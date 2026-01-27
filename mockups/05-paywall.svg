@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 375 812" width="375" height="812">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fbbf24"/>
+      <stop offset="100%" style="stop-color:#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="premiumGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6"/>
+      <stop offset="100%" style="stop-color:#a855f7"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="375" height="812" fill="url(#bgGradient)"/>
+
+  <!-- Status Bar -->
+  <rect x="0" y="0" width="375" height="44" fill="#0f172a"/>
+  <text x="24" y="30" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14" font-weight="600">9:44</text>
+  <g transform="translate(305, 17)">
+    <rect x="0" y="0" width="22" height="11" rx="2" fill="none" stroke="#fff" stroke-width="1"/>
+    <rect x="23" y="3" width="2" height="5" rx="1" fill="#fff"/>
+    <rect x="2" y="2" width="16" height="7" rx="1" fill="#34d399"/>
+  </g>
+
+  <!-- Close Button -->
+  <g transform="translate(330, 60)">
+    <circle cx="15" cy="15" r="15" fill="#334155"/>
+    <path d="M10 10 L20 20 M20 10 L10 20" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+  </g>
+
+  <!-- Hero Section -->
+  <g transform="translate(0, 100)">
+    <!-- Mountain Logo Large -->
+    <g transform="translate(137, 0)" filter="url(#glow)">
+      <path d="M30 70 L55 20 L80 70 Z" fill="#3b82f6" opacity="0.8"/>
+      <path d="M55 70 L80 30 L105 70 Z" fill="#8b5cf6" opacity="0.8"/>
+    </g>
+
+    <text x="187" y="110" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="28" font-weight="700" text-anchor="middle">You've used your</text>
+    <text x="187" y="145" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="28" font-weight="700" text-anchor="middle">free appeal</text>
+
+    <text x="187" y="180" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" text-anchor="middle">Upgrade to keep getting Medicare guidance</text>
+  </g>
+
+  <!-- Pricing Cards -->
+  <g transform="translate(24, 310)">
+    <!-- Pay Per Appeal Card -->
+    <g>
+      <rect width="327" height="130" rx="20" fill="#1e293b" filter="url(#shadow)"/>
+      <rect x="0" y="0" width="327" height="130" rx="20" fill="none" stroke="#334155" stroke-width="1"/>
+
+      <!-- Icon -->
+      <circle cx="40" cy="45" r="24" fill="#3b82f6" opacity="0.15"/>
+      <text x="40" y="52" fill="#3b82f6" font-size="22" text-anchor="middle">💳</text>
+
+      <text x="80" y="40" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="18" font-weight="600">$10 per appeal</text>
+      <text x="80" y="62" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">Pay only when you need help</text>
+
+      <text x="80" y="95" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12">✓ No subscription required</text>
+      <text x="80" y="115" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12">✓ Full appeal letter + citations</text>
+
+      <!-- Arrow -->
+      <path d="M300 65 L308 65 M304 59 L310 65 L304 71" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+
+    <!-- Unlimited Plan Card (Featured) -->
+    <g transform="translate(0, 150)">
+      <rect width="327" height="160" rx="20" fill="#1e293b" filter="url(#shadow)"/>
+      <rect x="0" y="0" width="327" height="160" rx="20" fill="none" stroke="url(#premiumGradient)" stroke-width="2"/>
+
+      <!-- Best Value Badge -->
+      <g transform="translate(220, -12)">
+        <rect width="95" height="24" rx="12" fill="url(#goldGradient)"/>
+        <text x="47" y="16" fill="#0f172a" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11" font-weight="700" text-anchor="middle">BEST VALUE</text>
+      </g>
+
+      <!-- Icon -->
+      <circle cx="40" cy="50" r="24" fill="#8b5cf6" opacity="0.15"/>
+      <text x="40" y="57" fill="#8b5cf6" font-size="22" text-anchor="middle">⭐</text>
+
+      <text x="80" y="45" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="18" font-weight="600">$25/month unlimited</text>
+      <text x="80" y="67" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">Best for ongoing care needs</text>
+
+      <text x="80" y="100" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12">✓ Unlimited appeals</text>
+      <text x="80" y="120" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12">✓ Priority support</text>
+      <text x="80" y="140" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12">✓ Coverage guidance included</text>
+
+      <!-- Arrow -->
+      <path d="M300 80 L308 80 M304 74 L310 80 L304 86" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+
+  <!-- Trust Indicators -->
+  <g transform="translate(24, 650)">
+    <g transform="translate(0, 0)">
+      <circle cx="16" cy="16" r="16" fill="#334155"/>
+      <text x="16" y="22" fill="#10b981" font-size="16" text-anchor="middle">🔒</text>
+      <text x="50" y="14" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12">Secure payment</text>
+      <text x="50" y="30" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11">Powered by Stripe</text>
+    </g>
+
+    <g transform="translate(170, 0)">
+      <circle cx="16" cy="16" r="16" fill="#334155"/>
+      <text x="16" y="22" fill="#3b82f6" font-size="16" text-anchor="middle">↩️</text>
+      <text x="50" y="14" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12">Cancel anytime</text>
+      <text x="50" y="30" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11">No commitments</text>
+    </g>
+  </g>
+
+  <!-- Terms -->
+  <g transform="translate(24, 720)">
+    <text x="163" y="10" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11" text-anchor="middle">By upgrading, you agree to our</text>
+    <text x="163" y="28" fill="#3b82f6" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11" text-anchor="middle">Terms of Service and Privacy Policy</text>
+  </g>
+
+  <!-- Home Indicator -->
+  <rect x="120" y="790" width="135" height="5" rx="2.5" fill="#64748b"/>
+</svg>

@@ -1,0 +1,125 @@
+<svg width="375" height="812" viewBox="0 0 375 812" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="btnGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="20" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="375" height="812" fill="url(#bgGrad)"/>
+
+  <!-- Background Glow Effect -->
+  <circle cx="187" cy="200" r="150" fill="#3b82f6" opacity="0.1" filter="url(#glow)"/>
+
+  <!-- Header/Navigation -->
+  <g transform="translate(24, 50)">
+    <!-- Logo -->
+    <text x="0" y="24" fill="#ffffff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="22" font-weight="700">
+      <tspan fill="url(#accentGrad)">🏔️</tspan> denali.health
+    </text>
+
+    <!-- Login Link -->
+    <text x="280" y="24" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14" font-weight="500">Sign In</text>
+  </g>
+
+  <!-- Hero Section -->
+  <g transform="translate(24, 130)">
+    <!-- Tagline Badge -->
+    <g transform="translate(55, 0)">
+      <rect width="220" height="28" rx="14" fill="#3b82f6" opacity="0.15"/>
+      <text x="110" y="18" fill="#3b82f6" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12" font-weight="600" text-anchor="middle">For Original Medicare Patients</text>
+    </g>
+
+    <!-- Main Headline -->
+    <text y="70" fill="#ffffff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="32" font-weight="700">
+      <tspan x="0">Get Your Medicare</tspan>
+      <tspan x="0" dy="40">Claim Approved</tspan>
+    </text>
+
+    <!-- Subheadline -->
+    <text y="160" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="16" font-weight="400">
+      <tspan x="0">AI-powered guidance to help you navigate</tspan>
+      <tspan x="0" dy="24">prior authorizations, denials, and appeals.</tspan>
+    </text>
+  </g>
+
+  <!-- CTA Buttons -->
+  <g transform="translate(24, 350)">
+    <!-- Primary CTA -->
+    <g filter="url(#shadow)">
+      <rect width="327" height="56" rx="16" fill="url(#btnGrad)"/>
+      <text x="163" y="35" fill="#ffffff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17" font-weight="600" text-anchor="middle">Try Free — 1 Appeal</text>
+    </g>
+
+    <!-- Secondary CTA -->
+    <g transform="translate(0, 70)">
+      <rect width="327" height="56" rx="16" fill="transparent" stroke="#334155" stroke-width="1.5"/>
+      <text x="163" y="35" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17" font-weight="500" text-anchor="middle">See How It Works</text>
+    </g>
+  </g>
+
+  <!-- Features Section -->
+  <g transform="translate(24, 500)">
+    <text x="0" y="0" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11" font-weight="600" letter-spacing="1.5">HOW DENALI HELPS</text>
+
+    <!-- Feature 1 -->
+    <g transform="translate(0, 30)">
+      <rect width="327" height="80" rx="12" fill="#1e293b"/>
+      <g transform="translate(16, 20)">
+        <rect width="40" height="40" rx="10" fill="#3b82f6" opacity="0.15"/>
+        <text x="20" y="28" fill="#3b82f6" font-size="20" text-anchor="middle">💬</text>
+      </g>
+      <text x="70" y="35" fill="#ffffff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" font-weight="600">Tell us in plain English</text>
+      <text x="70" y="55" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">"My mom needs a back scan approved"</text>
+    </g>
+
+    <!-- Feature 2 -->
+    <g transform="translate(0, 120)">
+      <rect width="327" height="80" rx="12" fill="#1e293b"/>
+      <g transform="translate(16, 20)">
+        <rect width="40" height="40" rx="10" fill="#10b981" opacity="0.15"/>
+        <text x="20" y="28" fill="#10b981" font-size="20" text-anchor="middle">🔍</text>
+      </g>
+      <text x="70" y="35" fill="#ffffff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" font-weight="600">We check Medicare policies</text>
+      <text x="70" y="55" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">NCD, LCD, and coverage requirements</text>
+    </g>
+
+    <!-- Feature 3 -->
+    <g transform="translate(0, 210)">
+      <rect width="327" height="80" rx="12" fill="#1e293b"/>
+      <g transform="translate(16, 20)">
+        <rect width="40" height="40" rx="10" fill="#8b5cf6" opacity="0.15"/>
+        <text x="20" y="28" fill="#8b5cf6" font-size="20" text-anchor="middle">✅</text>
+      </g>
+      <text x="70" y="35" fill="#ffffff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" font-weight="600">Get a printable checklist</text>
+      <text x="70" y="55" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">What docs need to document for approval</text>
+    </g>
+  </g>
+
+  <!-- Trust/Social Proof -->
+  <g transform="translate(24, 760)">
+    <text x="163" y="0" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12" text-anchor="middle">No medical records stored • HIPAA-aware • Original Medicare only</text>
+  </g>
+
+  <!-- Home Indicator (iOS) -->
+  <rect x="120" y="790" width="134" height="5" rx="2.5" fill="#ffffff" opacity="0.2"/>
+</svg>

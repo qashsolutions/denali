@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 375 812" width="375" height="812">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="375" height="812" fill="url(#bgGradient)"/>
+
+  <!-- Status Bar -->
+  <rect x="0" y="0" width="375" height="44" fill="#0f172a"/>
+  <text x="24" y="30" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14" font-weight="600">9:41</text>
+  <g transform="translate(305, 17)">
+    <rect x="0" y="0" width="22" height="11" rx="2" fill="none" stroke="#fff" stroke-width="1"/>
+    <rect x="23" y="3" width="2" height="5" rx="1" fill="#fff"/>
+    <rect x="2" y="2" width="16" height="7" rx="1" fill="#34d399"/>
+  </g>
+
+  <!-- Header -->
+  <g transform="translate(0, 44)">
+    <rect width="375" height="60" fill="#0f172a"/>
+    <rect x="0" y="59" width="375" height="1" fill="#1e293b"/>
+
+    <!-- Back button -->
+    <g transform="translate(16, 18)">
+      <path d="M12 4 L4 12 L12 20" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+    </g>
+
+    <text x="187" y="38" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17" font-weight="600" text-anchor="middle">Past Questions</text>
+  </g>
+
+  <!-- Filter Tabs -->
+  <g transform="translate(24, 120)">
+    <rect width="70" height="32" rx="16" fill="url(#accentGradient)"/>
+    <text x="35" y="21" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle">All</text>
+
+    <g transform="translate(80, 0)">
+      <rect width="90" height="32" rx="16" fill="#1e293b"/>
+      <text x="45" y="21" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13" text-anchor="middle">Coverage</text>
+    </g>
+
+    <g transform="translate(180, 0)">
+      <rect width="80" height="32" rx="16" fill="#1e293b"/>
+      <text x="40" y="21" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13" text-anchor="middle">Appeals</text>
+    </g>
+  </g>
+
+  <!-- History Items -->
+  <g transform="translate(24, 180)">
+    <!-- Today Section -->
+    <text x="0" y="0" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12" font-weight="600" letter-spacing="1">TODAY</text>
+
+    <!-- Item 1 -->
+    <g transform="translate(0, 20)">
+      <rect width="327" height="90" rx="16" fill="#1e293b" filter="url(#shadow)"/>
+      <rect x="0" y="0" width="327" height="90" rx="16" fill="none" stroke="#334155" stroke-width="1"/>
+
+      <!-- Status indicator -->
+      <circle cx="24" cy="30" r="8" fill="#10b981"/>
+
+      <text x="44" y="28" fill="#10b981" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11" font-weight="500">COVERED</text>
+      <text x="280" y="28" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11">9:43 AM</text>
+
+      <text x="44" y="50" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" font-weight="500">Lumbar MRI for back pain</text>
+      <text x="44" y="72" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">For: Mom • LCD L38824</text>
+
+      <path d="M305 45 L313 45" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round"/>
+    </g>
+
+    <!-- Item 2 -->
+    <g transform="translate(0, 125)">
+      <rect width="327" height="90" rx="16" fill="#1e293b" filter="url(#shadow)"/>
+      <rect x="0" y="0" width="327" height="90" rx="16" fill="none" stroke="#334155" stroke-width="1"/>
+
+      <circle cx="24" cy="30" r="8" fill="#f59e0b"/>
+
+      <text x="44" y="28" fill="#f59e0b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11" font-weight="500">APPEAL IN PROGRESS</text>
+      <text x="280" y="28" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11">8:15 AM</text>
+
+      <text x="44" y="50" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" font-weight="500">Denied MRI claim appeal</text>
+      <text x="44" y="72" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">For: Mom • Due Feb 14</text>
+
+      <path d="M305 45 L313 45" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round"/>
+    </g>
+
+    <!-- Yesterday Section -->
+    <text x="0" y="245" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12" font-weight="600" letter-spacing="1">YESTERDAY</text>
+
+    <!-- Item 3 -->
+    <g transform="translate(0, 265)">
+      <rect width="327" height="90" rx="16" fill="#1e293b" filter="url(#shadow)"/>
+      <rect x="0" y="0" width="327" height="90" rx="16" fill="none" stroke="#334155" stroke-width="1"/>
+
+      <circle cx="24" cy="30" r="8" fill="#10b981"/>
+
+      <text x="44" y="28" fill="#10b981" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11" font-weight="500">COVERED</text>
+      <text x="280" y="28" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11">4:22 PM</text>
+
+      <text x="44" y="50" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" font-weight="500">Hearing aid coverage check</text>
+      <text x="44" y="72" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">For: Self • Not covered by Original</text>
+
+      <path d="M305 45 L313 45" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round"/>
+    </g>
+
+    <!-- Item 4 -->
+    <g transform="translate(0, 370)">
+      <rect width="327" height="90" rx="16" fill="#1e293b" filter="url(#shadow)"/>
+      <rect x="0" y="0" width="327" height="90" rx="16" fill="none" stroke="#334155" stroke-width="1"/>
+
+      <circle cx="24" cy="30" r="8" fill="#10b981"/>
+
+      <text x="44" y="28" fill="#10b981" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11" font-weight="500">COVERED</text>
+      <text x="280" y="28" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11">11:05 AM</text>
+
+      <text x="44" y="50" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" font-weight="500">Diabetes supplies coverage</text>
+      <text x="44" y="72" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">For: Dad • Part B covered</text>
+
+      <path d="M305 45 L313 45" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- Floating Action Button - New Question -->
+  <g transform="translate(290, 720)">
+    <circle cx="32" cy="32" r="32" fill="url(#accentGradient)" filter="url(#shadow)"/>
+    <path d="M22 32 L42 32 M32 22 L32 42" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- Home Indicator -->
+  <rect x="120" y="790" width="135" height="5" rx="2.5" fill="#64748b"/>
+</svg>

@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 375 812" width="375" height="812">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="successGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#10b981"/>
+      <stop offset="100%" style="stop-color:#34d399"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="375" height="812" fill="url(#bgGradient)"/>
+
+  <!-- Status Bar -->
+  <rect x="0" y="0" width="375" height="44" fill="#0f172a"/>
+  <text x="24" y="30" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14" font-weight="600">9:48</text>
+  <g transform="translate(305, 17)">
+    <rect x="0" y="0" width="22" height="11" rx="2" fill="none" stroke="#fff" stroke-width="1"/>
+    <rect x="23" y="3" width="2" height="5" rx="1" fill="#fff"/>
+    <rect x="2" y="2" width="16" height="7" rx="1" fill="#34d399"/>
+  </g>
+
+  <!-- Header -->
+  <g transform="translate(0, 44)">
+    <rect width="375" height="60" fill="#0f172a"/>
+    <rect x="0" y="59" width="375" height="1" fill="#1e293b"/>
+
+    <g transform="translate(16, 18)">
+      <path d="M12 4 L4 12 L12 20" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+    </g>
+
+    <text x="187" y="36" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17" font-weight="600" text-anchor="middle">Appeal Letter</text>
+
+    <!-- Edit button -->
+    <text x="340" y="36" fill="#3b82f6" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" font-weight="500">Edit</text>
+  </g>
+
+  <!-- Letter Preview Card -->
+  <g transform="translate(24, 120)">
+    <rect width="327" height="420" rx="16" fill="#fff" filter="url(#shadow)"/>
+
+    <!-- Letter content -->
+    <g transform="translate(20, 24)">
+      <text x="0" y="0" fill="#0f172a" font-family="Georgia, serif" font-size="11">January 20, 2024</text>
+
+      <text x="0" y="30" fill="#0f172a" font-family="Georgia, serif" font-size="11">Medicare Administrative Contractor</text>
+      <text x="0" y="44" fill="#0f172a" font-family="Georgia, serif" font-size="11">P.O. Box 12345</text>
+      <text x="0" y="58" fill="#0f172a" font-family="Georgia, serif" font-size="11">Anytown, USA 12345</text>
+
+      <text x="0" y="88" fill="#0f172a" font-family="Georgia, serif" font-size="11" font-weight="700">RE: Appeal of Claim #2024-MRI-98234</text>
+      <text x="0" y="102" fill="#0f172a" font-family="Georgia, serif" font-size="11">Patient: Jane Doe (MBI: 1EG4-TE5-MK72)</text>
+
+      <text x="0" y="132" fill="#0f172a" font-family="Georgia, serif" font-size="11">Dear Medicare Review Team,</text>
+
+      <text x="0" y="158" fill="#374151" font-family="Georgia, serif" font-size="10" font-style="italic">I am writing to appeal the denial of coverage</text>
+      <text x="0" y="172" fill="#374151" font-family="Georgia, serif" font-size="10" font-style="italic">for a lumbar MRI (CPT 72148) that was denied</text>
+      <text x="0" y="186" fill="#374151" font-family="Georgia, serif" font-size="10" font-style="italic">as "not medically necessary."</text>
+
+      <text x="0" y="216" fill="#0f172a" font-family="Georgia, serif" font-size="11" font-weight="700">Medical Necessity Evidence:</text>
+
+      <text x="0" y="238" fill="#374151" font-family="Georgia, serif" font-size="10">• Patient has experienced chronic low back</text>
+      <text x="0" y="252" fill="#374151" font-family="Georgia, serif" font-size="10">  pain for over 3 months (ICD-10: M54.5)</text>
+
+      <text x="0" y="272" fill="#374151" font-family="Georgia, serif" font-size="10">• Conservative treatment (physical therapy,</text>
+      <text x="0" y="286" fill="#374151" font-family="Georgia, serif" font-size="10">  NSAIDs) was attempted for 8 weeks</text>
+
+      <text x="0" y="306" fill="#374151" font-family="Georgia, serif" font-size="10">• Neurological symptoms present: radicular</text>
+      <text x="0" y="320" fill="#374151" font-family="Georgia, serif" font-size="10">  pain, left leg numbness (ICD-10: M54.16)</text>
+
+      <!-- Policy citation highlight -->
+      <rect x="-4" y="336" width="295" height="36" rx="4" fill="#dbeafe"/>
+      <text x="0" y="352" fill="#1e40af" font-family="Georgia, serif" font-size="10" font-weight="500">Per LCD L38824, imaging is indicated when</text>
+      <text x="0" y="366" fill="#1e40af" font-family="Georgia, serif" font-size="10" font-weight="500">radiculopathy is present with failed conservative tx.</text>
+
+      <text x="0" y="395" fill="#6b7280" font-family="Georgia, serif" font-size="10">...</text>
+    </g>
+  </g>
+
+  <!-- Policy Citations -->
+  <g transform="translate(24, 560)">
+    <text x="0" y="0" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12" font-weight="600" letter-spacing="1">INCLUDED POLICY CITATIONS</text>
+
+    <g transform="translate(0, 16)">
+      <rect width="155" height="40" rx="8" fill="#1e293b"/>
+      <text x="12" y="18" fill="#3b82f6" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11" font-weight="500">LCD L38824</text>
+      <text x="12" y="32" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="10">Lumbar Spine MRI</text>
+    </g>
+
+    <g transform="translate(165, 16)">
+      <rect width="162" height="40" rx="8" fill="#1e293b"/>
+      <text x="12" y="18" fill="#8b5cf6" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11" font-weight="500">ICD-10 M54.5, M54.16</text>
+      <text x="12" y="32" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="10">Diagnosis codes</text>
+    </g>
+  </g>
+
+  <!-- Action Buttons -->
+  <g transform="translate(24, 640)">
+    <!-- Copy Button -->
+    <g>
+      <rect width="100" height="48" rx="12" fill="#1e293b" filter="url(#shadow)"/>
+      <text x="20" y="30" fill="#94a3b8" font-size="16">📋</text>
+      <text x="45" y="31" fill="#e2e8f0" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">Copy</text>
+    </g>
+
+    <!-- Download Button -->
+    <g transform="translate(112, 0)">
+      <rect width="100" height="48" rx="12" fill="#1e293b" filter="url(#shadow)"/>
+      <text x="16" y="30" fill="#94a3b8" font-size="16">📄</text>
+      <text x="42" y="31" fill="#e2e8f0" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">PDF</text>
+    </g>
+
+    <!-- Send/Share Button -->
+    <g transform="translate(224, 0)">
+      <rect width="103" height="48" rx="12" fill="url(#accentGradient)" filter="url(#shadow)"/>
+      <text x="18" y="30" fill="#fff" font-size="16">📤</text>
+      <text x="44" y="31" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13" font-weight="500">Share</text>
+    </g>
+  </g>
+
+  <!-- Disclaimer -->
+  <g transform="translate(24, 710)">
+    <rect width="327" height="50" rx="8" fill="#1e293b" opacity="0.5"/>
+    <text x="16" y="20" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11">💡 Have your doctor review this letter before</text>
+    <text x="16" y="36" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11">sending. They may add clinical details.</text>
+  </g>
+
+  <!-- Home Indicator -->
+  <rect x="120" y="790" width="135" height="5" rx="2.5" fill="#64748b"/>
+</svg>

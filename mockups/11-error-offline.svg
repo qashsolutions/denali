@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 375 812" width="375" height="812">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="375" height="812" fill="url(#bgGradient)"/>
+
+  <!-- Status Bar (Offline indicator) -->
+  <rect x="0" y="0" width="375" height="44" fill="#0f172a"/>
+  <text x="24" y="30" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14" font-weight="600">9:41</text>
+
+  <!-- No signal icon -->
+  <g transform="translate(280, 20)">
+    <path d="M0 6 L3 3 L6 6 L9 0 L12 6" fill="none" stroke="#64748b" stroke-width="1.5"/>
+    <path d="M2 2 L10 10" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
+
+  <g transform="translate(305, 17)">
+    <rect x="0" y="0" width="22" height="11" rx="2" fill="none" stroke="#fff" stroke-width="1"/>
+    <rect x="23" y="3" width="2" height="5" rx="1" fill="#fff"/>
+    <rect x="2" y="2" width="8" height="7" rx="1" fill="#f59e0b"/>
+  </g>
+
+  <!-- Offline Banner -->
+  <g transform="translate(0, 44)">
+    <rect width="375" height="36" fill="#ef4444" opacity="0.15"/>
+    <text x="187" y="24" fill="#ef4444" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle">📡 No internet connection</text>
+  </g>
+
+  <!-- Header -->
+  <g transform="translate(0, 80)">
+    <rect width="375" height="60" fill="#0f172a"/>
+    <rect x="0" y="59" width="375" height="1" fill="#1e293b"/>
+
+    <g transform="translate(16, 18)">
+      <path d="M12 4 L4 12 L12 20" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+    </g>
+
+    <text x="187" y="36" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17" font-weight="600" text-anchor="middle">New Question</text>
+  </g>
+
+  <!-- Error State Illustration -->
+  <g transform="translate(0, 200)">
+    <!-- Cloud with X -->
+    <g transform="translate(137, 0)">
+      <ellipse cx="50" cy="70" rx="50" ry="35" fill="#334155"/>
+      <ellipse cx="30" cy="60" rx="30" ry="25" fill="#334155"/>
+      <ellipse cx="75" cy="55" rx="35" ry="30" fill="#334155"/>
+
+      <!-- X mark -->
+      <circle cx="50" cy="55" r="20" fill="#ef4444" opacity="0.2"/>
+      <path d="M40 45 L60 65 M60 45 L40 65" stroke="#ef4444" stroke-width="3" stroke-linecap="round"/>
+    </g>
+
+    <text x="187" y="140" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="20" font-weight="600" text-anchor="middle">Can't connect right now</text>
+    <text x="187" y="170" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" text-anchor="middle">Check your internet connection</text>
+    <text x="187" y="192" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" text-anchor="middle">and try again</text>
+  </g>
+
+  <!-- Retry Button -->
+  <g transform="translate(100, 440)">
+    <rect width="175" height="50" rx="25" fill="url(#accentGradient)" filter="url(#shadow)"/>
+    <text x="87" y="32" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" font-weight="600" text-anchor="middle">Try Again</text>
+  </g>
+
+  <!-- Offline Available Features -->
+  <g transform="translate(24, 530)">
+    <text x="0" y="0" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12" font-weight="600" letter-spacing="1">AVAILABLE OFFLINE</text>
+
+    <rect y="16" width="327" height="120" rx="16" fill="#1e293b"/>
+    <rect x="0" y="16" width="327" height="120" rx="16" fill="none" stroke="#334155" stroke-width="1"/>
+
+    <g transform="translate(20, 36)">
+      <circle cx="12" cy="12" r="12" fill="#10b981" opacity="0.15"/>
+      <text x="12" y="17" fill="#10b981" font-size="12" text-anchor="middle">✓</text>
+      <text x="36" y="17" fill="#e2e8f0" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">View past questions</text>
+    </g>
+
+    <g transform="translate(20, 72)">
+      <circle cx="12" cy="12" r="12" fill="#10b981" opacity="0.15"/>
+      <text x="12" y="17" fill="#10b981" font-size="12" text-anchor="middle">✓</text>
+      <text x="36" y="17" fill="#e2e8f0" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">Access saved guidance</text>
+    </g>
+
+    <g transform="translate(20, 108)">
+      <circle cx="12" cy="12" r="12" fill="#10b981" opacity="0.15"/>
+      <text x="12" y="17" fill="#10b981" font-size="12" text-anchor="middle">✓</text>
+      <text x="36" y="17" fill="#e2e8f0" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">View appeal letters</text>
+    </g>
+  </g>
+
+  <!-- View Saved Button -->
+  <g transform="translate(24, 680)">
+    <rect width="327" height="50" rx="12" fill="#1e293b"/>
+    <rect x="0" y="0" width="327" height="50" rx="12" fill="none" stroke="#334155" stroke-width="1"/>
+    <text x="163" y="32" fill="#3b82f6" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" font-weight="500" text-anchor="middle">View Saved Questions</text>
+  </g>
+
+  <!-- Home Indicator -->
+  <rect x="120" y="790" width="135" height="5" rx="2.5" fill="#64748b"/>
+</svg>

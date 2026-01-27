@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 768 1024" width="768" height="1024">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+    <linearGradient id="cardGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b"/>
+      <stop offset="100%" style="stop-color:#334155"/>
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="768" height="1024" fill="url(#bgGradient)"/>
+
+  <!-- Status Bar -->
+  <rect x="0" y="0" width="768" height="44" fill="#0f172a"/>
+  <text x="40" y="30" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="16" font-weight="600">9:41</text>
+  <g transform="translate(680, 17)">
+    <rect x="0" y="0" width="26" height="13" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>
+    <rect x="27" y="3" width="3" height="7" rx="1" fill="#fff"/>
+    <rect x="3" y="3" width="18" height="8" rx="1" fill="#34d399"/>
+  </g>
+  <g transform="translate(645, 20)">
+    <path d="M0 8 L4 4 L8 8 L12 0 L16 8" fill="none" stroke="#fff" stroke-width="2"/>
+  </g>
+
+  <!-- Header with Logo -->
+  <g transform="translate(60, 80)">
+    <g filter="url(#glow)">
+      <path d="M25 50 L45 15 L65 50 Z" fill="#3b82f6" opacity="0.8"/>
+      <path d="M50 50 L70 20 L90 50 Z" fill="#8b5cf6" opacity="0.8"/>
+    </g>
+    <text x="110" y="40" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="32" font-weight="700">denali</text>
+    <text x="110" y="62" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="16">.health</text>
+  </g>
+
+  <!-- Main Content Area - Two Column Layout -->
+  <g transform="translate(60, 160)">
+    <!-- Left Column: Greeting -->
+    <g>
+      <rect width="310" height="150" rx="24" fill="url(#cardGradient)" filter="url(#shadow)"/>
+      <rect x="0" y="0" width="310" height="150" rx="24" fill="none" stroke="url(#accentGradient)" stroke-width="1" opacity="0.3"/>
+
+      <circle cx="50" cy="50" r="28" fill="#3b82f6" opacity="0.2"/>
+      <text x="50" y="58" fill="#fbbf24" font-size="26" text-anchor="middle">🌙</text>
+
+      <text x="95" y="44" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="16">Good evening</text>
+      <text x="95" y="72" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="28" font-weight="600">Venkata</text>
+
+      <text x="30" y="120" fill="#cbd5e1" font-family="SF Pro Display, -apple-system, sans-serif" font-size="18">What can I help you with today?</text>
+    </g>
+
+    <!-- Right Column: Stats -->
+    <g transform="translate(338, 0)">
+      <rect width="310" height="150" rx="24" fill="#1e293b" filter="url(#shadow)"/>
+
+      <g transform="translate(30, 30)">
+        <text x="0" y="0" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12" font-weight="600" letter-spacing="1">YOUR ACTIVITY</text>
+
+        <g transform="translate(0, 25)">
+          <text x="0" y="0" fill="#3b82f6" font-family="SF Pro Display, -apple-system, sans-serif" font-size="36" font-weight="700">12</text>
+          <text x="50" y="0" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">questions</text>
+          <text x="50" y="18" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">answered</text>
+        </g>
+
+        <g transform="translate(150, 25)">
+          <text x="0" y="0" fill="#10b981" font-family="SF Pro Display, -apple-system, sans-serif" font-size="36" font-weight="700">2</text>
+          <text x="30" y="0" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">successful</text>
+          <text x="30" y="18" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">appeals</text>
+        </g>
+      </g>
+    </g>
+  </g>
+
+  <!-- Quick Actions Grid -->
+  <g transform="translate(60, 340)">
+    <text x="0" y="0" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14" font-weight="600" letter-spacing="1">QUICK ACTIONS</text>
+
+    <!-- Card 1 -->
+    <g transform="translate(0, 24)">
+      <rect width="200" height="130" rx="20" fill="#1e293b" filter="url(#shadow)"/>
+      <circle cx="40" cy="45" r="24" fill="#3b82f6" opacity="0.15"/>
+      <text x="40" y="53" fill="#3b82f6" font-size="24" text-anchor="middle">💬</text>
+      <text x="24" y="95" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17" font-weight="500">New Question</text>
+      <text x="24" y="115" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">Ask about coverage</text>
+    </g>
+
+    <!-- Card 2 -->
+    <g transform="translate(220, 24)">
+      <rect width="200" height="130" rx="20" fill="#1e293b" filter="url(#shadow)"/>
+      <circle cx="40" cy="45" r="24" fill="#8b5cf6" opacity="0.15"/>
+      <text x="40" y="53" fill="#8b5cf6" font-size="24" text-anchor="middle">📋</text>
+      <text x="24" y="95" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17" font-weight="500">Past Questions</text>
+      <text x="24" y="115" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">View history</text>
+    </g>
+
+    <!-- Card 3 -->
+    <g transform="translate(440, 24)">
+      <rect width="208" height="130" rx="20" fill="#1e293b" filter="url(#shadow)"/>
+      <circle cx="40" cy="45" r="24" fill="#f59e0b" opacity="0.15"/>
+      <text x="40" y="53" fill="#f59e0b" font-size="24" text-anchor="middle">⚖️</text>
+      <text x="24" y="95" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17" font-weight="500">Appeal a Denial</text>
+      <text x="24" y="115" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">Get help with appeals</text>
+    </g>
+  </g>
+
+  <!-- Common Questions Section -->
+  <g transform="translate(60, 530)">
+    <text x="0" y="0" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14" font-weight="600" letter-spacing="1">COMMON QUESTIONS</text>
+
+    <!-- Question 1 -->
+    <g transform="translate(0, 24)">
+      <rect width="648" height="70" rx="16" fill="#1e293b"/>
+      <rect x="0" y="0" width="648" height="70" rx="16" fill="none" stroke="#334155" stroke-width="1"/>
+      <text x="24" y="42" fill="#e2e8f0" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17">"My mom needs a back scan approved"</text>
+      <path d="M610 35 L618 35 L614 41 Z" fill="#64748b" transform="rotate(-90 614 35)"/>
+    </g>
+
+    <!-- Question 2 -->
+    <g transform="translate(0, 108)">
+      <rect width="648" height="70" rx="16" fill="#1e293b"/>
+      <rect x="0" y="0" width="648" height="70" rx="16" fill="none" stroke="#334155" stroke-width="1"/>
+      <text x="24" y="42" fill="#e2e8f0" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17">"Medicare denied my claim, help me appeal"</text>
+      <path d="M610 35 L618 35 L614 41 Z" fill="#64748b" transform="rotate(-90 614 35)"/>
+    </g>
+
+    <!-- Question 3 -->
+    <g transform="translate(0, 192)">
+      <rect width="648" height="70" rx="16" fill="#1e293b"/>
+      <rect x="0" y="0" width="648" height="70" rx="16" fill="none" stroke="#334155" stroke-width="1"/>
+      <text x="24" y="42" fill="#e2e8f0" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17">"Does Medicare cover diabetes supplies?"</text>
+      <path d="M610 35 L618 35 L614 41 Z" fill="#64748b" transform="rotate(-90 614 35)"/>
+    </g>
+  </g>
+
+  <!-- Bottom Input Bar -->
+  <g transform="translate(0, 900)">
+    <rect width="768" height="124" fill="#0f172a"/>
+    <rect x="0" y="0" width="768" height="1" fill="#1e293b"/>
+
+    <rect x="60" y="24" width="580" height="60" rx="30" fill="#1e293b"/>
+    <rect x="60" y="24" width="580" height="60" rx="30" fill="none" stroke="#334155" stroke-width="1"/>
+    <text x="96" y="62" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17">Ask anything about Medicare...</text>
+
+    <!-- Send Button -->
+    <circle cx="678" cy="54" r="28" fill="url(#accentGradient)"/>
+    <path d="M669 54 L687 54 M680 46 L688 54 L680 62" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Home Indicator -->
+  <rect x="280" y="1000" width="208" height="6" rx="3" fill="#64748b"/>
+</svg>

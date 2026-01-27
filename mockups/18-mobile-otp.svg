@@ -1,0 +1,109 @@
+<svg width="375" height="812" viewBox="0 0 375 812" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="btnGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="375" height="812" fill="url(#bgGrad)"/>
+
+  <!-- Status Bar -->
+  <rect x="0" y="0" width="375" height="44" fill="#0f172a"/>
+  <text x="24" y="30" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14" font-weight="600">9:41</text>
+  <g transform="translate(305, 17)">
+    <rect x="0" y="0" width="22" height="11" rx="2" fill="none" stroke="#fff" stroke-width="1"/>
+    <rect x="23" y="3" width="2" height="5" rx="1" fill="#fff"/>
+    <rect x="2" y="2" width="16" height="7" rx="1" fill="#34d399"/>
+  </g>
+
+  <!-- Back Button -->
+  <g transform="translate(24, 60)">
+    <path d="M12 4 L4 12 L12 20" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+  </g>
+
+  <!-- Phone Icon -->
+  <g transform="translate(155, 120)">
+    <rect width="64" height="64" rx="20" fill="#10b981" opacity="0.15"/>
+    <text x="32" y="44" fill="#10b981" font-size="28" text-anchor="middle">📱</text>
+  </g>
+
+  <!-- Header -->
+  <g transform="translate(24, 210)">
+    <text x="163" y="0" fill="#ffffff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="24" font-weight="700" text-anchor="middle">Verify Your Phone</text>
+
+    <text x="163" y="40" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" text-anchor="middle">We sent a 6-digit code to</text>
+    <text x="163" y="65" fill="#ffffff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17" font-weight="600" text-anchor="middle">+1 (555) 867-5309</text>
+  </g>
+
+  <!-- OTP Input Boxes -->
+  <g transform="translate(40, 320)">
+    <!-- 6 digit boxes -->
+    <g>
+      <rect x="0" y="0" width="44" height="56" rx="12" fill="#334155"/>
+      <text x="22" y="40" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="24" font-weight="600" text-anchor="middle">4</text>
+    </g>
+    <g transform="translate(50, 0)">
+      <rect x="0" y="0" width="44" height="56" rx="12" fill="#334155"/>
+      <text x="22" y="40" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="24" font-weight="600" text-anchor="middle">8</text>
+    </g>
+    <g transform="translate(100, 0)">
+      <rect x="0" y="0" width="44" height="56" rx="12" fill="#334155"/>
+      <text x="22" y="40" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="24" font-weight="600" text-anchor="middle">2</text>
+    </g>
+    <g transform="translate(150, 0)">
+      <rect x="0" y="0" width="44" height="56" rx="12" fill="#334155"/>
+      <text x="22" y="40" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="24" font-weight="600" text-anchor="middle">9</text>
+    </g>
+    <g transform="translate(200, 0)">
+      <rect x="0" y="0" width="44" height="56" rx="12" fill="#3b82f6" opacity="0.3" stroke="#3b82f6" stroke-width="2"/>
+      <rect x="20" y="16" width="2" height="24" fill="#3b82f6">
+        <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/>
+      </rect>
+    </g>
+    <g transform="translate(250, 0)">
+      <rect x="0" y="0" width="44" height="56" rx="12" fill="#334155"/>
+    </g>
+  </g>
+
+  <!-- Verify Button -->
+  <g transform="translate(24, 420)">
+    <rect width="327" height="56" rx="16" fill="url(#btnGrad)" filter="url(#shadow)"/>
+    <text x="163" y="36" fill="#ffffff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17" font-weight="600" text-anchor="middle">Verify &amp; View Appeal Letter</text>
+  </g>
+
+  <!-- Resend Link -->
+  <g transform="translate(24, 500)">
+    <text x="163" y="0" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14" text-anchor="middle">Didn't receive the code?</text>
+    <text x="163" y="25" fill="#3b82f6" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14" font-weight="500" text-anchor="middle">Resend Code (0:45)</text>
+  </g>
+
+  <!-- Info Card -->
+  <g transform="translate(24, 580)">
+    <rect width="327" height="100" rx="16" fill="#1e293b"/>
+
+    <g transform="translate(20, 20)">
+      <circle cx="12" cy="12" r="12" fill="#3b82f6" opacity="0.15"/>
+      <text x="12" y="17" fill="#3b82f6" font-size="12" text-anchor="middle">ℹ️</text>
+      <text x="35" y="10" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">Your first appeal letter is completely</text>
+      <text x="35" y="28" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="13">free. No payment required.</text>
+    </g>
+
+    <g transform="translate(20, 60)">
+      <circle cx="12" cy="12" r="12" fill="#10b981" opacity="0.15"/>
+      <text x="12" y="17" fill="#10b981" font-size="12" text-anchor="middle">🔒</text>
+      <text x="35" y="16" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12">Phone used only for verification</text>
+    </g>
+  </g>
+
+  <!-- Home Indicator (iOS) -->
+  <rect x="120" y="790" width="134" height="5" rx="2.5" fill="#ffffff" opacity="0.2"/>
+</svg>

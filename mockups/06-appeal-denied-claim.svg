@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 375 812" width="375" height="812">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="userBubble" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#2563eb"/>
+    </linearGradient>
+    <linearGradient id="warningGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#f59e0b"/>
+      <stop offset="100%" style="stop-color:#fbbf24"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="375" height="812" fill="url(#bgGradient)"/>
+
+  <!-- Status Bar -->
+  <rect x="0" y="0" width="375" height="44" fill="#0f172a"/>
+  <text x="24" y="30" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14" font-weight="600">9:45</text>
+  <g transform="translate(305, 17)">
+    <rect x="0" y="0" width="22" height="11" rx="2" fill="none" stroke="#fff" stroke-width="1"/>
+    <rect x="23" y="3" width="2" height="5" rx="1" fill="#fff"/>
+    <rect x="2" y="2" width="16" height="7" rx="1" fill="#34d399"/>
+  </g>
+
+  <!-- Header -->
+  <g transform="translate(0, 44)">
+    <rect width="375" height="60" fill="#0f172a"/>
+    <rect x="0" y="59" width="375" height="1" fill="#1e293b"/>
+
+    <g transform="translate(16, 18)">
+      <path d="M12 4 L4 12 L12 20" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+    </g>
+
+    <text x="187" y="36" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="17" font-weight="600" text-anchor="middle">Appeal Assistance</text>
+  </g>
+
+  <!-- Chat Messages -->
+  <g transform="translate(0, 120)">
+    <!-- User Message -->
+    <g transform="translate(24, 0)">
+      <rect width="320" height="70" rx="20" fill="url(#userBubble)" filter="url(#shadow)"/>
+      <text x="20" y="28" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15">Medicare denied my mom's MRI claim.</text>
+      <text x="20" y="50" fill="rgba(255,255,255,0.8)" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15">Can you help me appeal?</text>
+    </g>
+    <text x="327" y="86" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="11">9:45 AM</text>
+
+    <!-- Assistant Response -->
+    <g transform="translate(24, 100)">
+      <rect width="327" height="95" rx="20" fill="#1e293b" filter="url(#shadow)"/>
+      <rect x="0" y="0" width="327" height="95" rx="20" fill="none" stroke="#334155" stroke-width="1"/>
+
+      <circle cx="-12" cy="20" r="16" fill="#3b82f6" opacity="0.2"/>
+      <text x="-12" y="26" fill="#3b82f6" font-size="14" text-anchor="middle">🏔️</text>
+
+      <text x="20" y="30" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15">I'm sorry to hear that. I can definitely</text>
+      <text x="20" y="52" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15">help with the appeal. First, do you</text>
+      <text x="20" y="74" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15">have the denial letter?</text>
+    </g>
+  </g>
+
+  <!-- Denial Info Card -->
+  <g transform="translate(24, 340)">
+    <rect width="327" height="130" rx="16" fill="#1e293b" filter="url(#shadow)"/>
+    <rect x="0" y="0" width="327" height="130" rx="16" fill="none" stroke="#f59e0b" stroke-width="1" opacity="0.5"/>
+
+    <!-- Warning icon -->
+    <circle cx="28" cy="28" r="16" fill="#f59e0b" opacity="0.15"/>
+    <text x="28" y="34" fill="#f59e0b" font-size="16" text-anchor="middle">⚠️</text>
+
+    <text x="56" y="24" fill="#fbbf24" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12" font-weight="600">DENIAL REASON FROM LETTER</text>
+    <text x="56" y="44" fill="#e2e8f0" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">"Not medically necessary"</text>
+
+    <rect x="16" y="60" width="295" height="1" fill="#334155"/>
+
+    <text x="16" y="82" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12">Claim #: 2024-MRI-98234</text>
+    <text x="16" y="100" fill="#94a3b8" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12">Denied: January 15, 2024</text>
+    <text x="16" y="118" fill="#f59e0b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12" font-weight="500">Appeal deadline: February 14, 2024</text>
+  </g>
+
+  <!-- Appeal Strategy Card -->
+  <g transform="translate(24, 490)">
+    <text x="0" y="0" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="12" font-weight="600" letter-spacing="1">APPEAL STRATEGY</text>
+
+    <rect y="16" width="327" height="130" rx="16" fill="#1e293b" filter="url(#shadow)"/>
+    <rect x="0" y="16" width="327" height="130" rx="16" fill="none" stroke="#3b82f6" stroke-width="1" opacity="0.3"/>
+
+    <g transform="translate(16, 36)">
+      <circle cx="12" cy="10" r="10" fill="#3b82f6" opacity="0.2"/>
+      <text x="12" y="14" fill="#3b82f6" font-size="10" text-anchor="middle" font-weight="700">1</text>
+      <text x="36" y="15" fill="#e2e8f0" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">Gather medical documentation</text>
+    </g>
+
+    <g transform="translate(16, 70)">
+      <circle cx="12" cy="10" r="10" fill="#3b82f6" opacity="0.2"/>
+      <text x="12" y="14" fill="#3b82f6" font-size="10" text-anchor="middle" font-weight="700">2</text>
+      <text x="36" y="15" fill="#e2e8f0" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">Get doctor's letter of necessity</text>
+    </g>
+
+    <g transform="translate(16, 104)">
+      <circle cx="12" cy="10" r="10" fill="#3b82f6" opacity="0.2"/>
+      <text x="12" y="14" fill="#3b82f6" font-size="10" text-anchor="middle" font-weight="700">3</text>
+      <text x="36" y="15" fill="#e2e8f0" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">Submit with LCD policy citations</text>
+    </g>
+  </g>
+
+  <!-- Action Buttons -->
+  <g transform="translate(24, 660)">
+    <rect width="327" height="50" rx="14" fill="url(#accentGradient)" filter="url(#shadow)"/>
+    <text x="163" y="32" fill="#fff" font-family="SF Pro Display, -apple-system, sans-serif" font-size="15" font-weight="600" text-anchor="middle">Start Building Appeal</text>
+  </g>
+
+  <!-- Bottom Input Bar -->
+  <g transform="translate(0, 730)">
+    <rect width="375" height="82" fill="#0f172a"/>
+    <rect x="24" y="8" width="280" height="46" rx="23" fill="#1e293b"/>
+    <rect x="24" y="8" width="280" height="46" rx="23" fill="none" stroke="#334155" stroke-width="1"/>
+    <text x="48" y="37" fill="#64748b" font-family="SF Pro Display, -apple-system, sans-serif" font-size="14">Ask about your appeal...</text>
+
+    <circle cx="327" cy="31" r="21" fill="url(#accentGradient)"/>
+    <path d="M320 31 L334 31 M328 25 L334 31 L328 37" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Home Indicator -->
+  <rect x="120" y="790" width="135" height="5" rx="2.5" fill="#64748b"/>
+</svg>
