@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body: ChatRequestBody = await request.json();
+    console.log("[Chat API] Received request with", body.messages?.length, "messages");
 
     // Validate request
     if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
 
     // Detect triggers based on conversation content
     const triggers = detectTriggers(body.messages, sessionState);
+    console.log("[Chat API] Detected triggers:", triggers);
 
     // Build dynamic system prompt with learning context (async)
     // This injects learned symptom/procedure mappings and successful coverage paths
@@ -85,13 +87,22 @@ export async function POST(request: NextRequest) {
       sessionState,
       body.messages
     );
+    console.log("[Chat API] System prompt length:", systemPrompt.length);
 
     // Get tool definitions and create executor map
     const toolDefinitions = getToolDefinitions();
     const toolExecutors = createToolExecutorMap();
+    console.log("[Chat API] Available tools:", toolDefinitions.map(t => t.name));
 
     // Extract entities for learning (async, non-blocking)
     const entities = extractEntitiesFromMessages(body.messages);
+    console.log("[Chat API] Extracted entities:", {
+      symptoms: entities.symptoms.length,
+      procedures: entities.procedures.length,
+      medications: entities.medications.length,
+      providers: entities.providers.length,
+    });
+
     if (entities.symptoms.length > 0 || entities.procedures.length > 0) {
       // Queue learning job for background processing
       queueLearningJob("extract_entities", {
@@ -107,6 +118,7 @@ export async function POST(request: NextRequest) {
     const formattedMessages = formatMessages(body.messages);
 
     // Call Claude with tools
+    console.log("[Chat API] Calling Claude API...");
     const result = await chat(
       {
         messages: formattedMessages,
@@ -116,6 +128,13 @@ export async function POST(request: NextRequest) {
       },
       toolExecutors
     );
+    console.log("[Chat API] Claude response received. Tools used:", result.toolsUsed);
+    console.log("[Chat API] Session state after call:", {
+      diagnosisCodes: result.sessionState.diagnosisCodes,
+      procedureCodes: result.sessionState.procedureCodes,
+      provider: result.sessionState.provider,
+      coverageCriteria: result.sessionState.coverageCriteria?.length || 0,
+    });
 
     // Generate conversation ID if not provided
     const conversationId = body.conversationId ?? `conv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -136,6 +155,7 @@ export async function POST(request: NextRequest) {
       toolsUsed: result.toolsUsed,
     };
 
+    console.log("[Chat API] Sending response with", response.suggestions.length, "suggestions");
     return NextResponse.json(response);
   } catch (error) {
     console.error("Chat API error:", error);

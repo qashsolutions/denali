@@ -252,22 +252,27 @@ export async function submitMessageFeedback(
 ): Promise<boolean> {
   const supabase = createClient();
 
-  // Use the database function for proper feedback processing
-  // All parameters except p_message_id are optional to support anonymous users
-  // Valid feedback_type values: 'accuracy', 'clarity', 'completeness', 'other'
-  const { error } = await supabase.rpc("process_feedback", {
+  const params = {
     p_message_id: messageId,
     p_rating: rating,
     p_user_id: userId,
     p_correction: correction,
     p_feedback_type: "accuracy",
-  });
+  };
+
+  console.log("[Feedback] Submitting feedback:", JSON.stringify(params, null, 2));
+
+  // Use the database function for proper feedback processing
+  // All parameters except p_message_id are optional to support anonymous users
+  // Valid feedback_type values: 'accuracy', 'clarity', 'completeness', 'other'
+  const { data, error } = await supabase.rpc("process_feedback", params);
 
   if (error) {
-    console.error("Failed to submit feedback:", error);
+    console.error("[Feedback] Failed to submit feedback:", error);
     return false;
   }
 
+  console.log("[Feedback] Success, feedback_id:", data);
   return true;
 }
 
@@ -458,16 +463,26 @@ export async function trackEvent(
 ): Promise<void> {
   const supabase = createClient();
 
+  const params = {
+    p_event_type: eventType,
+    p_phone: options.phone,
+    p_conversation_id: options.conversationId,
+    p_appeal_id: options.appealId,
+    p_event_data: options.eventData as Record<string, string | number | boolean | null> | undefined,
+  };
+
+  console.log("[TrackEvent] Tracking event:", JSON.stringify(params, null, 2));
+
   try {
-    await supabase.rpc("track_user_event", {
-      p_event_type: eventType,
-      p_phone: options.phone,
-      p_conversation_id: options.conversationId,
-      p_appeal_id: options.appealId,
-      p_event_data: options.eventData as Record<string, string | number | boolean | null> | undefined,
-    });
+    const { data, error } = await supabase.rpc("track_user_event", params);
+
+    if (error) {
+      console.error("[TrackEvent] RPC error:", error);
+    } else {
+      console.log("[TrackEvent] Success, event_id:", data);
+    }
   } catch (error) {
     // Non-blocking - just log
-    console.error("Failed to track event:", error);
+    console.error("[TrackEvent] Exception:", error);
   }
 }

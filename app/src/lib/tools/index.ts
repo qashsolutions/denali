@@ -107,6 +107,8 @@ async function callCMSCoverageMCP(
     params,
   };
 
+  console.log("[CMS MCP] Calling:", method, "with params:", JSON.stringify(params));
+
   try {
     const response = await cmsMcpFetch(CMS_COVERAGE_MCP_URL, {
       method: "POST",
@@ -116,11 +118,15 @@ async function callCMSCoverageMCP(
       body: JSON.stringify(request),
     });
 
+    console.log("[CMS MCP] Response status:", response.status);
+
     if (!response.ok) {
       throw new Error(`MCP server error: ${response.status}`);
     }
 
-    return await response.json();
+    const result = await response.json();
+    console.log("[CMS MCP] Response data:", JSON.stringify(result).substring(0, 500));
+    return result;
   } catch (error) {
     // Handle circuit breaker and rate limit errors gracefully
     if (error instanceof CircuitOpenError || error instanceof RateLimitError) {
@@ -147,10 +153,13 @@ async function searchNCDsViaMCP(
   cptCode?: string,
   limit: number = 5
 ): Promise<NCDResult[]> {
+  console.log("[NCD Search] Query:", query, "CPT:", cptCode, "Limit:", limit);
+
   // Check cache first
   const cacheKey = { type: "ncd", query, cptCode, limit };
   const cached = ncdCache.get(cacheKey);
   if (cached) {
+    console.log("[NCD Search] Cache hit, returning", (cached as NCDResult[]).length, "results");
     return cached as NCDResult[];
   }
 
@@ -164,7 +173,7 @@ async function searchNCDsViaMCP(
   });
 
   if (response.error) {
-    console.error("NCD search error:", response.error);
+    console.error("[NCD Search] Error:", response.error);
     return [];
   }
 
@@ -172,14 +181,17 @@ async function searchNCDsViaMCP(
   if (result?.content?.[0]?.text) {
     try {
       const ncds = JSON.parse(result.content[0].text);
+      console.log("[NCD Search] Found", ncds.length, "NCDs");
       // Cache the result
       ncdCache.set(cacheKey, ncds);
       return ncds;
-    } catch {
+    } catch (e) {
+      console.error("[NCD Search] Parse error:", e);
       return [];
     }
   }
 
+  console.log("[NCD Search] No results found");
   return [];
 }
 
@@ -192,10 +204,13 @@ async function searchLCDsViaMCP(
   state?: string,
   limit: number = 5
 ): Promise<LCDResult[]> {
+  console.log("[LCD Search] Query:", query, "CPT:", cptCode, "State:", state, "Limit:", limit);
+
   // Check cache first
   const cacheKey = { type: "lcd", query, cptCode, state, limit };
   const cached = lcdCache.get(cacheKey);
   if (cached) {
+    console.log("[LCD Search] Cache hit, returning", (cached as LCDResult[]).length, "results");
     return cached as LCDResult[];
   }
 
@@ -210,7 +225,7 @@ async function searchLCDsViaMCP(
   });
 
   if (response.error) {
-    console.error("LCD search error:", response.error);
+    console.error("[LCD Search] Error:", response.error);
     return [];
   }
 
@@ -218,14 +233,17 @@ async function searchLCDsViaMCP(
   if (result?.content?.[0]?.text) {
     try {
       const lcds = JSON.parse(result.content[0].text);
+      console.log("[LCD Search] Found", lcds.length, "LCDs");
       // Cache the result
       lcdCache.set(cacheKey, lcds);
       return lcds;
-    } catch {
+    } catch (e) {
+      console.error("[LCD Search] Parse error:", e);
       return [];
     }
   }
 
+  console.log("[LCD Search] No results found");
   return [];
 }
 
@@ -562,6 +580,8 @@ const searchICD10Executor: ToolExecutor = async (input) => {
     const query = input.query as string;
     const limit = (input.limit as number) || 10;
 
+    console.log("[Tool:search_icd10] Searching for:", query, "limit:", limit);
+
     // First try condition-based lookup
     let results = getICD10sForCondition(query);
 
@@ -571,6 +591,8 @@ const searchICD10Executor: ToolExecutor = async (input) => {
     } else {
       results = results.slice(0, limit);
     }
+
+    console.log("[Tool:search_icd10] Found", results.length, "codes:", results.map(r => r.code).join(", "));
 
     return {
       success: true,
@@ -584,6 +606,7 @@ const searchICD10Executor: ToolExecutor = async (input) => {
       },
     };
   } catch (error) {
+    console.error("[Tool:search_icd10] Error:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to search ICD-10 codes",
@@ -596,6 +619,8 @@ const searchCPTExecutor: ToolExecutor = async (input) => {
     const query = input.query as string;
     const limit = (input.limit as number) || 10;
 
+    console.log("[Tool:search_cpt] Searching for:", query, "limit:", limit);
+
     // First try condition-based lookup
     let results = getCPTsForCondition(query);
 
@@ -605,6 +630,8 @@ const searchCPTExecutor: ToolExecutor = async (input) => {
     } else {
       results = results.slice(0, limit);
     }
+
+    console.log("[Tool:search_cpt] Found", results.length, "codes:", results.map(r => r.code).join(", "));
 
     return {
       success: true,
@@ -619,6 +646,7 @@ const searchCPTExecutor: ToolExecutor = async (input) => {
       },
     };
   } catch (error) {
+    console.error("[Tool:search_cpt] Error:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to search CPT codes",
@@ -839,18 +867,25 @@ const getCoverageRequirementsExecutor: ToolExecutor = async (input) => {
     const procedure = (input.procedure as string).toLowerCase();
     const diagnosis = input.diagnosis as string | undefined;
 
+    console.log("[Tool:get_coverage_requirements] Procedure:", procedure, "Diagnosis:", diagnosis);
+
     // Search for related codes
     const cptResults = searchCPT(procedure, 3);
     const icd10Results = diagnosis ? searchICD10(diagnosis, 3) : [];
 
+    console.log("[Tool:get_coverage_requirements] CPT results:", cptResults.length, "ICD-10 results:", icd10Results.length);
+
     // Get the primary CPT code for NCD/LCD lookup
     const primaryCPT = cptResults[0]?.code;
+    console.log("[Tool:get_coverage_requirements] Primary CPT for policy lookup:", primaryCPT);
 
     // Search for NCDs and LCDs via MCP
+    console.log("[Tool:get_coverage_requirements] Searching NCD/LCD policies...");
     const [ncds, lcds] = await Promise.all([
       searchNCDsViaMCP(procedure, primaryCPT, 3),
       searchLCDsViaMCP(procedure, primaryCPT, undefined, 3),
     ]);
+    console.log("[Tool:get_coverage_requirements] NCD results:", ncds.length, "LCD results:", lcds.length);
 
     // If we got real coverage data from MCP, use it
     if (ncds.length > 0 || lcds.length > 0) {
@@ -1074,6 +1109,8 @@ const npiFetch = createRateLimitedFetcher("NPI");
 
 const searchNPIExecutor: ToolExecutor = async (input) => {
   try {
+    console.log("[Tool:search_npi] Input:", JSON.stringify(input));
+
     const params = new URLSearchParams();
     params.append("version", "2.1");
 
@@ -1105,22 +1142,29 @@ const searchNPIExecutor: ToolExecutor = async (input) => {
     const limit = Math.min((input.limit as number) || 10, 20);
     params.append("limit", limit.toString());
 
+    console.log("[Tool:search_npi] API URL params:", params.toString());
+
     // Check cache first
     const cacheKey = { type: "npi", params: params.toString() };
     const cached = npiCache.get(cacheKey);
     if (cached) {
+      console.log("[Tool:search_npi] Cache hit");
       return cached as ToolResult;
     }
 
+    console.log("[Tool:search_npi] Calling NPI Registry API...");
     const response = await npiFetch(
       `https://npiregistry.cms.hhs.gov/api/?${params.toString()}`
     );
+
+    console.log("[Tool:search_npi] Response status:", response.status);
 
     if (!response.ok) {
       throw new Error(`NPI Registry API error: ${response.status}`);
     }
 
     const data = await response.json();
+    console.log("[Tool:search_npi] Result count:", data.result_count);
 
     if (data.result_count === 0) {
       return {
@@ -1133,6 +1177,7 @@ const searchNPIExecutor: ToolExecutor = async (input) => {
       };
     }
 
+    console.log("[Tool:search_npi] Processing", data.results.length, "providers");
     const providers = data.results.map((result: Record<string, unknown>) => {
       const basic = result.basic as Record<string, unknown> || {};
       const addresses = result.addresses as Array<Record<string, unknown>> || [];
