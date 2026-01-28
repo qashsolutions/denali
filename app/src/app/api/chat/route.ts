@@ -17,8 +17,17 @@ import {
   createDefaultSessionState,
   type SessionState,
 } from "@/lib/claude";
-import { buildSystemPrompt, detectTriggers } from "@/lib/skills-loader";
+import {
+  buildSystemPromptWithLearning,
+  detectTriggers,
+  extractEntitiesFromMessages,
+} from "@/lib/skills-loader";
 import { getToolDefinitions, createToolExecutorMap } from "@/lib/tools";
+import {
+  updateSymptomMapping,
+  updateProcedureMapping,
+  queueLearningJob,
+} from "@/lib/learning";
 
 // Request body type
 interface ChatRequestBody {
@@ -66,12 +75,30 @@ export async function POST(request: NextRequest) {
     // Detect triggers based on conversation content
     const triggers = detectTriggers(body.messages, sessionState);
 
-    // Build dynamic system prompt based on triggers
-    const systemPrompt = buildSystemPrompt(triggers, sessionState);
+    // Build dynamic system prompt with learning context (async)
+    // This injects learned symptom/procedure mappings and successful coverage paths
+    const systemPrompt = await buildSystemPromptWithLearning(
+      triggers,
+      sessionState,
+      body.messages
+    );
 
     // Get tool definitions and create executor map
     const toolDefinitions = getToolDefinitions();
     const toolExecutors = createToolExecutorMap();
+
+    // Extract entities for learning (async, non-blocking)
+    const entities = extractEntitiesFromMessages(body.messages);
+    if (entities.symptoms.length > 0 || entities.procedures.length > 0) {
+      // Queue learning job for background processing
+      queueLearningJob("extract_entities", {
+        symptoms: entities.symptoms,
+        procedures: entities.procedures,
+        medications: entities.medications,
+        providers: entities.providers,
+        conversationId: body.conversationId,
+      }).catch((err) => console.warn("Failed to queue learning job:", err));
+    }
 
     // Format messages for Claude API
     const formattedMessages = formatMessages(body.messages);

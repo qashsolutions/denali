@@ -334,6 +334,112 @@ export async function saveAppeal(
 }
 
 /**
+ * Check appeal access for a user
+ * Returns: 'free' (first appeal), 'paywall' (needs payment), 'allowed' (has subscription)
+ */
+export async function checkAppealAccess(
+  phone: string,
+  userId?: string
+): Promise<{
+  access: "free" | "paywall" | "allowed";
+  appealCount: number;
+  hasSubscription: boolean;
+}> {
+  const supabase = createClient();
+
+  try {
+    // First try the RPC function if available
+    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+      "check_appeal_access",
+      { p_phone: phone }
+    );
+
+    if (!rpcError && rpcResult) {
+      // RPC returns 'free', 'paywall', or 'allowed'
+      return {
+        access: rpcResult as "free" | "paywall" | "allowed",
+        appealCount: 0, // RPC doesn't return count
+        hasSubscription: rpcResult === "allowed",
+      };
+    }
+
+    // Fallback: Check manually
+    // 1. Get appeal count from usage table
+    const { data: usageData } = await supabase
+      .from("usage")
+      .select("appeal_count")
+      .eq("phone", phone)
+      .single();
+
+    const appealCount = usageData?.appeal_count ?? 0;
+
+    // 2. Check for active subscription
+    let hasSubscription = false;
+    if (userId) {
+      const { data: subData } = await supabase
+        .from("subscriptions")
+        .select("status, plan_type")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .single();
+
+      hasSubscription = !!subData;
+    }
+
+    // Determine access
+    let access: "free" | "paywall" | "allowed";
+    if (hasSubscription) {
+      access = "allowed";
+    } else if (appealCount === 0) {
+      access = "free"; // First appeal is free
+    } else {
+      access = "paywall"; // Needs to pay for additional appeals
+    }
+
+    return { access, appealCount, hasSubscription };
+  } catch (error) {
+    console.error("Failed to check appeal access:", error);
+    // Default to free on error (graceful degradation)
+    return { access: "free", appealCount: 0, hasSubscription: false };
+  }
+}
+
+/**
+ * Get appeal count for a phone number
+ */
+export async function getAppealCount(phone: string): Promise<number> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("usage")
+    .select("appeal_count")
+    .eq("phone", phone)
+    .single();
+
+  if (error || !data) {
+    return 0;
+  }
+
+  return data.appeal_count;
+}
+
+/**
+ * Check if user has active subscription
+ */
+export async function hasActiveSubscription(userId: string): Promise<boolean> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .single();
+
+  return !error && !!data;
+}
+
+/**
  * Track a user event for analytics
  */
 export async function trackEvent(
