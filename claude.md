@@ -33,6 +33,11 @@ This is a Medicare claims intelligence platform. Claude is the brain — driving
    - [Feedback Loops](#83-feedback-loops)
 9. [Tools & APIs](#9-tools--apis)
 10. [Guardrails](#10-guardrails)
+11. [Coding Standards](#11-coding-standards)
+    - [Principles](#111-principles)
+    - [Project Structure](#112-project-structure)
+    - [Component Guidelines](#113-component-guidelines)
+    - [Edge Function Guidelines](#114-edge-function-guidelines)
 
 ---
 
@@ -526,6 +531,201 @@ User: "Medicare denied my MRI, help me appeal"
 - Cascade delete all user-linked data
 - Cancel Stripe subscription
 - Retain anonymized learning data (no user FK)
+
+---
+
+## 11. Coding Standards
+
+### 11.1 Principles
+
+- **Modular**: Small, focused units that do one thing well
+- **Component-based**: Reusable, composable building blocks
+- **Props-driven**: No hardcoded values, configuration via props/parameters
+- **Separation of concerns**: UI, logic, and data access in separate layers
+- **DRY**: Don't repeat yourself — extract shared logic into utilities
+
+### 11.2 Project Structure
+
+```
+src/
+├── components/
+│   ├── ui/                 # Primitives (Button, Input, Card, Modal)
+│   │   ├── Button.tsx
+│   │   ├── Input.tsx
+│   │   ├── Card.tsx
+│   │   └── index.ts        # Barrel export
+│   ├── chat/               # Chat-specific components
+│   │   ├── Message.tsx
+│   │   ├── ChatInput.tsx
+│   │   ├── Suggestions.tsx
+│   │   └── index.ts
+│   ├── appeal/             # Appeal-specific components
+│   │   ├── AppealLetter.tsx
+│   │   ├── StatusBadge.tsx
+│   │   └── index.ts
+│   └── layout/             # Layout components
+│       ├── Header.tsx
+│       ├── Container.tsx
+│       └── index.ts
+├── features/               # Feature modules (self-contained)
+│   ├── coverage/           # Coverage check feature
+│   │   ├── CoverageFlow.tsx
+│   │   ├── useCoverage.ts
+│   │   └── coverage.utils.ts
+│   ├── appeal/             # Appeal generation feature
+│   │   ├── AppealFlow.tsx
+│   │   ├── useAppeal.ts
+│   │   └── appeal.utils.ts
+│   └── auth/               # Auth flows
+│       ├── OTPVerify.tsx
+│       ├── useAuth.ts
+│       └── auth.utils.ts
+├── hooks/                  # Shared custom hooks
+│   ├── useSupabase.ts
+│   ├── useClaude.ts
+│   └── useLocalStorage.ts
+├── lib/                    # Core libraries & clients
+│   ├── supabase.ts         # Supabase client
+│   ├── claude.ts           # Claude API client
+│   └── stripe.ts           # Stripe client
+├── utils/                  # Shared utilities
+│   ├── format.ts           # Formatting helpers
+│   ├── validate.ts         # Validation helpers
+│   └── constants.ts        # App constants
+├── types/                  # TypeScript types
+│   ├── database.ts         # Supabase generated types
+│   ├── api.ts              # API response types
+│   └── index.ts
+└── styles/                 # Global styles
+    ├── globals.css
+    └── theme.ts
+```
+
+### 11.3 Component Guidelines
+
+**DO:**
+```tsx
+// ✅ Small, focused component
+export function Message({ content, role, timestamp }: MessageProps) {
+  return (
+    <div className={cn("message", role)}>
+      <p>{content}</p>
+      <time>{formatTime(timestamp)}</time>
+    </div>
+  );
+}
+
+// ✅ Props-driven, no hardcoded values
+export function Button({ variant = "primary", size = "md", children, ...props }: ButtonProps) {
+  return (
+    <button className={cn(variants[variant], sizes[size])} {...props}>
+      {children}
+    </button>
+  );
+}
+
+// ✅ Composition over configuration
+export function AppealLetter({ appeal }: AppealLetterProps) {
+  return (
+    <Card>
+      <Card.Header>
+        <StatusBadge status={appeal.status} />
+      </Card.Header>
+      <Card.Body>
+        <LetterContent content={appeal.letter} />
+      </Card.Body>
+      <Card.Footer>
+        <PrintButton />
+        <CopyButton />
+      </Card.Footer>
+    </Card>
+  );
+}
+```
+
+**DON'T:**
+```tsx
+// ❌ Monolithic component with hardcoded values
+export function ChatPage() {
+  // 500 lines of mixed UI, logic, and API calls
+  const apiUrl = "https://api.example.com"; // hardcoded
+  // ...
+}
+```
+
+### 11.4 Edge Function Guidelines
+
+**One function per skill/domain:**
+```
+supabase/functions/
+├── coverage-check/         # Coverage Check Skill
+│   └── index.ts
+├── symptom-lookup/         # Symptom-to-Diagnosis Skill
+│   └── index.ts
+├── procedure-lookup/       # Procedure Identification Skill
+│   └── index.ts
+├── provider-search/        # Provider Lookup Skill
+│   └── index.ts
+├── guidance-generate/      # Guidance Generation Skill
+│   └── index.ts
+├── appeal-generate/        # Appeal letter generation
+│   └── index.ts
+├── feedback-process/       # Process user feedback
+│   └── index.ts
+└── _shared/                # Shared utilities (not deployed)
+    ├── cors.ts
+    ├── auth.ts
+    ├── claude.ts
+    └── types.ts
+```
+
+**Function template:**
+```typescript
+// supabase/functions/coverage-check/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { corsHeaders } from "../_shared/cors.ts";
+import { validateAuth } from "../_shared/auth.ts";
+import { createClaudeClient } from "../_shared/claude.ts";
+
+serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    // 1. Validate request
+    const { diagnosis, procedure } = await req.json();
+
+    // 2. Do one thing well
+    const coverage = await checkCoverage(diagnosis, procedure);
+
+    // 3. Return response
+    return new Response(JSON.stringify(coverage), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
+```
+
+**Shared utilities pattern:**
+```typescript
+// supabase/functions/_shared/claude.ts
+export function createClaudeClient() {
+  return new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
+}
+
+// supabase/functions/_shared/cors.ts
+export const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+```
 
 ---
 
