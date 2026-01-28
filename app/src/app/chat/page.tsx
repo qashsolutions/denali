@@ -72,29 +72,18 @@ function ChatContent() {
               </span>
             </Link>
 
-            {/* Actions */}
-            <div className="flex items-center gap-2">
-              {/* Theme Toggle */}
-              <button
-                onClick={toggleTheme}
-                className="w-10 h-10 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors hover:bg-[var(--border)]"
-                aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
-              >
-                {isDark ? (
-                  <SunIcon className="w-5 h-5 text-yellow-400" />
-                ) : (
-                  <MoonIcon className="w-5 h-5 text-[var(--text-secondary)]" />
-                )}
-              </button>
-
-              {/* Home Link */}
-              <Link
-                href="/"
-                className="px-4 h-10 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--border)]"
-              >
-                Home
-              </Link>
-            </div>
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="w-10 h-10 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors hover:bg-[var(--border)]"
+              aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
+            >
+              {isDark ? (
+                <SunIcon className="w-5 h-5 text-yellow-400" />
+              ) : (
+                <MoonIcon className="w-5 h-5 text-[var(--text-secondary)]" />
+              )}
+            </button>
           </div>
         </div>
       </header>
@@ -153,7 +142,7 @@ function ChatContent() {
         )}
 
         {/* Chat Input */}
-        <div className="p-4 pb-8 bg-[var(--bg-primary)] border-t border-[var(--border)]">
+        <div className="p-4 bg-[var(--bg-primary)] border-t border-[var(--border)]">
           <Container>
             <ChatInput
               onSend={sendMessage}
@@ -162,6 +151,15 @@ function ChatContent() {
             />
           </Container>
         </div>
+
+        {/* Compact Footer */}
+        <footer className="py-3 px-4 bg-[var(--bg-secondary)] border-t border-[var(--border)]">
+          <div className="max-w-4xl mx-auto text-center">
+            <p className="text-xs text-[var(--text-muted)]">
+              {BRAND.NAME} · {BRAND.COMPANY_ATTRIBUTION} · Coverage guidance only, not medical advice
+            </p>
+          </div>
+        </footer>
       </main>
 
       {/* Print Preview Modal */}
