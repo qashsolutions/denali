@@ -16,6 +16,12 @@
  */
 
 import { createClient } from "./supabase";
+import {
+  CONFIDENCE_CONFIG,
+  FEEDBACK_CONFIG,
+  PRUNING_CONFIG,
+  ENTITY_EXTRACTION_CONFIG,
+} from "@/config";
 
 // Types for learning data
 export interface SymptomMapping {
@@ -254,7 +260,7 @@ export async function updateSymptomMapping(
   phrase: string,
   icd10Code: string,
   icd10Description: string,
-  boost: number = 0.1
+  boost: number = FEEDBACK_CONFIG.positiveBoost
 ): Promise<void> {
   const supabase = createClient();
 
@@ -319,7 +325,7 @@ async function directUpdateSymptomMapping(
       phrase: normalizedPhrase,
       icd10_code: icd10Code,
       icd10_description: icd10Description,
-      confidence: 0.5 + boost,
+      confidence: CONFIDENCE_CONFIG.initial + boost,
       use_count: 1,
       last_used_at: new Date().toISOString(),
     });
@@ -333,7 +339,7 @@ export async function updateProcedureMapping(
   phrase: string,
   cptCode: string,
   cptDescription: string,
-  boost: number = 0.1
+  boost: number = FEEDBACK_CONFIG.positiveBoost
 ): Promise<void> {
   const supabase = createClient();
 
@@ -388,7 +394,7 @@ async function directUpdateProcedureMapping(
       phrase: normalizedPhrase,
       cpt_code: cptCode,
       cpt_description: cptDescription,
-      confidence: 0.5 + boost,
+      confidence: CONFIDENCE_CONFIG.initial + boost,
       use_count: 1,
       last_used_at: new Date().toISOString(),
     });
@@ -459,7 +465,9 @@ export async function processFeedback(
   },
   correction?: string
 ): Promise<void> {
-  const boost = rating === "up" ? 0.1 : -0.15;
+  const boost = rating === "up"
+    ? FEEDBACK_CONFIG.positiveBoost
+    : -FEEDBACK_CONFIG.negativePenalty;
 
   // Update symptom mappings
   if (conversationContext.symptoms && conversationContext.icd10Codes) {
@@ -497,7 +505,7 @@ export async function processFeedback(
  */
 export async function getSymptomMappings(
   phrase: string,
-  minConfidence: number = 0.6
+  minConfidence: number = CONFIDENCE_CONFIG.minForPrompt
 ): Promise<SymptomMapping[]> {
   const supabase = createClient();
   const normalizedPhrase = phrase.toLowerCase().trim();
@@ -531,7 +539,7 @@ export async function getSymptomMappings(
  */
 export async function getProcedureMappings(
   phrase: string,
-  minConfidence: number = 0.6
+  minConfidence: number = CONFIDENCE_CONFIG.minForPrompt
 ): Promise<ProcedureMapping[]> {
   const supabase = createClient();
   const normalizedPhrase = phrase.toLowerCase().trim();
@@ -727,8 +735,8 @@ export async function queueLearningJob(
  * Prune low-confidence mappings (for batch processing)
  */
 export async function pruneLowConfidenceMappings(
-  minConfidence: number = 0.3,
-  maxAge: number = 90 // days
+  minConfidence: number = CONFIDENCE_CONFIG.minBeforePrune,
+  maxAge: number = PRUNING_CONFIG.maxAgeDays
 ): Promise<{ symptoms: number; procedures: number }> {
   const supabase = createClient();
   const cutoffDate = new Date();

@@ -5,6 +5,14 @@
  * Reduces API calls and improves response time.
  */
 
+import {
+  CACHE_TTL,
+  CACHE_LIMITS,
+} from "@/config";
+
+// Re-export for backwards compatibility
+export { CACHE_TTL };
+
 interface CacheEntry<T> {
   value: T;
   expiresAt: number;
@@ -19,21 +27,6 @@ interface CacheStats {
   oldestEntry: number | null;
   newestEntry: number | null;
 }
-
-// Default TTLs for different API types (in milliseconds)
-export const CACHE_TTL = {
-  NPI: 24 * 60 * 60 * 1000, // 24 hours - NPI data rarely changes
-  PUBMED: 12 * 60 * 60 * 1000, // 12 hours - research articles are stable
-  NCD: 6 * 60 * 60 * 1000, // 6 hours - policies can update
-  LCD: 6 * 60 * 60 * 1000, // 6 hours - policies can update
-  ICD10: 24 * 60 * 60 * 1000, // 24 hours - codes are stable
-  CPT: 24 * 60 * 60 * 1000, // 24 hours - codes are stable
-  SAD: 24 * 60 * 60 * 1000, // 24 hours - SAD list is stable
-  DEFAULT: 60 * 60 * 1000, // 1 hour default
-} as const;
-
-// Maximum cache entries per type to prevent memory issues
-const MAX_CACHE_ENTRIES = 1000;
 
 class Cache<T> {
   private cache: Map<string, CacheEntry<T>> = new Map();
@@ -51,7 +44,7 @@ class Cache<T> {
   constructor(
     name: string,
     defaultTTL: number = CACHE_TTL.DEFAULT,
-    maxEntries: number = MAX_CACHE_ENTRIES
+    maxEntries: number = CACHE_LIMITS.maxEntries
   ) {
     this.name = name;
     this.defaultTTL = defaultTTL;
@@ -338,10 +331,10 @@ export const cacheManager = {
   },
 };
 
-// Periodic cleanup (run every hour)
+// Periodic cleanup
 let cleanupInterval: NodeJS.Timeout | null = null;
 
-export function startCacheCleanup(intervalMs: number = 60 * 60 * 1000): void {
+export function startCacheCleanup(intervalMs: number = CACHE_LIMITS.cleanupInterval): void {
   if (cleanupInterval) {
     clearInterval(cleanupInterval);
   }

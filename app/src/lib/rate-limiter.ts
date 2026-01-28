@@ -7,30 +7,14 @@
  * - Circuit breaker pattern for failing APIs
  */
 
-// Rate limit configurations per API
-export const RATE_LIMITS = {
-  NPI: { requestsPerMinute: 60, burstSize: 10 },
-  PUBMED: { requestsPerMinute: 3, burstSize: 3 }, // NCBI is strict
-  CMS_MCP: { requestsPerMinute: 30, burstSize: 5 },
-  CLAUDE: { requestsPerMinute: 50, burstSize: 10 },
-  DEFAULT: { requestsPerMinute: 30, burstSize: 5 },
-} as const;
+import {
+  RATE_LIMITS,
+  RETRY_CONFIG,
+  CIRCUIT_BREAKER_CONFIG,
+} from "@/config";
 
-// Retry configurations
-export const RETRY_CONFIG = {
-  maxRetries: 3,
-  initialDelayMs: 1000,
-  maxDelayMs: 30000,
-  backoffMultiplier: 2,
-  jitterFactor: 0.2, // 20% jitter
-} as const;
-
-// Circuit breaker configurations
-export const CIRCUIT_BREAKER_CONFIG = {
-  failureThreshold: 5, // Open circuit after 5 failures
-  resetTimeoutMs: 60000, // Try again after 1 minute
-  halfOpenRequests: 2, // Allow 2 requests in half-open state
-} as const;
+// Re-export for backwards compatibility
+export { RATE_LIMITS, RETRY_CONFIG, CIRCUIT_BREAKER_CONFIG };
 
 // Token bucket rate limiter
 interface TokenBucket {

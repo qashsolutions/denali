@@ -7,6 +7,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { Message, MessageParam, ContentBlock, ToolUseBlock, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
+import { API_CONFIG } from "@/config";
 
 // Types for our tool system
 export interface ToolDefinition {
@@ -168,7 +169,7 @@ async function processToolCalls(
 export async function chat(
   request: ChatRequest,
   toolExecutors: Map<string, ToolExecutor>,
-  maxIterations: number = 10
+  maxIterations: number = API_CONFIG.claude.maxToolIterations
 ): Promise<ChatResult> {
   const claude = getClaudeClient();
   const sessionState = request.sessionState ?? createDefaultSessionState();
@@ -189,8 +190,8 @@ export async function chat(
 
     // Call Claude API
     const response: Message = await claude.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+      model: API_CONFIG.claude.model,
+      max_tokens: API_CONFIG.claude.maxTokens,
       system: request.systemPrompt,
       messages,
       tools: anthropicTools.length > 0 ? anthropicTools : undefined,

@@ -1,0 +1,50 @@
+/**
+ * Pricing Configuration
+ *
+ * Centralized pricing values for the application.
+ * These can be overridden via environment variables.
+ */
+
+export const PRICING = {
+  /** Single appeal one-time payment */
+  SINGLE_APPEAL: {
+    amount: parseInt(process.env.NEXT_PUBLIC_PRICE_SINGLE_APPEAL || "10", 10),
+    currency: "USD",
+    label: "One-time",
+    stripePriceId: process.env.STRIPE_PRICE_SINGLE || "price_single_appeal",
+  },
+
+  /** Unlimited monthly subscription */
+  UNLIMITED_MONTHLY: {
+    amount: parseInt(process.env.NEXT_PUBLIC_PRICE_UNLIMITED_MONTHLY || "25", 10),
+    currency: "USD",
+    label: "per month",
+    stripePriceId: process.env.STRIPE_PRICE_UNLIMITED || "price_unlimited_monthly",
+  },
+} as const;
+
+/**
+ * Format price for display
+ */
+export function formatPrice(amount: number, currency: string = "USD"): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+/**
+ * Get formatted single appeal price
+ */
+export function getSingleAppealPrice(): string {
+  return formatPrice(PRICING.SINGLE_APPEAL.amount);
+}
+
+/**
+ * Get formatted unlimited price
+ */
+export function getUnlimitedPrice(): string {
+  return formatPrice(PRICING.UNLIMITED_MONTHLY.amount);
+}

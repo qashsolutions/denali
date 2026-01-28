@@ -4,10 +4,11 @@
  * POST /api/checkout
  *
  * Creates a Stripe Checkout session for appeal letter purchases.
- * Supports both one-time ($10) and subscription ($25/month) payments.
+ * Pricing is configured via config/pricing.ts
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { PRICING, getBaseUrl } from "@/config";
 
 // Stripe is imported dynamically to avoid build errors when key is not set
 type Stripe = typeof import("stripe").default;
@@ -16,10 +17,10 @@ interface CheckoutRequestBody {
   plan: "single" | "unlimited";
 }
 
-// Price IDs from Stripe Dashboard (to be configured)
+// Price IDs from config (with Stripe Dashboard fallback)
 const STRIPE_PRICES = {
-  single: process.env.STRIPE_PRICE_SINGLE || "price_single_appeal",
-  unlimited: process.env.STRIPE_PRICE_UNLIMITED || "price_unlimited_monthly",
+  single: PRICING.SINGLE_APPEAL.stripePriceId,
+  unlimited: PRICING.UNLIMITED_MONTHLY.stripePriceId,
 };
 
 export async function POST(request: NextRequest) {
@@ -48,8 +49,8 @@ export async function POST(request: NextRequest) {
     const StripeModule = await import("stripe");
     const stripe = new StripeModule.default(stripeKey);
 
-    // Get the origin for redirect URLs
-    const origin = request.headers.get("origin") || "http://localhost:3000";
+    // Get the origin for redirect URLs (uses safe fallback from config)
+    const origin = getBaseUrl(request.headers.get("origin"));
 
     // Create checkout session
     const session = await stripe.checkout.sessions.create({

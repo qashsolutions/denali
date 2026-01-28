@@ -37,12 +37,13 @@ import {
   CircuitOpenError,
   RateLimitError,
 } from "../rate-limiter";
+import { API_CONFIG } from "@/config";
 
 // =============================================================================
 // CMS COVERAGE MCP CLIENT
 // =============================================================================
 
-const CMS_COVERAGE_MCP_URL = process.env.CMS_COVERAGE_MCP_URL || "https://mcp.deepsense.ai/cms_coverage/mcp";
+const CMS_COVERAGE_MCP_URL = API_CONFIG.mcp.cmsCoverage;
 
 interface MCPRequest {
   jsonrpc: "2.0";

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { PRICING, formatPrice } from "@/config";
 
 interface PaywallModalProps {
   isOpen: boolean;
@@ -15,9 +16,8 @@ type PlanType = "single" | "unlimited";
 /**
  * PaywallModal Component
  *
- * Shows pricing options for appeal letters:
- * - $10 per appeal (one-time)
- * - $25/month unlimited
+ * Shows pricing options for appeal letters.
+ * Prices are configured via PRICING config.
  */
 export function PaywallModal({
   isOpen,
@@ -169,8 +169,10 @@ export function PaywallModal({
                   </p>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-slate-100">$10</div>
-                  <div className="text-xs text-slate-500">one-time</div>
+                  <div className="text-2xl font-bold text-slate-100">
+                    {formatPrice(PRICING.SINGLE_APPEAL.amount)}
+                  </div>
+                  <div className="text-xs text-slate-500">{PRICING.SINGLE_APPEAL.label}</div>
                 </div>
               </div>
             </button>
@@ -253,8 +255,10 @@ export function PaywallModal({
                   </ul>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-slate-100">$25</div>
-                  <div className="text-xs text-slate-500">/month</div>
+                  <div className="text-2xl font-bold text-slate-100">
+                    {formatPrice(PRICING.UNLIMITED_MONTHLY.amount)}
+                  </div>
+                  <div className="text-xs text-slate-500">/{PRICING.UNLIMITED_MONTHLY.label}</div>
                 </div>
               </div>
             </button>
@@ -306,8 +310,8 @@ export function PaywallModal({
             ) : (
               <>
                 {selectedPlan === "single"
-                  ? "Pay $10 & Get Letter"
-                  : "Subscribe for $25/month"}
+                  ? `Pay ${formatPrice(PRICING.SINGLE_APPEAL.amount)} & Get Letter`
+                  : `Subscribe for ${formatPrice(PRICING.UNLIMITED_MONTHLY.amount)}/month`}
               </>
             )}
           </button>
