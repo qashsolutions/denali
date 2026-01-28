@@ -260,27 +260,69 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     // Save email for future use
     setUserEmail(email);
 
-    // TODO: Actually send email via Edge function
-    console.log(`Sending checklist to ${email}`);
+    const data = checklistData || generateChecklistData();
 
-    // Simulate sending
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      // Call Supabase Edge function to send email
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    setCurrentAction({ type: "email_sent", email });
+      if (supabaseUrl && supabaseKey) {
+        const response = await fetch(
+          `${supabaseUrl}/functions/v1/send-checklist-email`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseKey}`,
+            },
+            body: JSON.stringify({
+              email,
+              checklist: data,
+              conversationId,
+            }),
+          }
+        );
 
-    // Add confirmation message
-    const confirmMessage: Message = {
-      id: generateId(),
-      role: "assistant",
-      content: `Done! I've sent the checklist to **${email}**. Check your inbox (and spam folder, just in case).`,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, confirmMessage]);
-    setSuggestions(["Print checklist", "What if it's denied?", "New question"]);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to send email");
+        }
+      } else {
+        // Development fallback
+        console.log(`[DEV] Would send checklist to ${email}`);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
 
-    // Clear action after a moment
-    setTimeout(() => setCurrentAction({ type: "none" }), 500);
-  }, []);
+      setCurrentAction({ type: "email_sent", email });
+
+      // Add confirmation message
+      const confirmMessage: Message = {
+        id: generateId(),
+        role: "assistant",
+        content: `Done! I've sent the checklist to **${email}**. Check your inbox (and spam folder, just in case).`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, confirmMessage]);
+      setSuggestions(["Print checklist", "What if it's denied?", "New question"]);
+
+      // Clear action after a moment
+      setTimeout(() => setCurrentAction({ type: "none" }), 500);
+    } catch (error) {
+      console.error("Failed to send email:", error);
+
+      // Show error message
+      const errorMessage: Message = {
+        id: generateId(),
+        role: "assistant",
+        content: `Sorry, I couldn't send the email. Please try again or use the print option instead.`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      setSuggestions(["Print checklist", "Try email again", "New question"]);
+      setCurrentAction({ type: "none" });
+    }
+  }, [checklistData, conversationId]);
 
   const dismissAction = useCallback(() => {
     setCurrentAction({ type: "none" });
