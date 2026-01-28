@@ -56,7 +56,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       root.setAttribute("data-theme", "light");
       root.style.colorScheme = "light";
     } else {
-      root.removeAttribute("data-theme");
+      root.setAttribute("data-theme", "dark");
       root.style.colorScheme = "dark";
     }
   };

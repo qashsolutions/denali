@@ -40,14 +40,16 @@ const themeScript = `
         document.documentElement.setAttribute('data-theme', 'light');
         document.documentElement.style.colorScheme = 'light';
       } else if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
         document.documentElement.style.colorScheme = 'dark';
       } else {
         var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (!prefersDark) {
+        if (prefersDark) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.style.colorScheme = 'dark';
+        } else {
           document.documentElement.setAttribute('data-theme', 'light');
           document.documentElement.style.colorScheme = 'light';
-        } else {
-          document.documentElement.style.colorScheme = 'dark';
         }
       }
     } catch (e) {}
