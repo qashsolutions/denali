@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils";
+import { MarkdownContent } from "./MarkdownContent";
 
 export interface MessageProps {
   id: string;
@@ -36,9 +37,13 @@ export function Message({
             : "bg-[var(--assistant-bubble)] text-[var(--text-primary)] rounded-bl-md border border-[var(--border)]"
         )}
       >
-        <div className="text-[15px] leading-relaxed whitespace-pre-wrap">
-          {content}
-        </div>
+        {isUser ? (
+          <div className="text-[15px] leading-relaxed whitespace-pre-wrap">
+            {content}
+          </div>
+        ) : (
+          <MarkdownContent content={content} />
+        )}
 
         {timestamp && (
           <div

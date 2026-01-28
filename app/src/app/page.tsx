@@ -26,6 +26,10 @@ export default function WelcomePage() {
     router.push("/chat");
   };
 
+  const handleSettings = () => {
+    router.push("/settings");
+  };
+
   const handleSend = (message: string) => {
     // Navigate to chat with initial message
     router.push(`/chat?message=${encodeURIComponent(message)}`);
@@ -37,6 +41,8 @@ export default function WelcomePage() {
         showThemeToggle
         onThemeToggle={toggleTheme}
         isDark={isDark}
+        showSettings
+        onSettings={handleSettings}
       />
 
       <main className="flex-1 flex flex-col">

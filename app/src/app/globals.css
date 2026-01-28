@@ -250,6 +250,71 @@ body {
    TAILWIND THEME INTEGRATION
    ============================================================================= */
 
+/* =============================================================================
+   MARKDOWN CONTENT (Chat messages)
+   ============================================================================= */
+
+.prose-chat {
+  font-size: 0.9375rem; /* 15px */
+  line-height: 1.6;
+}
+
+.prose-chat p {
+  margin-bottom: 0.75rem;
+}
+
+.prose-chat p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-chat strong {
+  font-weight: 600;
+}
+
+.prose-chat em {
+  font-style: italic;
+}
+
+.prose-chat .checkbox {
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+  margin-right: 0.5rem;
+  font-size: 0.875rem;
+  vertical-align: middle;
+}
+
+.prose-chat .checkbox--unchecked {
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
+}
+
+.prose-chat .checkbox--checked {
+  background: var(--success);
+  color: white;
+}
+
+.prose-chat .checklist-item {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.prose-chat .checklist-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Checklist component (printable) */
+.checklist {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
 @theme inline {
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
