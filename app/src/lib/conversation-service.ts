@@ -252,11 +252,12 @@ export async function submitMessageFeedback(
   const supabase = createClient();
 
   // Use the database function for proper feedback processing
+  // Note: p_user_id accepts null for anonymous users
   const { error } = await supabase.rpc("process_feedback", {
     p_message_id: messageId,
     p_rating: rating,
-    p_user_id: userId ?? "",
-    p_correction: correction,
+    p_user_id: (userId || null) as string,
+    p_correction: (correction || null) as string,
     p_feedback_type: "message_quality",
   });
 
@@ -457,10 +458,10 @@ export async function trackEvent(
   try {
     await supabase.rpc("track_user_event", {
       p_event_type: eventType,
-      p_phone: options.phone ?? "",
-      p_conversation_id: options.conversationId,
-      p_appeal_id: options.appealId,
-      p_event_data: options.eventData as Record<string, never> | undefined,
+      p_phone: (options.phone || null) as string,
+      p_conversation_id: (options.conversationId || null) as string,
+      p_appeal_id: (options.appealId || null) as string,
+      p_event_data: (options.eventData || null) as Record<string, never> | null,
     });
   } catch (error) {
     // Non-blocking - just log
