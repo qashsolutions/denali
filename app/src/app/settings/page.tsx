@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { PageContainer, Container } from "@/components/layout/Container";
-import { useTheme } from "@/hooks/useTheme";
+import { useTheme } from "@/components/ThemeProvider";
 import { useSettings } from "@/hooks/useSettings";
 
 export default function SettingsPage() {

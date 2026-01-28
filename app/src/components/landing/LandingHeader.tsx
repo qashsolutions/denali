@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { MountainIcon, SunIcon, MoonIcon, ChatBubbleIcon } from "../icons";
-import { useTheme } from "@/hooks/useTheme";
+import { useTheme } from "@/components/ThemeProvider";
 
 interface LandingHeaderProps {
   settings: Record<string, string>;

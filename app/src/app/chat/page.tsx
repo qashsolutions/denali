@@ -9,7 +9,7 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { Suggestions } from "@/components/chat/Suggestions";
 import { PrintableChecklist } from "@/components/chat/PrintableChecklist";
 import { EmailPrompt } from "@/components/chat/EmailPrompt";
-import { useTheme } from "@/hooks/useTheme";
+import { useTheme } from "@/components/ThemeProvider";
 import { useChat } from "@/hooks/useChat";
 
 function ChatContent() {
