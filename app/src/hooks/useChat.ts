@@ -1,8 +1,16 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import type { Message } from "@/types";
 import type { ChecklistData } from "@/components/chat/PrintableChecklist";
+import type { SessionState } from "@/lib/claude";
+import {
+  createConversation,
+  saveMessage,
+  loadConversation,
+  submitMessageFeedback,
+  trackEvent,
+} from "@/lib/conversation-service";
 
 export interface UseChatOptions {
   conversationId?: string;
@@ -35,105 +43,91 @@ interface UseChatReturn {
   dismissAction: () => void;
 }
 
-// Mock checklist data based on conversation
-function generateChecklistData(): ChecklistData {
+// Extract checklist data from Claude's response
+function extractChecklistData(content: string): ChecklistData | null {
+  // Look for checklist patterns in the response
+  const hasChecklist =
+    content.includes("□") ||
+    content.includes("**What the doctor needs") ||
+    content.includes("documentation");
+
+  if (!hasChecklist) return null;
+
+  // Extract service name from context
+  let serviceName = "Medicare Service";
+  if (content.toLowerCase().includes("mri")) {
+    serviceName = content.toLowerCase().includes("lumbar")
+      ? "Lumbar Spine MRI"
+      : content.toLowerCase().includes("knee")
+      ? "Knee MRI"
+      : "MRI";
+  } else if (content.toLowerCase().includes("ct") || content.toLowerCase().includes("scan")) {
+    serviceName = "CT Scan";
+  } else if (content.toLowerCase().includes("replacement")) {
+    serviceName = content.toLowerCase().includes("knee")
+      ? "Knee Replacement"
+      : content.toLowerCase().includes("hip")
+      ? "Hip Replacement"
+      : "Joint Replacement";
+  } else if (content.toLowerCase().includes("therapy")) {
+    serviceName = "Physical Therapy";
+  }
+
+  // Extract requirements (lines starting with □ or checkboxes)
+  const requirements: string[] = [];
+  const requirementMatches = content.match(/□\s*([^\n]+)/g);
+  if (requirementMatches) {
+    requirementMatches.forEach((match) => {
+      const cleaned = match.replace(/□\s*/, "").trim();
+      if (cleaned && !cleaned.includes("**")) {
+        requirements.push(cleaned);
+      }
+    });
+  }
+
+  // Extract questions (lines with quotes or starting with -)
+  const questions: string[] = [];
+  const questionMatches = content.match(/-\s*['"]([^'"]+)['"]/g) || content.match(/-\s*"([^"]+)"/g);
+  if (questionMatches) {
+    questionMatches.forEach((match) => {
+      const cleaned = match.replace(/^-\s*/, "").trim();
+      if (cleaned) {
+        questions.push(cleaned);
+      }
+    });
+  }
+
+  // If we couldn't extract specific items, use defaults based on service
+  if (requirements.length === 0) {
+    requirements.push(
+      "Medical necessity documented",
+      "Relevant symptoms and duration noted",
+      "Prior treatments documented if applicable"
+    );
+  }
+
+  if (questions.length === 0) {
+    questions.push(
+      '"Can you note in my chart how long I\'ve had these symptoms?"',
+      '"Can you document what treatments I\'ve already tried?"',
+      '"Is there anything else Medicare needs documented?"'
+    );
+  }
+
   return {
-    serviceName: "Lumbar Spine MRI",
+    serviceName,
     generatedDate: new Date().toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
     }),
-    requirements: [
-      "Pain has lasted more than 6 weeks",
-      "Prior treatments tried (physical therapy, medication)",
-      "Neurological symptoms if present (numbness, weakness)",
-      "Physical exam findings documented",
-      "Medical necessity clearly stated",
-    ],
-    questions: [
-      '"Can you note in my chart how long I\'ve had this pain?"',
-      '"Can you document that I\'ve tried [treatments] without enough relief?"',
-      '"Can you describe how this affects my daily activities?"',
-      '"Is there anything else Medicare needs documented?"',
-    ],
+    requirements: requirements.slice(0, 5),
+    questions: questions.slice(0, 4),
   };
 }
 
-// Mock responses for development
-const MOCK_RESPONSES: Record<string, { content: string; suggestions: string[] }> = {
-  default: {
-    content: "I'd be happy to help you understand Medicare coverage. Could you tell me a bit more about your situation? What service or procedure are you asking about?",
-    suggestions: ["MRI scan", "Physical therapy", "Surgery"],
-  },
-  mri: {
-    content: "I can help with MRI coverage. Medicare typically covers MRI scans when they're medically necessary.\n\nTo give you specific guidance, I have a few questions:\n\nHow long have you been experiencing symptoms?",
-    suggestions: ["Less than 6 weeks", "6 weeks to 3 months", "More than 3 months"],
-  },
-  duration: {
-    content: "Thank you. That's helpful information.\n\nHas your doctor recommended any other treatments first, like physical therapy or medication?",
-    suggestions: ["Yes, I've tried other treatments", "No, not yet", "I'm not sure"],
-  },
-  treatments: {
-    content: "Good to know. One more question:\n\nAre you experiencing any symptoms that radiate to other areas, like pain going down your leg or arm?",
-    suggestions: ["Yes, radiating symptoms", "No, localized only"],
-  },
-  guidance: {
-    content: "Based on what you've told me, here's what Medicare typically requires for MRI approval:\n\n**Documentation Checklist:**\n□ Duration of symptoms (you mentioned this)\n□ Prior treatments tried\n□ Neurological symptoms if present\n□ Physical exam findings\n\n**What to ask your doctor to document:**\n• How long you've had symptoms\n• What treatments you've already tried\n• Any weakness, numbness, or radiating pain\n• Why an MRI is needed for diagnosis\n\nWould you like me to create a printable version of this checklist?",
-    suggestions: ["Print checklist", "Email to me", "What if it's denied?"],
-  },
-  appeal: {
-    content: "I'm sorry to hear about your denial. I can help you understand the appeal process.\n\nCould you tell me:\n1. What service was denied?\n2. What reason did they give for the denial?",
-    suggestions: ["Show me the appeal process", "I have my denial letter"],
-  },
-};
-
 function generateId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-function getMockResponse(content: string, hasChecklist: boolean): {
-  content: string;
-  suggestions: string[];
-  actionType?: "print" | "email";
-} {
-  const lower = content.toLowerCase();
-
-  // Handle print request
-  if (lower.includes("print") && (lower.includes("checklist") || lower.includes("now"))) {
-    return {
-      content: "Opening your printable checklist now. You can print it directly or save as PDF.",
-      suggestions: ["Email to me", "What if it's denied?", "New question"],
-      actionType: "print",
-    };
-  }
-
-  // Handle email request
-  if (lower.includes("email") && (lower.includes("me") || lower.includes("to me"))) {
-    return {
-      content: "I'll send the checklist to your email.",
-      suggestions: ["Print checklist", "What if it's denied?", "New question"],
-      actionType: "email",
-    };
-  }
-
-  if (lower.includes("mri") || lower.includes("scan")) {
-    return MOCK_RESPONSES.mri;
-  }
-  if (lower.includes("week") || lower.includes("month") || lower.includes("less than") || lower.includes("more than")) {
-    return MOCK_RESPONSES.duration;
-  }
-  if (lower.includes("tried") || lower.includes("treatment") || lower.includes("therapy") || lower.includes("medication")) {
-    return MOCK_RESPONSES.treatments;
-  }
-  if (lower.includes("radiat") || lower.includes("leg") || lower.includes("arm") || lower.includes("yes, ") || lower.includes("no, ")) {
-    return MOCK_RESPONSES.guidance;
-  }
-  if (lower.includes("denied") || lower.includes("denial") || lower.includes("appeal")) {
-    return MOCK_RESPONSES.appeal;
-  }
-
-  return MOCK_RESPONSES.default;
 }
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
@@ -152,8 +146,34 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const [currentAction, setCurrentAction] = useState<ChatAction>({ type: "none" });
   const [checklistData, setChecklistData] = useState<ChecklistData | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [sessionState, setSessionState] = useState<SessionState | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isInitializedRef = useRef(false);
+
+  // Load existing conversation if ID provided
+  useEffect(() => {
+    if (options.conversationId && !isInitializedRef.current) {
+      isInitializedRef.current = true;
+      loadConversation(options.conversationId).then((data) => {
+        if (data) {
+          setMessages(
+            data.messages.map((msg) => ({
+              id: msg.id,
+              role: msg.role,
+              content: msg.content,
+              timestamp: msg.timestamp,
+              icd10Codes: msg.icd10Codes,
+              cptCodes: msg.cptCodes,
+              npi: msg.npi,
+              policyRefs: msg.policyRefs,
+            }))
+          );
+          setConversationId(data.id);
+        }
+      });
+    }
+  }, [options.conversationId]);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
@@ -179,39 +199,102 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     setCurrentAction({ type: "none" });
 
     try {
-      // Generate conversation ID if not exists
-      if (!conversationId) {
-        setConversationId(`conv_${Date.now()}`);
+      // Create conversation if this is the first message
+      let currentConversationId = conversationId;
+      if (!currentConversationId) {
+        const newConvId = await createConversation({
+          isAppeal: content.toLowerCase().includes("denied") || content.toLowerCase().includes("appeal"),
+        });
+        if (newConvId) {
+          currentConversationId = newConvId;
+          setConversationId(newConvId);
+        }
       }
 
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 800 + Math.random() * 400));
+      // Save user message to database
+      if (currentConversationId) {
+        const savedMsgId = await saveMessage(currentConversationId, {
+          role: "user",
+          content: userMessage.content,
+        });
+        if (savedMsgId) {
+          userMessage.id = savedMsgId;
+        }
+      }
 
-      // Get mock response
-      const mockResponse = getMockResponse(content, !!checklistData);
+      // Prepare messages for API
+      const apiMessages = [...messages, userMessage].map((msg) => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+      }));
 
-      // Generate checklist data if showing guidance
-      if (mockResponse === MOCK_RESPONSES.guidance) {
-        setChecklistData(generateChecklistData());
+      // Call the chat API
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: apiMessages,
+          conversationId,
+          sessionState,
+        }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Update conversation ID
+      if (data.conversationId && !conversationId) {
+        setConversationId(data.conversationId);
+      }
+
+      // Update session state
+      if (data.sessionState) {
+        setSessionState(data.sessionState);
       }
 
       // Create assistant message
       const assistantMessage: Message = {
         id: generateId(),
         role: "assistant",
-        content: mockResponse.content,
+        content: data.content,
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
-      setSuggestions(mockResponse.suggestions);
+      // Save assistant message to database
+      if (currentConversationId) {
+        const savedMsgId = await saveMessage(currentConversationId, {
+          role: "assistant",
+          content: assistantMessage.content,
+        });
+        if (savedMsgId) {
+          assistantMessage.id = savedMsgId;
+        }
+      }
 
-      // Handle special actions
-      if (mockResponse.actionType === "print") {
-        const data = checklistData || generateChecklistData();
-        setChecklistData(data);
-        setCurrentAction({ type: "show_print", data });
-      } else if (mockResponse.actionType === "email") {
+      setMessages((prev) => [...prev, assistantMessage]);
+      setSuggestions(data.suggestions || []);
+
+      // Check if response contains checklist data
+      const extractedChecklist = extractChecklistData(data.content);
+      if (extractedChecklist) {
+        setChecklistData(extractedChecklist);
+      }
+
+      // Handle special actions based on user input
+      const lower = content.toLowerCase();
+      if (lower.includes("print") && (lower.includes("checklist") || lower.includes("now"))) {
+        const data = checklistData || extractedChecklist;
+        if (data) {
+          setCurrentAction({ type: "show_print", data });
+        }
+      } else if (lower.includes("email") && (lower.includes("me") || lower.includes("to me"))) {
         setCurrentAction({ type: "prompt_email", existingEmail: userEmail });
       }
     } catch (err) {
@@ -221,10 +304,20 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       const error = err instanceof Error ? err : new Error("Failed to send message");
       setError(error);
       onError?.(error);
+
+      // Add error message to chat
+      const errorMessage: Message = {
+        id: generateId(),
+        role: "assistant",
+        content: "I'm having trouble connecting right now. Please try again in a moment.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      setSuggestions(["Try again", "Start a new question"]);
     } finally {
       setIsLoading(false);
     }
-  }, [conversationId, onError, checklistData, userEmail]);
+  }, [conversationId, onError, checklistData, userEmail, messages, sessionState]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);
@@ -236,20 +329,52 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     setError(null);
     setChecklistData(null);
     setCurrentAction({ type: "none" });
+    setSessionState(null);
   }, []);
 
   const submitFeedback = useCallback(async (messageId: string, rating: "up" | "down") => {
     try {
-      console.log(`Feedback for ${messageId}: ${rating}`);
+      // Submit feedback to database
+      const success = await submitMessageFeedback(messageId, rating);
+      if (success) {
+        // Track the feedback event
+        await trackEvent("feedback_submitted", {
+          conversationId: conversationId || undefined,
+          eventData: { messageId, rating },
+        });
+      }
     } catch (err) {
       console.error("Failed to submit feedback:", err);
     }
-  }, []);
+  }, [conversationId]);
 
   const triggerPrint = useCallback(() => {
-    const data = checklistData || generateChecklistData();
-    setChecklistData(data);
-    setCurrentAction({ type: "show_print", data });
+    if (checklistData) {
+      setCurrentAction({ type: "show_print", data: checklistData });
+    } else {
+      // Generate default checklist if none exists
+      const defaultChecklist: ChecklistData = {
+        serviceName: "Medicare Service",
+        generatedDate: new Date().toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        requirements: [
+          "Medical necessity documented",
+          "Relevant symptoms and duration noted",
+          "Prior treatments documented if applicable",
+          "Physical exam findings recorded",
+        ],
+        questions: [
+          '"Can you note in my chart how long I\'ve had these symptoms?"',
+          '"Can you document what treatments I\'ve already tried?"',
+          '"Is there anything else Medicare needs documented?"',
+        ],
+      };
+      setChecklistData(defaultChecklist);
+      setCurrentAction({ type: "show_print", data: defaultChecklist });
+    }
   }, [checklistData]);
 
   const triggerEmail = useCallback(() => {
@@ -260,7 +385,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     // Save email for future use
     setUserEmail(email);
 
-    const data = checklistData || generateChecklistData();
+    const data = checklistData;
+    if (!data) {
+      console.error("No checklist data to send");
+      return;
+    }
 
     try {
       // Call Supabase Edge function to send email

@@ -1,0 +1,1 @@
+export { PaywallModal } from "./PaywallModal";

@@ -1,0 +1,1 @@
+export { PhoneOTPModal } from "./PhoneOTPModal";
