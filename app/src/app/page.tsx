@@ -6,7 +6,6 @@ import {
   LandingHowItWorks,
   LandingPricing,
   LandingTestimonials,
-  LandingCTA,
   LandingFooter,
 } from "@/components/landing";
 
@@ -22,7 +21,6 @@ export default async function LandingPage() {
   const howItWorksSection = data.sections.find(
     (s) => s.section_key === "how_it_works"
   );
-  const ctaSection = data.sections.find((s) => s.section_key === "cta");
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -34,7 +32,6 @@ export default async function LandingPage() {
         <LandingHowItWorks section={howItWorksSection} />
         <LandingPricing plans={data.pricing} />
         <LandingTestimonials testimonials={data.testimonials} />
-        <LandingCTA section={ctaSection} />
       </main>
 
       <LandingFooter settings={data.settings} />

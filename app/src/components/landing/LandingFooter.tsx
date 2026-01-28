@@ -28,31 +28,6 @@ export function LandingFooter({ settings }: LandingFooterProps) {
             {companyPrefix} {companyName}
           </p>
 
-          {/* Links */}
-          <div className="flex flex-wrap items-center justify-center gap-6 text-sm mb-8">
-            <Link
-              href="/chat"
-              className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-            >
-              Get Started
-            </Link>
-            <Link
-              href="#how-it-works"
-              className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-            >
-              How It Works
-            </Link>
-            <Link
-              href="/settings"
-              className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-            >
-              Settings
-            </Link>
-          </div>
-
-          {/* Divider */}
-          <div className="w-full max-w-md h-px bg-[var(--border)] mb-6" />
-
           {/* Copyright */}
           <p className="text-sm text-[var(--text-muted)]">
             &copy; {copyrightYear} {brandName}. All rights reserved.
