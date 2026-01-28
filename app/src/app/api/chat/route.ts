@@ -136,8 +136,8 @@ export async function POST(request: NextRequest) {
       coverageCriteria: result.sessionState.coverageCriteria?.length || 0,
     });
 
-    // Generate conversation ID if not provided
-    const conversationId = body.conversationId ?? `conv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    // Generate conversation ID if not provided (must be valid UUID for database)
+    const conversationId = body.conversationId ?? crypto.randomUUID();
 
     // Persist learning from successful tool use (non-blocking)
     if (result.toolsUsed.length > 0) {

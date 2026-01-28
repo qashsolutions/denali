@@ -463,11 +463,22 @@ export async function trackEvent(
 ): Promise<void> {
   const supabase = createClient();
 
+  // UUID validation regex
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  // Only pass IDs if they're valid UUIDs (database requires UUID format)
+  const conversationId = options.conversationId && uuidRegex.test(options.conversationId)
+    ? options.conversationId
+    : undefined;
+  const appealId = options.appealId && uuidRegex.test(options.appealId)
+    ? options.appealId
+    : undefined;
+
   const params = {
     p_event_type: eventType,
     p_phone: options.phone,
-    p_conversation_id: options.conversationId,
-    p_appeal_id: options.appealId,
+    p_conversation_id: conversationId,
+    p_appeal_id: appealId,
     p_event_data: options.eventData as Record<string, string | number | boolean | null> | undefined,
   };
 
