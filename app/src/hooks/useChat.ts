@@ -136,10 +136,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [suggestions, setSuggestions] = useState<string[]>([
-    "Will Medicare cover my MRI?",
-    "Help me appeal a denial",
-  ]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(
     options.conversationId || null
   );
@@ -321,10 +318,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
   const clearMessages = useCallback(() => {
     setMessages([]);
-    setSuggestions([
-      "Will Medicare cover my MRI?",
-      "Help me appeal a denial",
-    ]);
+    setSuggestions([]); // No suggestions until Claude responds
     setConversationId(null);
     setError(null);
     setChecklistData(null);
