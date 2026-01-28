@@ -448,6 +448,24 @@ export async function hasActiveSubscription(userId: string): Promise<boolean> {
   return !error && !!data;
 }
 
+// Valid event types per database constraint
+const VALID_EVENT_TYPES = [
+  "print",
+  "copy",
+  "download",
+  "share",
+  "return_visit",
+  "upgrade",
+  "cancel",
+  "feedback_positive",
+  "feedback_negative",
+  "appeal_started",
+  "appeal_completed",
+  "outcome_reported",
+] as const;
+
+type ValidEventType = (typeof VALID_EVENT_TYPES)[number];
+
 /**
  * Track a user event for analytics
  * All parameters are optional to support anonymous users
@@ -463,6 +481,19 @@ export async function trackEvent(
 ): Promise<void> {
   const supabase = createClient();
 
+  console.log("[TrackEvent] Input:", { eventType, options });
+
+  // Validate event type
+  if (!VALID_EVENT_TYPES.includes(eventType as ValidEventType)) {
+    console.error(
+      "[TrackEvent] Invalid event type:",
+      eventType,
+      "| Valid types:",
+      VALID_EVENT_TYPES.join(", ")
+    );
+    return;
+  }
+
   // UUID validation regex
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -474,6 +505,13 @@ export async function trackEvent(
     ? options.appealId
     : undefined;
 
+  console.log("[TrackEvent] UUID validation:", {
+    inputConvId: options.conversationId,
+    validatedConvId: conversationId,
+    inputAppealId: options.appealId,
+    validatedAppealId: appealId,
+  });
+
   const params = {
     p_event_type: eventType,
     p_phone: options.phone,
@@ -482,13 +520,18 @@ export async function trackEvent(
     p_event_data: options.eventData as Record<string, string | number | boolean | null> | undefined,
   };
 
-  console.log("[TrackEvent] Tracking event:", JSON.stringify(params, null, 2));
+  console.log("[TrackEvent] Calling RPC with params:", JSON.stringify(params, null, 2));
 
   try {
     const { data, error } = await supabase.rpc("track_user_event", params);
 
     if (error) {
-      console.error("[TrackEvent] RPC error:", error);
+      console.error("[TrackEvent] RPC error:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
     } else {
       console.log("[TrackEvent] Success, event_id:", data);
     }

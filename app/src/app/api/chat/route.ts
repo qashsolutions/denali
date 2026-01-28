@@ -128,12 +128,18 @@ export async function POST(request: NextRequest) {
       },
       toolExecutors
     );
-    console.log("[Chat API] Claude response received. Tools used:", result.toolsUsed);
-    console.log("[Chat API] Session state after call:", {
+    console.log("[Chat API] Claude response received:");
+    console.log("[Chat API] - Tools used:", result.toolsUsed);
+    console.log("[Chat API] - Suggestions:", result.suggestions);
+    console.log("[Chat API] - Content preview:", result.content.substring(0, 200) + "...");
+    console.log("[Chat API] - Session state:", {
+      symptoms: result.sessionState.symptoms,
+      procedureNeeded: result.sessionState.procedureNeeded,
       diagnosisCodes: result.sessionState.diagnosisCodes,
       procedureCodes: result.sessionState.procedureCodes,
       provider: result.sessionState.provider,
-      coverageCriteria: result.sessionState.coverageCriteria?.length || 0,
+      guidanceGenerated: result.sessionState.guidanceGenerated,
+      isAppeal: result.sessionState.isAppeal,
     });
 
     // Generate conversation ID if not provided (must be valid UUID for database)

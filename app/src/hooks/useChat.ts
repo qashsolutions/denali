@@ -333,18 +333,24 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }, []);
 
   const submitFeedback = useCallback(async (messageId: string, rating: "up" | "down") => {
+    console.log("[submitFeedback] Starting:", { messageId, rating, conversationId });
     try {
       // Submit feedback to database
       const success = await submitMessageFeedback(messageId, rating);
+      console.log("[submitFeedback] submitMessageFeedback result:", success);
+
       if (success) {
-        // Track the feedback event
-        await trackEvent("feedback_submitted", {
+        // Track the feedback event - use correct event types from constraint
+        const eventType = rating === "up" ? "feedback_positive" : "feedback_negative";
+        console.log("[submitFeedback] Tracking event:", eventType);
+        await trackEvent(eventType, {
           conversationId: conversationId || undefined,
           eventData: { messageId, rating },
         });
+        console.log("[submitFeedback] trackEvent completed");
       }
     } catch (err) {
-      console.error("Failed to submit feedback:", err);
+      console.error("[submitFeedback] Failed:", err);
     }
   }, [conversationId]);
 

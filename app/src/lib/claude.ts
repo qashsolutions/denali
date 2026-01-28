@@ -93,29 +93,85 @@ export function createDefaultSessionState(): SessionState {
 }
 
 // Extract suggestions from Claude's response
+// Claude should include suggestions at the end in format:
+// ---
+// What would you like to do?
+// • Suggestion one
+// • Suggestion two
 function extractSuggestions(content: string, sessionState: SessionState): string[] {
-  // Default suggestions based on session state
+  console.log("[extractSuggestions] Parsing content for suggestions...");
+
+  // Try to extract suggestions from Claude's response
+  // Look for bullet points after "What would you like to do?" or similar
+  const suggestionPatterns = [
+    /what would you like to do\??\s*\n((?:[•\-\*]\s*.+\n?)+)/i,
+    /here are some options:?\s*\n((?:[•\-\*]\s*.+\n?)+)/i,
+    /you could:?\s*\n((?:[•\-\*]\s*.+\n?)+)/i,
+    /next steps:?\s*\n((?:[•\-\*]\s*.+\n?)+)/i,
+  ];
+
+  for (const pattern of suggestionPatterns) {
+    const match = content.match(pattern);
+    if (match) {
+      const bulletSection = match[1];
+      const suggestions = bulletSection
+        .split(/\n/)
+        .map((line) => line.replace(/^[•\-\*]\s*/, "").trim())
+        .filter((line) => line.length > 0 && line.length < 60); // Keep short, valid suggestions
+
+      if (suggestions.length >= 1 && suggestions.length <= 4) {
+        console.log("[extractSuggestions] Found dynamic suggestions:", suggestions);
+        return suggestions;
+      }
+    }
+  }
+
+  console.log("[extractSuggestions] No dynamic suggestions found, using context-aware defaults");
+
+  // Context-aware fallback suggestions based on session state and content
+  const lowerContent = content.toLowerCase();
+
+  // Check for specific content patterns to generate relevant suggestions
+  if (lowerContent.includes("mri") || lowerContent.includes("scan") || lowerContent.includes("imaging")) {
+    if (!sessionState.guidanceGenerated) {
+      return ["What body part is the scan for?", "Check if Medicare covers this"];
+    }
+  }
+
+  if (lowerContent.includes("denied") || lowerContent.includes("denial") || lowerContent.includes("appeal")) {
+    return ["Help me write an appeal", "What was the denial reason?"];
+  }
+
+  if (lowerContent.includes("checklist") || lowerContent.includes("documentation")) {
+    return ["Print this checklist", "Email to myself", "Ask another question"];
+  }
+
+  if (lowerContent.includes("what part") || lowerContent.includes("which body")) {
+    return ["Tell me about your symptoms", "Ask about a specific body part"];
+  }
+
+  // Default fallback based on session state
   if (!sessionState.symptoms.length && !sessionState.procedureNeeded) {
     return ["Ask about coverage", "Help with a denial"];
   }
 
   if (sessionState.symptoms.length && !sessionState.procedureNeeded) {
-    return ["What treatment is needed?", "Check Medicare coverage"];
+    return ["What treatment might I need?", "Check Medicare coverage"];
   }
 
   if (sessionState.procedureNeeded && !sessionState.guidanceGenerated) {
-    return ["Check Medicare coverage", "What should the doctor document?"];
+    return ["Check Medicare coverage", "What documentation is needed?"];
   }
 
   if (sessionState.guidanceGenerated) {
-    return ["Print this checklist", "Email to me", "What if it's denied?"];
+    return ["Print this checklist", "What if it gets denied?"];
   }
 
   if (sessionState.isAppeal) {
-    return ["Print letter", "Download PDF", "Start a new question"];
+    return ["Print letter", "Download PDF", "Start new question"];
   }
 
-  return ["New question"];
+  return ["Ask another question"];
 }
 
 // Process tool calls and execute them

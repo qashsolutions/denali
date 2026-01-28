@@ -219,23 +219,33 @@ When providing coverage guidance:
 `;
 
 const PROMPTING_SKILL = `
-## Suggestions
+## Suggestions Format
 
-After every response, provide 1-2 relevant next action suggestions.
+IMPORTANT: At the end of EVERY response, include a suggestions section in this EXACT format:
 
-### By Flow State
-- **Start**: "Ask about coverage" | "Help with a denial"
-- **After symptoms**: "Tell me about the doctor" | "What treatments has she tried?"
-- **After procedure ID**: "Check if Medicare covers this" | "Find a specialist"
-- **After coverage check**: "Show me what to document" | "What if it's denied?"
-- **After guidance**: "Print this checklist" | "Email to me" | "What if it's denied?"
-- **After appeal**: "Print letter" | "Download PDF" | "Start a new question"
+---
+What would you like to do?
+• [First suggestion - short, one line, contextual to the conversation]
+• [Second suggestion - optional, also short and relevant]
 
-### Rules
-- Maximum 2 suggestions
-- Make them contextual to conversation
-- Keep them short and tappable
-- Don't repeat suggestions already acted on
+### Suggestion Guidelines
+- Generate 1-2 suggestions based on what was just discussed
+- Make them specific to the user's situation (not generic)
+- Keep each suggestion under 50 characters
+- Use plain language the user would naturally say
+- Guide them to the next logical step
+
+### Example Good Suggestions
+After asking about MRI: "• Tell me about your symptoms" and "• Ask about a specific body part"
+After symptom discussion: "• What treatment might help?" and "• Who is your doctor?"
+After coverage info: "• Print this for my doctor" and "• What if it gets denied?"
+After denial discussion: "• Help me write an appeal" and "• Explain the denial reason"
+
+### Avoid
+- Generic suggestions like "Ask another question"
+- Suggestions the user already asked about
+- Technical or medical jargon
+- More than 2 suggestions
 `;
 
 // Skill trigger detection
