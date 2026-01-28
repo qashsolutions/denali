@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils";
 import { MarkdownContent } from "./MarkdownContent";
@@ -11,6 +12,7 @@ export interface MessageProps {
   timestamp?: Date | string;
   showFeedback?: boolean;
   onFeedback?: (rating: "up" | "down") => void;
+  feedbackGiven?: "up" | "down" | null;
 }
 
 export function Message({
@@ -19,8 +21,15 @@ export function Message({
   timestamp,
   showFeedback = false,
   onFeedback,
+  feedbackGiven: initialFeedback = null,
 }: MessageProps) {
   const isUser = role === "user";
+  const [feedbackGiven, setFeedbackGiven] = useState<"up" | "down" | null>(initialFeedback);
+
+  const handleFeedback = (rating: "up" | "down") => {
+    setFeedbackGiven(rating);
+    onFeedback?.(rating);
+  };
 
   return (
     <div
@@ -59,19 +68,38 @@ export function Message({
         {!isUser && showFeedback && onFeedback && (
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[var(--border)]">
             <button
-              onClick={() => onFeedback("up")}
-              className="p-1.5 rounded-md hover:bg-[var(--bg-tertiary)] transition-colors"
+              onClick={() => handleFeedback("up")}
+              disabled={feedbackGiven !== null}
+              className={cn(
+                "p-1.5 rounded-md transition-colors",
+                feedbackGiven === "up"
+                  ? "bg-green-500/20 text-green-500"
+                  : feedbackGiven === null
+                  ? "hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)]"
+                  : "text-[var(--text-muted)] opacity-40"
+              )}
               aria-label="Helpful"
             >
-              <ThumbsUpIcon className="w-4 h-4 text-[var(--text-muted)]" />
+              <ThumbsUpIcon className={cn("w-4 h-4", feedbackGiven === "up" && "fill-current")} />
             </button>
             <button
-              onClick={() => onFeedback("down")}
-              className="p-1.5 rounded-md hover:bg-[var(--bg-tertiary)] transition-colors"
+              onClick={() => handleFeedback("down")}
+              disabled={feedbackGiven !== null}
+              className={cn(
+                "p-1.5 rounded-md transition-colors",
+                feedbackGiven === "down"
+                  ? "bg-red-500/20 text-red-500"
+                  : feedbackGiven === null
+                  ? "hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)]"
+                  : "text-[var(--text-muted)] opacity-40"
+              )}
               aria-label="Not helpful"
             >
-              <ThumbsDownIcon className="w-4 h-4 text-[var(--text-muted)]" />
+              <ThumbsDownIcon className={cn("w-4 h-4", feedbackGiven === "down" && "fill-current")} />
             </button>
+            {feedbackGiven && (
+              <span className="text-xs text-[var(--text-muted)] ml-2">Thanks for feedback!</span>
+            )}
           </div>
         )}
       </div>

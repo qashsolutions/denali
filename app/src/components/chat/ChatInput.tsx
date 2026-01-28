@@ -7,15 +7,29 @@ export interface ChatInputProps {
   onSend: (message: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  externalValue?: string;
+  onExternalValueUsed?: () => void;
 }
 
 export function ChatInput({
   onSend,
   disabled = false,
   placeholder = "Type your message...",
+  externalValue,
+  onExternalValueUsed,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Handle external value (e.g., from suggestion click)
+  useEffect(() => {
+    if (externalValue) {
+      setValue(externalValue);
+      onExternalValueUsed?.();
+      // Focus the textarea
+      textareaRef.current?.focus();
+    }
+  }, [externalValue, onExternalValueUsed]);
 
   // Auto-resize textarea
   useEffect(() => {

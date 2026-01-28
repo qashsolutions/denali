@@ -23,12 +23,12 @@ export function Suggestions({
           onClick={() => onSelect(suggestion)}
           disabled={disabled}
           className={cn(
-            "px-4 py-2 rounded-full",
-            "text-sm font-medium text-suggestion",
-            "text-[var(--text-secondary)]",
-            "bg-transparent border border-[var(--border)]",
-            "transition-colors duration-[var(--transition-fast)]",
-            "hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-primary)]",
+            "px-4 py-2.5 rounded-full",
+            "text-sm font-bold",
+            "text-white",
+            "bg-[var(--accent-primary)]/20 border border-[var(--accent-primary)]/50",
+            "transition-all duration-[var(--transition-fast)]",
+            "hover:bg-[var(--accent-primary)]/40 hover:border-[var(--accent-primary)]",
             "focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]",
             "disabled:opacity-50 disabled:cursor-not-allowed",
             "whitespace-nowrap"

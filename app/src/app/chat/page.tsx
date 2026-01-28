@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useCallback } from "react";
+import { Suspense, useEffect, useRef, useCallback, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { PageContainer, Container } from "@/components/layout/Container";
@@ -18,6 +18,7 @@ function ChatContent() {
   const searchParams = useSearchParams();
   const { isDark, toggleTheme } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [pendingInput, setPendingInput] = useState<string | undefined>(undefined);
 
   const {
     messages,
@@ -45,8 +46,13 @@ function ChatContent() {
   }, [messages, isLoading]);
 
   const handleSuggestionSelect = (suggestion: string) => {
-    sendMessage(suggestion);
+    // Populate input box instead of auto-sending
+    setPendingInput(suggestion);
   };
+
+  const handlePendingInputUsed = useCallback(() => {
+    setPendingInput(undefined);
+  }, []);
 
   const handlePrintComplete = useCallback(() => {
     // Track print event (would call API in production)
@@ -148,6 +154,8 @@ function ChatContent() {
               onSend={sendMessage}
               disabled={isLoading}
               placeholder="Type your message..."
+              externalValue={pendingInput}
+              onExternalValueUsed={handlePendingInputUsed}
             />
           </Container>
         </div>
