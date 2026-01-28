@@ -775,3 +775,90 @@ export async function pruneLowConfidenceMappings(
     procedures: procedureCount || 0,
   };
 }
+
+/**
+ * Record appeal outcome for learning
+ * This data helps improve coverage path recommendations
+ */
+export async function recordAppealOutcome(
+  appealId: string,
+  outcome: "approved" | "denied" | "partial",
+  details?: {
+    denialReason?: string;
+    approvalNotes?: string;
+    daysToDecision?: number;
+  }
+): Promise<boolean> {
+  const supabase = createClient();
+
+  try {
+    // Get the appeal to find associated codes
+    const { data: appeal, error: appealError } = await supabase
+      .from("appeals")
+      .select("icd10_codes, cpt_codes, ncd_refs, lcd_refs")
+      .eq("id", appealId)
+      .single();
+
+    if (appealError || !appeal) {
+      console.error("Failed to get appeal:", appealError);
+      return false;
+    }
+
+    // Update the appeal with outcome
+    const { error: updateError } = await supabase
+      .from("appeals")
+      .update({
+        status: outcome === "approved" ? "approved" : outcome === "denied" ? "denied" : "partial",
+        outcome_reported_at: new Date().toISOString(),
+        outcome_details: details,
+      })
+      .eq("id", appealId);
+
+    if (updateError) {
+      console.error("Failed to update appeal:", updateError);
+      return false;
+    }
+
+    // Update coverage paths based on outcome
+    if (appeal.icd10_codes?.length && appeal.cpt_codes?.length) {
+      const icd10 = appeal.icd10_codes[0];
+      const cpt = appeal.cpt_codes[0];
+
+      // Find existing coverage path
+      const { data: existing } = await supabase
+        .from("coverage_paths")
+        .select("*")
+        .eq("icd10_code", icd10)
+        .eq("cpt_code", cpt)
+        .single();
+
+      if (existing) {
+        // Update with outcome
+        await supabase
+          .from("coverage_paths")
+          .update({
+            outcome: outcome,
+            use_count: existing.use_count + 1,
+            last_used_at: new Date().toISOString(),
+          })
+          .eq("id", existing.id);
+      } else {
+        // Create new coverage path
+        await supabase.from("coverage_paths").insert({
+          icd10_code: icd10,
+          cpt_code: cpt,
+          ncd_id: appeal.ncd_refs?.[0] || null,
+          lcd_id: appeal.lcd_refs?.[0] || null,
+          outcome: outcome,
+          use_count: 1,
+          last_used_at: new Date().toISOString(),
+        });
+      }
+    }
+
+    return true;
+  } catch (err) {
+    console.error("Failed to record appeal outcome:", err);
+    return false;
+  }
+}

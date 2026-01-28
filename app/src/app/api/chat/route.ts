@@ -27,7 +27,10 @@ import {
   updateSymptomMapping,
   updateProcedureMapping,
   queueLearningJob,
+  recordCoveragePath,
+  type ExtractedEntities,
 } from "@/lib/learning";
+import { FEEDBACK_CONFIG } from "@/config";
 
 // Request body type
 interface ChatRequestBody {
@@ -117,6 +120,13 @@ export async function POST(request: NextRequest) {
     // Generate conversation ID if not provided
     const conversationId = body.conversationId ?? `conv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
+    // Persist learning from successful tool use (non-blocking)
+    if (result.toolsUsed.length > 0) {
+      persistLearning(entities, result.sessionState, result.toolsUsed).catch(
+        (err) => console.warn("Failed to persist learning:", err)
+      );
+    }
+
     // Build response
     const response: ChatResponseBody = {
       content: result.content,
@@ -168,4 +178,68 @@ export async function GET() {
     hasApiKey: !!process.env.ANTHROPIC_API_KEY,
     timestamp: new Date().toISOString(),
   });
+}
+
+/**
+ * Persist learning from successful tool use
+ * Updates symptom/procedure mappings when codes are found
+ */
+async function persistLearning(
+  entities: ExtractedEntities,
+  sessionState: SessionState,
+  toolsUsed: string[]
+): Promise<void> {
+  const boost = FEEDBACK_CONFIG.toolSuccessBoost;
+
+  // If ICD-10 search was used and we have diagnosis codes, update symptom mappings
+  if (
+    toolsUsed.includes("search_icd10") &&
+    sessionState.diagnosisCodes.length > 0 &&
+    entities.symptoms.length > 0
+  ) {
+    for (const symptom of entities.symptoms) {
+      for (const code of sessionState.diagnosisCodes) {
+        await updateSymptomMapping(
+          symptom.phrase,
+          code,
+          "", // Description will be looked up by the function
+          boost
+        );
+      }
+    }
+  }
+
+  // If CPT search was used and we have procedure codes, update procedure mappings
+  if (
+    toolsUsed.includes("search_cpt") &&
+    sessionState.procedureCodes.length > 0 &&
+    entities.procedures.length > 0
+  ) {
+    for (const procedure of entities.procedures) {
+      for (const code of sessionState.procedureCodes) {
+        await updateProcedureMapping(
+          procedure.phrase,
+          code,
+          "", // Description will be looked up by the function
+          boost
+        );
+      }
+    }
+  }
+
+  // If coverage was checked, record the coverage path
+  if (
+    (toolsUsed.includes("search_ncd") || toolsUsed.includes("search_lcd")) &&
+    sessionState.diagnosisCodes.length > 0 &&
+    sessionState.procedureCodes.length > 0
+  ) {
+    // Record coverage path for the first dx/px combination
+    await recordCoveragePath(
+      sessionState.diagnosisCodes[0],
+      sessionState.procedureCodes[0],
+      {}, // Policy refs would come from tool results
+      "pending", // Outcome unknown until user reports
+      sessionState.coverageCriteria
+    );
+  }
 }
