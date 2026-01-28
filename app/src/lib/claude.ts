@@ -92,86 +92,87 @@ export function createDefaultSessionState(): SessionState {
   };
 }
 
-// Extract suggestions from Claude's response
-// Claude should include suggestions at the end in format:
-// ---
-// What would you like to do?
-// • Suggestion one
-// • Suggestion two
-function extractSuggestions(content: string, sessionState: SessionState): string[] {
-  console.log("[extractSuggestions] Parsing content for suggestions...");
+// Extract suggestions from Claude's response and return cleaned content
+// Claude includes suggestions in [SUGGESTIONS]...[/SUGGESTIONS] block
+function extractSuggestionsAndClean(content: string, sessionState: SessionState): {
+  cleanContent: string;
+  suggestions: string[]
+} {
+  console.log("[extractSuggestions] Parsing content for [SUGGESTIONS] block...");
 
-  // Try to extract suggestions from Claude's response
-  // Look for bullet points after "What would you like to do?" or similar
-  const suggestionPatterns = [
+  // Try to extract [SUGGESTIONS] block
+  const suggestionsMatch = content.match(/\[SUGGESTIONS\]\s*([\s\S]*?)\s*\[\/SUGGESTIONS\]/i);
+
+  if (suggestionsMatch) {
+    const suggestionsBlock = suggestionsMatch[1];
+    const suggestions = suggestionsBlock
+      .split(/\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && line.length < 50);
+
+    // Remove the suggestions block from content
+    const cleanContent = content
+      .replace(/\[SUGGESTIONS\][\s\S]*?\[\/SUGGESTIONS\]/i, "")
+      .replace(/---\s*$/m, "") // Remove trailing ---
+      .replace(/\n{3,}/g, "\n\n") // Clean up extra newlines
+      .trim();
+
+    if (suggestions.length >= 1) {
+      console.log("[extractSuggestions] Found suggestions:", suggestions);
+      console.log("[extractSuggestions] Clean content length:", cleanContent.length);
+      return { cleanContent, suggestions };
+    }
+  }
+
+  // Also try old format for backwards compatibility
+  const oldPatterns = [
+    /---\s*\nwhat would you like to do\??\s*\n((?:[•\-\*]\s*.+\n?)+)/i,
     /what would you like to do\??\s*\n((?:[•\-\*]\s*.+\n?)+)/i,
-    /here are some options:?\s*\n((?:[•\-\*]\s*.+\n?)+)/i,
-    /you could:?\s*\n((?:[•\-\*]\s*.+\n?)+)/i,
-    /next steps:?\s*\n((?:[•\-\*]\s*.+\n?)+)/i,
   ];
 
-  for (const pattern of suggestionPatterns) {
+  for (const pattern of oldPatterns) {
     const match = content.match(pattern);
     if (match) {
       const bulletSection = match[1];
       const suggestions = bulletSection
         .split(/\n/)
         .map((line) => line.replace(/^[•\-\*]\s*/, "").trim())
-        .filter((line) => line.length > 0 && line.length < 60); // Keep short, valid suggestions
+        .filter((line) => line.length > 0 && line.length < 50);
 
-      if (suggestions.length >= 1 && suggestions.length <= 4) {
-        console.log("[extractSuggestions] Found dynamic suggestions:", suggestions);
-        return suggestions;
+      // Remove the old format from content
+      const cleanContent = content
+        .replace(/---\s*\nwhat would you like to do\?[\s\S]*$/i, "")
+        .replace(/what would you like to do\?[\s\S]*$/i, "")
+        .trim();
+
+      if (suggestions.length >= 1) {
+        console.log("[extractSuggestions] Found old-format suggestions:", suggestions);
+        return { cleanContent, suggestions };
       }
     }
   }
 
-  console.log("[extractSuggestions] No dynamic suggestions found, using context-aware defaults");
+  console.log("[extractSuggestions] No suggestions block found, using context-aware defaults");
 
-  // Context-aware fallback suggestions based on session state and content
+  // Context-aware fallback suggestions
   const lowerContent = content.toLowerCase();
+  let suggestions: string[];
 
-  // Check for specific content patterns to generate relevant suggestions
-  if (lowerContent.includes("mri") || lowerContent.includes("scan") || lowerContent.includes("imaging")) {
-    if (!sessionState.guidanceGenerated) {
-      return ["What body part is the scan for?", "Check if Medicare covers this"];
-    }
+  if (lowerContent.includes("which body") || lowerContent.includes("what part") || lowerContent.includes("what body")) {
+    suggestions = ["It's my back", "It's my knee"];
+  } else if (lowerContent.includes("mri") || lowerContent.includes("scan")) {
+    suggestions = ["Check Medicare coverage", "What body part?"];
+  } else if (lowerContent.includes("denied") || lowerContent.includes("denial")) {
+    suggestions = ["Help me appeal", "Explain the denial"];
+  } else if (lowerContent.includes("document") || lowerContent.includes("checklist")) {
+    suggestions = ["Print this checklist", "What if it's denied?"];
+  } else if (!sessionState.symptoms.length && !sessionState.procedureNeeded) {
+    suggestions = ["Ask about coverage", "Help with a denial"];
+  } else {
+    suggestions = ["Tell me more", "Start over"];
   }
 
-  if (lowerContent.includes("denied") || lowerContent.includes("denial") || lowerContent.includes("appeal")) {
-    return ["Help me write an appeal", "What was the denial reason?"];
-  }
-
-  if (lowerContent.includes("checklist") || lowerContent.includes("documentation")) {
-    return ["Print this checklist", "Email to myself", "Ask another question"];
-  }
-
-  if (lowerContent.includes("what part") || lowerContent.includes("which body")) {
-    return ["Tell me about your symptoms", "Ask about a specific body part"];
-  }
-
-  // Default fallback based on session state
-  if (!sessionState.symptoms.length && !sessionState.procedureNeeded) {
-    return ["Ask about coverage", "Help with a denial"];
-  }
-
-  if (sessionState.symptoms.length && !sessionState.procedureNeeded) {
-    return ["What treatment might I need?", "Check Medicare coverage"];
-  }
-
-  if (sessionState.procedureNeeded && !sessionState.guidanceGenerated) {
-    return ["Check Medicare coverage", "What documentation is needed?"];
-  }
-
-  if (sessionState.guidanceGenerated) {
-    return ["Print this checklist", "What if it gets denied?"];
-  }
-
-  if (sessionState.isAppeal) {
-    return ["Print letter", "Download PDF", "Start new question"];
-  }
-
-  return ["Ask another question"];
+  return { cleanContent: content, suggestions };
 }
 
 // Process tool calls and execute them
@@ -287,16 +288,20 @@ export async function chat(
     const textBlocks = response.content.filter(
       (block): block is Anthropic.TextBlock => block.type === "text"
     );
-    const content = textBlocks.map((block) => block.text).join("\n");
+    const rawContent = textBlocks.map((block) => block.text).join("\n");
 
     // Update session state based on response content
-    updateSessionState(sessionState, content, toolsUsed);
+    updateSessionState(sessionState, rawContent, toolsUsed);
 
-    // Generate suggestions
-    const suggestions = extractSuggestions(content, sessionState);
+    // Extract suggestions and clean content (remove [SUGGESTIONS] block)
+    const { cleanContent, suggestions } = extractSuggestionsAndClean(rawContent, sessionState);
+
+    console.log("[chat] Raw content length:", rawContent.length);
+    console.log("[chat] Clean content length:", cleanContent.length);
+    console.log("[chat] Suggestions:", suggestions);
 
     return {
-      content,
+      content: cleanContent,
       suggestions,
       sessionState,
       toolsUsed,
