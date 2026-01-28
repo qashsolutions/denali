@@ -14,11 +14,12 @@ This skill defines how to use healthcare APIs and MCPs (Model Context Protocol s
 | Tool | Source | Purpose | Status |
 |------|--------|---------|--------|
 | ICD-10 | ICD-10 Codes MCP | Diagnosis code lookup | ✅ Full access |
-| CPT | AMA API | Procedure code lookup | ⚠️ Dev only |
+| CPT | Local Medicare Codes | Procedure code lookup | ✅ Full access |
 | NPI | NPI Registry MCP | Provider validation | ✅ Full access |
 | NCD/LCD | CMS Coverage MCP | Medicare coverage policies | ✅ Full access |
 | SAD | CMS Coverage MCP | Part B/D exclusion check | ✅ Full access |
 | PubMed | PubMed MCP | Clinical evidence | ✅ Full access |
+| AMA Knowledge Base | AMA KBAPI | CPT guidance articles | ⏸️ Disabled |
 
 ## ICD-10 Search
 
@@ -71,43 +72,78 @@ const results = await icd10.search({
 | Chest pain | R07.9, R07.89 |
 | Fatigue | R53.83, R53.1 |
 
-## CPT Lookup
+## CPT Lookup (Local Medicare Codes)
 
 ### Purpose
-Map procedures to CPT codes. **Dev environment only** (AMA license required for production).
+Map procedures to CPT codes using local Medicare-focused code mappings.
+
+### Primary Source: Local Code Database
+
+```typescript
+// Import from /app/src/lib/medicare-lookup.ts
+import {
+  searchCPT,
+  getCPTCode,
+  getCPTDescription,
+  getCPTsForCondition,
+  getCPTsByCategory,
+  getRelatedDiagnoses,
+  isPreventiveCode,
+  commonlyRequiresPriorAuth,
+} from "@/lib/medicare-lookup";
+```
 
 ### Usage
 
 ```typescript
-// Search by description
-const results = await cpt.search({
-  query: "MRI lumbar spine",
-  limit: 10
-});
+// Search CPT codes by keyword
+const results = searchCPT("MRI lumbar", 10);
+// Returns: CPTCode[] with code, description, category, subcategory, commonDiagnoses
 
-// Response
-{
-  codes: [
-    {
-      code: "72148",
-      description: "MRI lumbar spine without contrast",
-      category: "Radiology",
-      rvu: 1.52
-    },
-    {
-      code: "72149",
-      description: "MRI lumbar spine with contrast",
-      ...
-    }
-  ]
-}
+// Get specific code details
+const code = getCPTCode("72148");
+// Returns: { code: "72148", description: "MRI lumbar spine without contrast", ... }
+
+// Search by condition/procedure description
+const codes = getCPTsForCondition("back pain");
+// Returns all CPT codes in the Orthopedics category
+
+// Get codes by category
+const cardioCodes = getCPTsByCategory("Cardiology");
+
+// Get related diagnoses for a procedure
+const diagnoses = getRelatedDiagnoses("72148");
+// Returns ICD-10 codes commonly paired with this CPT
+
+// Check if code is preventive (usually no cost-sharing)
+const isFree = isPreventiveCode("G0438"); // true - AWV
+
+// Check if prior auth commonly required
+const needsAuth = commonlyRequiresPriorAuth("27447"); // true - knee replacement
 ```
+
+### Available Categories
+
+- E/M (Evaluation & Management)
+- Cardiology
+- Diabetes
+- Orthopedics
+- Pulmonary
+- Oncology
+- Nephrology
+- Neurology
+- Ophthalmology
+- GI (Gastroenterology)
+- Mental Health
+- Preventive
+- DME (Durable Medical Equipment)
 
 ### Best Practices
 
 1. **Include modifiers**: -RT (right), -LT (left), -50 (bilateral)
 2. **Check for bundling**: Some codes include others
 3. **Verify category**: Professional vs technical component
+4. **Use condition mapping**: `getCPTsForCondition()` handles common synonyms
 
 ### Common Procedures
 
@@ -121,6 +157,10 @@ const results = await cpt.search({
 | Office visit, established | 99213/99214 |
 | Physical therapy eval | 97163 |
 | Sleep study (polysomnography) | 95810 |
+
+### AMA API (Disabled)
+
+The AMA Intelligent Platform API integration is temporarily disabled due to CPTAPI_Zip endpoint issues. The implementation is preserved in `/app/src/lib/ama-client.ts` for future use when KBAPI access is needed for detailed CPT guidance articles.
 
 ## NPI Registry
 
@@ -373,8 +413,8 @@ if (error.code === 'NO_RESULTS') {
 
 | Tool | Cache TTL | Reason |
 |------|-----------|--------|
-| ICD-10 | 30 days | Codes updated annually |
-| CPT | 30 days | Codes updated annually |
+| ICD-10 (MCP) | 30 days | Codes updated annually |
+| CPT (Local) | N/A | In-memory, always fresh |
 | NPI | 7 days | Providers can move/change |
 | NCD/LCD | 24 hours | Policies can update |
 | PubMed | 7 days | Articles don't change |
@@ -399,6 +439,7 @@ if (error.code === 'NO_RESULTS') {
 
 | Tool | Rate Limit | Strategy |
 |------|------------|----------|
+| Local CPT/ICD-10 | Unlimited | In-memory, instant |
 | NPI Registry | 20/sec | Queue requests |
 | CMS Coverage | 10/sec | Cache aggressively |
 | PubMed | 3/sec | Batch searches |
