@@ -30,6 +30,7 @@ import {
   recordCoveragePath,
   type ExtractedEntities,
 } from "@/lib/learning";
+import { createConversation } from "@/lib/conversation-service";
 import { FEEDBACK_CONFIG } from "@/config";
 
 // Request body type
@@ -142,8 +143,25 @@ export async function POST(request: NextRequest) {
       isAppeal: result.sessionState.isAppeal,
     });
 
-    // Generate conversation ID if not provided (must be valid UUID for database)
-    const conversationId = body.conversationId ?? crypto.randomUUID();
+    // Get or create conversation ID
+    let conversationId = body.conversationId;
+
+    if (!conversationId) {
+      // Create new conversation in database (required for FK constraints)
+      console.log("[Chat API] Creating new conversation...");
+      const newConvId = await createConversation({
+        isAppeal: result.sessionState.isAppeal,
+      });
+
+      if (newConvId) {
+        conversationId = newConvId;
+        console.log("[Chat API] Created conversation:", conversationId);
+      } else {
+        // Fallback: generate UUID but log warning (tracking won't work)
+        conversationId = crypto.randomUUID();
+        console.warn("[Chat API] Failed to create conversation in DB, using local UUID:", conversationId);
+      }
+    }
 
     // Persist learning from successful tool use (non-blocking)
     if (result.toolsUsed.length > 0) {
