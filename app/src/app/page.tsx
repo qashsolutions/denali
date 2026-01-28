@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { PageContainer, Container } from "@/components/layout/Container";
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -9,6 +10,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { getGreeting } from "@/lib/utils";
 
 export default function WelcomePage() {
+  const router = useRouter();
   const { isDark, toggleTheme } = useTheme();
   const [userName] = useState<string | null>(null); // Will come from auth later
 
@@ -16,18 +18,17 @@ export default function WelcomePage() {
   const timeIcon = getTimeIcon();
 
   const handleNewQuestion = () => {
-    // TODO: Navigate to chat
-    console.log("New question");
+    router.push("/chat");
   };
 
   const handlePastQuestions = () => {
-    // TODO: Navigate to history
-    console.log("Past questions");
+    // TODO: Navigate to history when built
+    router.push("/chat");
   };
 
   const handleSend = (message: string) => {
-    // TODO: Start conversation with message
-    console.log("Send:", message);
+    // Navigate to chat with initial message
+    router.push(`/chat?message=${encodeURIComponent(message)}`);
   };
 
   return (
