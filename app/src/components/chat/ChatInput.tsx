@@ -9,6 +9,8 @@ export interface ChatInputProps {
   placeholder?: string;
   externalValue?: string;
   onExternalValueUsed?: () => void;
+  suggestions?: string[];
+  onSuggestionClick?: (suggestion: string) => void;
 }
 
 export function ChatInput({
@@ -17,6 +19,8 @@ export function ChatInput({
   placeholder = "Type your message...",
   externalValue,
   onExternalValueUsed,
+  suggestions = [],
+  onSuggestionClick,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -55,41 +59,79 @@ export function ChatInput({
     }
   };
 
+  const handleSuggestionClick = (suggestion: string) => {
+    if (onSuggestionClick) {
+      onSuggestionClick(suggestion);
+    } else {
+      setValue(suggestion);
+      textareaRef.current?.focus();
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit} className="chat-input w-full">
-      <div className="flex items-end gap-2 p-2 bg-[var(--input-bg)] rounded-2xl border border-[var(--border)]">
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          disabled={disabled}
-          rows={1}
-          className={cn(
-            "flex-1 resize-none bg-transparent px-2 py-2",
-            "text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
-            "focus:outline-none",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-            "min-h-[44px] max-h-[150px]"
-          )}
-          aria-label="Type your message"
-        />
-        <button
-          type="submit"
-          disabled={disabled || !value.trim()}
-          className={cn(
-            "flex-shrink-0 w-10 h-10 rounded-xl",
-            "flex items-center justify-center",
-            "bg-gradient-to-r from-[var(--user-bubble-from)] to-[var(--user-bubble-to)]",
-            "text-white transition-opacity",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-            "hover:opacity-90"
-          )}
-          aria-label="Send message"
-        >
-          <SendIcon className="w-5 h-5" />
-        </button>
+      <div className="bg-[var(--input-bg)] rounded-2xl border border-[var(--border)] overflow-hidden">
+        {/* Suggestions inside input area */}
+        {suggestions.length > 0 && !disabled && (
+          <div className="flex flex-wrap items-center gap-2 px-4 pt-3 pb-2">
+            {suggestions.map((suggestion, index) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() => handleSuggestionClick(suggestion)}
+                className={cn(
+                  "px-4 py-2 rounded-full",
+                  "text-base font-bold",
+                  "text-white",
+                  "bg-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/80",
+                  "transition-colors",
+                  "whitespace-nowrap"
+                )}
+              >
+                {suggestion}
+              </button>
+            ))}
+            <span className="text-base text-[var(--text-muted)] ml-1">
+              or type here if it's something else
+            </span>
+          </div>
+        )}
+
+        {/* Text input row */}
+        <div className="flex items-end gap-2 p-3">
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={disabled}
+            rows={1}
+            className={cn(
+              "flex-1 resize-none bg-transparent px-2 py-2",
+              "text-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
+              "focus:outline-none",
+              "disabled:opacity-50 disabled:cursor-not-allowed",
+              "min-h-[48px] max-h-[150px]"
+            )}
+            aria-label="Type your message"
+          />
+          <button
+            type="submit"
+            disabled={disabled || !value.trim()}
+            className={cn(
+              "flex-shrink-0 w-12 h-12 rounded-xl",
+              "flex items-center justify-center",
+              "bg-gradient-to-r from-[var(--user-bubble-from)] to-[var(--user-bubble-to)]",
+              "text-white transition-opacity",
+              "disabled:opacity-50 disabled:cursor-not-allowed",
+              "hover:opacity-90"
+            )}
+            aria-label="Send message"
+          >
+            <SendIcon className="w-6 h-6" />
+          </button>
+        </div>
       </div>
     </form>
   );

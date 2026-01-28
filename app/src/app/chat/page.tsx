@@ -6,7 +6,6 @@ import Link from "next/link";
 import { PageContainer, Container } from "@/components/layout/Container";
 import { Message, LoadingMessage } from "@/components/chat/Message";
 import { ChatInput } from "@/components/chat/ChatInput";
-import { Suggestions } from "@/components/chat/Suggestions";
 import { PrintableChecklist } from "@/components/chat/PrintableChecklist";
 import { EmailPrompt } from "@/components/chat/EmailPrompt";
 import { useTheme } from "@/components/ThemeProvider";
@@ -139,20 +138,7 @@ function ChatContent() {
           </Container>
         </div>
 
-        {/* Suggestions */}
-        {suggestions.length > 0 && !isLoading && currentAction.type === "none" && (
-          <div className="px-4 py-2 border-t border-[var(--border)] bg-[var(--bg-primary)]">
-            <Container>
-              <Suggestions
-                suggestions={suggestions}
-                onSelect={handleSuggestionSelect}
-                disabled={isLoading}
-              />
-            </Container>
-          </div>
-        )}
-
-        {/* Chat Input */}
+        {/* Chat Input with integrated suggestions */}
         <div className="p-4 bg-[var(--bg-primary)] border-t border-[var(--border)]">
           <Container>
             <ChatInput
@@ -161,6 +147,8 @@ function ChatContent() {
               placeholder="Type your message..."
               externalValue={pendingInput}
               onExternalValueUsed={handlePendingInputUsed}
+              suggestions={currentAction.type === "none" ? suggestions : []}
+              onSuggestionClick={handleSuggestionSelect}
             />
           </Container>
         </div>
