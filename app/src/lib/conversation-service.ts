@@ -242,6 +242,7 @@ export async function updateConversationStatus(
 
 /**
  * Submit feedback for a message
+ * Anonymous users can provide feedback without authentication
  */
 export async function submitMessageFeedback(
   messageId: string,
@@ -252,13 +253,13 @@ export async function submitMessageFeedback(
   const supabase = createClient();
 
   // Use the database function for proper feedback processing
-  // Note: p_user_id accepts null for anonymous users
+  // All parameters except p_message_id are optional to support anonymous users
   // Valid feedback_type values: 'accuracy', 'clarity', 'completeness', 'other'
   const { error } = await supabase.rpc("process_feedback", {
     p_message_id: messageId,
     p_rating: rating,
-    p_user_id: (userId || null) as string,
-    p_correction: (correction || null) as string,
+    p_user_id: userId,
+    p_correction: correction,
     p_feedback_type: "accuracy",
   });
 
@@ -444,6 +445,7 @@ export async function hasActiveSubscription(userId: string): Promise<boolean> {
 
 /**
  * Track a user event for analytics
+ * All parameters are optional to support anonymous users
  */
 export async function trackEvent(
   eventType: string,
@@ -459,10 +461,10 @@ export async function trackEvent(
   try {
     await supabase.rpc("track_user_event", {
       p_event_type: eventType,
-      p_phone: (options.phone || null) as string,
-      p_conversation_id: (options.conversationId || null) as string,
-      p_appeal_id: (options.appealId || null) as string,
-      p_event_data: (options.eventData || null) as Record<string, never> | null,
+      p_phone: options.phone,
+      p_conversation_id: options.conversationId,
+      p_appeal_id: options.appealId,
+      p_event_data: options.eventData as Record<string, string | number | boolean | null> | undefined,
     });
   } catch (error) {
     // Non-blocking - just log
