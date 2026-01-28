@@ -6,6 +6,7 @@
  */
 
 import type { ToolDefinition, ToolResult, ToolExecutor } from "../claude";
+import { MEDICARE_CONSTANTS } from "@/config";
 import {
   searchCPT,
   searchICD10,
@@ -1326,10 +1327,10 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
     const providerName = (input.provider_name as string) || "[Provider Name]";
     const denialDate = (input.denial_date as string) || new Date().toISOString().split("T")[0];
 
-    // Calculate appeal deadline (120 days from denial)
+    // Calculate appeal deadline
     const denialDateObj = new Date(denialDate);
     const deadlineDate = new Date(denialDateObj);
-    deadlineDate.setDate(deadlineDate.getDate() + 120);
+    deadlineDate.setDate(deadlineDate.getDate() + MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS);
     const deadlineStr = deadlineDate.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
@@ -1420,7 +1421,7 @@ Sincerely,
 [ADDRESS]
 
 ---
-IMPORTANT: This appeal must be submitted by ${deadlineStr} (120 days from denial date).
+IMPORTANT: This appeal must be submitted by ${deadlineStr} (${MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS} days from denial date).
 `.trim();
 
     return {

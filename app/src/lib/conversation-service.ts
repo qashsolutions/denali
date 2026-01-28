@@ -5,6 +5,7 @@
  */
 
 import { createClient } from "./supabase";
+import { MEDICARE_CONSTANTS } from "@/config";
 import type { Database } from "@/types/database";
 
 type Conversation = Database["public"]["Tables"]["conversations"]["Row"];
@@ -288,12 +289,12 @@ export async function saveAppeal(
 ): Promise<string | null> {
   const supabase = createClient();
 
-  // Calculate deadline (120 days from denial)
+  // Calculate deadline
   let deadline: string | null = null;
   if (appealData.denialDate) {
     const denialDate = new Date(appealData.denialDate);
     const deadlineDate = new Date(denialDate);
-    deadlineDate.setDate(deadlineDate.getDate() + 120);
+    deadlineDate.setDate(deadlineDate.getDate() + MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS);
     deadline = deadlineDate.toISOString();
   }
 

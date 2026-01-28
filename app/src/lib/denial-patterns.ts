@@ -6,6 +6,7 @@
  */
 
 import type { CPTCode, ICD10Code } from "./medicare-codes";
+import { MEDICARE_CONSTANTS } from "@/config";
 
 // =============================================================================
 // TYPES
@@ -66,7 +67,7 @@ export const DENIAL_PATTERNS: DenialPattern[] = [
       "Statement of medical necessity from treating physician",
     ],
     estimatedSuccessRate: "high",
-    appealDeadlineDays: 120,
+    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
   },
 
   {
@@ -86,7 +87,7 @@ export const DENIAL_PATTERNS: DenialPattern[] = [
       "Similar coverage decisions from other Medicare contractors",
     ],
     estimatedSuccessRate: "medium",
-    appealDeadlineDays: 120,
+    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
   },
 
   // ---------------------------------------------------------------------------
@@ -112,7 +113,7 @@ export const DENIAL_PATTERNS: DenialPattern[] = [
       "Physician signature and date",
     ],
     estimatedSuccessRate: "high",
-    appealDeadlineDays: 120,
+    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
   },
 
   {
@@ -157,7 +158,7 @@ export const DENIAL_PATTERNS: DenialPattern[] = [
       "Alternative diagnosis codes if appropriate",
     ],
     estimatedSuccessRate: "low",
-    appealDeadlineDays: 120,
+    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
   },
 
   {
@@ -179,7 +180,7 @@ export const DENIAL_PATTERNS: DenialPattern[] = [
       "Change in clinical status since last service",
     ],
     estimatedSuccessRate: "medium",
-    appealDeadlineDays: 120,
+    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
   },
 
   // ---------------------------------------------------------------------------
@@ -202,7 +203,7 @@ export const DENIAL_PATTERNS: DenialPattern[] = [
       "LCD coverage criteria met",
     ],
     estimatedSuccessRate: "high",
-    appealDeadlineDays: 120,
+    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
   },
 
   {
@@ -222,7 +223,7 @@ export const DENIAL_PATTERNS: DenialPattern[] = [
       "Time documentation if relevant",
     ],
     estimatedSuccessRate: "medium",
-    appealDeadlineDays: 120,
+    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
   },
 
   // ---------------------------------------------------------------------------
@@ -249,7 +250,7 @@ export const DENIAL_PATTERNS: DenialPattern[] = [
       "For wheelchairs: mobility examination findings",
     ],
     estimatedSuccessRate: "medium",
-    appealDeadlineDays: 120,
+    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
   },
 
   {
@@ -264,7 +265,7 @@ export const DENIAL_PATTERNS: DenialPattern[] = [
       "Documentation of beneficiary's good faith",
     ],
     estimatedSuccessRate: "low",
-    appealDeadlineDays: 120,
+    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
   },
 
   // ---------------------------------------------------------------------------
@@ -289,7 +290,7 @@ export const DENIAL_PATTERNS: DenialPattern[] = [
       "Plan for discharge/transition",
     ],
     estimatedSuccessRate: "medium",
-    appealDeadlineDays: 120,
+    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
   },
 
   {
@@ -306,7 +307,7 @@ export const DENIAL_PATTERNS: DenialPattern[] = [
       "Estimated additional visits needed",
     ],
     estimatedSuccessRate: "high",
-    appealDeadlineDays: 120,
+    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
   },
 ];
 
@@ -544,15 +545,15 @@ export function calculateAppealDeadline(
 ): Date {
   const level = MEDICARE_APPEAL_LEVELS.find((l) => l.level === appealLevel);
   if (!level) {
-    // Default to 120 days if level not found
+    // Default to standard appeal deadline if level not found
     const deadline = new Date(denialDate);
-    deadline.setDate(deadline.getDate() + 120);
+    deadline.setDate(deadline.getDate() + MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS);
     return deadline;
   }
 
   // Parse time limit (e.g., "120 days from denial date")
   const daysMatch = level.timeLimit.match(/(\d+)\s*days/i);
-  const days = daysMatch ? parseInt(daysMatch[1], 10) : 120;
+  const days = daysMatch ? parseInt(daysMatch[1], 10) : MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS;
 
   const deadline = new Date(denialDate);
   deadline.setDate(deadline.getDate() + days);
