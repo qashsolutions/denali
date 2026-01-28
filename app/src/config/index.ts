@@ -4,6 +4,9 @@
  * Barrel export for all configuration modules.
  */
 
+// Brand
+export { BRAND, getSiteUrl, getBrandName } from "./brand";
+
 // Pricing
 export {
   PRICING,

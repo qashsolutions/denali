@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.1"
+  }
   public: {
     Tables: {
       appeal_outcomes: {
@@ -271,6 +276,42 @@ export type Database = {
         }
         Relationships: []
       }
+      landing_content: {
+        Row: {
+          content: Json | null
+          created_at: string | null
+          display_order: number | null
+          id: string
+          is_published: boolean | null
+          section_key: string
+          subtitle: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          content?: Json | null
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_published?: boolean | null
+          section_key: string
+          subtitle?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          content?: Json | null
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_published?: boolean | null
+          section_key?: string
+          subtitle?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       learning_queue: {
         Row: {
           attempts: number | null
@@ -408,6 +449,45 @@ export type Database = {
         }
         Relationships: []
       }
+      pricing_plans: {
+        Row: {
+          billing_period: string | null
+          created_at: string | null
+          display_order: number | null
+          features: Json | null
+          id: string
+          is_active: boolean | null
+          is_popular: boolean | null
+          name: string
+          price_cents: number
+          stripe_price_id: string | null
+        }
+        Insert: {
+          billing_period?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          features?: Json | null
+          id?: string
+          is_active?: boolean | null
+          is_popular?: boolean | null
+          name: string
+          price_cents: number
+          stripe_price_id?: string | null
+        }
+        Update: {
+          billing_period?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          features?: Json | null
+          id?: string
+          is_active?: boolean | null
+          is_popular?: boolean | null
+          name?: string
+          price_cents?: number
+          stripe_price_id?: string | null
+        }
+        Relationships: []
+      }
       procedure_mappings: {
         Row: {
           confidence: number
@@ -438,6 +518,33 @@ export type Database = {
           last_used_at?: string
           phrase?: string
           use_count?: number
+        }
+        Relationships: []
+      }
+      site_settings: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          id: string
+          key: string
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          value?: string
         }
         Relationships: []
       }
@@ -524,6 +631,42 @@ export type Database = {
           last_used_at?: string
           phrase?: string
           use_count?: number
+        }
+        Relationships: []
+      }
+      testimonials: {
+        Row: {
+          author_name: string
+          author_title: string | null
+          content: string
+          created_at: string | null
+          id: string
+          is_featured: boolean | null
+          is_published: boolean | null
+          rating: number | null
+          source: string | null
+        }
+        Insert: {
+          author_name: string
+          author_title?: string | null
+          content: string
+          created_at?: string | null
+          id?: string
+          is_featured?: boolean | null
+          is_published?: boolean | null
+          rating?: number | null
+          source?: string | null
+        }
+        Update: {
+          author_name?: string
+          author_title?: string | null
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_featured?: boolean | null
+          is_published?: boolean | null
+          rating?: number | null
+          source?: string | null
         }
         Relationships: []
       }
@@ -754,7 +897,7 @@ export type Database = {
     Functions: {
       check_appeal_access: { Args: { p_phone: string }; Returns: string }
       claim_learning_job: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           job_data: Json
           job_id: string
@@ -765,6 +908,7 @@ export type Database = {
         Args: { p_error?: string; p_job_id: string; p_success: boolean }
         Returns: undefined
       }
+      custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       delete_user_cascade: {
         Args: { target_user_id: string }
         Returns: undefined
@@ -774,6 +918,7 @@ export type Database = {
         Returns: Json
       }
       get_appeal_count: { Args: { p_phone: string }; Returns: number }
+      get_current_practice_id: { Args: never; Returns: string }
       get_learning_context: {
         Args: {
           p_cpt_codes?: string[]
@@ -791,6 +936,7 @@ export type Database = {
         }
         Returns: number
       }
+      is_admin: { Args: never; Returns: boolean }
       process_feedback: {
         Args: {
           p_correction?: string
@@ -889,23 +1035,25 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof Database
+  schema: keyof DatabaseWithoutInternals
 }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -923,16 +1071,16 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof Database
+  schema: keyof DatabaseWithoutInternals
 }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -948,16 +1096,16 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof Database
+  schema: keyof DatabaseWithoutInternals
 }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U

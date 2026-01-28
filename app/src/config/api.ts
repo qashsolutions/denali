@@ -4,6 +4,8 @@
  * Centralized API endpoints and model configuration.
  */
 
+import { BRAND } from "./brand";
+
 export const API_CONFIG = {
   /** Claude/Anthropic configuration */
   claude: {
@@ -49,5 +51,5 @@ export function getBaseUrl(requestOrigin?: string | null): string {
 
   // Production without origin - this shouldn't happen but handle gracefully
   console.warn("No origin provided and NEXT_PUBLIC_APP_URL not set");
-  return "https://denali.health";
+  return BRAND.SITE_URL;
 }

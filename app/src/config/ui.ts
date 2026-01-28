@@ -60,7 +60,11 @@ export function getTimeBasedGreeting(): string {
 }
 
 /**
- * Medicare-specific constants (regulatory, not configurable)
+ * Medicare-specific constants (regulatory values by year)
+ *
+ * These values are set by CMS annually and should be updated each year.
+ * Future enhancement: These could be stored in Supabase and learned/updated
+ * from user-provided data patterns.
  */
 export const MEDICARE_CONSTANTS = {
   /** First-level appeal deadline in days (42 CFR 405.904) */
@@ -68,6 +72,51 @@ export const MEDICARE_CONSTANTS = {
 
   /** Reconsideration deadline in days */
   RECONSIDERATION_DEADLINE_DAYS: 180,
+
+  /**
+   * Annual thresholds by year
+   * These are CMS-published values that change annually
+   */
+  ANNUAL_THRESHOLDS: {
+    2024: {
+      /** ALJ hearing amount in controversy threshold */
+      ALJ_THRESHOLD: 180,
+      /** Federal court amount in controversy threshold */
+      FEDERAL_COURT_THRESHOLD: 1840,
+      /** Part B deductible */
+      PART_B_DEDUCTIBLE: 240,
+    },
+    2025: {
+      ALJ_THRESHOLD: 190,
+      FEDERAL_COURT_THRESHOLD: 1900,
+      PART_B_DEDUCTIBLE: 257,
+    },
+    2026: {
+      ALJ_THRESHOLD: 200,
+      FEDERAL_COURT_THRESHOLD: 1960,
+      PART_B_DEDUCTIBLE: 265,
+    },
+  } as Record<number, { ALJ_THRESHOLD: number; FEDERAL_COURT_THRESHOLD: number; PART_B_DEDUCTIBLE: number }>,
+
+  /**
+   * Get threshold for the current year (or most recent available)
+   */
+  getCurrentThresholds() {
+    const currentYear = new Date().getFullYear();
+    const years = Object.keys(this.ANNUAL_THRESHOLDS)
+      .map(Number)
+      .sort((a, b) => b - a);
+
+    // Return current year if available, otherwise most recent year
+    for (const year of years) {
+      if (year <= currentYear) {
+        return { year, ...this.ANNUAL_THRESHOLDS[year] };
+      }
+    }
+    // Fallback to most recent year if all are in the future
+    const latestYear = years[0];
+    return { year: latestYear, ...this.ANNUAL_THRESHOLDS[latestYear] };
+  },
 } as const;
 
 /**

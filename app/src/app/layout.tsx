@@ -1,18 +1,19 @@
 import type { Metadata, Viewport } from "next";
+import { BRAND } from "@/config";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Denali Health - Medicare Coverage Guidance",
+  title: `${BRAND.NAME} - Medicare Coverage Guidance`,
   description:
     "Get plain-English guidance on Medicare coverage requirements. Understand what your doctor needs to document for approval.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Denali Health",
+    title: BRAND.NAME,
   },
   openGraph: {
-    title: "Denali Health",
+    title: BRAND.NAME,
     description: "Medicare coverage guidance in plain English",
     type: "website",
   },

@@ -414,8 +414,7 @@ export const MEDICARE_APPEAL_LEVELS: AppealLevel[] = [
   {
     level: 3,
     name: "Administrative Law Judge (ALJ) Hearing",
-    description:
-      "Third level appeal heard by an Administrative Law Judge if amount in controversy meets threshold ($180 for 2024)",
+    description: `Third level appeal heard by an Administrative Law Judge if amount in controversy meets threshold ($${MEDICARE_CONSTANTS.getCurrentThresholds().ALJ_THRESHOLD} for ${MEDICARE_CONSTANTS.getCurrentThresholds().year})`,
     timeLimit: "60 days from reconsideration decision",
     decisionTimeframe: "90 days",
     successRate: "~70% of cases decided in beneficiary's favor",
@@ -431,8 +430,7 @@ export const MEDICARE_APPEAL_LEVELS: AppealLevel[] = [
   {
     level: 5,
     name: "Federal District Court",
-    description:
-      "Final level - judicial review in federal court if amount in controversy meets threshold ($1,840 for 2024)",
+    description: `Final level - judicial review in federal court if amount in controversy meets threshold ($${MEDICARE_CONSTANTS.getCurrentThresholds().FEDERAL_COURT_THRESHOLD.toLocaleString()} for ${MEDICARE_CONSTANTS.getCurrentThresholds().year})`,
     timeLimit: "60 days from Appeals Council decision",
     decisionTimeframe: "Varies",
   },
