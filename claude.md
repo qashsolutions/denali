@@ -655,76 +655,63 @@ export function ChatPage() {
 
 ### 11.4 Edge Function Guidelines
 
-**One function per skill/domain:**
+**Architecture Note:** Domain skills (coverage-check, symptom-lookup, etc.) are implemented via Claude tool calling in `/api/chat` rather than separate edge functions. This provides better latency and simpler orchestration.
+
+**Edge functions for background/async tasks:**
 ```
 supabase/functions/
-├── coverage-check/         # Coverage Check Skill
+├── send-checklist-email/   # Email checklists via Resend
 │   └── index.ts
-├── symptom-lookup/         # Symptom-to-Diagnosis Skill
-│   └── index.ts
-├── procedure-lookup/       # Procedure Identification Skill
-│   └── index.ts
-├── provider-search/        # Provider Lookup Skill
-│   └── index.ts
-├── guidance-generate/      # Guidance Generation Skill
-│   └── index.ts
-├── appeal-generate/        # Appeal letter generation
-│   └── index.ts
-├── feedback-process/       # Process user feedback
+├── process-learning-queue/ # Background learning job processor
 │   └── index.ts
 └── _shared/                # Shared utilities (not deployed)
     ├── cors.ts
-    ├── auth.ts
-    ├── claude.ts
-    └── types.ts
+    └── auth.ts
+```
+
+**API Routes for domain skills (via tool calling):**
+```
+app/src/app/api/
+├── chat/route.ts           # Main chat with Claude + 13 tools
+├── appeal-outcome/route.ts # Record appeal results
+├── account/delete/route.ts # GDPR/CCPA account deletion
+└── checkout/route.ts       # Stripe payment
 ```
 
 **Function template:**
 ```typescript
-// supabase/functions/coverage-check/index.ts
+// supabase/functions/send-checklist-email/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders } from "../_shared/cors.ts";
-import { validateAuth } from "../_shared/auth.ts";
-import { createClaudeClient } from "../_shared/claude.ts";
+import { corsHeaders, handleCors, jsonResponse } from "../_shared/cors.ts";
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   try {
-    // 1. Validate request
-    const { diagnosis, procedure } = await req.json();
-
-    // 2. Do one thing well
-    const coverage = await checkCoverage(diagnosis, procedure);
-
-    // 3. Return response
-    return new Response(JSON.stringify(coverage), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    const { email, checklist } = await req.json();
+    // Send email via Resend API
+    return jsonResponse({ success: true });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: error.message }, 500);
   }
 });
 ```
 
 **Shared utilities pattern:**
 ```typescript
-// supabase/functions/_shared/claude.ts
-export function createClaudeClient() {
-  return new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
-}
-
 // supabase/functions/_shared/cors.ts
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+export function handleCors(req: Request): Response | null {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+  return null;
+}
 ```
 
 ---
