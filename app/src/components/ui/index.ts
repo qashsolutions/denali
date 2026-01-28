@@ -8,3 +8,4 @@ export {
   CardFooter,
   type CardProps,
 } from "./Card";
+export { PrintButton } from "./PrintButton";

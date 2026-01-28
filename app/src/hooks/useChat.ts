@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import type { Message } from "@/types";
 
-interface UseChatOptions {
+export interface UseChatOptions {
   conversationId?: string;
   initialMessages?: Message[];
   onError?: (error: Error) => void;
