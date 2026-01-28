@@ -253,12 +253,13 @@ export async function submitMessageFeedback(
 
   // Use the database function for proper feedback processing
   // Note: p_user_id accepts null for anonymous users
+  // Valid feedback_type values: 'accuracy', 'clarity', 'completeness', 'other'
   const { error } = await supabase.rpc("process_feedback", {
     p_message_id: messageId,
     p_rating: rating,
     p_user_id: (userId || null) as string,
     p_correction: (correction || null) as string,
-    p_feedback_type: "message_quality",
+    p_feedback_type: "accuracy",
   });
 
   if (error) {
