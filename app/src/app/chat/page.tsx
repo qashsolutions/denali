@@ -1,12 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { PageContainer, Container } from "@/components/layout/Container";
 import { Message, LoadingMessage } from "@/components/chat/Message";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { Suggestions } from "@/components/chat/Suggestions";
+import { PrintableChecklist } from "@/components/chat/PrintableChecklist";
+import { EmailPrompt } from "@/components/chat/EmailPrompt";
 import { useTheme } from "@/hooks/useTheme";
 import { useChat } from "@/hooks/useChat";
 
@@ -20,8 +22,12 @@ function ChatContent() {
     messages,
     isLoading,
     suggestions,
+    currentAction,
     sendMessage,
     submitFeedback,
+    dismissAction,
+    sendEmail,
+    triggerEmail,
   } = useChat();
 
   // Handle initial message from URL params
@@ -44,6 +50,16 @@ function ChatContent() {
   const handleSuggestionSelect = (suggestion: string) => {
     sendMessage(suggestion);
   };
+
+  const handlePrintComplete = useCallback(() => {
+    // Track print event (would call API in production)
+    console.log("Print completed");
+  }, []);
+
+  const handleEmailFromPrint = useCallback(() => {
+    dismissAction();
+    triggerEmail();
+  }, [dismissAction, triggerEmail]);
 
   return (
     <PageContainer>
@@ -77,6 +93,18 @@ function ChatContent() {
                     />
                   ))}
                 {isLoading && <LoadingMessage />}
+
+                {/* Email Prompt - inline in messages */}
+                {currentAction.type === "prompt_email" && (
+                  <div className="max-w-[85%]">
+                    <EmailPrompt
+                      existingEmail={currentAction.existingEmail}
+                      onConfirm={sendEmail}
+                      onCancel={dismissAction}
+                    />
+                  </div>
+                )}
+
                 <div ref={messagesEndRef} />
               </div>
             )}
@@ -84,7 +112,7 @@ function ChatContent() {
         </div>
 
         {/* Suggestions */}
-        {suggestions.length > 0 && !isLoading && (
+        {suggestions.length > 0 && !isLoading && currentAction.type === "none" && (
           <div className="px-4 py-2 border-t border-[var(--border)] bg-[var(--bg-primary)]">
             <Container>
               <Suggestions
@@ -107,6 +135,16 @@ function ChatContent() {
           </Container>
         </div>
       </main>
+
+      {/* Print Preview Modal */}
+      {currentAction.type === "show_print" && (
+        <PrintableChecklist
+          data={currentAction.data}
+          onClose={dismissAction}
+          onPrint={handlePrintComplete}
+          onEmail={handleEmailFromPrint}
+        />
+      )}
     </PageContainer>
   );
 }
