@@ -45,8 +45,13 @@ function ChatContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
+  // Initial cards: send immediately
+  const handleInitialCardSelect = (question: string) => {
+    sendMessage(question);
+  };
+
+  // Suggestion buttons (after Claude responds): populate text box for review
   const handleSuggestionSelect = (suggestion: string) => {
-    // Populate input box instead of auto-sending
     setPendingInput(suggestion);
   };
 
@@ -99,7 +104,7 @@ function ChatContent() {
         <div className="flex-1 overflow-y-auto">
           <Container className="py-4">
             {messages.length === 0 && !isLoading ? (
-              <EmptyState onSuggestionSelect={handleSuggestionSelect} />
+              <EmptyState onSuggestionSelect={handleInitialCardSelect} />
             ) : (
               <div className="space-y-1">
                 {messages
