@@ -1,8 +1,8 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Header } from "@/components/layout/Header";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { PageContainer, Container } from "@/components/layout/Container";
 import { Message, LoadingMessage } from "@/components/chat/Message";
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -11,9 +11,10 @@ import { PrintableChecklist } from "@/components/chat/PrintableChecklist";
 import { EmailPrompt } from "@/components/chat/EmailPrompt";
 import { useTheme } from "@/components/ThemeProvider";
 import { useChat } from "@/hooks/useChat";
+import { MountainIcon, SunIcon, MoonIcon } from "@/components/icons";
+import { BRAND } from "@/config";
 
 function ChatContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { isDark, toggleTheme } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -43,10 +44,6 @@ function ChatContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
-  const handleBack = () => {
-    router.push("/");
-  };
-
   const handleSuggestionSelect = (suggestion: string) => {
     sendMessage(suggestion);
   };
@@ -63,13 +60,44 @@ function ChatContent() {
 
   return (
     <PageContainer>
-      <Header
-        showBack
-        onBack={handleBack}
-        showThemeToggle
-        onThemeToggle={toggleTheme}
-        isDark={isDark}
-      />
+      {/* Branded Header */}
+      <header className="sticky top-0 z-50 backdrop-blur-md bg-[var(--bg-primary)]/90 border-b border-[var(--border)]/50">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo + Brand */}
+            <Link href="/" className="flex items-center gap-3 group">
+              <MountainIcon className="w-10 h-8 transition-transform group-hover:scale-105" />
+              <span className="text-lg font-bold text-[var(--text-primary)]">
+                {BRAND.NAME}
+              </span>
+            </Link>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              {/* Theme Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="w-10 h-10 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors hover:bg-[var(--border)]"
+                aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
+              >
+                {isDark ? (
+                  <SunIcon className="w-5 h-5 text-yellow-400" />
+                ) : (
+                  <MoonIcon className="w-5 h-5 text-[var(--text-secondary)]" />
+                )}
+              </button>
+
+              {/* Home Link */}
+              <Link
+                href="/"
+                className="px-4 h-10 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--border)]"
+              >
+                Home
+              </Link>
+            </div>
+          </div>
+        </div>
+      </header>
 
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Messages Area */}
@@ -160,7 +188,18 @@ export default function ChatPage() {
 function ChatLoadingFallback() {
   return (
     <PageContainer>
-      <Header />
+      <header className="sticky top-0 z-50 backdrop-blur-md bg-[var(--bg-primary)]/90 border-b border-[var(--border)]/50">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            <Link href="/" className="flex items-center gap-3">
+              <MountainIcon className="w-10 h-8" />
+              <span className="text-lg font-bold text-[var(--text-primary)]">
+                {BRAND.NAME}
+              </span>
+            </Link>
+          </div>
+        </div>
+      </header>
       <main className="flex-1 flex items-center justify-center">
         <div className="animate-pulse text-[var(--text-secondary)]">
           Loading...
