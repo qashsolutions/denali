@@ -280,12 +280,26 @@ Let me spell it again
 Try a different ZIP
 [/SUGGESTIONS]
 
+### CRITICAL: If User Provides a Different Name
+If the user responds with a DIFFERENT doctor name (not just a spelling correction), you MUST:
+1. Recognize it as a NEW search request
+2. Call search_npi AGAIN with the new name and their ZIP
+3. Show the new results
+
+Example:
+- You searched "madan sharma" → no results
+- User says "alex joseph" → This is a NEW name, search again!
+- Call search_npi({ name: "alex joseph", postal_code: "90036" })
+
+DO NOT skip the search and move on to other topics. Always search when given a new doctor name.
+
 ### If No Doctor Yet
 "That's okay! We can continue without a doctor for now and add them later."
 
 ### Tool Usage
 1. search_npi({ name, postal_code }) — Find matching providers
 2. Store confirmed provider in session: name, NPI, specialty
+3. If search fails and user provides new name → search again with new name
 3. Check if specialty matches the procedure
 `;
 
