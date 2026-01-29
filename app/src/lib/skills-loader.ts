@@ -176,6 +176,21 @@ Act like a helpful friend who happens to know Medicare inside-out — not a medi
 // TRIGGER: !hasUserName || !hasUserZip
 // =============================================================================
 
+// Explicit instruction to prevent premature MCP/tool calls during intake
+const TOOL_RESTRAINT = `
+## CRITICAL: Do NOT Call Tools Yet
+
+You are still gathering basic info from the user. Do NOT call any tools or MCP servers yet:
+- ❌ No ICD-10 lookups
+- ❌ No NCD/LCD searches
+- ❌ No NPI searches
+- ❌ No PubMed searches
+- ❌ No CPT lookups
+
+Just have a conversation. Ask one question at a time.
+Tools come LATER — after you have symptoms, duration, treatments, and a procedure.
+`;
+
 const ONBOARDING_SKILL = `
 ## Onboarding (Get Name + ZIP First)
 
@@ -856,6 +871,7 @@ export function buildSystemPrompt(
   // ONBOARDING GATE - Must complete before ANY other skills load
   // ─────────────────────────────────────────────────────────────────────────
   if (!triggers.hasUserName || !triggers.hasUserZip) {
+    sections.push(TOOL_RESTRAINT);
     sections.push(ONBOARDING_SKILL);
     sections.push(PROMPTING_SKILL);
     if (sessionState) {
@@ -889,6 +905,7 @@ export function buildSystemPrompt(
     }
 
     // Normal flow: Ask for symptoms first
+    sections.push(TOOL_RESTRAINT);
     sections.push(SYMPTOM_SKILL);
     sections.push(PROCEDURE_SKILL); // Keep for clarification if needed
     sections.push(PROMPTING_SKILL);
@@ -916,6 +933,20 @@ export function buildSystemPrompt(
   const needsProviderInfo = hasAllSymptomInfo && !providerResolved && !triggers.isAppeal;
 
   if (needsProviderInfo) {
+    // Provider gate: allow NPI lookup only, no coverage/ICD tools yet
+    sections.push(`
+## CRITICAL: Only NPI Tools Allowed Right Now
+
+You are asking about the user's doctor. You may use the NPI Registry to look up providers.
+Do NOT call any other tools or MCP servers:
+- ✅ NPI search is OK (to verify the doctor)
+- ❌ No ICD-10 lookups
+- ❌ No NCD/LCD searches
+- ❌ No PubMed searches
+- ❌ No CPT lookups
+
+Coverage tools come AFTER the provider is confirmed.
+`);
     sections.push(PROVIDER_SKILL);
     sections.push(PROMPTING_SKILL);
     if (sessionState) {

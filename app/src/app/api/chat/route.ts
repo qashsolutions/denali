@@ -10,6 +10,10 @@
  * 4. Returning structured response with suggestions
  */
 
+// Max execution time for this route (seconds)
+// Pro plan max is 300s. Our per-iteration timeout (60s) handles graceful failure.
+export const maxDuration = 300;
+
 import { NextRequest, NextResponse } from "next/server";
 import {
   chat,
@@ -32,7 +36,7 @@ import {
   type ExtractedEntities,
 } from "@/lib/learning";
 import { createConversation } from "@/lib/conversation-service";
-import { FEEDBACK_CONFIG } from "@/config";
+import { FEEDBACK_CONFIG, API_CONFIG } from "@/config";
 
 // Request body type
 interface ChatRequestBody {
@@ -129,13 +133,18 @@ export async function POST(request: NextRequest) {
     const formattedMessages = formatMessages(body.messages);
 
     // Call Claude with tools
-    console.log("[Chat API] Calling Claude API...");
+    // Use Opus for appeals (higher quality), Sonnet for chat (faster)
+    const modelOverride = sessionState.isAppeal
+      ? API_CONFIG.claude.appealModel
+      : undefined;
+    console.log("[Chat API] Calling Claude API...", modelOverride ? `(appeal mode: ${modelOverride})` : "");
     const result = await chat(
       {
         messages: formattedMessages,
         systemPrompt,
         tools: toolDefinitions,
         sessionState,
+        modelOverride,
       },
       toolExecutors
     );

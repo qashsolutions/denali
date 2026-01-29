@@ -383,21 +383,46 @@ export async function chat(
       (block): block is ToolUseBlock => block.type === "tool_use"
     );
 
-    // Track MCP tool usage for logging (mcp_tool_use blocks)
-    let mcpToolCount = 0;
-    response.content.forEach((block) => {
-      if (block.type === "mcp_tool_use") {
-        mcpToolCount++;
-        const mcpBlock = block as { type: "mcp_tool_use"; name?: string };
+    // Track MCP tool usage with session context for debugging premature calls
+    const mcpBlocks = response.content.filter(b => b.type === "mcp_tool_use");
+    const mcpToolNames = mcpBlocks.map(b => {
+      const mcpBlock = b as { type: "mcp_tool_use"; name?: string; server_name?: string; input?: unknown };
+      return mcpBlock.name || "mcp_tool";
+    });
+
+    if (mcpBlocks.length > 0) {
+      // Log each MCP tool call with context
+      for (const block of mcpBlocks) {
+        const mcpBlock = block as { type: "mcp_tool_use"; name?: string; server_name?: string; input?: unknown };
         const toolName = mcpBlock.name || "mcp_tool";
         if (!toolsUsed.includes(toolName)) {
           toolsUsed.push(toolName);
         }
-        console.log("[CLAUDE API] >>> MCP TOOL CALLED:", toolName);
+        console.log("[CLAUDE API] >>> MCP TOOL CALLED:", toolName, "| server:", mcpBlock.server_name || "unknown");
+        console.log("[CLAUDE API] >>> MCP TOOL INPUT:", JSON.stringify(mcpBlock.input || {}).substring(0, 200));
       }
-    });
-
-    if (mcpToolCount === 0) {
+      // Log session context to detect premature MCP calls
+      console.log("[CLAUDE API] >>> MCP CALL CONTEXT:", {
+        iteration: iterations,
+        hasUserName: !!sessionState.userName,
+        hasUserZip: !!sessionState.userZip,
+        hasSymptoms: sessionState.symptoms.length > 0,
+        hasProcedure: !!sessionState.procedureNeeded,
+        hasDuration: !!sessionState.duration,
+        hasPriorTreatments: sessionState.priorTreatments.length > 0,
+        hasProvider: !!sessionState.provider,
+        mcpToolsCalled: mcpToolNames,
+      });
+      // Warn if MCP tools fired during intake (before we have enough info)
+      const hasMinInfo = sessionState.symptoms.length > 0 && !!sessionState.procedureNeeded;
+      if (!hasMinInfo) {
+        console.warn("[CLAUDE API] ⚠️ MCP TOOLS FIRED DURING INTAKE — info not yet gathered!", {
+          mcpToolsCalled: mcpToolNames,
+          missingSymptoms: sessionState.symptoms.length === 0,
+          missingProcedure: !sessionState.procedureNeeded,
+        });
+      }
+    } else {
       console.log("[CLAUDE API] No MCP tools used in this response");
     }
 
