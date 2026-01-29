@@ -175,9 +175,16 @@ Act like a helpful friend who happens to know Medicare inside-out — not a medi
 // =============================================================================
 
 const ONBOARDING_SKILL = `
-## Onboarding Flow
+## Onboarding Flow (MANDATORY - Complete Before Anything Else)
+
+Even if the user mentions a procedure or condition, you MUST collect name and ZIP first.
+Acknowledge what they mentioned, then ask for name/ZIP.
 
 ### Step 1: Get Their Name
+If they start with a question like "Will Medicare cover my MRI?":
+"I'd be happy to help with that! First, how should I address you?"
+
+If they just say hello:
 "Hi there! I'm here to help with Medicare coverage. How should I address you?"
 
 [SUGGESTIONS]
@@ -188,19 +195,19 @@ Skip this
 When they give name: "Great to meet you, [Name]!"
 
 ### Step 2: Get Their ZIP
-"To help find doctors in your area, what's your ZIP code, [Name]?"
+"To look up the coverage rules in your area, what's your ZIP code?"
 
 [SUGGESTIONS]
-[5-digit ZIP]
+[Let me type it]
 I'll share later
 [/SUGGESTIONS]
 
-When they give ZIP: "Perfect! So [Name], how can I help you today?"
+When they give ZIP: "Perfect! Now, [repeat back their original question or ask what they need]"
 
-[SUGGESTIONS]
-Get something approved
-Something was denied
-[/SUGGESTIONS]
+### Important
+- ALWAYS get name first, then ZIP, then address their question
+- If they already mentioned a procedure, remember it but still ask for name/ZIP first
+- Keep it brief - one question at a time
 `;
 
 // =============================================================================
@@ -697,18 +704,32 @@ export function buildSystemPrompt(
   const sections: string[] = [BASE_PROMPT];
 
   // ─────────────────────────────────────────────────────────────────────────
-  // CONDITIONAL SKILLS - Load only when triggered
+  // EMERGENCY CHECK - Highest priority, even before onboarding
   // ─────────────────────────────────────────────────────────────────────────
-
-  // Emergency check - highest priority
   if (triggers.hasEmergencySymptoms) {
     sections.push(RED_FLAG_SKILL);
+    sections.push(PROMPTING_SKILL);
+    sections.push(buildFlowStateReminder(triggers, sessionState));
+    return sections.join("\n\n---\n\n");
   }
 
-  // Onboarding - get name and ZIP first
+  // ─────────────────────────────────────────────────────────────────────────
+  // ONBOARDING GATE - Must complete before ANY other skills load
+  // ─────────────────────────────────────────────────────────────────────────
   if (!triggers.hasUserName || !triggers.hasUserZip) {
     sections.push(ONBOARDING_SKILL);
+    sections.push(PROMPTING_SKILL);
+    if (sessionState) {
+      sections.push(buildSessionContext(sessionState));
+    }
+    sections.push(buildFlowStateReminder(triggers, sessionState));
+    // RETURN EARLY - Don't load any other skills until onboarding complete
+    return sections.join("\n\n---\n\n");
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONDITIONAL SKILLS - Only loaded AFTER onboarding is complete
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Symptom gathering
   if (triggers.hasProblem && (!triggers.hasDuration || !triggers.hasPriorTreatments)) {
@@ -752,11 +773,6 @@ export function buildSystemPrompt(
     triggers.hasGuidance
   ) {
     sections.push(GUIDANCE_SKILL);
-  }
-
-  // Red flag skill (non-emergency) - when symptoms present
-  if (triggers.hasSymptoms && !triggers.hasEmergencySymptoms) {
-    // Already covered in REQUIREMENT_VERIFICATION_SKILL
   }
 
   // Prompting skill - always loaded for suggestions
@@ -874,15 +890,22 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
 
   // Step 1: Get name
   if (!triggers.hasUserName) {
-    reminder.push("**STEP:** Get user's name");
-    reminder.push("**ASK:** 'Hi! How should I address you?'");
+    reminder.push("**STEP:** Get user's name (REQUIRED FIRST)");
+    if (triggers.hasProcedure) {
+      reminder.push("**NOTE:** User mentioned a procedure - acknowledge it but still ask for name first");
+      reminder.push("**SAY:** 'I'd be happy to help with that! First, how should I address you?'");
+    } else {
+      reminder.push("**SAY:** 'Hi there! I'm here to help with Medicare coverage. How should I address you?'");
+    }
+    reminder.push("**DO NOT:** Jump to answering their question yet");
     return reminder.join("\n");
   }
 
   // Step 2: Get ZIP
   if (!triggers.hasUserZip) {
-    reminder.push("**STEP:** Get ZIP code");
-    reminder.push(`**ASK:** 'Great to meet you, ${userName}! What's your ZIP code?'`);
+    reminder.push("**STEP:** Get ZIP code (REQUIRED BEFORE COVERAGE CHECK)");
+    reminder.push(`**SAY:** 'Great to meet you, ${userName}! To look up coverage rules in your area, what's your ZIP code?'`);
+    reminder.push("**DO NOT:** Answer their Medicare question until you have ZIP");
     return reminder.join("\n");
   }
 
