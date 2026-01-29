@@ -216,20 +216,31 @@ When they give ZIP: "Perfect! Now, [repeat back their original question or ask w
 // =============================================================================
 
 const SYMPTOM_SKILL = `
-## Symptom Intake
+## Symptom Intake (REQUIRED BEFORE COVERAGE CHECK)
+
+You MUST gather symptoms, duration, and treatments BEFORE providing any coverage information.
+Even if the user asks "check coverage" — first get their specific situation.
+
+### If User Asks for Coverage Before You Have Their Symptoms
+Say: "I can check that for you! First, what's going on with your [body part] — pain, numbness, or something else?"
+
+DO NOT provide generic coverage info. Get THEIR situation first so you can give personalized guidance.
 
 ### Gather These (One at a Time!)
-1. **What's the problem?** — "What's going on with your [body part]?"
+1. **Symptoms** — "What's going on with your [body part] — pain, numbness, something else?"
 2. **Duration** — "How long has this been going on?"
-3. **Severity** — "How bad is it — does it affect daily activities?"
-4. **Prior treatments** — "Has she tried any treatments — PT, medication, injections?"
+3. **Prior treatments** — "Have you tried any treatments — PT, medication, injections?"
 
-### Empathy First
-ALWAYS empathize before asking the next question:
-"Three months of back pain — that's really tough. Has she tried any treatments?"
+### Why This Matters
+- Generic guidance is unhelpful
+- Their specific symptoms determine what Medicare looks for
+- Duration and treatments tried affect whether they'll be approved
 
-### Tool Usage
-After gathering symptoms, look up ICD-10 diagnosis codes internally. NEVER show codes to user.
+### Empathy + Question Pattern
+"Pain going down your leg — that sounds rough. How long has this been going on?"
+
+### After Gathering All Three
+THEN you can look up coverage and provide PERSONALIZED guidance based on their situation.
 `;
 
 // =============================================================================
@@ -422,19 +433,25 @@ Before showing checklist, verify user meets key requirements.
 const GUIDANCE_SKILL = `
 ## Guidance Generation
 
+### NEVER Provide Generic Coverage Info
+All guidance must be PERSONALIZED based on what you gathered:
+- Their specific symptoms (not "symptoms in general")
+- Their duration (not "typically 4-6 weeks")
+- Their treatments tried (not "conservative treatment")
+
 ### Only Generate After Having:
-1. Symptoms and duration gathered
-2. Procedure clarified
-3. Coverage tools called with REAL results
-4. Verification questions answered
+1. ✓ Symptoms gathered (what's actually going on)
+2. ✓ Duration gathered (how long they've had it)
+3. ✓ Treatments tried gathered (what they've already done)
+4. ✓ Coverage tools called with REAL results
 
 ### Output Format (Progressive Disclosure)
 
-**First: High-level answer**
-"Great news, [Name] — Medicare typically covers [procedure] for this situation!"
+**First: High-level personalized answer**
+"Good news, [Name] — based on what you told me (3 months of pain, tried PT), Medicare should cover this MRI."
 
 **Then offer details:**
-"Want me to break down exactly what the doctor needs to document?"
+"Want me to show you exactly what the doctor needs to document?"
 
 **If they say yes, show checklist:**
 
@@ -728,15 +745,30 @@ export function buildSystemPrompt(
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // CONDITIONAL SKILLS - Only loaded AFTER onboarding is complete
+  // SYMPTOM GATHERING GATE - Must gather symptoms before coverage check
   // ─────────────────────────────────────────────────────────────────────────
+  // If we have a procedure but haven't gathered symptoms/duration/treatments,
+  // force symptom gathering before allowing coverage lookup
+  const needsSymptomGathering = triggers.hasProcedure &&
+    (!triggers.hasSymptoms || !triggers.hasDuration || !triggers.hasPriorTreatments);
 
-  // Symptom gathering
-  if (triggers.hasProblem && (!triggers.hasDuration || !triggers.hasPriorTreatments)) {
+  if (needsSymptomGathering && !triggers.isAppeal) {
     sections.push(SYMPTOM_SKILL);
+    sections.push(PROCEDURE_SKILL); // Keep for clarification if needed
+    sections.push(PROMPTING_SKILL);
+    if (sessionState) {
+      sections.push(buildSessionContext(sessionState));
+    }
+    sections.push(buildFlowStateReminder(triggers, sessionState));
+    // RETURN EARLY - Don't load coverage skills until symptoms gathered
+    return sections.join("\n\n---\n\n");
   }
 
-  // Procedure clarification
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONDITIONAL SKILLS - Only loaded AFTER symptoms gathered
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Procedure clarification (if still needed)
   if (triggers.hasProcedure || triggers.needsClarification) {
     sections.push(PROCEDURE_SKILL);
   }
@@ -751,8 +783,8 @@ export function buildSystemPrompt(
     sections.push(CODE_VALIDATION_SKILL);
   }
 
-  // Coverage lookup
-  if (triggers.hasProcedure && triggers.hasDuration) {
+  // Coverage lookup - only after symptoms gathered
+  if (triggers.hasProcedure && triggers.hasDuration && triggers.hasPriorTreatments) {
     sections.push(COVERAGE_SKILL);
   }
 
@@ -916,28 +948,38 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
     return reminder.join("\n");
   }
 
-  // Step 4: Gather duration
+  // Step 4: Get symptoms (what's going on)
+  if (triggers.hasProcedure && !triggers.hasSymptoms) {
+    reminder.push("**STEP:** Get symptoms (REQUIRED BEFORE COVERAGE CHECK)");
+    reminder.push(`**ASK:** 'What's going on with your [body part] — pain, numbness, or something else?'`);
+    reminder.push("**DO NOT:** Provide coverage info yet. Get their specific symptoms first.");
+    return reminder.join("\n");
+  }
+
+  // Step 5: Get duration
   if (triggers.hasProcedure && !triggers.hasDuration) {
-    reminder.push("**STEP:** Get duration");
+    reminder.push("**STEP:** Get duration (REQUIRED BEFORE COVERAGE CHECK)");
     reminder.push("**ASK:** 'How long has this been going on?'");
+    reminder.push("**DO NOT:** Provide coverage info yet.");
     return reminder.join("\n");
   }
 
-  // Step 5: Gather treatments
+  // Step 6: Get prior treatments
   if (triggers.hasDuration && !triggers.hasPriorTreatments) {
-    reminder.push("**STEP:** Get prior treatments");
-    reminder.push("**ASK:** 'Has she tried any treatments — PT, meds, injections?'");
+    reminder.push("**STEP:** Get prior treatments (REQUIRED BEFORE COVERAGE CHECK)");
+    reminder.push(`**ASK:** 'Have you tried any treatments — physical therapy, medications, injections?'`);
+    reminder.push("**DO NOT:** Provide coverage info yet.");
     return reminder.join("\n");
   }
 
-  // Step 6: Get doctor
+  // Step 7: Get doctor (optional - can skip)
   if (!triggers.hasProviderName && triggers.hasPriorTreatments) {
-    reminder.push("**STEP:** Get doctor's name");
-    reminder.push(`**ASK:** 'Do you have your doctor's name, ${userName}?'`);
+    reminder.push("**STEP:** Get doctor's name (optional)");
+    reminder.push(`**ASK:** 'Do you have a doctor in mind for this, ${userName}?'`);
     return reminder.join("\n");
   }
 
-  // Step 7: Verify provider
+  // Step 8: Verify provider
   if (triggers.hasProviderName && !triggers.hasProviderConfirmed) {
     reminder.push("**STEP:** Verify provider NPI");
     reminder.push(`**ACTION:** Search for provider by name in ZIP ${userZip}`);
@@ -945,15 +987,16 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
     return reminder.join("\n");
   }
 
-  // Step 8: Check coverage
-  if (!triggers.hasCoverage && triggers.hasProcedure && triggers.hasDuration) {
+  // Step 9: Check coverage (NOW we have enough info)
+  if (!triggers.hasCoverage && triggers.hasProcedure && triggers.hasDuration && triggers.hasPriorTreatments) {
     reminder.push("**STEP:** Check Medicare coverage");
     reminder.push("**ACTION:** Look up NCD/LCD for procedure + diagnosis");
+    reminder.push("**THEN:** Provide PERSONALIZED guidance based on their symptoms/duration/treatments");
     reminder.push("**USE ONLY:** Tool results, never make up requirements");
     return reminder.join("\n");
   }
 
-  // Step 9: Verify requirements
+  // Step 10: Verify requirements
   if (triggers.hasCoverage && !triggers.verificationComplete && triggers.hasRequirementsToVerify) {
     reminder.push("**STEP:** Verify requirements (DENIAL PREVENTION)");
     reminder.push("**ASK:** One verification question at a time");
