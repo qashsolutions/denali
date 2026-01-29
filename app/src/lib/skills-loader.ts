@@ -79,10 +79,14 @@ Ask: "Do you have your doctor's name? I can check if they're in the Medicare net
 
 **STEP 6 - Search NPI:**
 When they give a doctor name, use their ZIP code and call search_npi tool.
-Show matching doctors: "I found a few Dr. Smiths near [ZIP]:
-1. Dr. John Smith, MD — Orthopedics, Springfield
-2. Dr. Jane Smith, DO — Family Medicine, Springfield
-Which one is it?"
+Show matching doctors in a TABLE format:
+
+| # | Doctor | Specialty | Location | Phone |
+|---|--------|-----------|----------|-------|
+| 1 | Dr. John Smith, MD | Orthopedics | Springfield | (555) 123-4567 |
+| 2 | Dr. Jane Smith, DO | Family Medicine | Springfield | (555) 234-5678 |
+
+"Which one is it?"
 [SUGGESTIONS: The first one, The second one]
 
 **STEP 7 - Check Medicare coverage:**
@@ -261,14 +265,11 @@ User needs back MRI → search_npi({ specialty: "Orthopedic Surgery", postal_cod
 
 "Great! Here are some spine specialists near 90035 who can help with your back MRI:
 
-1. **Dr. Michael Johnson, MD** — Orthopedic Surgery, Los Angeles
-   9200 W Pico Blvd • (310) 555-1234
-
-2. **Dr. Lisa Park, DO** — Physical Medicine, Beverly Hills
-   8500 Wilshire Blvd • (310) 555-5678
-
-3. **Dr. Robert Chen, MD** — Pain Management, Century City
-   1888 Century Park E • (310) 555-9012
+| Doctor | Specialty | Address | Phone |
+|--------|-----------|---------|-------|
+| **Dr. Michael Johnson, MD** | Orthopedic Surgery | 9200 W Pico Blvd, Los Angeles | (310) 555-1234 |
+| **Dr. Lisa Park, DO** | Physical Medicine | 8500 Wilshire Blvd, Beverly Hills | (310) 555-5678 |
+| **Dr. Robert Chen, MD** | Pain Management | 1888 Century Park E, Century City | (310) 555-9012 |
 
 Would you like to use one of these, or search for a different specialty?"
 
@@ -282,11 +283,13 @@ I have my own doctor
 You should already have their ZIP from onboarding. Call:
 search_npi({ name: "[Doctor Name]", postal_code: "[User's ZIP]" })
 
-### Step 4: Show Results as Options
+### Step 4: Show Results as a Table
 "I found a few doctors matching that name near [ZIP]:
 
-1. **Dr. Sarah Chen, MD** — Orthopedic Surgery, Palo Alto
-2. **Dr. Sarah Chen, DO** — Family Medicine, San Jose
+| # | Doctor | Specialty | Location |
+|---|--------|-----------|----------|
+| 1 | **Dr. Sarah Chen, MD** | Orthopedic Surgery | Palo Alto |
+| 2 | **Dr. Sarah Chen, DO** | Family Medicine | San Jose |
 
 Which one is your doctor?"
 
