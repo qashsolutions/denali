@@ -38,6 +38,12 @@ This is a Medicare claims intelligence platform. Claude is the brain — driving
     - [Project Structure](#112-project-structure)
     - [Component Guidelines](#113-component-guidelines)
     - [Edge Function Guidelines](#114-edge-function-guidelines)
+12. [MCP Integration](#12-mcp-integration)
+    - [MCP Server Architecture](#121-mcp-server-architecture)
+    - [Claude Beta API Usage](#122-claude-beta-api-usage)
+    - [Tool Mapping](#123-tool-mapping)
+    - [Prompt Guidelines](#124-prompt-guidelines)
+    - [Debugging](#125-debugging)
 
 ---
 
@@ -712,6 +718,148 @@ export function handleCors(req: Request): Response | null {
   }
   return null;
 }
+```
+
+---
+
+## 12. MCP Integration
+
+Claude accesses real CMS coverage data through Model Context Protocol (MCP) servers. This is the **primary method** for healthcare data retrieval — no local fallbacks.
+
+### 12.1 MCP Server Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Claude Beta API                             │
+│                  (mcp-client-2025-04-04)                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   ┌─────────────────┐  ┌─────────────────┐  ┌────────────────┐  │
+│   │  cms-coverage   │  │  npi-registry   │  │  icd10-codes   │  │
+│   │                 │  │                 │  │                │  │
+│   │ • NCDs/LCDs     │  │ • Provider NPI  │  │ • ICD-10 codes │  │
+│   │ • Coverage docs │  │ • Specialty     │  │ • Diagnosis    │  │
+│   │ • Policy refs   │  │ • Medicare status│  │ • Search       │  │
+│   └─────────────────┘  └─────────────────┘  └────────────────┘  │
+│                                                                  │
+│   URL: https://mcp.deepsense.ai/{server}/mcp                    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**MCP Servers Configured** (`/app/src/lib/claude.ts`):
+
+| Server Name | URL | Purpose |
+|-------------|-----|---------|
+| `cms-coverage` | `https://mcp.deepsense.ai/cms_coverage/mcp` | NCD/LCD coverage policies, policy documents |
+| `npi-registry` | `https://mcp.deepsense.ai/npi_registry/mcp` | Provider NPI lookup, specialty, Medicare status |
+| `icd10-codes` | `https://mcp.deepsense.ai/icd10_codes/mcp` | ICD-10 diagnosis code search |
+
+### 12.2 Claude Beta API Usage
+
+MCP integration requires the **beta API** with the `mcp_servers` parameter:
+
+```typescript
+// /app/src/lib/claude.ts
+import { BetaMessage, BetaRequestMCPServerURLDefinition } from "@anthropic-ai/sdk/resources/beta/messages/messages";
+
+export const MCP_SERVERS: BetaRequestMCPServerURLDefinition[] = [
+  { type: "url", url: "https://mcp.deepsense.ai/cms_coverage/mcp", name: "cms-coverage" },
+  { type: "url", url: "https://mcp.deepsense.ai/npi_registry/mcp", name: "npi-registry" },
+  { type: "url", url: "https://mcp.deepsense.ai/icd10_codes/mcp", name: "icd10-codes" },
+];
+
+const response: BetaMessage = await claude.beta.messages.create({
+  model: API_CONFIG.claude.model,
+  max_tokens: API_CONFIG.claude.maxTokens,
+  system: request.systemPrompt,
+  messages,
+  tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+  mcp_servers: MCP_SERVERS,
+  betas: ["mcp-client-2025-04-04"],  // Required beta flag
+});
+```
+
+**Key Points**:
+- Use `claude.beta.messages.create()` not `claude.messages.create()`
+- Import types from `@anthropic-ai/sdk/resources/beta/messages/messages`
+- Include `betas: ["mcp-client-2025-04-04"]` array
+- MCP tools appear as `mcp_tool_use` content blocks (handled automatically by API)
+- Local tools appear as `tool_use` content blocks (must be executed manually)
+
+### 12.3 Tool Mapping
+
+Claude discovers MCP tools dynamically. Current available tools:
+
+| MCP Tool | Server | Purpose |
+|----------|--------|---------|
+| `search_local_coverage` | cms-coverage | Search LCDs by state/MAC |
+| `search_national_coverage` | cms-coverage | Search NCDs |
+| `get_coverage_document` | cms-coverage | Get full policy text |
+| `npi_lookup` | npi-registry | Look up provider by NPI number |
+| `npi_search` | npi-registry | Search providers by name/location |
+| `search_icd10` | icd10-codes | Search ICD-10 diagnosis codes |
+
+**Local Tools** (defined in `/app/src/lib/tools/index.ts`):
+
+| Tool | Purpose |
+|------|---------|
+| `search_cpt` | CPT code lookup (AMA API) |
+| `get_related_diagnoses` | Find related ICD-10 codes |
+| `get_related_procedures` | Find related CPT codes |
+| `check_prior_auth` | Check prior authorization requirements |
+| `check_preventive` | Check if service is preventive |
+| `search_pubmed` | Search PubMed for clinical evidence |
+| `generate_appeal_letter` | Generate appeal letter with citations |
+| `check_sad_list` | Check Part B/D classification |
+
+### 12.4 Prompt Guidelines
+
+**CRITICAL**: Never hardcode MCP tool names in system prompts. Claude discovers tools dynamically.
+
+**DO** — Use action descriptions:
+```
+- "Look up ICD-10 diagnosis codes for the symptoms"
+- "Search for the provider's NPI and verify their specialty"
+- "Check NCD/LCD coverage requirements for this procedure"
+```
+
+**DON'T** — Use hardcoded tool names:
+```
+- "Call search_icd10 to find codes"
+- "Use the npi_search tool to find providers"
+- "Call get_coverage_requirements"
+```
+
+**Why?** MCP tool names are determined by the server. Hardcoding names causes Claude to call non-existent local tools, which fail silently or trigger fallback behavior.
+
+### 12.5 Debugging
+
+Server-side logs (visible in Vercel Functions logs, not browser console):
+
+```
+[CLAUDE API] Iteration: 1
+[CLAUDE API] Model: claude-opus-4-5-20251101
+[CLAUDE API] MCP Servers: cms-coverage, npi-registry, icd10-codes
+[CLAUDE API] Local tools: search_cpt, get_related_diagnoses, ...
+[CLAUDE API] Using BETA API with mcp_servers parameter
+
+[CLAUDE API] Response stop_reason: end_turn
+[CLAUDE API] Response content blocks: mcp_tool_use, mcp_tool_result, text
+[CLAUDE API] >>> MCP TOOL CALLED: search_local_coverage
+[CLAUDE API] >>> MCP TOOL CALLED: npi_search
+```
+
+**Verification Checklist**:
+1. ✅ Logs show `Using BETA API with mcp_servers parameter`
+2. ✅ Response contains `mcp_tool_use` content blocks
+3. ✅ Real policy references returned (e.g., `L34220`)
+4. ✅ No `[CLAUDE API] Local tools called: search_icd10` (this means fallback was triggered)
+
+**Environment Variables** (Vercel):
+```
+ANTHROPIC_API_KEY=sk-ant-api03-...
+ANTHROPIC_MODEL=claude-opus-4-5-20251101
 ```
 
 ---
