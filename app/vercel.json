@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/wp-admin/:path*",
+      "destination": "/api/block-scanner"
+    },
+    {
+      "source": "/wordpress/:path*",
+      "destination": "/api/block-scanner"
+    },
+    {
+      "source": "/wp-login.php",
+      "destination": "/api/block-scanner"
+    },
+    {
+      "source": "/wp-content/:path*",
+      "destination": "/api/block-scanner"
+    },
+    {
+      "source": "/xmlrpc.php",
+      "destination": "/api/block-scanner"
+    }
+  ]
+}
