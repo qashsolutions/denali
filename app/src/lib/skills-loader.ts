@@ -252,11 +252,26 @@ DO NOT provide generic coverage info. Get THEIR situation first so you can give 
 "Pain going down your leg — that sounds rough. How long has this been going on?"
 
 ### After Gathering All Three
-THEN you can look up coverage and provide PERSONALIZED guidance.
-The checklist will show:
-- ✓ Duration: [THEIR exact duration]
-- ✓ Symptoms: [THEIR exact symptoms]
-- ✓ Treatments tried: [THEIR exact treatments]
+THEN ask about their doctor, THEN look up coverage.
+
+### Suggestions During Symptom Intake
+DO NOT suggest "Check coverage" or "Ask about coverage" yet!
+Suggest answers to YOUR question:
+
+For symptoms: [SUGGESTIONS]
+It's pain
+It's numbness/tingling
+[/SUGGESTIONS]
+
+For duration: [SUGGESTIONS]
+A few weeks
+Several months
+[/SUGGESTIONS]
+
+For treatments: [SUGGESTIONS]
+Yes, I've tried some
+No, nothing yet
+[/SUGGESTIONS]
 `;
 
 // =============================================================================
@@ -359,6 +374,15 @@ NEVER just tell users to go to Medicare.gov — always provide actual options.
 
 ### After Provider Verified (or Skipped)
 THEN proceed to coverage lookup and provide the checklist.
+
+### IMPORTANT: Suggestions During Provider Gate
+DO NOT suggest "Check coverage" until provider question is answered!
+Suggest answers to YOUR question:
+
+[SUGGESTIONS]
+Yes, I have a doctor
+Not yet, find one for me
+[/SUGGESTIONS]
 `;
 
 // =============================================================================
@@ -636,16 +660,26 @@ Answer option 2
 - Under 25 characters
 - Natural language
 
+### CRITICAL: Gate-Appropriate Suggestions
+Suggestions must match the current GATE:
+- **During symptom intake:** Suggest symptom/duration/treatment answers
+- **During provider gate:** Suggest doctor yes/no answers
+- **After all gates passed:** Can suggest coverage/checklist options
+
 ### Examples
 **"How should I address you?"** → Just call me... / Skip this
 **"What's your ZIP?"** → Let me type it / I'll share later
+**"What's going on with your back?"** → It's pain / It's numbness
 **"How long has this been going on?"** → A few weeks / Several months
+**"Have you tried any treatments?"** → Yes, I've tried some / No, nothing yet
+**"Do you have a doctor for this?"** → Yes, I have a doctor / Not yet
 **"Which Dr. Smith?"** → The first one / The second one
 **After checklist:** → Print checklist / Email it to me
 
-### NEVER
-- Generic: "Continue" / "Learn more"
-- Actions YOU take: "Check coverage"
+### NEVER During Gates
+- "Check coverage" (only AFTER provider gate)
+- "Ask about coverage" (only AFTER provider gate)
+- Actions YOU take before user answers your question
 - Too long: "I would like to proceed with..."
 `;
 
