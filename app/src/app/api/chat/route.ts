@@ -219,6 +219,13 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+
+      if (error.message.includes("timed out")) {
+        return NextResponse.json(
+          { error: "This is taking longer than usual. Please try again — it usually works on the second try." },
+          { status: 504 }
+        );
+      }
     }
 
     return NextResponse.json(

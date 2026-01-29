@@ -107,6 +107,8 @@ export interface ChatRequest {
   systemPrompt: string;
   tools: ToolDefinition[];
   sessionState?: SessionState;
+  /** Override model (e.g., use Opus for appeals) */
+  modelOverride?: string;
 }
 
 export interface ChatResult {
@@ -310,6 +312,16 @@ async function processToolCalls(
   return results;
 }
 
+// Timeout wrapper for API calls
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs / 1000}s`)), timeoutMs)
+    ),
+  ]);
+}
+
 // Main chat function with tool calling loop
 // Uses beta API to access MCP servers for real LCD/NCD data
 export async function chat(
@@ -320,6 +332,8 @@ export async function chat(
   const claude = getClaudeClient();
   const sessionState = request.sessionState ?? createDefaultSessionState();
   const toolsUsed: string[] = [];
+  const model = request.modelOverride || API_CONFIG.claude.model;
+  const timeoutMs = API_CONFIG.claude.iterationTimeoutMs;
 
   // Convert our tool definitions to Anthropic format
   const anthropicTools = request.tools.map((tool) => ({
@@ -336,24 +350,28 @@ export async function chat(
 
     // DEBUG: Log what we're sending to Claude
     console.log("========================================");
-    console.log("[CLAUDE API] Iteration:", iterations);
-    console.log("[CLAUDE API] Model:", API_CONFIG.claude.model);
+    console.log("[CLAUDE API] Iteration:", iterations, "of", maxIterations);
+    console.log("[CLAUDE API] Model:", model);
+    console.log("[CLAUDE API] Timeout:", timeoutMs / 1000, "s per iteration");
     console.log("[CLAUDE API] MCP Servers:", MCP_SERVERS.map(s => s.name).join(", "));
     console.log("[CLAUDE API] Local tools:", anthropicTools.map(t => t.name).join(", ") || "none");
-    console.log("[CLAUDE API] Using BETA API with mcp_servers parameter");
     console.log("========================================");
 
     // Call Claude Beta API with MCP servers for direct LCD/NCD access
-    // MCP servers give Claude direct access to real CMS coverage data
-    const response: BetaMessage = await claude.beta.messages.create({
-      model: API_CONFIG.claude.model,
-      max_tokens: API_CONFIG.claude.maxTokens,
-      system: request.systemPrompt,
-      messages,
-      tools: anthropicTools.length > 0 ? anthropicTools : undefined,
-      mcp_servers: MCP_SERVERS,
-      betas: ["mcp-client-2025-04-04"],
-    });
+    // Wrapped in timeout to prevent Vercel 504s
+    const response: BetaMessage = await withTimeout(
+      claude.beta.messages.create({
+        model,
+        max_tokens: API_CONFIG.claude.maxTokens,
+        system: request.systemPrompt,
+        messages,
+        tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+        mcp_servers: MCP_SERVERS,
+        betas: ["mcp-client-2025-04-04"],
+      }),
+      timeoutMs,
+      `Claude API iteration ${iterations}`
+    );
 
     // DEBUG: Log response content block types
     console.log("[CLAUDE API] Response stop_reason:", response.stop_reason);
