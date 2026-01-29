@@ -9,7 +9,7 @@ interface MarkdownContentProps {
 
 /**
  * Simple markdown renderer for chat messages
- * Supports: **bold**, *italic*, checkboxes (□/✓), line breaks
+ * Supports: **bold**, *italic*, checkboxes (□/✓), line breaks, tables
  */
 export function MarkdownContent({ content, className = "" }: MarkdownContentProps) {
   const rendered = useMemo(() => parseMarkdown(content), [content]);
@@ -23,11 +23,29 @@ export function MarkdownContent({ content, className = "" }: MarkdownContentProp
 }
 
 function parseMarkdown(text: string): string {
-  // Split by double newlines to create paragraphs
-  const paragraphs = text.split(/\n\n+/);
+  // First, extract and process tables
+  const tableRegex = /\|(.+)\|\n\|[-:\s|]+\|\n((?:\|.+\|\n?)+)/g;
+  let processedText = text;
 
-  return paragraphs
+  // Find all tables and replace with HTML
+  const tables: string[] = [];
+  processedText = processedText.replace(tableRegex, (match, headerRow, bodyRows) => {
+    const tableHtml = parseTable(headerRow, bodyRows);
+    tables.push(tableHtml);
+    return `__TABLE_${tables.length - 1}__`;
+  });
+
+  // Split by double newlines to create paragraphs
+  const paragraphs = processedText.split(/\n\n+/);
+
+  const result = paragraphs
     .map((para) => {
+      // Check if this is a table placeholder
+      const tableMatch = para.match(/^__TABLE_(\d+)__$/);
+      if (tableMatch) {
+        return tables[parseInt(tableMatch[1])];
+      }
+
       // Process each paragraph
       let html = para
         // Escape HTML entities first
@@ -53,6 +71,64 @@ function parseMarkdown(text: string): string {
       return `<p>${html}</p>`;
     })
     .join("");
+
+  return result;
+}
+
+/**
+ * Parse a markdown table into HTML
+ */
+function parseTable(headerRow: string, bodyRows: string): string {
+  // Parse header cells
+  const headers = headerRow
+    .split("|")
+    .map((cell) => cell.trim())
+    .filter((cell) => cell.length > 0);
+
+  // Parse body rows
+  const rows = bodyRows
+    .trim()
+    .split("\n")
+    .map((row) =>
+      row
+        .split("|")
+        .map((cell) => cell.trim())
+        .filter((cell) => cell.length > 0)
+    )
+    .filter((row) => row.length > 0);
+
+  // Build HTML table with inline styles for proper rendering
+  let html = `<div class="table-wrapper" style="overflow-x: auto; margin: 0.75rem 0;">`;
+  html += `<table style="width: 100%; border-collapse: collapse; font-size: 0.875rem;">`;
+
+  // Header
+  html += `<thead><tr style="border-bottom: 2px solid var(--border);">`;
+  headers.forEach((header) => {
+    // Process bold in header
+    const processedHeader = header.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    html += `<th style="padding: 0.5rem 0.75rem; text-align: left; font-weight: 600; color: var(--text-secondary);">${processedHeader}</th>`;
+  });
+  html += `</tr></thead>`;
+
+  // Body
+  html += `<tbody>`;
+  rows.forEach((row, rowIndex) => {
+    const bgColor = rowIndex % 2 === 0 ? "transparent" : "rgba(255,255,255,0.03)";
+    html += `<tr style="border-bottom: 1px solid var(--border); background: ${bgColor};">`;
+    row.forEach((cell, cellIndex) => {
+      // Process bold in cells
+      let processedCell = cell.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      // First column (usually doctor name) - make it stand out
+      const fontWeight = cellIndex === 0 ? "500" : "400";
+      html += `<td style="padding: 0.5rem 0.75rem; color: var(--text-primary); font-weight: ${fontWeight};">${processedCell}</td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody>`;
+
+  html += `</table></div>`;
+
+  return html;
 }
 
 /**
