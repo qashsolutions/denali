@@ -522,14 +522,9 @@ function updateSessionState(
     state.guidanceGenerated = true;
   }
 
-  // Detect if this is an appeal conversation
-  if (
-    lowerContent.includes("appeal") ||
-    lowerContent.includes("denied") ||
-    lowerContent.includes("denial")
-  ) {
-    state.isAppeal = true;
-  }
+  // NOTE: isAppeal is detected from USER messages only (in extractUserInfo),
+  // NOT from assistant responses. Assistant coverage guidance often mentions
+  // "denial" in denial-prevention context, which would false-positive here.
 
   // Track tool usage for coverage criteria
   if (toolsUsed.includes("get_coverage_requirements") || toolsUsed.includes("search_ncd") || toolsUsed.includes("search_lcd")) {
@@ -578,6 +573,14 @@ export function extractUserInfo(
     const doctorMatch = content.match(/(?:dr\.?|doctor)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i);
     if (doctorMatch && !updatedState.providerName) {
       updatedState.providerName = doctorMatch[1];
+    }
+
+    // Detect appeal intent from USER messages only
+    // (not from assistant responses which mention "denial" in prevention context)
+    if (!updatedState.isAppeal) {
+      if (/\b(appeal|appealing|denied|denial|rejected|refused)\b/i.test(content)) {
+        updatedState.isAppeal = true;
+      }
     }
   }
 
