@@ -110,15 +110,9 @@ export function Sidebar({
           {!isPaidUser ? (
             <div className="text-center py-8 px-4">
               <LockIcon className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-3" />
-              <p className="text-sm text-[var(--text-muted)] mb-2">
+              <p className="text-sm text-[var(--text-muted)]">
                 Chat history is available for subscribers
               </p>
-              <Link
-                href="/pricing"
-                className="text-sm text-[var(--accent-primary)] hover:underline"
-              >
-                Upgrade to unlock
-              </Link>
             </div>
           ) : isLoading ? (
             <div className="space-y-2 py-4">
