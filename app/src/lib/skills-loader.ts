@@ -77,8 +77,8 @@ When they describe their problem, EMPATHIZE first, then ask about duration, seve
 Ask: "Do you have your doctor's name? I can check if they're in the Medicare network."
 [SUGGESTIONS: Yes, I'll tell you, I don't have one yet]
 
-**STEP 6 - Search NPI:**
-When they give a doctor name, use their ZIP code and call search_npi tool.
+**STEP 6 - Verify Provider:**
+When they give a doctor name, verify their NPI using their ZIP code.
 Show matching doctors in a TABLE format:
 
 | # | Doctor | Specialty | Location | Phone |
@@ -90,8 +90,8 @@ Show matching doctors in a TABLE format:
 [SUGGESTIONS: The first one, The second one]
 
 **STEP 7 - Check Medicare coverage:**
-After confirming doctor, call get_coverage_requirements tool.
-MUST use real tool results — never make up requirements.
+After confirming doctor, check NCD/LCD coverage requirements for the procedure.
+MUST use real policy data — never make up requirements.
 
 **STEP 8 - Generate guidance:**
 Create checklist FROM tool results with policy citations.
@@ -211,7 +211,7 @@ If symptoms suggest emergency (chest pain + shortness of breath, sudden severe h
 "If this is happening RIGHT NOW, please call 911. Once you're safe, I can help with coverage questions."
 
 ### Tool Usage
-After gathering symptoms, call search_icd10 internally. NEVER show codes to user.
+After gathering symptoms, look up ICD-10 diagnosis codes internally. NEVER show codes to user.
 `;
 
 // =============================================================================
@@ -231,8 +231,8 @@ WRONG: "Please specify the imaging modality and anatomical region."
 RIGHT: "Got it — is that an MRI or a CT? And which part of the back?"
 
 ### Tool Usage
-After clarifying, call search_cpt internally. NEVER show codes to user.
-Then call get_coverage_requirements with the procedure and diagnosis.
+After clarifying, look up CPT procedure codes internally. NEVER show codes to user.
+Then check NCD/LCD coverage requirements for the procedure and diagnosis.
 `;
 
 // =============================================================================
@@ -257,11 +257,11 @@ When they say yes: "What's the doctor's name?"
 ### Step 2b: If They Say "Find doctors for me" or "Yes, find doctors"
 This is a request to SEARCH BY SPECIALTY. You MUST:
 1. Determine the appropriate specialty for their procedure (e.g., MRI back → Orthopedic Surgery, Pain Management)
-2. Call search_npi with specialty + their ZIP code
+2. Search for providers by specialty in their ZIP code area
 3. Return 3-5 actual doctors they can choose from
 
 Example:
-User needs back MRI → search_npi({ specialty: "Orthopedic Surgery", postal_code: "90035" })
+User needs back MRI → search for Orthopedic Surgery specialists near 90035
 
 "Great! Here are some spine specialists near 90035 who can help with your back MRI:
 
@@ -279,9 +279,9 @@ Show me more options
 I have my own doctor
 [/SUGGESTIONS]
 
-### Step 3: Search NPI Using Their ZIP
-You should already have their ZIP from onboarding. Call:
-search_npi({ name: "[Doctor Name]", postal_code: "[User's ZIP]" })
+### Step 3: Verify Provider NPI Using Their ZIP
+You should already have their ZIP from onboarding.
+Search for the provider by name in their ZIP code area.
 
 ### Step 4: Show Results as a Table
 "I found a few doctors matching that name near [ZIP]:
@@ -320,13 +320,13 @@ If they choose "Search for specialists" → Do a specialty search as described i
 ### CRITICAL: If User Provides a Different Name
 If the user responds with a DIFFERENT doctor name (not just a spelling correction), you MUST:
 1. Recognize it as a NEW search request
-2. Call search_npi AGAIN with the new name and their ZIP
+2. Search for the provider again with the new name and their ZIP
 3. Show the new results
 
 Example:
 - You searched "madan sharma" → no results
 - User says "alex joseph" → This is a NEW name, search again!
-- Call search_npi({ name: "alex joseph", postal_code: "90036" })
+- Search for "alex joseph" near 90036
 
 DO NOT skip the search and move on to other topics. Always search when given a new doctor name.
 
@@ -335,7 +335,7 @@ After 3 failed NAME searches, AUTOMATICALLY search by specialty:
 
 "I've tried a few name searches but couldn't find a match. Let me find some [specialty] doctors near [ZIP] for you..."
 
-Then call: search_npi({ specialty: "[appropriate specialty]", postal_code: "[ZIP]" })
+Then search for providers by specialty in the user's ZIP code area.
 
 Show the results and offer them as options. NEVER just tell users to go to Medicare.gov — always provide actual doctor options.
 
@@ -350,8 +350,8 @@ Show the results and offer them as options. NEVER just tell users to go to Medic
 "That's okay! Want me to find some doctors in your area who specialize in this?"
 
 ### Tool Usage
-1. search_npi({ name, postal_code }) — Find by name
-2. search_npi({ specialty, postal_code }) — Find by specialty (ALWAYS use this as fallback!)
+1. Search for providers by name in their ZIP code area
+2. Search for providers by specialty (ALWAYS use this as fallback if name search fails!)
 3. Store confirmed provider in session: name, NPI, specialty
 4. Check if specialty matches the procedure
 `;
@@ -363,15 +363,15 @@ Show the results and offer them as options. NEVER just tell users to go to Medic
 const COVERAGE_SKILL = `
 ## Coverage Check
 
-### MANDATORY: Call Tools
-You MUST call these tools — do NOT use general knowledge:
-1. get_coverage_requirements(procedure, diagnosis) — Gets REAL NCD/LCD requirements
-2. search_ncd(query) — National Coverage Determinations
-3. search_lcd(query, state) — Local Coverage Determinations
+### MANDATORY: Check Coverage Policies
+You MUST look up real Medicare policies — do NOT use general knowledge:
+1. Search for NCD/LCD coverage requirements for the procedure and diagnosis
+2. Check National Coverage Determinations (NCDs)
+3. Check Local Coverage Determinations (LCDs) for the patient's state
 
 ### Process
-1. Call get_coverage_requirements with procedure and diagnosis
-2. Extract documentation_requirements from results
+1. Look up coverage requirements for the procedure and diagnosis
+2. Extract documentation_requirements from the policy results
 3. Note the policy IDs (NCD or LCD numbers)
 4. Translate requirements to plain English
 
@@ -1105,8 +1105,8 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
 
   // Step 6: Search NPI (have name but not confirmed)
   if (triggers.hasProviderName && !triggers.hasProviderConfirmed) {
-    reminder.push(`**YOU ARE AT:** Step 6 - Search NPI registry`);
-    reminder.push(`**ACTION:** Call search_npi with doctor name + ZIP code (${userZip})`);
+    reminder.push(`**YOU ARE AT:** Step 6 - Verify provider NPI`);
+    reminder.push(`**ACTION:** Search for the provider by name in ZIP code ${userZip}`);
     reminder.push("**THEN:** Show matching doctors as numbered options");
     reminder.push("**SUGGESTIONS:** 'The first one' / 'The second one' / etc.");
     return reminder.join("\n");
@@ -1115,7 +1115,7 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
   // Step 7: Check coverage
   if (!triggers.hasCoverage && triggers.hasProcedure && triggers.hasDuration) {
     reminder.push(`**YOU ARE AT:** Step 7 - Check Medicare coverage`);
-    reminder.push("**ACTION:** Call get_coverage_requirements(procedure, diagnosis)");
+    reminder.push("**ACTION:** Look up NCD/LCD coverage requirements for the procedure and diagnosis");
     reminder.push("**THEN:** Parse the documentation_requirements from results");
     reminder.push("**DO NOT** make up requirements — use ONLY tool results");
     return reminder.join("\n");
