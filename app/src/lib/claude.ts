@@ -334,6 +334,15 @@ export async function chat(
   while (iterations < maxIterations) {
     iterations++;
 
+    // DEBUG: Log what we're sending to Claude
+    console.log("========================================");
+    console.log("[CLAUDE API] Iteration:", iterations);
+    console.log("[CLAUDE API] Model:", API_CONFIG.claude.model);
+    console.log("[CLAUDE API] MCP Servers:", MCP_SERVERS.map(s => s.name).join(", "));
+    console.log("[CLAUDE API] Local tools:", anthropicTools.map(t => t.name).join(", ") || "none");
+    console.log("[CLAUDE API] Using BETA API with mcp_servers parameter");
+    console.log("========================================");
+
     // Call Claude Beta API with MCP servers for direct LCD/NCD access
     // MCP servers give Claude direct access to real CMS coverage data
     const response: BetaMessage = await claude.beta.messages.create({
@@ -346,6 +355,10 @@ export async function chat(
       betas: ["mcp-client-2025-04-04"],
     });
 
+    // DEBUG: Log response content block types
+    console.log("[CLAUDE API] Response stop_reason:", response.stop_reason);
+    console.log("[CLAUDE API] Response content blocks:", response.content.map(b => b.type).join(", "));
+
     // Check if Claude wants to use LOCAL tools (not MCP tools)
     // MCP tools (mcp_tool_use) are handled automatically by the API
     const toolUseBlocks = response.content.filter(
@@ -353,16 +366,26 @@ export async function chat(
     );
 
     // Track MCP tool usage for logging (mcp_tool_use blocks)
+    let mcpToolCount = 0;
     response.content.forEach((block) => {
       if (block.type === "mcp_tool_use") {
+        mcpToolCount++;
         const mcpBlock = block as { type: "mcp_tool_use"; name?: string };
         const toolName = mcpBlock.name || "mcp_tool";
         if (!toolsUsed.includes(toolName)) {
           toolsUsed.push(toolName);
-          console.log("[chat] MCP tool used:", toolName);
         }
+        console.log("[CLAUDE API] >>> MCP TOOL CALLED:", toolName);
       }
     });
+
+    if (mcpToolCount === 0) {
+      console.log("[CLAUDE API] No MCP tools used in this response");
+    }
+
+    if (toolUseBlocks.length > 0) {
+      console.log("[CLAUDE API] Local tools called:", toolUseBlocks.map(b => b.name).join(", "));
+    }
 
     if (toolUseBlocks.length > 0) {
       // Track which LOCAL tools were used
