@@ -224,15 +224,34 @@ When they give ZIP: "Perfect! Now, [repeat back their original question or ask w
 // =============================================================================
 
 const SYMPTOM_SKILL = `
-## Symptom Intake (REQUIRED BEFORE COVERAGE CHECK)
+## Symptom Intake (Preferred Before Coverage Check)
 
-You MUST gather symptoms, duration, and treatments BEFORE providing any coverage information.
-Even if the user asks "check coverage" — first get their specific situation.
+We prefer to gather symptoms, duration, and treatments to give PERSONALIZED guidance.
+But if user is in a rush, we can provide basic coverage info while offering to do better.
 
-### If User Asks for Coverage Before You Have Their Symptoms
+### If User Asks for Coverage Once
 Say: "I can check that for you! First, what's going on with your [body part] — pain, numbness, or something else?"
 
-DO NOT provide generic coverage info. Get THEIR situation first so you can give personalized guidance.
+### If User Asks for Coverage AGAIN (Rush Mode)
+They're in a hurry. Provide BASIC coverage info, but offer to improve it:
+
+"Got it — here's the quick version:
+
+**Basic Coverage (LCD [number]):**
+Medicare covers [procedure] when medically necessary. Your doctor needs to document why it's needed.
+
+**But here's the thing, [Name]:** I can give you a MUCH better checklist — one tailored to YOUR situation — if you can answer just 2-3 quick questions. This helps prevent denials.
+
+Want me to:
+1. Ask a few quick questions for a personalized checklist?
+2. Check if your doctor accepts Medicare?
+
+Or is the basic info enough for now?"
+
+[SUGGESTIONS]
+Yes, personalize it
+Basic info is fine
+[/SUGGESTIONS]
 
 ### Gather These (One at a Time!) — SAVE THEIR EXACT WORDS
 1. **Symptoms** — "What's going on with your [body part] — pain, numbness, something else?"
@@ -699,6 +718,8 @@ export interface SkillTriggers {
   // Procedure
   hasProcedure: boolean;
   needsClarification: boolean;
+  // Rush mode (user asked for coverage multiple times)
+  isRushMode: boolean; // User repeatedly asking for coverage - give basic info
   // Provider
   hasProviderName: boolean;
   hasProviderConfirmed: boolean;
@@ -760,6 +781,14 @@ export function detectTriggers(
       sessionState?.procedureNeeded != null ||
       /mri|ct scan|surgery|replacement|x-ray|ultrasound|need.*(scan|test)/.test(userContent),
     needsClarification: /which|what kind|what type/.test(lastUserMessage),
+
+    // Rush mode - user asked about coverage 2+ times without answering questions
+    isRushMode: (() => {
+      const coverageRequests = userMessages.filter(m =>
+        /check.*coverage|ask.*coverage|coverage.*check|just.*coverage|want.*coverage/i.test(m.content)
+      );
+      return coverageRequests.length >= 2;
+    })(),
 
     // Provider - only if user mentions a specific doctor
     hasProviderName:
@@ -865,14 +894,28 @@ export function buildSystemPrompt(
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SYMPTOM GATHERING GATE - Must gather symptoms before coverage check
+  // SYMPTOM GATHERING GATE - Prefer gathering symptoms before coverage check
   // ─────────────────────────────────────────────────────────────────────────
   // If we have a procedure but haven't gathered symptoms/duration/treatments,
-  // force symptom gathering before allowing coverage lookup
+  // try to gather them first. BUT if user is in rush mode (asked 2+ times),
+  // provide basic coverage while offering to personalize.
   const needsSymptomGathering = triggers.hasProcedure &&
     (!triggers.hasSymptoms || !triggers.hasDuration || !triggers.hasPriorTreatments);
 
   if (needsSymptomGathering && !triggers.isAppeal) {
+    // Rush mode: User asked for coverage 2+ times - give basic info but offer better
+    if (triggers.isRushMode) {
+      sections.push(SYMPTOM_SKILL); // Contains rush mode instructions
+      sections.push(COVERAGE_SKILL);
+      sections.push(PROMPTING_SKILL);
+      if (sessionState) {
+        sections.push(buildSessionContext(sessionState));
+      }
+      sections.push(buildRushModeReminder(triggers, sessionState));
+      return sections.join("\n\n---\n\n");
+    }
+
+    // Normal flow: Ask for symptoms first
     sections.push(SYMPTOM_SKILL);
     sections.push(PROCEDURE_SKILL); // Keep for clarification if needed
     sections.push(PROMPTING_SKILL);
@@ -1054,6 +1097,49 @@ function buildSessionContext(state: SessionState): string {
 }
 
 // =============================================================================
+// RUSH MODE REMINDER
+// =============================================================================
+
+function buildRushModeReminder(triggers: SkillTriggers, sessionState?: SessionState): string {
+  const userName = sessionState?.userName || "there";
+  const procedure = sessionState?.procedureNeeded || "this procedure";
+
+  return `## RUSH MODE - User Asked for Coverage Multiple Times
+
+**THEY'RE IN A HURRY.** Don't keep blocking them. Provide basic coverage BUT offer to do better.
+
+**YOUR RESPONSE FORMAT:**
+
+"Got it, ${userName} — here's what I found:
+
+**Quick Answer:** Medicare does cover ${procedure} when medically necessary.
+
+**From the policy (LCD [number]):**
+[Look up and show the basic coverage requirements]
+
+---
+
+**Here's the thing though:** I can give you a MUCH more useful checklist — one tailored to YOUR specific situation — that helps prevent denials.
+
+It just takes 2-3 quick questions:
+• What symptoms are you having?
+• How long has this been going on?
+• Have you tried any treatments?
+
+Plus I can check if your doctor accepts Medicare.
+
+Want me to personalize this for you, or is the basic info enough?"
+
+[SUGGESTIONS]
+Yes, personalize it
+Basic info is fine
+[/SUGGESTIONS]
+
+**IF THEY SAY "personalize it":** Go back to symptom questions
+**IF THEY SAY "basic is fine":** Wish them luck, offer to help later`;
+}
+
+// =============================================================================
 // FLOW STATE REMINDER
 // =============================================================================
 
@@ -1218,6 +1304,7 @@ export function buildInitialSystemPrompt(): string {
     hasPriorTreatments: false,
     hasProcedure: false,
     needsClarification: false,
+    isRushMode: false,
     hasProviderName: false,
     hasProviderConfirmed: false,
     providerSkipped: false,
