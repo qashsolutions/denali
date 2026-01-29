@@ -10,9 +10,9 @@ export const API_CONFIG = {
   /** Claude/Anthropic configuration */
   claude: {
     /** Chat model: Sonnet 4.5 (fast, good for conversation + tool calls) */
-    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5",
+    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929",
     /** Appeal model: Opus 4.5 (slower, better quality for complex letter generation) */
-    appealModel: process.env.ANTHROPIC_APPEAL_MODEL || "claude-opus-4-5",
+    appealModel: process.env.ANTHROPIC_APPEAL_MODEL || "claude-opus-4-5-20251101",
     maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS || "4096", 10),
     maxToolIterations: parseInt(process.env.CLAUDE_MAX_TOOL_ITERATIONS || "5", 10),
     /** Per-iteration timeout in ms (prevents single API call from hanging) */
