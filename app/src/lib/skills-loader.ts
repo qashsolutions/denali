@@ -698,39 +698,43 @@ export function detectTriggers(
   messages: Array<{ role: string; content: string }>,
   sessionState?: SessionState
 ): SkillTriggers {
-  const allContent = messages.map((m) => m.content.toLowerCase()).join(" ");
+  // IMPORTANT: Only look at USER messages for content-based triggers
+  // Otherwise Claude's questions ("Have you tried any treatments?") trigger false positives
+  const userMessages = messages.filter((m) => m.role === "user");
+  const userContent = userMessages.map((m) => m.content.toLowerCase()).join(" ");
+  const lastUserMessage = userMessages.length > 0 ? userMessages[userMessages.length - 1].content.toLowerCase() : "";
 
   return {
     // Onboarding
     hasUserName: sessionState?.userName != null && sessionState.userName.length > 0,
     hasUserZip: sessionState?.userZip != null && sessionState.userZip.length > 0,
-    hasProblem: messages.length > 2 || /mri|ct|scan|surgery|pain|hurt|denied|appeal|approval/.test(allContent),
+    hasProblem: userMessages.length > 1 || /mri|ct|scan|surgery|pain|hurt|denied|appeal|approval/.test(userContent),
 
-    // Symptoms
+    // Symptoms - ONLY from sessionState or user's actual statements
     hasSymptoms:
       (sessionState?.symptoms?.length ?? 0) > 0 ||
-      /pain|hurt|ache|numb|tingle|dizzy|tired|weak|swollen/.test(allContent),
+      /my.*(pain|hurt|ache|numb)|pain in|hurts when|been having|suffering from/.test(userContent),
     hasDuration:
       sessionState?.duration != null ||
-      /\d+\s*(week|month|year|day)s?|long time|a while|recently|started/.test(allContent),
+      /\d+\s*(week|month|year|day)s?|few (weeks|months)|long time|a while|since/.test(userContent),
     hasPriorTreatments:
       (sessionState?.priorTreatments?.length ?? 0) > 0 ||
-      /tried|pt|physical therapy|medication|injection|treatment|medicine|exercises/.test(allContent),
+      /i('ve| have) tried|been doing|taking|did pt|physical therapy|on medication/.test(userContent),
 
     // Procedure
     hasProcedure:
       sessionState?.procedureNeeded != null ||
-      /mri|ct|scan|surgery|replacement|therapy|test|procedure|x-ray|ultrasound/.test(allContent),
-    needsClarification: /which|what kind|what type|clarify/.test(allContent),
+      /mri|ct scan|surgery|replacement|x-ray|ultrasound|need.*(scan|test)/.test(userContent),
+    needsClarification: /which|what kind|what type/.test(lastUserMessage),
 
-    // Provider
+    // Provider - only if user mentions a specific doctor
     hasProviderName:
       sessionState?.providerName != null ||
-      /dr\.|doctor|physician|specialist|provider|surgeon/.test(allContent),
+      /dr\.\s*\w+|doctor\s+\w+|my doctor|my physician/.test(userContent),
     hasProviderConfirmed:
       sessionState?.provider != null && sessionState.provider.npi != null,
     providerSkipped:
-      /don't have a doctor|no doctor yet|not yet|show coverage first|skip.*(doctor|provider)/i.test(allContent),
+      /don't have a doctor|no doctor yet|not yet|show coverage first|find.*specialist|skip/i.test(lastUserMessage),
     providerSearchLimitReached:
       (sessionState?.providerSearchAttempts ?? 0) >= 3,
 
@@ -742,7 +746,7 @@ export function detectTriggers(
     // Appeal
     isAppeal:
       sessionState?.isAppeal ||
-      /denied|denial|appeal|reject|refuse/.test(allContent),
+      /denied|denial|appeal|rejected|refused/.test(userContent),
 
     // Verification
     hasRequirementsToVerify: (sessionState?.requirementsToVerify?.length ?? 0) > 0,
@@ -762,7 +766,7 @@ export function detectTriggers(
     })(),
 
     // Emergency
-    hasEmergencySymptoms: EMERGENCY_PATTERNS.test(allContent),
+    hasEmergencySymptoms: EMERGENCY_PATTERNS.test(userContent),
   };
 }
 
