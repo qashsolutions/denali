@@ -286,15 +286,26 @@ After clarifying, look up CPT procedure codes internally. NEVER show codes to us
 // =============================================================================
 
 const PROVIDER_SKILL = `
-## Provider Lookup (IMPORTANT FOR DENIAL PREVENTION)
+## Provider Lookup (REQUIRED BEFORE COVERAGE CHECK)
 
 ### Why This Matters
-Knowing the doctor helps verify:
-1. They accept Original Medicare
-2. Their specialty matches the procedure (reduces denial risk)
+Before checking coverage, we need to know:
+1. Do they have a doctor for this procedure?
+2. Does the doctor accept Original Medicare?
+3. Is the doctor's specialty appropriate for this procedure?
 
-### When They Give a Doctor Name
-Search for the provider by name AND the user's ZIP code.
+### Step 1: Ask If They Have a Doctor
+"Do you have a doctor in mind for this, [Name]? I can check if they accept Medicare."
+
+[SUGGESTIONS]
+Yes, I have a doctor
+Not yet, find one for me
+[/SUGGESTIONS]
+
+### Step 2a: If They Have a Doctor
+"Great! What's the doctor's name?"
+
+When they give a name, search by name AND the user's ZIP code.
 **ALWAYS include postal_code parameter with user's ZIP in NPI search.**
 
 ### Show Results as a Table
@@ -314,7 +325,7 @@ The second one
 
 ### Medicare Participation
 After confirming provider, check if they accept Original Medicare:
-- If YES: "Great — Dr. Chen accepts Original Medicare."
+- If YES: "Great — Dr. Chen accepts Original Medicare. ✓"
 - If UNCLEAR: "You'll want to confirm Dr. Chen accepts Original Medicare before your visit."
 
 ### If No Matches
@@ -325,8 +336,16 @@ Search for specialists
 Try different spelling
 [/SUGGESTIONS]
 
-### If They Say "Find doctors for me"
-Search by specialty in their ZIP. Return 3-5 actual doctors.
+### Step 2b: If They DON'T Have a Doctor Yet
+"No problem! Would you like me to find specialists near you who can order this, or should I show you the coverage requirements first so you know what to look for?"
+
+[SUGGESTIONS]
+Find specialists near me
+Show coverage first
+[/SUGGESTIONS]
+
+If they want specialists: Search by specialty in their ZIP. Return 3-5 actual doctors with Medicare status.
+If they want coverage first: Proceed to coverage lookup (mark provider as "skipped for now").
 
 ### 3-Attempt Limit
 After 3 failed name searches, automatically offer specialty search.
@@ -337,6 +356,9 @@ NEVER just tell users to go to Medicare.gov — always provide actual options.
 - Knee MRI, joints → Orthopedic Surgery, Sports Medicine
 - Brain MRI → Neurology, Neurosurgery
 - Heart tests → Cardiology
+
+### After Provider Verified (or Skipped)
+THEN proceed to coverage lookup and provide the checklist.
 `;
 
 // =============================================================================
@@ -646,6 +668,7 @@ export interface SkillTriggers {
   // Provider
   hasProviderName: boolean;
   hasProviderConfirmed: boolean;
+  providerSkipped: boolean; // User said "not yet" or "show coverage first"
   providerSearchLimitReached: boolean;
   // Coverage
   hasDiagnosis: boolean;
@@ -706,6 +729,8 @@ export function detectTriggers(
       /dr\.|doctor|physician|specialist|provider|surgeon/.test(allContent),
     hasProviderConfirmed:
       sessionState?.provider != null && sessionState.provider.npi != null,
+    providerSkipped:
+      /don't have a doctor|no doctor yet|not yet|show coverage first|skip.*(doctor|provider)/i.test(allContent),
     providerSearchLimitReached:
       (sessionState?.providerSearchAttempts ?? 0) >= 3,
 
@@ -822,17 +847,38 @@ export function buildSystemPrompt(
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // CONDITIONAL SKILLS - Only loaded AFTER symptoms gathered
+  // PROVIDER GATE - Must ask about doctor before coverage check
+  // ─────────────────────────────────────────────────────────────────────────
+  // After gathering symptoms, we need to know about their doctor:
+  // 1. Do they have a doctor for this?
+  // 2. Who is the doctor? (NPI lookup)
+  // 3. Does the doctor accept Medicare?
+  // Only then can we provide coverage guidance
+  // (Unless user explicitly skips - "show coverage first" / "not yet")
+
+  const hasAllSymptomInfo = triggers.hasProcedure && triggers.hasSymptoms &&
+    triggers.hasDuration && triggers.hasPriorTreatments;
+  const providerResolved = triggers.hasProviderConfirmed || triggers.providerSkipped;
+  const needsProviderInfo = hasAllSymptomInfo && !providerResolved && !triggers.isAppeal;
+
+  if (needsProviderInfo) {
+    sections.push(PROVIDER_SKILL);
+    sections.push(PROMPTING_SKILL);
+    if (sessionState) {
+      sections.push(buildSessionContext(sessionState));
+    }
+    sections.push(buildFlowStateReminder(triggers, sessionState));
+    // RETURN EARLY - Don't load coverage skills until provider verified
+    return sections.join("\n\n---\n\n");
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONDITIONAL SKILLS - Only loaded AFTER provider verified (or skipped)
   // ─────────────────────────────────────────────────────────────────────────
 
   // Procedure clarification (if still needed)
   if (triggers.hasProcedure || triggers.needsClarification) {
     sections.push(PROCEDURE_SKILL);
-  }
-
-  // Provider verification
-  if (triggers.hasProviderName && !triggers.hasProviderConfirmed) {
-    sections.push(PROVIDER_SKILL);
   }
 
   // Code validation - load when procedure identified or checking coverage
@@ -1037,12 +1083,19 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
     return reminder.join("\n");
   }
 
-  // Step 7: Get doctor (helps with denial prevention)
-  if (!triggers.hasProviderName && triggers.hasPriorTreatments) {
-    reminder.push("**STEP:** Ask about their doctor");
-    reminder.push("**WHY:** Knowing the doctor helps verify Medicare acceptance and specialty match");
+  // Step 7: Get doctor (REQUIRED GATE - ask before coverage)
+  const hasAllSymptomInfo = triggers.hasProcedure && triggers.hasSymptoms &&
+    triggers.hasDuration && triggers.hasPriorTreatments;
+  const providerResolved = triggers.hasProviderConfirmed || triggers.providerSkipped;
+
+  if (hasAllSymptomInfo && !providerResolved && !triggers.isAppeal) {
+    reminder.push("**STEP:** Ask about their doctor (REQUIRED BEFORE COVERAGE)");
+    reminder.push("**WHY:** Need to verify Medicare acceptance and specialty match");
     reminder.push(`**ASK:** 'Do you have a doctor in mind for this, ${userName}? I can check if they accept Medicare.'`);
-    reminder.push("**IF THEY SAY NO:** Offer to find specialists in their area, then proceed to coverage");
+    reminder.push("**OPTIONS:**");
+    reminder.push("  - If YES: Get doctor's name → NPI lookup → verify Medicare");
+    reminder.push("  - If NO: Offer to find specialists OR let them skip to coverage");
+    reminder.push("**DO NOT:** Provide coverage info yet until provider question is answered");
     return reminder.join("\n");
   }
 
@@ -1054,12 +1107,13 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
     return reminder.join("\n");
   }
 
-  // Step 9: Check coverage (NOW we have enough info)
-  if (!triggers.hasCoverage && triggers.hasProcedure && triggers.hasDuration && triggers.hasPriorTreatments) {
-    reminder.push("**STEP:** Check Medicare coverage");
+  // Step 9: Check coverage (NOW we have enough info - provider resolved)
+  const providerResolvedForCoverage = triggers.hasProviderConfirmed || triggers.providerSkipped;
+  if (!triggers.hasCoverage && triggers.hasProcedure && triggers.hasDuration && triggers.hasPriorTreatments && providerResolvedForCoverage) {
+    reminder.push("**STEP:** Check Medicare coverage (provider step complete ✓)");
     reminder.push("**ACTION:** Look up NCD/LCD for procedure + diagnosis (use ZIP for regional LCD)");
     reminder.push("**SAVE:** The LCD/NCD policy number (e.g., L35936) — REQUIRED for guidance");
-    reminder.push("**THEN:** Provide PERSONALIZED guidance using THEIR data:");
+    reminder.push("**THEN:** IMMEDIATELY provide PERSONALIZED checklist using THEIR data:");
     reminder.push(`  - Name: ${userName}`);
     if (sessionState?.symptoms?.length) {
       reminder.push(`  - Symptoms: ${sessionState.symptoms.join(", ")}`);
@@ -1128,6 +1182,7 @@ export function buildInitialSystemPrompt(): string {
     needsClarification: false,
     hasProviderName: false,
     hasProviderConfirmed: false,
+    providerSkipped: false,
     providerSearchLimitReached: false,
     hasDiagnosis: false,
     hasCoverage: false,
