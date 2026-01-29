@@ -1,9 +1,10 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useCallback, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { PageContainer, Container } from "@/components/layout/Container";
+import { Sidebar, SidebarToggle } from "@/components/layout/Sidebar";
 import { Message, LoadingMessage } from "@/components/chat/Message";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { PrintableChecklist } from "@/components/chat/PrintableChecklist";
@@ -15,9 +16,11 @@ import { BRAND } from "@/config";
 
 function ChatContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { isDark, toggleTheme } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [pendingInput, setPendingInput] = useState<string | undefined>(undefined);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const {
     messages,
@@ -29,6 +32,8 @@ function ChatContent() {
     dismissAction,
     sendEmail,
     triggerEmail,
+    resetChat,
+    conversationId,
   } = useChat();
 
   // Handle initial message from URL params
@@ -43,6 +48,17 @@ function ChatContent() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
+
+  // Close sidebar on wider screens when resizing
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Initial cards: send immediately
   const handleInitialCardSelect = (question: string) => {
@@ -59,7 +75,6 @@ function ChatContent() {
   }, []);
 
   const handlePrintComplete = useCallback(() => {
-    // Track print event (would call API in production)
     console.log("Print completed");
   }, []);
 
@@ -68,111 +83,135 @@ function ChatContent() {
     triggerEmail();
   }, [dismissAction, triggerEmail]);
 
+  const handleNewChat = useCallback(() => {
+    resetChat();
+    router.push("/chat");
+  }, [resetChat, router]);
+
   return (
-    <PageContainer>
-      {/* Branded Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-[var(--bg-primary)]/90 border-b border-[var(--border)]/50">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo + Brand */}
-            <Link href="/" className="flex items-center gap-3 group">
-              <MountainIcon className="w-10 h-8 transition-transform group-hover:scale-105" />
-              <span className="text-lg font-bold text-[var(--text-primary)]">
-                {BRAND.NAME}
-              </span>
-            </Link>
+    <div className="min-h-screen flex bg-[var(--bg-primary)]">
+      {/* Sidebar - hidden on mobile by default */}
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        currentConversationId={conversationId ?? undefined}
+        onNewChat={handleNewChat}
+      />
 
-            {/* Theme Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="w-10 h-10 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors hover:bg-[var(--border)]"
-              aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
-            >
-              {isDark ? (
-                <SunIcon className="w-5 h-5 text-yellow-400" />
-              ) : (
-                <MoonIcon className="w-5 h-5 text-[var(--text-secondary)]" />
-              )}
-            </button>
-          </div>
-        </div>
-      </header>
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <header className="sticky top-0 z-30 backdrop-blur-md bg-[var(--bg-primary)]/90 border-b border-[var(--border)]/50">
+          <div className="max-w-4xl mx-auto px-4">
+            <div className="flex items-center justify-between h-16">
+              {/* Left: Menu button (mobile) + Logo */}
+              <div className="flex items-center gap-2">
+                {/* Mobile menu button */}
+                <div className="md:hidden">
+                  <SidebarToggle onClick={() => setSidebarOpen(true)} />
+                </div>
 
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto">
-          <Container className="py-4">
-            {messages.length === 0 && !isLoading ? (
-              <EmptyState onSuggestionSelect={handleInitialCardSelect} />
-            ) : (
-              <div className="space-y-1">
-                {messages
-                  .filter((message) => message.role !== "system")
-                  .map((message) => (
-                    <Message
-                      key={message.id}
-                      id={message.id}
-                      role={message.role as "user" | "assistant"}
-                      content={message.content}
-                      timestamp={message.timestamp}
-                      showFeedback={message.role === "assistant"}
-                      onFeedback={(rating) => submitFeedback(message.id, rating)}
-                    />
-                  ))}
-                {isLoading && <LoadingMessage />}
-
-                {/* Email Prompt - inline in messages */}
-                {currentAction.type === "prompt_email" && (
-                  <div className="max-w-[85%]">
-                    <EmailPrompt
-                      existingEmail={currentAction.existingEmail}
-                      onConfirm={sendEmail}
-                      onCancel={dismissAction}
-                    />
-                  </div>
-                )}
-
-                <div ref={messagesEndRef} />
+                {/* Logo */}
+                <Link href="/" className="flex items-center gap-2 group">
+                  <MountainIcon className="w-8 h-6 transition-transform group-hover:scale-105" />
+                  <span className="text-lg font-bold text-[var(--text-primary)] hidden sm:inline">
+                    {BRAND.NAME}
+                  </span>
+                </Link>
               </div>
-            )}
-          </Container>
-        </div>
 
-        {/* Chat Input with integrated suggestions */}
-        <div className="p-4 bg-[var(--bg-primary)] border-t border-[var(--border)]">
-          <Container>
-            <ChatInput
-              onSend={sendMessage}
-              disabled={isLoading}
-              placeholder="Type your message..."
-              externalValue={pendingInput}
-              onExternalValueUsed={handlePendingInputUsed}
-              suggestions={currentAction.type === "none" ? suggestions : []}
-              onSuggestionClick={handleSuggestionSelect}
-            />
-          </Container>
-        </div>
-
-        {/* Compact Footer */}
-        <footer className="py-3 px-4 bg-[var(--bg-secondary)] border-t border-[var(--border)]">
-          <div className="max-w-4xl mx-auto text-center">
-            <p className="text-xs text-[var(--text-muted)]">
-              {BRAND.NAME} · {BRAND.COMPANY_ATTRIBUTION} · Coverage guidance only, not medical advice
-            </p>
+              {/* Right: Theme Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="w-10 h-10 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors hover:bg-[var(--border)]"
+                aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
+              >
+                {isDark ? (
+                  <SunIcon className="w-5 h-5 text-yellow-400" />
+                ) : (
+                  <MoonIcon className="w-5 h-5 text-[var(--text-secondary)]" />
+                )}
+              </button>
+            </div>
           </div>
-        </footer>
-      </main>
+        </header>
 
-      {/* Print Preview Modal */}
-      {currentAction.type === "show_print" && (
-        <PrintableChecklist
-          data={currentAction.data}
-          onClose={dismissAction}
-          onPrint={handlePrintComplete}
-          onEmail={handleEmailFromPrint}
-        />
-      )}
-    </PageContainer>
+        <main className="flex-1 flex flex-col overflow-hidden">
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto">
+            <Container className="py-4">
+              {messages.length === 0 && !isLoading ? (
+                <EmptyState onSuggestionSelect={handleInitialCardSelect} />
+              ) : (
+                <div className="space-y-1">
+                  {messages
+                    .filter((message) => message.role !== "system")
+                    .map((message) => (
+                      <Message
+                        key={message.id}
+                        id={message.id}
+                        role={message.role as "user" | "assistant"}
+                        content={message.content}
+                        timestamp={message.timestamp}
+                        showFeedback={message.role === "assistant"}
+                        onFeedback={(rating) => submitFeedback(message.id, rating)}
+                      />
+                    ))}
+                  {isLoading && <LoadingMessage />}
+
+                  {/* Email Prompt - inline in messages */}
+                  {currentAction.type === "prompt_email" && (
+                    <div className="max-w-[85%]">
+                      <EmailPrompt
+                        existingEmail={currentAction.existingEmail}
+                        onConfirm={sendEmail}
+                        onCancel={dismissAction}
+                      />
+                    </div>
+                  )}
+
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </Container>
+          </div>
+
+          {/* Chat Input with integrated suggestions */}
+          <div className="p-4 bg-[var(--bg-primary)] border-t border-[var(--border)]">
+            <Container>
+              <ChatInput
+                onSend={sendMessage}
+                disabled={isLoading}
+                placeholder="Type your message..."
+                externalValue={pendingInput}
+                onExternalValueUsed={handlePendingInputUsed}
+                suggestions={currentAction.type === "none" ? suggestions : []}
+                onSuggestionClick={handleSuggestionSelect}
+              />
+            </Container>
+          </div>
+
+          {/* Compact Footer */}
+          <footer className="py-3 px-4 bg-[var(--bg-secondary)] border-t border-[var(--border)]">
+            <div className="max-w-4xl mx-auto text-center">
+              <p className="text-xs text-[var(--text-muted)]">
+                {BRAND.NAME} · {BRAND.COMPANY_ATTRIBUTION} · Coverage guidance only, not medical advice
+              </p>
+            </div>
+          </footer>
+        </main>
+
+        {/* Print Preview Modal */}
+        {currentAction.type === "show_print" && (
+          <PrintableChecklist
+            data={currentAction.data}
+            onClose={dismissAction}
+            onPrint={handlePrintComplete}
+            onEmail={handleEmailFromPrint}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 

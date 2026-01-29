@@ -35,6 +35,7 @@ interface UseChatReturn {
   userEmail: string | null;
   sendMessage: (content: string) => Promise<void>;
   clearMessages: () => void;
+  resetChat: () => void;
   submitFeedback: (messageId: string, rating: "up" | "down") => Promise<void>;
   triggerPrint: () => void;
   triggerEmail: () => void;
@@ -468,6 +469,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     userEmail,
     sendMessage,
     clearMessages,
+    resetChat: clearMessages, // Alias for sidebar integration
     submitFeedback,
     triggerPrint,
     triggerEmail,
