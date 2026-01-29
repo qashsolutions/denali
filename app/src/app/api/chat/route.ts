@@ -15,6 +15,7 @@ import {
   chat,
   formatMessages,
   createDefaultSessionState,
+  extractUserInfo,
   type SessionState,
 } from "@/lib/claude";
 import {
@@ -75,7 +76,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Initialize or restore session state
-    const sessionState = body.sessionState ?? createDefaultSessionState();
+    let sessionState = body.sessionState ?? createDefaultSessionState();
+
+    // Extract user info (name, ZIP, etc.) from messages
+    sessionState = extractUserInfo(body.messages, sessionState);
+    console.log("[Chat API] User info extracted:", {
+      userName: sessionState.userName,
+      userZip: sessionState.userZip,
+      providerName: sessionState.providerName,
+      duration: sessionState.duration,
+    });
 
     // Detect triggers based on conversation content
     const triggers = detectTriggers(body.messages, sessionState);
@@ -134,10 +144,13 @@ export async function POST(request: NextRequest) {
     console.log("[Chat API] - Suggestions:", result.suggestions);
     console.log("[Chat API] - Content preview:", result.content.substring(0, 200) + "...");
     console.log("[Chat API] - Session state:", {
+      userName: result.sessionState.userName,
+      userZip: result.sessionState.userZip,
       symptoms: result.sessionState.symptoms,
+      duration: result.sessionState.duration,
+      priorTreatments: result.sessionState.priorTreatments,
       procedureNeeded: result.sessionState.procedureNeeded,
-      diagnosisCodes: result.sessionState.diagnosisCodes,
-      procedureCodes: result.sessionState.procedureCodes,
+      providerName: result.sessionState.providerName,
       provider: result.sessionState.provider,
       guidanceGenerated: result.sessionState.guidanceGenerated,
       isAppeal: result.sessionState.isAppeal,
