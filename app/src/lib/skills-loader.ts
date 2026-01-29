@@ -243,11 +243,40 @@ const PROVIDER_SKILL = `
 
 [SUGGESTIONS]
 Yes, I'll tell you
+Find doctors for me
 I don't have one yet
 [/SUGGESTIONS]
 
-### Step 2: Get the Name
+### Step 2a: If They Have a Name
 When they say yes: "What's the doctor's name?"
+
+### Step 2b: If They Say "Find doctors for me" or "Yes, find doctors"
+This is a request to SEARCH BY SPECIALTY. You MUST:
+1. Determine the appropriate specialty for their procedure (e.g., MRI back → Orthopedic Surgery, Pain Management)
+2. Call search_npi with specialty + their ZIP code
+3. Return 3-5 actual doctors they can choose from
+
+Example:
+User needs back MRI → search_npi({ specialty: "Orthopedic Surgery", postal_code: "90035" })
+
+"Great! Here are some spine specialists near 90035 who can help with your back MRI:
+
+1. **Dr. Michael Johnson, MD** — Orthopedic Surgery, Los Angeles
+   9200 W Pico Blvd • (310) 555-1234
+
+2. **Dr. Lisa Park, DO** — Physical Medicine, Beverly Hills
+   8500 Wilshire Blvd • (310) 555-5678
+
+3. **Dr. Robert Chen, MD** — Pain Management, Century City
+   1888 Century Park E • (310) 555-9012
+
+Would you like to use one of these, or search for a different specialty?"
+
+[SUGGESTIONS]
+Dr. Johnson looks good
+Show me more options
+I have my own doctor
+[/SUGGESTIONS]
 
 ### Step 3: Search NPI Using Their ZIP
 You should already have their ZIP from onboarding. Call:
@@ -270,15 +299,20 @@ The second one
 After they select:
 "Perfect — Dr. Sarah Chen, orthopedic surgeon. She's a great match for ordering a back MRI. Let me check what Medicare needs..."
 
-### If No Matches
-"I couldn't find Dr. [Name] near [ZIP]. Could you check:
-- Is the spelling right?
-- Maybe a nearby city?"
+### If No Matches for a Name Search
+When name search returns no results, OFFER to search by specialty:
+
+"I couldn't find Dr. [Name] near [ZIP]. Would you like me to:
+- Try a different spelling
+- Search for [appropriate specialty] doctors in your area instead"
 
 [SUGGESTIONS]
-Let me spell it again
-Try a different ZIP
+Search for specialists
+Try different spelling
+Continue without doctor
 [/SUGGESTIONS]
+
+If they choose "Search for specialists" → Do a specialty search as described in Step 2b.
 
 ### CRITICAL: If User Provides a Different Name
 If the user responds with a DIFFERENT doctor name (not just a spelling correction), you MUST:
@@ -293,29 +327,30 @@ Example:
 
 DO NOT skip the search and move on to other topics. Always search when given a new doctor name.
 
-### 3-Attempt Limit (IMPORTANT)
-After 3 failed search attempts, gently nudge the user to continue without a confirmed doctor:
+### 3-Attempt Limit with Specialty Fallback
+After 3 failed NAME searches, AUTOMATICALLY search by specialty:
 
-"I've tried a few searches but couldn't find a match. No worries — we can still help you!
+"I've tried a few name searches but couldn't find a match. Let me find some [specialty] doctors near [ZIP] for you..."
 
-Let's continue with the coverage guidance. You can always add your doctor's information later, or bring this checklist to any Medicare-participating provider."
+Then call: search_npi({ specialty: "[appropriate specialty]", postal_code: "[ZIP]" })
 
-[SUGGESTIONS]
-Continue without doctor
-Try one more name
-[/SUGGESTIONS]
+Show the results and offer them as options. NEVER just tell users to go to Medicare.gov — always provide actual doctor options.
 
-Count each search_npi call as one attempt. After 3 attempts with no confirmed provider, offer to move forward.
+### Specialty Mapping for Procedures
+- Back MRI, spine issues → "Orthopedic Surgery" or "Pain Management" or "Neurosurgery"
+- Knee MRI, joint issues → "Orthopedic Surgery" or "Sports Medicine"
+- Brain MRI → "Neurology" or "Neurosurgery"
+- Heart tests → "Cardiology"
+- Therapy → "Physical Medicine" or "Physiatry"
 
 ### If No Doctor Yet
-"That's okay! We can continue without a doctor for now and add them later."
+"That's okay! Want me to find some doctors in your area who specialize in this?"
 
 ### Tool Usage
-1. search_npi({ name, postal_code }) — Find matching providers
-2. Store confirmed provider in session: name, NPI, specialty
-3. If search fails and user provides new name → search again with new name
-4. After 3 failed attempts → offer to continue without doctor
-3. Check if specialty matches the procedure
+1. search_npi({ name, postal_code }) — Find by name
+2. search_npi({ specialty, postal_code }) — Find by specialty (ALWAYS use this as fallback!)
+3. Store confirmed provider in session: name, NPI, specialty
+4. Check if specialty matches the procedure
 `;
 
 // =============================================================================

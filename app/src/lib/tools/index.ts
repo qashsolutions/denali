@@ -450,37 +450,37 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "search_npi",
     description:
-      "Search the NPI Registry to find and validate healthcare providers. Use this to look up doctors, verify their specialties, and confirm they accept Medicare. ALWAYS include postal_code when you have the user's ZIP code.",
+      "Search the NPI Registry to find healthcare providers. Two search modes: (1) By NAME: search_npi({ name: 'Dr. Smith', postal_code: '90035' }) to find specific doctor. (2) By SPECIALTY: search_npi({ specialty: 'Orthopedic Surgery', postal_code: '90035' }) to find nearby specialists. IMPORTANT: If name search returns no results, ALWAYS do a specialty search as fallback to give users actual doctor options. NEVER tell users to go to Medicare.gov - find doctors for them!",
     input_schema: {
       type: "object",
       properties: {
         name: {
           type: "string",
-          description: "Provider's name (first and/or last name)",
-        },
-        state: {
-          type: "string",
-          description: "Two-letter state code (e.g., 'CA', 'NY')",
-        },
-        city: {
-          type: "string",
-          description: "City name",
-        },
-        postal_code: {
-          type: "string",
-          description: "5-digit ZIP code to find providers near the user's location. ALWAYS include this if you have the user's ZIP code.",
+          description: "Provider's name (first and/or last name). Use for finding a specific doctor.",
         },
         specialty: {
           type: "string",
-          description: "Medical specialty (e.g., 'Orthopedic Surgery', 'Family Medicine')",
+          description: "Medical specialty to search for (e.g., 'Orthopedic Surgery', 'Pain Management', 'Neurology', 'Cardiology', 'Physical Medicine'). Use this when user wants to find doctors or when name search fails.",
+        },
+        postal_code: {
+          type: "string",
+          description: "5-digit ZIP code. ALWAYS include this - it's essential for finding nearby providers.",
+        },
+        state: {
+          type: "string",
+          description: "Two-letter state code (e.g., 'CA', 'NY'). Optional if postal_code provided.",
+        },
+        city: {
+          type: "string",
+          description: "City name. Optional.",
         },
         npi: {
           type: "string",
-          description: "Specific NPI number to look up",
+          description: "Specific NPI number to look up.",
         },
         limit: {
           type: "number",
-          description: "Maximum results to return (default: 10, max: 20)",
+          description: "Maximum results to return (default: 10, max: 20). Use 5 for specialty searches.",
         },
       },
       required: [],
