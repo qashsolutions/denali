@@ -92,7 +92,7 @@ export function ChatInput({
               </button>
             ))}
             <span className="text-base text-[var(--text-muted)] ml-1">
-              or type here if it's something else
+              or type below
             </span>
           </div>
         )}
