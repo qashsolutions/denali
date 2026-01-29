@@ -3,17 +3,11 @@
 import { useState, useEffect, useCallback } from "react";
 
 export interface UserSettings {
-  textScale: number; // 0.8 - 1.5
-  highContrast: boolean;
-  reduceMotion: boolean;
-  theme: "auto" | "light" | "dark";
+  textScale: number; // 0.9 - 1.2
 }
 
 const DEFAULT_SETTINGS: UserSettings = {
   textScale: 1,
-  highContrast: false,
-  reduceMotion: false,
-  theme: "auto",
 };
 
 const STORAGE_KEY = "denali-settings";
@@ -27,13 +21,20 @@ export function useSettings() {
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load settings from localStorage on mount
+  // Also clean up any old high-contrast setting
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as Partial<UserSettings>;
-        setSettings((prev) => ({ ...prev, ...parsed }));
+        // Only keep textScale, ignore deprecated settings
+        setSettings({
+          textScale: parsed.textScale ?? DEFAULT_SETTINGS.textScale,
+        });
       }
+
+      // Clean up deprecated high-contrast attribute
+      document.documentElement.removeAttribute("data-high-contrast");
     } catch {
       // Ignore parse errors
     }
@@ -48,19 +49,6 @@ export function useSettings() {
     document.documentElement.style.setProperty(
       "--text-scale",
       String(settings.textScale)
-    );
-
-    // High contrast
-    document.documentElement.setAttribute(
-      "data-high-contrast",
-      String(settings.highContrast)
-    );
-
-    // Reduce motion - browser handles this via media query,
-    // but we can add a class for additional control
-    document.documentElement.classList.toggle(
-      "reduce-motion",
-      settings.reduceMotion
     );
   }, [settings, isLoaded]);
 
@@ -77,33 +65,12 @@ export function useSettings() {
     });
   }, []);
 
-  // Individual setters for convenience
+  // Individual setter for text scale
   const setTextScale = useCallback(
     (scale: number) => {
       // Clamp to valid range
-      const clamped = Math.max(0.8, Math.min(1.5, scale));
+      const clamped = Math.max(0.9, Math.min(1.2, scale));
       updateSettings({ textScale: clamped });
-    },
-    [updateSettings]
-  );
-
-  const setHighContrast = useCallback(
-    (enabled: boolean) => {
-      updateSettings({ highContrast: enabled });
-    },
-    [updateSettings]
-  );
-
-  const setReduceMotion = useCallback(
-    (enabled: boolean) => {
-      updateSettings({ reduceMotion: enabled });
-    },
-    [updateSettings]
-  );
-
-  const setTheme = useCallback(
-    (theme: "auto" | "light" | "dark") => {
-      updateSettings({ theme });
     },
     [updateSettings]
   );
@@ -115,6 +82,9 @@ export function useSettings() {
     } catch {
       // Ignore storage errors
     }
+
+    // Clean up deprecated attribute
+    document.documentElement.removeAttribute("data-high-contrast");
   }, []);
 
   return {
@@ -122,9 +92,6 @@ export function useSettings() {
     isLoaded,
     updateSettings,
     setTextScale,
-    setHighContrast,
-    setReduceMotion,
-    setTheme,
     resetSettings,
   };
 }

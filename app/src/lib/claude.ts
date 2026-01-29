@@ -45,6 +45,7 @@ export interface SessionState {
 
   // Provider (NPI lookup flow)
   providerName: string | null;       // Doctor name before confirmation
+  providerSearchAttempts: number;    // Track NPI search attempts (max 3)
   provider: {
     name: string | null;
     npi: string | null;
@@ -117,6 +118,7 @@ export function createDefaultSessionState(): SessionState {
 
     // Provider
     providerName: null,
+    providerSearchAttempts: 0,
     provider: null,
 
     // Internal codes
@@ -392,9 +394,9 @@ function updateSessionState(
     }
   }
 
-  // Track NPI searches
+  // Track NPI searches - increment attempt counter
   if (toolsUsed.includes("search_npi")) {
-    // Provider was searched
+    state.providerSearchAttempts = (state.providerSearchAttempts || 0) + 1;
   }
 }
 

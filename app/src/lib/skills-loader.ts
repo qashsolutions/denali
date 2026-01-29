@@ -293,6 +293,20 @@ Example:
 
 DO NOT skip the search and move on to other topics. Always search when given a new doctor name.
 
+### 3-Attempt Limit (IMPORTANT)
+After 3 failed search attempts, gently nudge the user to continue without a confirmed doctor:
+
+"I've tried a few searches but couldn't find a match. No worries — we can still help you!
+
+Let's continue with the coverage guidance. You can always add your doctor's information later, or bring this checklist to any Medicare-participating provider."
+
+[SUGGESTIONS]
+Continue without doctor
+Try one more name
+[/SUGGESTIONS]
+
+Count each search_npi call as one attempt. After 3 attempts with no confirmed provider, offer to move forward.
+
 ### If No Doctor Yet
 "That's okay! We can continue without a doctor for now and add them later."
 
@@ -300,6 +314,7 @@ DO NOT skip the search and move on to other topics. Always search when given a n
 1. search_npi({ name, postal_code }) — Find matching providers
 2. Store confirmed provider in session: name, NPI, specialty
 3. If search fails and user provides new name → search again with new name
+4. After 3 failed attempts → offer to continue without doctor
 3. Check if specialty matches the procedure
 `;
 
@@ -632,6 +647,7 @@ export interface SkillTriggers {
   hasProcedure: boolean;
   hasProviderName: boolean;
   hasProviderConfirmed: boolean;
+  providerSearchLimitReached: boolean;
   hasDiagnosis: boolean;
   hasCoverage: boolean;
   hasGuidance: boolean;
@@ -679,6 +695,8 @@ export function detectTriggers(
       /dr\.|doctor|physician|specialist|provider|surgeon/.test(allContent),
     hasProviderConfirmed:
       sessionState?.provider != null && sessionState.provider.npi != null,
+    providerSearchLimitReached:
+      (sessionState?.providerSearchAttempts ?? 0) >= 3,
 
     // Coverage
     hasDiagnosis:
@@ -813,6 +831,9 @@ function buildSessionContext(state: SessionState): string {
   // Provider
   if (state.providerName) {
     context.push(`**Doctor name mentioned:** ${state.providerName}`);
+  }
+  if (state.providerSearchAttempts > 0) {
+    context.push(`**Provider search attempts:** ${state.providerSearchAttempts}/3${state.providerSearchAttempts >= 3 ? " (LIMIT REACHED - offer to continue without doctor)" : ""}`);
   }
   if (state.provider) {
     context.push(`**Provider confirmed:** ${state.provider.name || "Not yet"}`);
@@ -1011,6 +1032,7 @@ export function buildInitialSystemPrompt(): string {
     hasProcedure: false,
     hasProviderName: false,
     hasProviderConfirmed: false,
+    providerSearchLimitReached: false,
     hasDiagnosis: false,
     hasCoverage: false,
     hasGuidance: false,
