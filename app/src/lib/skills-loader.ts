@@ -469,6 +469,15 @@ If found, tell user:
 "I couldn't find a specific policy for this. Let me search more broadly..."
 
 ### NEVER make up requirements — use ONLY tool results.
+
+### After Delivering Coverage Info
+Always end with an offer to create a personalized checklist:
+"Want me to put together a checklist you can bring to your doctor?"
+
+[SUGGESTIONS]
+Yes, show checklist
+I'm all set
+[/SUGGESTIONS]
 `;
 
 // =============================================================================

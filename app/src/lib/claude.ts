@@ -436,14 +436,14 @@ export async function chat(
         hasProvider: !!sessionState.provider,
         mcpToolsCalled: mcpToolNames,
       });
-      // Warn if MCP tools fired during intake (before we have enough info)
-      const hasMinInfo = sessionState.symptoms.length > 0 && !!sessionState.procedureNeeded;
-      if (!hasMinInfo) {
-        console.warn("[CLAUDE API] ⚠️ MCP TOOLS FIRED DURING INTAKE — info not yet gathered!", {
+      // Warn if MCP tools fired during intake (when TOOL_RESTRAINT is active)
+      const isInIntakeGate = request.systemPrompt.includes("Do NOT Call Tools Yet");
+      if (isInIntakeGate) {
+        console.warn("[CLAUDE API] ⚠️ MCP TOOLS FIRED DURING INTAKE — tool restraint active!", {
           mcpToolsCalled: mcpToolNames,
-          missingSymptoms: sessionState.symptoms.length === 0,
-          missingProcedure: !sessionState.procedureNeeded,
         });
+      } else {
+        console.log("[CLAUDE API] MCP tools called (post-gate, expected):", mcpToolNames);
       }
     } else {
       console.log("[CLAUDE API] No MCP tools used in this response");
