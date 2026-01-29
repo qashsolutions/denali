@@ -65,6 +65,7 @@
   --assistant-bubble: #1e293b;
   --border: #334155;
   --input-bg: #1e293b;
+  --input-border: #475569;
 }
 
 /* =============================================================================
@@ -97,6 +98,7 @@
   --assistant-bubble: #1e293b;
   --border: #334155;
   --input-bg: #1e293b;
+  --input-border: #475569;
 }
 
 /* =============================================================================
@@ -129,6 +131,7 @@
   --assistant-bubble: #ffffff;
   --border: #e2e8f0;
   --input-bg: #ffffff;
+  --input-border: #cbd5e1;
 }
 
 /* High contrast mode removed - use system accessibility settings instead */

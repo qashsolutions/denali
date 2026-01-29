@@ -70,7 +70,7 @@ export function ChatInput({
 
   return (
     <form onSubmit={handleSubmit} className="chat-input w-full">
-      <div className="bg-[var(--input-bg)] rounded-2xl border border-[var(--border)] overflow-hidden">
+      <div className="bg-[var(--input-bg)] rounded-2xl border border-[var(--input-border)] overflow-hidden">
         {/* Suggestions inside input area */}
         {suggestions.length > 0 && !disabled && (
           <div className="flex flex-wrap items-center gap-2 px-4 pt-3 pb-2">
