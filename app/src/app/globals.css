@@ -266,6 +266,7 @@ body {
 
 .prose-chat em {
   font-style: italic;
+  color: var(--text-muted);
 }
 
 .prose-chat .checkbox {
