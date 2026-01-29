@@ -242,26 +242,49 @@ function extractSuggestionsAndClean(content: string, sessionState: SessionState)
     }
   }
 
-  console.log("[extractSuggestions] No suggestions block found, using context-aware defaults");
+  console.log("[extractSuggestions] No suggestions block found, using question-aware defaults");
 
-  // Context-aware fallback suggestions
+  // Question-aware fallback: match suggestions to what Claude ASKED the user
+  // This must align with gate-appropriate suggestions from PROMPTING_SKILL
   const lowerContent = content.toLowerCase();
   let suggestions: string[];
 
-  if (lowerContent.includes("which body") || lowerContent.includes("what part") || lowerContent.includes("what body")) {
+  // Onboarding questions
+  if (lowerContent.includes("your name") || lowerContent.includes("address you") || lowerContent.includes("call you")) {
+    suggestions = ["Just call me...", "Skip this"];
+  } else if (lowerContent.includes("your zip") || lowerContent.includes("zip code")) {
+    suggestions = ["Let me type it", "Skip for now"];
+
+  // Symptom intake questions
+  } else if (lowerContent.includes("which body") || lowerContent.includes("what part") || lowerContent.includes("what body")) {
     suggestions = ["It's my back", "It's my knee"];
-  } else if (lowerContent.includes("mri") || lowerContent.includes("scan")) {
-    suggestions = ["Check Medicare coverage", "What body part?"];
+  } else if (lowerContent.includes("what's going on") || lowerContent.includes("pain") && lowerContent.includes("numbness")) {
+    suggestions = ["It's pain", "It's numbness"];
+  } else if (lowerContent.includes("how long") || lowerContent.includes("when did") || lowerContent.includes("how many weeks")) {
+    suggestions = ["A few weeks", "Several months"];
+  } else if (lowerContent.includes("treatment") || lowerContent.includes("tried") || lowerContent.includes("pt") || lowerContent.includes("physical therapy")) {
+    suggestions = ["Yes, I've tried some", "No, nothing yet"];
+
+  // Provider gate questions
+  } else if (lowerContent.includes("have a doctor") || lowerContent.includes("your doctor") || lowerContent.includes("who's your")) {
+    suggestions = ["Yes, I have a doctor", "Not yet"];
+  } else if (lowerContent.includes("which dr") || lowerContent.includes("which doctor")) {
+    suggestions = ["The first one", "The second one"];
+
+  // Coverage/guidance delivered
   } else if (lowerContent.includes("denied") || lowerContent.includes("denial")) {
     suggestions = ["Help me appeal", "Explain the denial"];
-  } else if (lowerContent.includes("document") || lowerContent.includes("checklist")) {
-    suggestions = ["Print this checklist", "What if it's denied?"];
-  } else if (!sessionState.symptoms.length && !sessionState.procedureNeeded) {
-    suggestions = ["Ask about coverage", "Help with a denial"];
+  } else if (lowerContent.includes("checklist") || lowerContent.includes("document")) {
+    suggestions = ["Print this checklist", "Start a new question"];
+
+  // Generic fallback — safe options that don't skip gates
+  } else if (lowerContent.includes("help") && lowerContent.includes("?")) {
+    suggestions = ["Tell me more", "Start over"];
   } else {
     suggestions = ["Tell me more", "Start over"];
   }
 
+  console.log("[extractSuggestions] Fallback matched:", suggestions);
   return { cleanContent: content, suggestions };
 }
 

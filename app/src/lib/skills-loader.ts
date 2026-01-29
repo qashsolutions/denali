@@ -653,15 +653,16 @@ Want me to continue with the checklist, or find a specialist nearby?"
 // =============================================================================
 
 const PROMPTING_SKILL = `
-## Suggestions
+## Suggestions (MANDATORY — EVERY response must include this)
 
-### Format (at END of response)
+### Format (at END of every response — NEVER skip this)
 [SUGGESTIONS]
 Answer option 1
 Answer option 2
 [/SUGGESTIONS]
 
 ### Rules
+- You MUST include [SUGGESTIONS] at the end of EVERY response — no exceptions
 - Suggestions = what USER would click to answer YOUR question
 - Max 2 options
 - Under 25 characters
