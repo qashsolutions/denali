@@ -6,8 +6,29 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { Message, MessageParam, ContentBlock, ToolUseBlock, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
+import type { MessageParam, ContentBlock, ToolUseBlock, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
+import type { BetaMessage, BetaRequestMCPServerURLDefinition } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { API_CONFIG } from "@/config";
+
+// MCP Server configurations for Claude to access directly
+// These give Claude direct access to real CMS coverage data (LCDs/NCDs)
+export const MCP_SERVERS: BetaRequestMCPServerURLDefinition[] = [
+  {
+    type: "url",
+    url: "https://mcp.deepsense.ai/cms_coverage/mcp",
+    name: "cms-coverage",
+  },
+  {
+    type: "url",
+    url: "https://mcp.deepsense.ai/npi_registry/mcp",
+    name: "npi-registry",
+  },
+  {
+    type: "url",
+    url: "https://mcp.deepsense.ai/icd10_codes/mcp",
+    name: "icd10-codes",
+  },
+];
 
 // Types for our tool system
 export interface ToolDefinition {
@@ -67,6 +88,15 @@ export interface SessionState {
   requirementAnswers: Record<string, boolean>; // User's answers to requirements
   verificationComplete: boolean;               // All requirements asked
   meetsAllRequirements: boolean | null;        // Final determination
+
+  // Red flag symptoms (can expedite approval)
+  redFlagsPresent: string[];                   // List of red flags user confirmed
+  redFlagsChecked: boolean;                    // Whether red flags have been asked about
+
+  // Prior imaging status
+  priorImagingDone: boolean | null;            // Whether prior imaging (X-ray) was done
+  priorImagingType: string | null;             // Type of prior imaging (e.g., "X-ray")
+  priorImagingDate: string | null;             // When prior imaging was done
 
   // Specialty validation
   specialtyMismatchWarning: string | null;     // Warning if provider specialty doesn't match procedure
@@ -135,6 +165,15 @@ export function createDefaultSessionState(): SessionState {
     requirementAnswers: {},
     verificationComplete: false,
     meetsAllRequirements: null,
+
+    // Red flag symptoms
+    redFlagsPresent: [],
+    redFlagsChecked: false,
+
+    // Prior imaging status
+    priorImagingDone: null,
+    priorImagingType: null,
+    priorImagingDate: null,
 
     // Specialty validation
     specialtyMismatchWarning: null,
@@ -272,6 +311,7 @@ async function processToolCalls(
 }
 
 // Main chat function with tool calling loop
+// Uses beta API to access MCP servers for real LCD/NCD data
 export async function chat(
   request: ChatRequest,
   toolExecutors: Map<string, ToolExecutor>,
@@ -294,35 +334,51 @@ export async function chat(
   while (iterations < maxIterations) {
     iterations++;
 
-    // Call Claude API
-    const response: Message = await claude.messages.create({
+    // Call Claude Beta API with MCP servers for direct LCD/NCD access
+    // MCP servers give Claude direct access to real CMS coverage data
+    const response: BetaMessage = await claude.beta.messages.create({
       model: API_CONFIG.claude.model,
       max_tokens: API_CONFIG.claude.maxTokens,
       system: request.systemPrompt,
       messages,
       tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+      mcp_servers: MCP_SERVERS,
+      betas: ["mcp-client-2025-04-04"],
     });
 
-    // Check if Claude wants to use tools
+    // Check if Claude wants to use LOCAL tools (not MCP tools)
+    // MCP tools (mcp_tool_use) are handled automatically by the API
     const toolUseBlocks = response.content.filter(
       (block): block is ToolUseBlock => block.type === "tool_use"
     );
 
+    // Track MCP tool usage for logging (mcp_tool_use blocks)
+    response.content.forEach((block) => {
+      if (block.type === "mcp_tool_use") {
+        const mcpBlock = block as { type: "mcp_tool_use"; name?: string };
+        const toolName = mcpBlock.name || "mcp_tool";
+        if (!toolsUsed.includes(toolName)) {
+          toolsUsed.push(toolName);
+          console.log("[chat] MCP tool used:", toolName);
+        }
+      }
+    });
+
     if (toolUseBlocks.length > 0) {
-      // Track which tools were used
+      // Track which LOCAL tools were used
       toolUseBlocks.forEach((block) => {
         if (!toolsUsed.includes(block.name)) {
           toolsUsed.push(block.name);
         }
       });
 
-      // Execute tools
+      // Execute LOCAL tools only (MCP tools are handled by API)
       const toolResults = await processToolCalls(toolUseBlocks, toolExecutors);
 
       // Add assistant message and tool results to conversation
       messages.push({
         role: "assistant",
-        content: response.content,
+        content: response.content as ContentBlock[],
       });
       messages.push({
         role: "user",

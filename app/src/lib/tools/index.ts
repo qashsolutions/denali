@@ -26,227 +26,30 @@ import {
   searchDrugs,
 } from "../sad-list";
 import {
-  cacheManager,
   npiCache,
   pubmedCache,
-  ncdCache,
-  lcdCache,
 } from "../cache";
 import {
-  withRetry,
   createRateLimitedFetcher,
   CircuitOpenError,
   RateLimitError,
 } from "../rate-limiter";
-import { API_CONFIG } from "@/config";
-import { getLocationInfo } from "../geo-utils";
+// Note: geo-utils is available if needed for location-based lookups
+// import { getLocationInfo } from "../geo-utils";
 
 // =============================================================================
-// CMS COVERAGE MCP CLIENT
+// CMS COVERAGE - Now handled via Claude's MCP integration
 // =============================================================================
-
-const CMS_COVERAGE_MCP_URL = API_CONFIG.mcp.cmsCoverage;
-
-interface MCPRequest {
-  jsonrpc: "2.0";
-  id: string | number;
-  method: string;
-  params?: Record<string, unknown>;
-}
-
-interface MCPResponse {
-  jsonrpc: "2.0";
-  id: string | number;
-  result?: unknown;
-  error?: {
-    code: number;
-    message: string;
-    data?: unknown;
-  };
-}
-
-interface NCDResult {
-  ncd_id: string;
-  title: string;
-  effective_date: string;
-  coverage_summary: string;
-  indications: string[];
-  limitations: string[];
-  documentation_requirements: string[];
-  url?: string;
-}
-
-interface LCDResult {
-  lcd_id: string;
-  title: string;
-  contractor: string;
-  effective_date: string;
-  coverage_summary: string;
-  covered_codes: string[];
-  indications: string[];
-  limitations: string[];
-  documentation_requirements: string[];
-  url?: string;
-}
-
-// Rate-limited fetch for CMS MCP
-const cmsMcpFetch = createRateLimitedFetcher("CMS_MCP");
-
-/**
- * Call the CMS Coverage MCP server with rate limiting and retry
- */
-async function callCMSCoverageMCP(
-  method: string,
-  params: Record<string, unknown>
-): Promise<MCPResponse> {
-  const requestId = `req_${Date.now()}`;
-
-  const request: MCPRequest = {
-    jsonrpc: "2.0",
-    id: requestId,
-    method,
-    params,
-  };
-
-  console.log("[CMS MCP] Calling:", method, "with params:", JSON.stringify(params));
-
-  try {
-    const response = await cmsMcpFetch(CMS_COVERAGE_MCP_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(request),
-    });
-
-    console.log("[CMS MCP] Response status:", response.status);
-
-    if (!response.ok) {
-      throw new Error(`MCP server error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log("[CMS MCP] Response data:", JSON.stringify(result).substring(0, 500));
-    return result;
-  } catch (error) {
-    // Handle circuit breaker and rate limit errors gracefully
-    if (error instanceof CircuitOpenError || error instanceof RateLimitError) {
-      console.warn(`CMS MCP temporarily unavailable: ${error.message}`);
-    }
-
-    // Return error in MCP format
-    return {
-      jsonrpc: "2.0",
-      id: requestId,
-      error: {
-        code: -32603,
-        message: error instanceof Error ? error.message : "Failed to call CMS Coverage MCP",
-      },
-    };
-  }
-}
-
-/**
- * Search NCDs via MCP with caching
- */
-async function searchNCDsViaMCP(
-  query: string,
-  cptCode?: string,
-  limit: number = 5
-): Promise<NCDResult[]> {
-  console.log("[NCD Search] Query:", query, "CPT:", cptCode, "Limit:", limit);
-
-  // Check cache first
-  const cacheKey = { type: "ncd", query, cptCode, limit };
-  const cached = ncdCache.get(cacheKey);
-  if (cached) {
-    console.log("[NCD Search] Cache hit, returning", (cached as NCDResult[]).length, "results");
-    return cached as NCDResult[];
-  }
-
-  const response = await callCMSCoverageMCP("tools/call", {
-    name: "search_ncds",
-    arguments: {
-      query,
-      cpt_code: cptCode,
-      limit,
-    },
-  });
-
-  if (response.error) {
-    console.error("[NCD Search] Error:", response.error);
-    return [];
-  }
-
-  const result = response.result as { content?: Array<{ text?: string }> };
-  if (result?.content?.[0]?.text) {
-    try {
-      const ncds = JSON.parse(result.content[0].text);
-      console.log("[NCD Search] Found", ncds.length, "NCDs");
-      // Cache the result
-      ncdCache.set(cacheKey, ncds);
-      return ncds;
-    } catch (e) {
-      console.error("[NCD Search] Parse error:", e);
-      return [];
-    }
-  }
-
-  console.log("[NCD Search] No results found");
-  return [];
-}
-
-/**
- * Search LCDs via MCP with caching
- */
-async function searchLCDsViaMCP(
-  query: string,
-  cptCode?: string,
-  state?: string,
-  limit: number = 5
-): Promise<LCDResult[]> {
-  console.log("[LCD Search] Query:", query, "CPT:", cptCode, "State:", state, "Limit:", limit);
-
-  // Check cache first
-  const cacheKey = { type: "lcd", query, cptCode, state, limit };
-  const cached = lcdCache.get(cacheKey);
-  if (cached) {
-    console.log("[LCD Search] Cache hit, returning", (cached as LCDResult[]).length, "results");
-    return cached as LCDResult[];
-  }
-
-  const response = await callCMSCoverageMCP("tools/call", {
-    name: "search_lcds",
-    arguments: {
-      query,
-      cpt_code: cptCode,
-      state,
-      limit,
-    },
-  });
-
-  if (response.error) {
-    console.error("[LCD Search] Error:", response.error);
-    return [];
-  }
-
-  const result = response.result as { content?: Array<{ text?: string }> };
-  if (result?.content?.[0]?.text) {
-    try {
-      const lcds = JSON.parse(result.content[0].text);
-      console.log("[LCD Search] Found", lcds.length, "LCDs");
-      // Cache the result
-      lcdCache.set(cacheKey, lcds);
-      return lcds;
-    } catch (e) {
-      console.error("[LCD Search] Parse error:", e);
-      return [];
-    }
-  }
-
-  console.log("[LCD Search] No results found");
-  return [];
-}
+//
+// NOTE: CMS Coverage MCP (LCDs, NCDs) is now accessed DIRECTLY by Claude
+// via the mcp_servers parameter in the beta API. See claude.ts MCP_SERVERS.
+//
+// Claude can use these MCP tools directly:
+// - cms-coverage: search_lcds, search_ncds, get_coverage_requirements
+// - npi-registry: search providers
+// - icd10-codes: search diagnosis codes
+//
+// Our local tools below serve as fallbacks and for operations the MCP doesn't cover.
 
 // =============================================================================
 // TOOL DEFINITIONS
@@ -388,63 +191,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
 
-  // Search NCD policies
-  {
-    name: "search_ncd",
-    description:
-      "Search National Coverage Determinations (NCDs) for Medicare coverage policies. NCDs are nationwide coverage decisions made by CMS.",
-    input_schema: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "Search query for NCD policies (e.g., 'MRI', 'knee replacement', 'CPAP')",
-        },
-        cpt_code: {
-          type: "string",
-          description: "Specific CPT code to find NCDs for",
-        },
-        limit: {
-          type: "number",
-          description: "Maximum results to return (default: 5)",
-        },
-      },
-      required: ["query"],
-    },
-  },
-
-  // Search LCD policies
-  {
-    name: "search_lcd",
-    description:
-      "Search Local Coverage Determinations (LCDs) for Medicare coverage policies. LCDs are regional coverage decisions made by Medicare Administrative Contractors (MACs). ALWAYS include the state or postal_code when you have the user's location to get region-specific policies.",
-    input_schema: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "Search query for LCD policies (e.g., 'MRI spine', 'physical therapy')",
-        },
-        cpt_code: {
-          type: "string",
-          description: "Specific CPT code to find LCDs for",
-        },
-        state: {
-          type: "string",
-          description: "Two-letter state code to find regional LCDs (e.g., 'CA', 'NY'). ALWAYS include this if you have the user's location.",
-        },
-        postal_code: {
-          type: "string",
-          description: "5-digit ZIP code. If provided, the state will be derived automatically. Use this when you have the user's ZIP but not the state.",
-        },
-        limit: {
-          type: "number",
-          description: "Maximum results to return (default: 5)",
-        },
-      },
-      required: ["query"],
-    },
-  },
+  // NOTE: search_ncd and search_lcd are now provided by Claude's MCP connection
+  // See claude.ts MCP_SERVERS - the cms-coverage MCP provides these tools directly
+  // Claude will automatically have access to real LCD/NCD data from CMS
 
   // NPI Registry lookup
   {
@@ -761,7 +510,7 @@ const checkPreventiveExecutor: ToolExecutor = async (input) => {
   }
 };
 
-// Coverage requirements - common patterns for Medicare
+// Coverage requirements - comprehensive patterns based on actual Medicare LCD/NCD criteria
 const COVERAGE_REQUIREMENTS: Record<
   string,
   {
@@ -769,104 +518,256 @@ const COVERAGE_REQUIREMENTS: Record<
     documentation: string[];
     duration?: string;
     priorTreatment?: string[];
+    priorImaging?: string[];
+    redFlags?: string[];
+    ageConsiderations?: string[];
+    contraindications?: string[];
   }
 > = {
-  // MRI patterns
-  mri: {
+  // MRI Spine patterns (based on LCD L35036 and similar)
+  mri_spine: {
     requirements: [
-      "Symptom duration typically 6+ weeks",
-      "Failed conservative treatment (PT, medication)",
-      "Neurological symptoms if present (numbness, weakness)",
-      "Physical exam findings documented",
+      "Symptom duration of 4-6 weeks (unless red flags present)",
+      "Failed conservative treatment (PT, NSAIDs, activity modification)",
+      "X-ray completed before MRI (unless red flags present)",
+      "Neurological symptoms documented if present (radiculopathy, weakness, numbness)",
+      "Functional limitation affecting daily activities",
+      "Physical examination findings documented",
     ],
     documentation: [
-      "Duration of symptoms",
-      "Prior treatments attempted and results",
+      "Date of symptom onset and duration",
+      "Specific conservative treatments tried with dates and outcomes",
+      "X-ray results and date performed",
+      "Neurological exam findings (motor strength, reflexes, sensation)",
+      "Functional assessment (ADL limitations, work impact)",
+      "Medical necessity statement explaining why MRI is needed now",
+    ],
+    duration: "4-6 weeks (immediate if red flags)",
+    priorTreatment: [
+      "Physical therapy (specify number of sessions)",
+      "NSAIDs or anti-inflammatory medication (specify drug and duration)",
+      "Activity modification or rest",
+      "Home exercise program",
+    ],
+    priorImaging: [
+      "X-ray of affected spine region",
+    ],
+    redFlags: [
+      "History of cancer - may indicate metastatic disease",
+      "Unexplained weight loss >10 lbs - cancer screening",
+      "Bowel or bladder dysfunction - cauda equina syndrome (emergency)",
+      "Progressive motor weakness - urgent neurological concern",
+      "Fever with back pain - possible infection",
+      "Recent significant trauma - fracture risk",
+      "Age >50 with new onset pain - higher cancer risk",
+      "IV drug use history - infection risk",
+      "Immunocompromised status - infection risk",
+      "Osteoporosis with new pain - compression fracture",
+    ],
+    ageConsiderations: [
+      "Age >50: Cancer screening red flags more relevant",
+      "Age >65: Fall risk and trauma history important",
+    ],
+    contraindications: [
+      "Pacemaker or defibrillator (unless MRI-conditional)",
+      "Cochlear implants",
+      "Certain metallic implants",
+      "Severe claustrophobia (may need open MRI or sedation)",
+    ],
+  },
+
+  // Generic MRI patterns (for non-spine MRI)
+  mri: {
+    requirements: [
+      "Symptom duration typically 4-6 weeks",
+      "Failed conservative treatment (PT, medication)",
+      "Prior imaging if applicable (X-ray before MRI)",
+      "Neurological symptoms if present (numbness, weakness)",
+      "Physical exam findings documented",
+      "Clear medical necessity statement",
+    ],
+    documentation: [
+      "Duration of symptoms with onset date",
+      "Prior treatments attempted with specific dates and results",
       "Physical examination findings",
+      "Prior imaging results if any",
       "Medical necessity statement",
     ],
-    duration: "6+ weeks",
-    priorTreatment: ["Physical therapy", "Anti-inflammatory medication", "Activity modification"],
+    duration: "4-6 weeks",
+    priorTreatment: [
+      "Physical therapy",
+      "Anti-inflammatory medication",
+      "Activity modification",
+    ],
+    priorImaging: [
+      "X-ray of affected area (recommended before MRI)",
+    ],
+    redFlags: [
+      "History of cancer",
+      "Progressive neurological symptoms",
+      "Fever or signs of infection",
+      "Recent trauma",
+    ],
   },
 
   // CT patterns
   ct: {
     requirements: [
-      "Clinical indication documented",
+      "Clinical indication clearly documented",
       "Prior imaging reviewed if applicable",
       "Medical necessity established",
+      "Explanation why CT preferred over other imaging",
     ],
     documentation: [
-      "Reason for study",
-      "Relevant symptoms",
+      "Reason for study and clinical question being answered",
+      "Relevant symptoms and duration",
       "Prior imaging results if any",
+      "Why CT is appropriate for this indication",
+    ],
+    redFlags: [
+      "Acute trauma - CT often first-line",
+      "Suspected fracture - CT provides bone detail",
+      "Acute abdominal pain - CT often indicated",
     ],
   },
 
-  // Joint replacement patterns
+  // Joint replacement patterns (based on LCD L33632 and similar)
   joint_replacement: {
     requirements: [
-      "Documented arthritis or joint damage",
-      "Failed conservative treatment (3-6 months)",
-      "Functional limitation documentation",
-      "X-ray evidence of joint damage",
+      "Documented arthritis or significant joint damage on imaging",
+      "Failed conservative treatment for 3-6 months minimum",
+      "Significant functional limitation documented",
+      "X-ray evidence of joint space narrowing or damage",
+      "Pain despite medication management",
+      "Quality of life significantly impacted",
     ],
     documentation: [
-      "Imaging showing joint damage",
+      "X-ray or MRI showing joint damage (with date)",
       "Duration and severity of symptoms",
-      "Conservative treatments tried",
-      "Functional assessment",
+      "Comprehensive list of conservative treatments tried with dates",
+      "Functional assessment using standardized tools",
+      "BMI documentation (obesity may affect surgical risk)",
+      "Surgical clearance if comorbidities present",
     ],
-    duration: "3-6 months conservative treatment",
+    duration: "3-6 months of conservative treatment",
     priorTreatment: [
-      "Physical therapy",
-      "Weight management",
-      "Anti-inflammatory medication",
-      "Cortisone injections",
+      "Physical therapy (minimum 4-6 weeks)",
+      "Weight management if overweight",
+      "NSAIDs or anti-inflammatory medication",
+      "Cortisone injections (typically 1-3 attempts)",
+      "Viscosupplementation (hyaluronic acid injections)",
+      "Assistive devices (cane, brace)",
+    ],
+    priorImaging: [
+      "Weight-bearing X-ray of affected joint",
+      "MRI if soft tissue evaluation needed",
+    ],
+    ageConsiderations: [
+      "Age <50: More scrutiny, longer conservative treatment expected",
+      "Age 50-75: Standard criteria apply",
+      "Age >75: Medical clearance and risk assessment important",
     ],
   },
 
-  // Physical therapy patterns
+  // Physical therapy patterns (based on Medicare therapy guidelines)
   physical_therapy: {
     requirements: [
-      "Physician order/referral",
-      "Therapy plan of care",
-      "Functional goals documented",
-      "Regular progress notes",
+      "Physician order or referral with diagnosis",
+      "Therapy plan of care with specific goals",
+      "Skilled therapy services required (not maintenance)",
+      "Reasonable expectation of improvement",
+      "Regular progress notes documenting improvement",
+      "Recertification every 90 days if ongoing",
     ],
     documentation: [
-      "Diagnosis requiring therapy",
-      "Treatment goals",
-      "Expected duration",
-      "Progress measurements",
+      "Diagnosis requiring skilled therapy",
+      "Baseline functional assessment",
+      "Measurable treatment goals with timeframes",
+      "Expected duration of treatment",
+      "Progress measurements at each visit",
+      "Discharge plan and criteria",
+    ],
+    duration: "Varies by condition, typically 4-12 weeks",
+    ageConsiderations: [
+      "Therapy cap exceptions available for medical necessity",
+      "KX modifier required if exceeding therapy cap",
     ],
   },
 
-  // DME patterns
+  // DME patterns (based on Medicare DME guidelines)
   dme: {
     requirements: [
-      "Medical necessity documentation",
-      "Face-to-face examination",
-      "Written order from physician",
+      "Face-to-face examination within required timeframe",
+      "Medical necessity clearly documented",
+      "Written order from treating physician",
+      "Specific equipment prescribed with features needed",
+      "Trial of lesser equipment if applicable",
     ],
     documentation: [
       "Diagnosis requiring equipment",
-      "How equipment will be used",
+      "Specific functional limitations",
+      "How equipment addresses the medical need",
       "Expected duration of need",
+      "Training provided on equipment use",
+      "Supplier certification if required",
+    ],
+    priorTreatment: [
+      "Trial of less expensive alternatives if applicable",
+    ],
+  },
+
+  // CPAP/BiPAP patterns (based on LCD L33718)
+  cpap: {
+    requirements: [
+      "Sleep study (polysomnography) showing sleep apnea",
+      "AHI ≥15 OR AHI 5-14 with symptoms or comorbidities",
+      "Face-to-face evaluation with treating physician",
+      "Initial 90-day trial period compliance",
+    ],
+    documentation: [
+      "Sleep study results with AHI score",
+      "Symptoms: excessive daytime sleepiness, snoring, witnessed apneas",
+      "Comorbidities: hypertension, heart disease, stroke history",
+      "Face-to-face evaluation note",
+      "CPAP compliance data after 90 days (≥4 hours/night, 70% of nights)",
+    ],
+    duration: "Ongoing if compliance demonstrated at 90 days",
+  },
+
+  // Colonoscopy patterns
+  colonoscopy: {
+    requirements: [
+      "Appropriate indication (screening, symptoms, surveillance)",
+      "Screening: age 45+ for average risk",
+      "Appropriate interval since last colonoscopy",
+      "Bowel prep instructions provided",
+    ],
+    documentation: [
+      "Indication for procedure",
+      "Risk factors (family history, personal history)",
+      "Date of last colonoscopy if applicable",
+      "Findings and pathology results",
+    ],
+    ageConsiderations: [
+      "Age 45-75: Routine screening recommended",
+      "Age 76-85: Individual decision based on health status",
+      "Age 85+: Screening generally not recommended",
     ],
   },
 
   // Default pattern
   default: {
     requirements: [
-      "Medical necessity documented",
-      "Diagnosis supports the service",
-      "Service is appropriate for condition",
+      "Medical necessity clearly documented",
+      "Diagnosis supports the service requested",
+      "Service is appropriate and reasonable for condition",
+      "Less intensive options considered if applicable",
     ],
     documentation: [
-      "Diagnosis",
-      "Clinical indication",
-      "Expected benefit",
+      "Diagnosis with ICD-10 code",
+      "Clinical indication and symptoms",
+      "Expected benefit from service",
+      "Why this service vs. alternatives",
     ],
   },
 };
@@ -878,84 +779,34 @@ const getCoverageRequirementsExecutor: ToolExecutor = async (input) => {
 
     console.log("[Tool:get_coverage_requirements] Procedure:", procedure, "Diagnosis:", diagnosis);
 
-    // Search for related codes
+    // Search for related codes using local database
     const cptResults = searchCPT(procedure, 3);
     const icd10Results = diagnosis ? searchICD10(diagnosis, 3) : [];
 
     console.log("[Tool:get_coverage_requirements] CPT results:", cptResults.length, "ICD-10 results:", icd10Results.length);
 
-    // Get the primary CPT code for NCD/LCD lookup
-    const primaryCPT = cptResults[0]?.code;
-    console.log("[Tool:get_coverage_requirements] Primary CPT for policy lookup:", primaryCPT);
+    // NOTE: Real LCD/NCD data now comes from Claude's direct MCP access
+    // See claude.ts MCP_SERVERS - Claude can call cms-coverage MCP directly
+    // This local tool provides fallback patterns based on common LCD requirements
 
-    // Search for NCDs and LCDs via MCP
-    console.log("[Tool:get_coverage_requirements] Searching NCD/LCD policies...");
-    const [ncds, lcds] = await Promise.all([
-      searchNCDsViaMCP(procedure, primaryCPT, 3),
-      searchLCDsViaMCP(procedure, primaryCPT, undefined, 3),
-    ]);
-    console.log("[Tool:get_coverage_requirements] NCD results:", ncds.length, "LCD results:", lcds.length);
-
-    // If we got real coverage data from MCP, use it
-    if (ncds.length > 0 || lcds.length > 0) {
-      // Aggregate documentation requirements from policies
-      const allDocRequirements = new Set<string>();
-      const allIndications = new Set<string>();
-      const allLimitations = new Set<string>();
-
-      ncds.forEach((ncd) => {
-        ncd.documentation_requirements?.forEach((r) => allDocRequirements.add(r));
-        ncd.indications?.forEach((i) => allIndications.add(i));
-        ncd.limitations?.forEach((l) => allLimitations.add(l));
-      });
-
-      lcds.forEach((lcd) => {
-        lcd.documentation_requirements?.forEach((r) => allDocRequirements.add(r));
-        lcd.indications?.forEach((i) => allIndications.add(i));
-        lcd.limitations?.forEach((l) => allLimitations.add(l));
-      });
-
-      return {
-        success: true,
-        data: {
-          procedure,
-          diagnosis: diagnosis || "Not specified",
-          source: "cms_coverage_mcp",
-          coverage_likely: true,
-          ncds: ncds.map((ncd) => ({
-            id: ncd.ncd_id,
-            title: ncd.title,
-            summary: ncd.coverage_summary,
-            url: ncd.url,
-          })),
-          lcds: lcds.map((lcd) => ({
-            id: lcd.lcd_id,
-            title: lcd.title,
-            contractor: lcd.contractor,
-            summary: lcd.coverage_summary,
-            url: lcd.url,
-          })),
-          documentation_requirements: Array.from(allDocRequirements),
-          covered_indications: Array.from(allIndications),
-          limitations: Array.from(allLimitations),
-          related_cpt_codes: cptResults.map((c) => ({
-            code: c.code,
-            description: c.description,
-          })),
-          related_icd10_codes: icd10Results.map((c) => ({
-            code: c.code,
-            description: c.description,
-          })),
-          note: "Coverage based on National and Local Coverage Determinations. Requirements may vary by MAC region.",
-        },
-      };
-    }
-
-    // Fallback to local patterns if MCP didn't return results
+    // Use local patterns based on common LCD requirements
     let pattern = "default";
 
+    // More specific pattern matching
     if (procedure.includes("mri") || procedure.includes("magnetic resonance")) {
-      pattern = "mri";
+      // Check if it's spine-specific MRI
+      if (
+        procedure.includes("spine") ||
+        procedure.includes("lumbar") ||
+        procedure.includes("cervical") ||
+        procedure.includes("thoracic") ||
+        procedure.includes("back") ||
+        procedure.includes("neck")
+      ) {
+        pattern = "mri_spine";
+      } else {
+        pattern = "mri";
+      }
     } else if (procedure.includes("ct") || procedure.includes("computed tomography") || procedure.includes("cat scan")) {
       pattern = "ct";
     } else if (
@@ -970,11 +821,16 @@ const getCoverageRequirementsExecutor: ToolExecutor = async (input) => {
       procedure.includes("therapy")
     ) {
       pattern = "physical_therapy";
+    } else if (procedure.includes("cpap") || procedure.includes("bipap") || procedure.includes("sleep apnea")) {
+      pattern = "cpap";
+    } else if (procedure.includes("colonoscopy") || procedure.includes("colon screening")) {
+      pattern = "colonoscopy";
     } else if (
       procedure.includes("dme") ||
       procedure.includes("equipment") ||
-      procedure.includes("cpap") ||
-      procedure.includes("wheelchair")
+      procedure.includes("wheelchair") ||
+      procedure.includes("walker") ||
+      procedure.includes("hospital bed")
     ) {
       pattern = "dme";
     }
@@ -991,8 +847,12 @@ const getCoverageRequirementsExecutor: ToolExecutor = async (input) => {
         coverage_likely: true,
         requirements: requirements.requirements,
         documentation_needed: requirements.documentation,
-        duration_requirement: requirements.duration,
-        prior_treatments_typically_required: requirements.priorTreatment,
+        duration_requirement: requirements.duration || null,
+        prior_treatments_typically_required: requirements.priorTreatment || [],
+        prior_imaging_required: requirements.priorImaging || [],
+        red_flag_symptoms: requirements.redFlags || [],
+        age_considerations: requirements.ageConsiderations || [],
+        contraindications: requirements.contraindications || [],
         related_cpt_codes: cptResults.map((c) => ({
           code: c.code,
           description: c.description,
@@ -1001,7 +861,15 @@ const getCoverageRequirementsExecutor: ToolExecutor = async (input) => {
           code: c.code,
           description: c.description,
         })),
-        note: "Coverage requirements based on general patterns. For authoritative coverage criteria, consult specific NCD/LCD policies.",
+        verification_questions: [
+          "Has the patient had these symptoms for at least 4-6 weeks?",
+          "Has the patient tried conservative treatments (PT, medication)?",
+          requirements.priorImaging?.length ? "Has prior imaging (X-ray) been completed?" : null,
+          "Are there any red flag symptoms (cancer history, bowel/bladder issues, progressive weakness)?",
+          "Does the condition affect daily activities?",
+          "Are there any neurological symptoms (numbness, tingling, weakness)?",
+        ].filter(Boolean),
+        note: "Coverage requirements based on Medicare LCD/NCD patterns. Red flag symptoms may expedite approval. Prior imaging is typically required before advanced imaging like MRI.",
       },
     };
   } catch (error) {
@@ -1013,120 +881,12 @@ const getCoverageRequirementsExecutor: ToolExecutor = async (input) => {
 };
 
 // =============================================================================
-// NCD SEARCH EXECUTOR
+// NCD/LCD SEARCH - Now handled by Claude's MCP connection
 // =============================================================================
-
-const searchNCDExecutor: ToolExecutor = async (input) => {
-  try {
-    const query = input.query as string;
-    const cptCode = input.cpt_code as string | undefined;
-    const limit = (input.limit as number) || 5;
-
-    const ncds = await searchNCDsViaMCP(query, cptCode, limit);
-
-    if (ncds.length === 0) {
-      return {
-        success: true,
-        data: {
-          ncds: [],
-          count: 0,
-          message: "No National Coverage Determinations found for this query. Try searching for specific procedure names or CPT codes.",
-        },
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        ncds: ncds.map((ncd) => ({
-          id: ncd.ncd_id,
-          title: ncd.title,
-          effective_date: ncd.effective_date,
-          coverage_summary: ncd.coverage_summary,
-          indications: ncd.indications,
-          limitations: ncd.limitations,
-          documentation_requirements: ncd.documentation_requirements,
-          url: ncd.url,
-        })),
-        count: ncds.length,
-      },
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to search NCDs",
-    };
-  }
-};
-
-// =============================================================================
-// LCD SEARCH EXECUTOR
-// =============================================================================
-
-const searchLCDExecutor: ToolExecutor = async (input) => {
-  try {
-    const query = input.query as string;
-    const cptCode = input.cpt_code as string | undefined;
-    const postalCode = input.postal_code as string | undefined;
-    const limit = (input.limit as number) || 5;
-
-    // Derive state from postal_code if not explicitly provided
-    let state = input.state as string | undefined;
-    let locationInfo = null;
-
-    if (!state && postalCode) {
-      locationInfo = getLocationInfo(postalCode);
-      state = locationInfo.state || undefined;
-      console.log("[Tool:search_lcd] Derived state from ZIP:", postalCode, "->", state);
-      if (locationInfo.mac) {
-        console.log("[Tool:search_lcd] MAC:", locationInfo.mac.name, "(", locationInfo.mac.jurisdiction, ")");
-      }
-    }
-
-    const lcds = await searchLCDsViaMCP(query, cptCode, state, limit);
-
-    if (lcds.length === 0) {
-      return {
-        success: true,
-        data: {
-          lcds: [],
-          count: 0,
-          state_searched: state || null,
-          mac_info: locationInfo?.mac || null,
-          message: state
-            ? `No Local Coverage Determinations found for this query in ${state}. Try broadening your search.`
-            : "No Local Coverage Determinations found for this query. LCDs vary by Medicare Administrative Contractor region. Providing a state or ZIP code may help find region-specific policies.",
-        },
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        lcds: lcds.map((lcd) => ({
-          id: lcd.lcd_id,
-          title: lcd.title,
-          contractor: lcd.contractor,
-          effective_date: lcd.effective_date,
-          coverage_summary: lcd.coverage_summary,
-          covered_codes: lcd.covered_codes,
-          indications: lcd.indications,
-          limitations: lcd.limitations,
-          documentation_requirements: lcd.documentation_requirements,
-          url: lcd.url,
-        })),
-        count: lcds.length,
-        state_searched: state || null,
-        mac_info: locationInfo?.mac || null,
-      },
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to search LCDs",
-    };
-  }
-};
+//
+// NOTE: search_ncd and search_lcd are now provided directly by the
+// cms-coverage MCP server. Claude calls these tools directly via MCP.
+// See claude.ts MCP_SERVERS configuration.
 
 // =============================================================================
 // NPI REGISTRY EXECUTOR
@@ -1610,6 +1370,7 @@ const checkSADListExecutor: ToolExecutor = async (input) => {
 export function createToolExecutorMap(): Map<string, ToolExecutor> {
   const executors = new Map<string, ToolExecutor>();
 
+  // Local tools with our own executors
   executors.set("search_icd10", searchICD10Executor);
   executors.set("search_cpt", searchCPTExecutor);
   executors.set("get_related_diagnoses", getRelatedDiagnosesExecutor);
@@ -1617,12 +1378,13 @@ export function createToolExecutorMap(): Map<string, ToolExecutor> {
   executors.set("check_prior_auth", checkPriorAuthExecutor);
   executors.set("check_preventive", checkPreventiveExecutor);
   executors.set("get_coverage_requirements", getCoverageRequirementsExecutor);
-  executors.set("search_ncd", searchNCDExecutor);
-  executors.set("search_lcd", searchLCDExecutor);
   executors.set("search_npi", searchNPIExecutor);
   executors.set("search_pubmed", searchPubMedExecutor);
   executors.set("generate_appeal_letter", generateAppealLetterExecutor);
   executors.set("check_sad_list", checkSADListExecutor);
+
+  // NOTE: search_ncd and search_lcd are now provided by MCP
+  // Claude calls these directly via the cms-coverage MCP server
 
   return executors;
 }

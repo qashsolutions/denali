@@ -391,19 +391,42 @@ const GUIDANCE_SKILL = `
 1. Symptoms and duration gathered
 2. Procedure clarified
 3. Coverage tools called with REAL results
+4. Verification questions answered (red flags, prior imaging, duration, etc.)
 
 ### Output Format
 
 "Great news, [Name] — Medicare typically covers [procedure] for your mom's situation!
 
 **What the doctor needs to document:**
-[ ] [Requirement 1 — in plain English]
-[ ] [Requirement 2 — in plain English]
-[ ] [Requirement 3 — in plain English]
+
+*Duration & History:*
+[ ] Symptoms started [date] — [X weeks/months] duration
+[ ] Prior imaging: [X-ray on date, results]
+
+*Treatments Already Tried:*
+[ ] Physical therapy: [dates, sessions, outcome]
+[ ] Medications: [specific drugs, duration, why stopped]
+[ ] Other: [exercises, injections, etc.]
+
+*Current Symptoms:*
+[ ] Pain location and severity (scale 1-10)
+[ ] Neurological symptoms: [numbness/tingling/weakness if present]
+[ ] Red flags: [if any — cancer history, bowel/bladder issues, etc.]
+
+*Functional Impact:*
+[ ] Daily activities affected: [walking, sleeping, working, dressing]
+[ ] Quality of life impact
+
+*Physical Exam Findings:*
+[ ] Range of motion
+[ ] Neurological exam (reflexes, strength, sensation)
+[ ] Tenderness or spasm
 
 **What to say at the appointment:**
-- '[Specific talking point]'
-- 'Can you make sure to document all of this for Medicare?'
+- 'Can you document how long I've had these symptoms and what I've already tried?'
+- 'Please note how this affects my daily activities'
+- 'Can you include your exam findings in the notes?'
+- 'Can you make sure the medical necessity is clear for Medicare?'
 
 **Policy reference:** [LCD/NCD ID]
 
@@ -417,15 +440,40 @@ Email it to me
 ### Translation Table
 | Technical Requirement | Plain English |
 |----------------------|---------------|
-| Duration >6 weeks | Pain has lasted more than 6 weeks |
-| Failed conservative management | She's tried PT, medication, or exercises first |
-| Neurological deficit | Numbness, tingling, or weakness |
-| Functional limitation | How the pain affects daily activities |
+| Duration >4-6 weeks | Pain has lasted more than 4-6 weeks |
+| Failed conservative management | She's tried PT, medication, or exercises first and they didn't fully help |
+| Neurological deficit | Numbness, tingling, or weakness in arms/legs |
+| Functional limitation | How the pain affects daily activities (walking, sleeping, working) |
+| Radiculopathy | Pain, numbness, or weakness that travels down the arm or leg |
+| Prior imaging required | X-ray should be done before MRI |
+| Medical necessity | Clear explanation of why this test/procedure is needed now |
+| Red flag symptoms | Serious symptoms like cancer history, bowel/bladder issues, progressive weakness |
+| Contraindication | Reason a test can't be done (like pacemaker for MRI) |
+
+### Red Flag Highlighting
+If the user mentioned ANY red flags during verification, HIGHLIGHT them prominently:
+
+"**Important:** The [symptom] you mentioned is a 'red flag' that can actually help get faster approval. Make sure the doctor documents this clearly!"
+
+Red flags include:
+- Cancer history → "History of malignancy"
+- Bowel/bladder issues → "Cauda equina symptoms" (URGENT)
+- Progressive weakness → "Progressive neurological deficit" (URGENT)
+- Fever with pain → "Suspected infection"
+- Recent trauma → "Post-traumatic evaluation"
+- Unexplained weight loss → "Constitutional symptoms, rule out malignancy"
 
 ### Personalize With Their Details
-- "Your 3 months of back pain qualifies"
-- "Since she's tried physical therapy already"
-- "The leg tingling you mentioned is important"
+- "Your 3 months of back pain qualifies (Medicare asks for 4-6 weeks minimum)"
+- "Since she's already tried physical therapy, that requirement is met"
+- "The leg numbness you mentioned is important — the doctor should document this as radiculopathy"
+- "The X-ray she had last month fulfills the prior imaging requirement"
+
+### If Prior Imaging Missing
+"One thing I noticed — Medicare typically wants an X-ray before approving an MRI. If she hasn't had one yet, the doctor might order that first. It's quick and usually approved easily."
+
+### If Red Flags Present
+"Because she has [red flag symptom], the doctor may be able to skip some of the usual waiting period. Make sure they document this prominently!"
 `;
 
 // =============================================================================
@@ -511,43 +559,98 @@ When you get coverage requirements from tools, look for criteria like:
 - Duration requirements (e.g., "symptoms for 6+ weeks")
 - Prior treatment requirements (e.g., "failed conservative treatment")
 - Severity requirements (e.g., "functional limitation")
-- Referral requirements (e.g., "specialist evaluation")
+- Prior imaging requirements (e.g., "X-ray before MRI")
+- Red flag symptoms (these can EXPEDITE approval!)
+
+### RED FLAG SYMPTOMS (Ask These First!)
+Red flags can actually HELP get faster approval because they indicate urgent need:
+
+| Red Flag | Ask This | If YES |
+|----------|----------|--------|
+| Cancer history | "Has she ever been treated for cancer?" | Immediate imaging often approved |
+| Bowel/bladder issues | "Has she had any loss of bladder or bowel control?" | Emergency criteria - expedite! |
+| Progressive weakness | "Is the weakness in her legs getting worse over time?" | Urgent approval pathway |
+| Fever with pain | "Has she had any fever along with the back pain?" | Infection concern - fast-track |
+| Recent trauma | "Was there any injury or fall that started this?" | Trauma imaging usually approved |
+| Unexplained weight loss | "Has she lost weight without trying?" | Cancer screening criteria |
+
+**IMPORTANT:** If ANY red flag is YES, note it prominently — it strengthens the case!
 
 ### Flow: One Question at a Time
 
-**Step 1: Convert requirement to plain English question**
-| Technical Requirement | Ask This |
-|-----------------------|----------|
-| Duration > 6 weeks | "Has she had these symptoms for at least 6 weeks?" |
-| Failed conservative treatment | "Has she already tried physical therapy or medication without getting better?" |
-| Neurological symptoms | "Does she have any numbness, tingling, or weakness in her legs?" |
-| Functional limitation | "Does the pain affect her daily activities — like walking, sleeping, or working?" |
-| X-ray first | "Has she had an X-ray of her back already?" |
-
-**Step 2: Ask ONE question and wait**
-"Before I show you what the doctor needs to document, let me ask — has she had these symptoms for at least 6 weeks?"
+**Step 1: Check for Red Flags First**
+"Before we go through the requirements, I want to check a few important things. Has she had any loss of bladder or bowel control, or any weakness that's getting worse?"
 
 [SUGGESTIONS]
-Yes, more than 6 weeks
-No, less than that
+No, nothing like that
+Yes, she has some of those
 [/SUGGESTIONS]
 
-**Step 3: If YES → Continue to next requirement or checklist**
-"Great, that's an important one. Now, has she tried any treatments like physical therapy or pain medication?"
+If YES to red flags: "That's actually important — those symptoms can help get faster approval. Let me note that."
 
-**Step 4: If NO → Explain what's needed first**
-"Oh, I see. Medicare typically wants to see that symptoms have lasted at least 6 weeks before approving an MRI.
-
-Here's what I'd suggest:
-1. Keep track of when the symptoms started
-2. Try some conservative treatments (your doctor can recommend these)
-3. Come back in a few weeks and I can help with the approval process then
-
-Would you like me to explain what treatments might help in the meantime?"
+**Step 2: Prior Imaging Check (for MRI/CT)**
+"Has she had an X-ray of her back already?"
 
 [SUGGESTIONS]
-Tell me about treatments
-Start a new question
+Yes, she had X-rays
+No, not yet
+[/SUGGESTIONS]
+
+If NO: "Most Medicare contractors want to see an X-ray before approving an MRI. The good news is X-rays are quick and usually approved easily. Your doctor might want to order that first."
+
+**Step 3: Duration Check**
+"How long has she had these symptoms?"
+
+| Answer | Response |
+|--------|----------|
+| Less than 4 weeks | "Medicare typically wants 4-6 weeks of symptoms. You might want to wait a bit, or check if she has any red flag symptoms." |
+| 4-6 weeks | "That's right at the threshold — should be okay, especially with other documentation." |
+| 6+ weeks | "Perfect, that definitely meets the duration requirement." |
+
+**Step 4: Conservative Treatment Check**
+"Has she tried any treatments — physical therapy, anti-inflammatory medication like ibuprofen, or exercises?"
+
+[SUGGESTIONS]
+Yes, tried some things
+Not yet
+[/SUGGESTIONS]
+
+If NO: "Medicare usually wants to see that conservative treatments were tried first. Your doctor might recommend PT or medication before ordering the MRI."
+
+**Step 5: Functional Impact Check**
+"Does the pain affect her daily activities — like walking, sleeping, working, or getting dressed?"
+
+[SUGGESTIONS]
+Yes, significantly
+Just a little
+[/SUGGESTIONS]
+
+**Step 6: Neurological Symptoms Check**
+"Does she have any numbness, tingling, or weakness in her legs or feet?"
+
+[SUGGESTIONS]
+Yes, she does
+No, just pain
+[/SUGGESTIONS]
+
+### Age-Based Considerations
+- **Age 50+**: Ask about cancer history, unexplained weight loss (red flags more relevant)
+- **Age 65+**: Falls and trauma more common, ask about recent injuries
+- **Any age with cancer history**: Imaging often approved more readily
+
+### If Requirements NOT Met → Provide Helpful Guidance
+"Based on what you've told me, Medicare might not approve this right away. Here's what I'd suggest:
+
+1. **Get an X-ray first** — it's quick and helps document the problem
+2. **Try conservative treatment for 4-6 weeks** — PT, anti-inflammatories, or exercises
+3. **Keep a symptom diary** — document how pain affects daily activities
+4. **Come back after that** — I can help you get the MRI approved then
+
+Would you like tips on what to track?"
+
+[SUGGESTIONS]
+Tell me what to track
+I have more questions
 [/SUGGESTIONS]
 
 ### If ALL Requirements Met → Show Checklist
@@ -555,40 +658,12 @@ Start a new question
 
 ### Keep Track in Your Response
 After each answer, mentally note:
-- Requirements verified: ✓ Duration ✓ Prior treatment
-- Remaining: Neurological symptoms
-
-### Example Full Flow
-
-User asks about MRI for back pain.
-You call get_coverage_requirements, which returns:
-- Duration > 6 weeks
-- Failed conservative treatment
-- Functional limitation documented
-
-**You say:**
-"Before I create the checklist, let me make sure she qualifies. Has she had this back pain for at least 6 weeks?"
-
-**User says:** "Yes, about 3 months"
-
-**You say:**
-"Three months — that definitely qualifies. And has she tried any treatments like PT, medication, or exercises that didn't fully help?"
-
-**User says:** "She tried some exercises but they didn't work"
-
-**You say:**
-"Okay, good to know. Last question — does the pain affect her daily activities, like walking, sleeping, or doing things around the house?"
-
-**User says:** "Yes, she can barely walk some days"
-
-**You say:**
-"That's all I needed. Great news — based on what you've told me, your mom should qualify for Medicare coverage!
-
-**What the doctor needs to document:**
-[ ] Pain for 3+ months (you said about 3 months)
-[ ] Tried exercises without improvement
-[ ] Significant impact on daily activities (difficulty walking)
-..."
+- ✅ Red flags checked (none present OR list which ones)
+- ✅ Prior imaging: X-ray done
+- ✅ Duration: 3 months
+- ✅ Conservative treatment: tried PT
+- ✅ Functional limitation: affects walking
+- ✅ Neurological: numbness in legs
 `;
 
 // =============================================================================
@@ -695,6 +770,11 @@ export interface SkillTriggers {
   hasRequirementsToVerify: boolean;
   verificationComplete: boolean;
   meetsAllRequirements: boolean;
+  // Red flags and prior imaging (denial prevention)
+  redFlagsChecked: boolean;
+  hasRedFlags: boolean;
+  priorImagingChecked: boolean;
+  hasPriorImaging: boolean;
   // Specialty validation
   hasSpecialtyMismatch: boolean;
 }
@@ -759,6 +839,16 @@ export function detectTriggers(
       sessionState?.verificationComplete || false,
     meetsAllRequirements:
       sessionState?.meetsAllRequirements === true,
+
+    // Red flags and prior imaging (denial prevention)
+    redFlagsChecked:
+      sessionState?.redFlagsChecked || false,
+    hasRedFlags:
+      (sessionState?.redFlagsPresent?.length ?? 0) > 0,
+    priorImagingChecked:
+      sessionState?.priorImagingDone !== null && sessionState?.priorImagingDone !== undefined,
+    hasPriorImaging:
+      sessionState?.priorImagingDone === true,
 
     // Specialty validation - check programmatically using specialty-match utility
     hasSpecialtyMismatch: (() => {
@@ -899,6 +989,29 @@ function buildSessionContext(state: SessionState): string {
   }
   if (state.isAppeal) {
     context.push(`**Mode:** Appeal assistance`);
+  }
+
+  // Red flag symptoms (denial prevention - can expedite approval)
+  if (state.redFlagsChecked) {
+    context.push(`**Red flags checked:** Yes`);
+    if (state.redFlagsPresent && state.redFlagsPresent.length > 0) {
+      context.push(`**⚠️ Red flags PRESENT (can expedite approval):**`);
+      state.redFlagsPresent.forEach((flag) => {
+        context.push(`  - ${flag}`);
+      });
+      context.push(`  → HIGHLIGHT these in the checklist — they strengthen the case!`);
+    } else {
+      context.push(`**Red flags:** None reported`);
+    }
+  }
+
+  // Prior imaging status
+  if (state.priorImagingDone !== null) {
+    if (state.priorImagingDone) {
+      context.push(`**Prior imaging:** ${state.priorImagingType || "Yes"} ${state.priorImagingDate ? `(${state.priorImagingDate})` : ""}`);
+    } else {
+      context.push(`**Prior imaging:** Not done yet — may need X-ray before MRI`);
+    }
   }
 
   // Requirement verification (denial prevention)
@@ -1080,6 +1193,11 @@ export function buildInitialSystemPrompt(): string {
     hasRequirementsToVerify: false,
     verificationComplete: false,
     meetsAllRequirements: false,
+    // Red flags and prior imaging
+    redFlagsChecked: false,
+    hasRedFlags: false,
+    priorImagingChecked: false,
+    hasPriorImaging: false,
     // Specialty validation
     hasSpecialtyMismatch: false,
   };
