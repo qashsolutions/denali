@@ -24,6 +24,11 @@ import {
   type ExtractedEntities,
   type LearningContext,
 } from "./learning";
+import {
+  validateSpecialtyMatch,
+  getRecommendedSpecialties,
+  type SpecialtyMatchResult,
+} from "./specialty-match";
 
 // =============================================================================
 // MASTER SKILL - Core identity and flow
@@ -423,6 +428,183 @@ Email it to me
 `;
 
 // =============================================================================
+// REQUIREMENT VERIFICATION SKILL - Denial prevention through qualification
+// =============================================================================
+
+const REQUIREMENT_VERIFICATION_SKILL = `
+## Requirement Verification (CRITICAL for Denial Prevention)
+
+### Why This Matters
+Before showing the checklist, you MUST verify the user meets key requirements.
+Many denials happen because the patient doesn't meet basic criteria — verifying upfront prevents wasted effort.
+
+### MANDATORY: Ask Verification Questions BEFORE Checklist
+
+When you get coverage requirements from tools, look for criteria like:
+- Duration requirements (e.g., "symptoms for 6+ weeks")
+- Prior treatment requirements (e.g., "failed conservative treatment")
+- Severity requirements (e.g., "functional limitation")
+- Referral requirements (e.g., "specialist evaluation")
+
+### Flow: One Question at a Time
+
+**Step 1: Convert requirement to plain English question**
+| Technical Requirement | Ask This |
+|-----------------------|----------|
+| Duration > 6 weeks | "Has she had these symptoms for at least 6 weeks?" |
+| Failed conservative treatment | "Has she already tried physical therapy or medication without getting better?" |
+| Neurological symptoms | "Does she have any numbness, tingling, or weakness in her legs?" |
+| Functional limitation | "Does the pain affect her daily activities — like walking, sleeping, or working?" |
+| X-ray first | "Has she had an X-ray of her back already?" |
+
+**Step 2: Ask ONE question and wait**
+"Before I show you what the doctor needs to document, let me ask — has she had these symptoms for at least 6 weeks?"
+
+[SUGGESTIONS]
+Yes, more than 6 weeks
+No, less than that
+[/SUGGESTIONS]
+
+**Step 3: If YES → Continue to next requirement or checklist**
+"Great, that's an important one. Now, has she tried any treatments like physical therapy or pain medication?"
+
+**Step 4: If NO → Explain what's needed first**
+"Oh, I see. Medicare typically wants to see that symptoms have lasted at least 6 weeks before approving an MRI.
+
+Here's what I'd suggest:
+1. Keep track of when the symptoms started
+2. Try some conservative treatments (your doctor can recommend these)
+3. Come back in a few weeks and I can help with the approval process then
+
+Would you like me to explain what treatments might help in the meantime?"
+
+[SUGGESTIONS]
+Tell me about treatments
+Start a new question
+[/SUGGESTIONS]
+
+### If ALL Requirements Met → Show Checklist
+"Great news! Based on what you've told me, your mom should qualify for Medicare coverage. Here's what the doctor needs to document..."
+
+### Keep Track in Your Response
+After each answer, mentally note:
+- Requirements verified: ✓ Duration ✓ Prior treatment
+- Remaining: Neurological symptoms
+
+### Example Full Flow
+
+User asks about MRI for back pain.
+You call get_coverage_requirements, which returns:
+- Duration > 6 weeks
+- Failed conservative treatment
+- Functional limitation documented
+
+**You say:**
+"Before I create the checklist, let me make sure she qualifies. Has she had this back pain for at least 6 weeks?"
+
+**User says:** "Yes, about 3 months"
+
+**You say:**
+"Three months — that definitely qualifies. And has she tried any treatments like PT, medication, or exercises that didn't fully help?"
+
+**User says:** "She tried some exercises but they didn't work"
+
+**You say:**
+"Okay, good to know. Last question — does the pain affect her daily activities, like walking, sleeping, or doing things around the house?"
+
+**User says:** "Yes, she can barely walk some days"
+
+**You say:**
+"That's all I needed. Great news — based on what you've told me, your mom should qualify for Medicare coverage!
+
+**What the doctor needs to document:**
+[ ] Pain for 3+ months (you said about 3 months)
+[ ] Tried exercises without improvement
+[ ] Significant impact on daily activities (difficulty walking)
+..."
+`;
+
+// =============================================================================
+// SPECIALTY VALIDATION SKILL
+// =============================================================================
+
+const SPECIALTY_VALIDATION_SKILL = `
+## Specialty Validation (Denial Prevention)
+
+### After Confirming Provider
+When you confirm a provider from NPI search, check if their specialty matches the procedure.
+
+### Specialty Mismatch Warning
+If the provider's specialty doesn't typically order the procedure, warn the user:
+
+"I noticed Dr. Chen is a Family Medicine doctor. While she can order an MRI, Medicare sometimes questions orders from providers outside the typical specialty.
+
+For a lumbar MRI, orders are usually from:
+- Orthopedic surgeons
+- Neurologists
+- Pain management specialists
+- Physical medicine doctors
+
+This doesn't mean it won't be approved, but you might want to:
+1. Ask Dr. Chen if she can provide a strong medical necessity statement
+2. Get a referral to a specialist who can also order the MRI
+
+Would you like me to continue with the checklist, or would you prefer to find a specialist in your area?"
+
+[SUGGESTIONS]
+Continue with checklist
+Find a specialist
+[/SUGGESTIONS]
+
+### When Specialty DOES Match
+"Dr. Chen is an orthopedic surgeon — that's perfect for ordering a lumbar MRI. Let me check what Medicare needs..."
+
+### Important
+- Don't alarm the user unnecessarily
+- Primary care CAN order most imaging — just may need stronger documentation
+- The goal is to INFORM, not scare
+`;
+
+// =============================================================================
+// SKILL TRIGGERS
+// =============================================================================
+// SPECIALTY MATCH HELPER
+// =============================================================================
+
+/**
+ * Check if provider specialty matches the procedure being ordered.
+ * Returns validation result with warning if mismatch detected.
+ */
+export function checkProviderSpecialtyMatch(
+  sessionState?: SessionState
+): SpecialtyMatchResult | null {
+  // Need both a confirmed provider with specialty AND a procedure to validate
+  if (!sessionState?.provider?.specialty || !sessionState?.procedureNeeded) {
+    return null;
+  }
+
+  const result = validateSpecialtyMatch(
+    sessionState.procedureNeeded,
+    sessionState.provider.specialty
+  );
+
+  return result;
+}
+
+/**
+ * Get recommended specialties for the current procedure.
+ * Used to suggest alternatives when there's a mismatch.
+ */
+export function getRecommendedSpecialtiesForProcedure(
+  sessionState?: SessionState
+): string[] {
+  if (!sessionState?.procedureNeeded) {
+    return [];
+  }
+  return getRecommendedSpecialties(sessionState.procedureNeeded);
+}
+
+// =============================================================================
 // SKILL TRIGGERS
 // =============================================================================
 
@@ -441,6 +623,12 @@ export interface SkillTriggers {
   hasGuidance: boolean;
   isAppeal: boolean;
   needsClarification: boolean;
+  // Requirement verification (denial prevention)
+  hasRequirementsToVerify: boolean;
+  verificationComplete: boolean;
+  meetsAllRequirements: boolean;
+  // Specialty validation
+  hasSpecialtyMismatch: boolean;
 }
 
 export function detectTriggers(
@@ -493,6 +681,20 @@ export function detectTriggers(
 
     // Clarification
     needsClarification: /which|what kind|what type|clarify/.test(allContent),
+
+    // Requirement verification (denial prevention)
+    hasRequirementsToVerify:
+      (sessionState?.requirementsToVerify?.length ?? 0) > 0,
+    verificationComplete:
+      sessionState?.verificationComplete || false,
+    meetsAllRequirements:
+      sessionState?.meetsAllRequirements === true,
+
+    // Specialty validation - check programmatically using specialty-match utility
+    hasSpecialtyMismatch: (() => {
+      const matchResult = checkProviderSpecialtyMatch(sessionState);
+      return matchResult !== null && !matchResult.isMatch;
+    })(),
   };
 }
 
@@ -531,8 +733,21 @@ export function buildSystemPrompt(
     sections.push(COVERAGE_SKILL);
   }
 
-  // Add guidance skill when coverage checked
-  if (triggers.hasCoverage || triggers.hasGuidance) {
+  // Add requirement verification skill after coverage is checked but before showing guidance
+  // This ensures we verify requirements BEFORE showing the checklist
+  if (triggers.hasCoverage && !triggers.verificationComplete) {
+    sections.push(REQUIREMENT_VERIFICATION_SKILL);
+  }
+
+  // Add specialty validation skill if there's a mismatch
+  if (triggers.hasSpecialtyMismatch) {
+    sections.push(SPECIALTY_VALIDATION_SKILL);
+  }
+
+  // Add guidance skill when coverage checked AND verification complete (or no requirements to verify)
+  if ((triggers.hasCoverage && triggers.verificationComplete) ||
+      (triggers.hasCoverage && !triggers.hasRequirementsToVerify) ||
+      triggers.hasGuidance) {
     sections.push(GUIDANCE_SKILL);
   }
 
@@ -613,6 +828,35 @@ function buildSessionContext(state: SessionState): string {
     context.push(`**Mode:** Appeal assistance`);
   }
 
+  // Requirement verification (denial prevention)
+  if (state.requirementsToVerify && state.requirementsToVerify.length > 0) {
+    context.push(`**Requirements to verify:** ${state.requirementsToVerify.length} items`);
+    state.requirementsToVerify.forEach((req, i) => {
+      const answered = state.requirementAnswers?.[req];
+      const status = answered === undefined ? "❓ Pending" : answered ? "✅ Met" : "❌ Not met";
+      context.push(`  ${i + 1}. ${req} — ${status}`);
+    });
+  }
+  if (state.verificationComplete) {
+    context.push(`**Verification complete:** Yes`);
+    context.push(`**Meets all requirements:** ${state.meetsAllRequirements ? "Yes" : "No"}`);
+  }
+
+  // Specialty validation - check programmatically using specialty-match utility
+  const specialtyMatchResult = checkProviderSpecialtyMatch(state);
+  if (specialtyMatchResult && !specialtyMatchResult.isMatch) {
+    context.push(`**⚠️ Specialty mismatch detected:**`);
+    context.push(`  - Provider specialty: ${specialtyMatchResult.providerSpecialty}`);
+    context.push(`  - Procedure: ${specialtyMatchResult.procedure}`);
+    context.push(`  - Warning: ${specialtyMatchResult.warning}`);
+    if (specialtyMatchResult.recommendation) {
+      context.push(`  - Recommendation: ${specialtyMatchResult.recommendation}`);
+    }
+  } else if (state.specialtyMismatchWarning) {
+    // Fallback to session state warning if set manually
+    context.push(`**Specialty warning:** ${state.specialtyMismatchWarning}`);
+  }
+
   return context.join("\n");
 }
 
@@ -691,12 +935,42 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
     return reminder.join("\n");
   }
 
-  // Step 8: Generate guidance
-  if (triggers.hasCoverage && !triggers.hasGuidance) {
+  // Step 7.5: Verify requirements BEFORE showing checklist
+  if (triggers.hasCoverage && triggers.hasRequirementsToVerify && !triggers.verificationComplete) {
+    reminder.push(`**YOU ARE AT:** Step 7.5 - Verify requirements (DENIAL PREVENTION)`);
+    reminder.push("**CRITICAL:** Ask verification questions BEFORE showing checklist");
+    reminder.push("**ASK ONE AT A TIME:** Convert each requirement to a yes/no question");
+    reminder.push("**EXAMPLE:** 'Has she had these symptoms for at least 6 weeks?'");
+    reminder.push("**IF NO:** Explain what's needed first before they can proceed");
+    reminder.push("**SUGGESTIONS:** 'Yes, [positive answer]' / 'No, [negative answer]'");
+    return reminder.join("\n");
+  }
+
+  // Step 7.6: Handle specialty mismatch warning
+  if (triggers.hasSpecialtyMismatch) {
+    reminder.push(`**YOU ARE AT:** Step 7.6 - Specialty mismatch warning`);
+    reminder.push("**ACTION:** Warn user that provider specialty may not match procedure");
+    reminder.push("**EXPLAIN:** This doesn't mean denial, but may need stronger documentation");
+    reminder.push("**OFFER:** Continue with checklist OR find a specialist");
+    reminder.push("**SUGGESTIONS:** 'Continue anyway' / 'Find a specialist'");
+    return reminder.join("\n");
+  }
+
+  // Step 8: Generate guidance (only after verification complete or no requirements)
+  if (triggers.hasCoverage && (triggers.verificationComplete || !triggers.hasRequirementsToVerify) && !triggers.hasGuidance) {
+    if (triggers.meetsAllRequirements === false) {
+      reminder.push(`**YOU ARE AT:** Step 8 - Requirements not met`);
+      reminder.push("**ACTION:** Explain what the user needs to do first");
+      reminder.push("**BE HELPFUL:** Suggest treatments or waiting period");
+      reminder.push("**OFFER:** Help with something else or revisit later");
+      reminder.push("**SUGGESTIONS:** 'Tell me about treatments' / 'New question'");
+      return reminder.join("\n");
+    }
+
     reminder.push(`**YOU ARE AT:** Step 8 - Generate guidance checklist`);
     reminder.push("**ACTION:** Create checklist FROM coverage tool results");
     reminder.push("**INCLUDE:** Policy citations (LCD/NCD IDs)");
-    reminder.push(`**PERSONALIZE:** Use ${userName}'s specific details`);
+    reminder.push(`**PERSONALIZE:** Use ${userName}'s specific details and verified answers`);
     reminder.push("**SUGGESTIONS:** 'Print checklist' / 'Email it to me'");
     return reminder.join("\n");
   }
@@ -728,6 +1002,12 @@ export function buildInitialSystemPrompt(): string {
     hasGuidance: false,
     isAppeal: false,
     needsClarification: false,
+    // Requirement verification
+    hasRequirementsToVerify: false,
+    verificationComplete: false,
+    meetsAllRequirements: false,
+    // Specialty validation
+    hasSpecialtyMismatch: false,
   };
 
   return buildSystemPrompt(triggers);

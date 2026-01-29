@@ -60,6 +60,15 @@ export interface SessionState {
   coverageCriteria: string[];
   guidanceGenerated: boolean;
   isAppeal: boolean;
+
+  // Requirement verification (denial prevention)
+  requirementsToVerify: string[];              // List of requirements to ask about
+  requirementAnswers: Record<string, boolean>; // User's answers to requirements
+  verificationComplete: boolean;               // All requirements asked
+  meetsAllRequirements: boolean | null;        // Final determination
+
+  // Specialty validation
+  specialtyMismatchWarning: string | null;     // Warning if provider specialty doesn't match procedure
 }
 
 export interface ChatRequest {
@@ -118,6 +127,15 @@ export function createDefaultSessionState(): SessionState {
     coverageCriteria: [],
     guidanceGenerated: false,
     isAppeal: false,
+
+    // Requirement verification
+    requirementsToVerify: [],
+    requirementAnswers: {},
+    verificationComplete: false,
+    meetsAllRequirements: null,
+
+    // Specialty validation
+    specialtyMismatchWarning: null,
   };
 }
 
@@ -268,7 +286,7 @@ export async function chat(
     input_schema: tool.input_schema,
   }));
 
-  let messages = [...request.messages];
+  const messages = [...request.messages];
   let iterations = 0;
 
   while (iterations < maxIterations) {

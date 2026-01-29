@@ -39,6 +39,7 @@ import {
   RateLimitError,
 } from "../rate-limiter";
 import { API_CONFIG } from "@/config";
+import { getLocationInfo } from "../geo-utils";
 
 // =============================================================================
 // CMS COVERAGE MCP CLIENT
@@ -416,7 +417,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "search_lcd",
     description:
-      "Search Local Coverage Determinations (LCDs) for Medicare coverage policies. LCDs are regional coverage decisions made by Medicare Administrative Contractors (MACs).",
+      "Search Local Coverage Determinations (LCDs) for Medicare coverage policies. LCDs are regional coverage decisions made by Medicare Administrative Contractors (MACs). ALWAYS include the state or postal_code when you have the user's location to get region-specific policies.",
     input_schema: {
       type: "object",
       properties: {
@@ -430,7 +431,11 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         state: {
           type: "string",
-          description: "Two-letter state code to find regional LCDs (e.g., 'CA', 'NY')",
+          description: "Two-letter state code to find regional LCDs (e.g., 'CA', 'NY'). ALWAYS include this if you have the user's location.",
+        },
+        postal_code: {
+          type: "string",
+          description: "5-digit ZIP code. If provided, the state will be derived automatically. Use this when you have the user's ZIP but not the state.",
         },
         limit: {
           type: "number",
@@ -445,7 +450,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "search_npi",
     description:
-      "Search the NPI Registry to find and validate healthcare providers. Use this to look up doctors, verify their specialties, and confirm they accept Medicare.",
+      "Search the NPI Registry to find and validate healthcare providers. Use this to look up doctors, verify their specialties, and confirm they accept Medicare. ALWAYS include postal_code when you have the user's ZIP code.",
     input_schema: {
       type: "object",
       properties: {
@@ -460,6 +465,10 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         city: {
           type: "string",
           description: "City name",
+        },
+        postal_code: {
+          type: "string",
+          description: "5-digit ZIP code to find providers near the user's location. ALWAYS include this if you have the user's ZIP code.",
         },
         specialty: {
           type: "string",
@@ -1058,8 +1067,21 @@ const searchLCDExecutor: ToolExecutor = async (input) => {
   try {
     const query = input.query as string;
     const cptCode = input.cpt_code as string | undefined;
-    const state = input.state as string | undefined;
+    const postalCode = input.postal_code as string | undefined;
     const limit = (input.limit as number) || 5;
+
+    // Derive state from postal_code if not explicitly provided
+    let state = input.state as string | undefined;
+    let locationInfo = null;
+
+    if (!state && postalCode) {
+      locationInfo = getLocationInfo(postalCode);
+      state = locationInfo.state || undefined;
+      console.log("[Tool:search_lcd] Derived state from ZIP:", postalCode, "->", state);
+      if (locationInfo.mac) {
+        console.log("[Tool:search_lcd] MAC:", locationInfo.mac.name, "(", locationInfo.mac.jurisdiction, ")");
+      }
+    }
 
     const lcds = await searchLCDsViaMCP(query, cptCode, state, limit);
 
@@ -1069,7 +1091,11 @@ const searchLCDExecutor: ToolExecutor = async (input) => {
         data: {
           lcds: [],
           count: 0,
-          message: "No Local Coverage Determinations found for this query. LCDs vary by Medicare Administrative Contractor region.",
+          state_searched: state || null,
+          mac_info: locationInfo?.mac || null,
+          message: state
+            ? `No Local Coverage Determinations found for this query in ${state}. Try broadening your search.`
+            : "No Local Coverage Determinations found for this query. LCDs vary by Medicare Administrative Contractor region. Providing a state or ZIP code may help find region-specific policies.",
         },
       };
     }
@@ -1090,6 +1116,8 @@ const searchLCDExecutor: ToolExecutor = async (input) => {
           url: lcd.url,
         })),
         count: lcds.length,
+        state_searched: state || null,
+        mac_info: locationInfo?.mac || null,
       },
     };
   } catch (error) {
@@ -1134,6 +1162,11 @@ const searchNPIExecutor: ToolExecutor = async (input) => {
     }
     if (input.city) {
       params.append("city", input.city as string);
+    }
+    // Add postal_code support for location-based searches
+    if (input.postal_code) {
+      params.append("postal_code", (input.postal_code as string).substring(0, 5));
+      console.log("[Tool:search_npi] Using postal_code:", input.postal_code);
     }
     if (input.specialty) {
       params.append("taxonomy_description", input.specialty as string);
@@ -1182,8 +1215,24 @@ const searchNPIExecutor: ToolExecutor = async (input) => {
       const basic = result.basic as Record<string, unknown> || {};
       const addresses = result.addresses as Array<Record<string, unknown>> || [];
       const taxonomies = result.taxonomies as Array<Record<string, unknown>> || [];
+      const otherIdentifiers = result.other_provider_identifiers as Array<Record<string, unknown>> || [];
       const practiceAddress = addresses.find((a) => a.address_purpose === "LOCATION") || addresses[0] || {};
       const primaryTaxonomy = taxonomies.find((t) => t.primary === true) || taxonomies[0] || {};
+
+      // Extract Medicare participation status from other_provider_identifiers
+      // Medicare identifiers have issuer "CMS" and identifier type "MEDICARE"
+      const medicareIdentifier = otherIdentifiers.find(
+        (id) => {
+          const issuer = (id.issuer as string || "").toUpperCase();
+          const idType = (id.identifier_type as string || "").toUpperCase();
+          const state = id.state as string || "";
+          return issuer === "CMS" || idType.includes("MEDICARE") || state !== "";
+        }
+      );
+
+      // Check if provider has Medicare PECOS enrollment indicator
+      // Providers with Medicare identifiers are typically enrolled
+      const hasMedicareId = medicareIdentifier !== undefined || otherIdentifiers.length > 0;
 
       return {
         npi: result.number,
@@ -1207,6 +1256,14 @@ const searchNPIExecutor: ToolExecutor = async (input) => {
         phone: practiceAddress.telephone_number || "",
         enumeration_date: basic.enumeration_date || "",
         last_updated: basic.last_updated || "",
+        // Medicare participation info
+        medicare_participation: {
+          has_medicare_identifiers: hasMedicareId,
+          status: hasMedicareId ? "likely_enrolled" : "unknown",
+          note: hasMedicareId
+            ? "Provider appears to be enrolled in Medicare. Verify with provider's office."
+            : "Medicare enrollment status unknown. Verify with provider's office.",
+        },
       };
     });
 
@@ -1215,6 +1272,7 @@ const searchNPIExecutor: ToolExecutor = async (input) => {
       data: {
         providers,
         count: data.result_count,
+        searched_postal_code: input.postal_code || null,
       },
     };
 
