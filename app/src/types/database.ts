@@ -76,6 +76,7 @@ export type Database = {
       appeals: {
         Row: {
           appeal_letter: string
+          carc_codes: string[] | null
           conversation_id: string
           cpt_codes: string[] | null
           created_at: string
@@ -89,6 +90,7 @@ export type Database = {
           paid: boolean | null
           phone: string
           pubmed_refs: string[] | null
+          rarc_codes: string[] | null
           service_description: string | null
           status: string | null
           stripe_payment_id: string | null
@@ -97,6 +99,7 @@ export type Database = {
         }
         Insert: {
           appeal_letter: string
+          carc_codes?: string[] | null
           conversation_id: string
           cpt_codes?: string[] | null
           created_at?: string
@@ -110,6 +113,7 @@ export type Database = {
           paid?: boolean | null
           phone: string
           pubmed_refs?: string[] | null
+          rarc_codes?: string[] | null
           service_description?: string | null
           status?: string | null
           stripe_payment_id?: string | null
@@ -118,6 +122,7 @@ export type Database = {
         }
         Update: {
           appeal_letter?: string
+          carc_codes?: string[] | null
           conversation_id?: string
           cpt_codes?: string[] | null
           created_at?: string
@@ -131,6 +136,7 @@ export type Database = {
           paid?: boolean | null
           phone?: string
           pubmed_refs?: string[] | null
+          rarc_codes?: string[] | null
           service_description?: string | null
           status?: string | null
           stripe_payment_id?: string | null
@@ -153,6 +159,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      carc_codes: {
+        Row: {
+          category: string | null
+          code: string
+          created_at: string | null
+          description: string
+          effective_date: string
+          group_code: string | null
+          is_active: boolean | null
+          plain_english: string | null
+        }
+        Insert: {
+          category?: string | null
+          code: string
+          created_at?: string | null
+          description: string
+          effective_date: string
+          group_code?: string | null
+          is_active?: boolean | null
+          plain_english?: string | null
+        }
+        Update: {
+          category?: string | null
+          code?: string
+          created_at?: string | null
+          description?: string
+          effective_date?: string
+          group_code?: string | null
+          is_active?: boolean | null
+          plain_english?: string | null
+        }
+        Relationships: []
       }
       conversation_patterns: {
         Row: {
@@ -275,6 +314,65 @@ export type Database = {
           use_count?: number
         }
         Relationships: []
+      }
+      eob_denial_mappings: {
+        Row: {
+          carc_code: string
+          created_at: string | null
+          effective_date: string
+          eob_code: string
+          eob_description: string | null
+          id: string
+          rarc_code: string | null
+        }
+        Insert: {
+          carc_code: string
+          created_at?: string | null
+          effective_date: string
+          eob_code: string
+          eob_description?: string | null
+          id?: string
+          rarc_code?: string | null
+        }
+        Update: {
+          carc_code?: string
+          created_at?: string | null
+          effective_date?: string
+          eob_code?: string
+          eob_description?: string | null
+          id?: string
+          rarc_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "eob_denial_mappings_carc_code_effective_date_fkey"
+            columns: ["carc_code", "effective_date"]
+            isOneToOne: false
+            referencedRelation: "carc_codes"
+            referencedColumns: ["code", "effective_date"]
+          },
+          {
+            foreignKeyName: "eob_denial_mappings_carc_code_effective_date_fkey"
+            columns: ["carc_code", "effective_date"]
+            isOneToOne: false
+            referencedRelation: "carc_codes_latest"
+            referencedColumns: ["code", "effective_date"]
+          },
+          {
+            foreignKeyName: "eob_denial_mappings_rarc_code_effective_date_fkey"
+            columns: ["rarc_code", "effective_date"]
+            isOneToOne: false
+            referencedRelation: "rarc_codes"
+            referencedColumns: ["code", "effective_date"]
+          },
+          {
+            foreignKeyName: "eob_denial_mappings_rarc_code_effective_date_fkey"
+            columns: ["rarc_code", "effective_date"]
+            isOneToOne: false
+            referencedRelation: "rarc_codes_latest"
+            referencedColumns: ["code", "effective_date"]
+          },
+        ]
       }
       landing_content: {
         Row: {
@@ -518,6 +616,36 @@ export type Database = {
           last_used_at?: string
           phrase?: string
           use_count?: number
+        }
+        Relationships: []
+      }
+      rarc_codes: {
+        Row: {
+          category: string | null
+          code: string
+          created_at: string | null
+          description: string
+          effective_date: string
+          is_active: boolean | null
+          plain_english: string | null
+        }
+        Insert: {
+          category?: string | null
+          code: string
+          created_at?: string | null
+          description: string
+          effective_date: string
+          is_active?: boolean | null
+          plain_english?: string | null
+        }
+        Update: {
+          category?: string | null
+          code?: string
+          created_at?: string | null
+          description?: string
+          effective_date?: string
+          is_active?: boolean | null
+          plain_english?: string | null
         }
         Relationships: []
       }
@@ -892,7 +1020,128 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      carc_codes_latest: {
+        Row: {
+          category: string | null
+          code: string | null
+          created_at: string | null
+          description: string | null
+          effective_date: string | null
+          group_code: string | null
+          is_active: boolean | null
+          plain_english: string | null
+        }
+        Insert: {
+          category?: string | null
+          code?: string | null
+          created_at?: string | null
+          description?: string | null
+          effective_date?: string | null
+          group_code?: string | null
+          is_active?: boolean | null
+          plain_english?: string | null
+        }
+        Update: {
+          category?: string | null
+          code?: string | null
+          created_at?: string | null
+          description?: string | null
+          effective_date?: string | null
+          group_code?: string | null
+          is_active?: boolean | null
+          plain_english?: string | null
+        }
+        Relationships: []
+      }
+      eob_denial_mappings_latest: {
+        Row: {
+          carc_code: string | null
+          created_at: string | null
+          effective_date: string | null
+          eob_code: string | null
+          eob_description: string | null
+          id: string | null
+          rarc_code: string | null
+        }
+        Insert: {
+          carc_code?: string | null
+          created_at?: string | null
+          effective_date?: string | null
+          eob_code?: string | null
+          eob_description?: string | null
+          id?: string | null
+          rarc_code?: string | null
+        }
+        Update: {
+          carc_code?: string | null
+          created_at?: string | null
+          effective_date?: string | null
+          eob_code?: string | null
+          eob_description?: string | null
+          id?: string | null
+          rarc_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "eob_denial_mappings_carc_code_effective_date_fkey"
+            columns: ["carc_code", "effective_date"]
+            isOneToOne: false
+            referencedRelation: "carc_codes"
+            referencedColumns: ["code", "effective_date"]
+          },
+          {
+            foreignKeyName: "eob_denial_mappings_carc_code_effective_date_fkey"
+            columns: ["carc_code", "effective_date"]
+            isOneToOne: false
+            referencedRelation: "carc_codes_latest"
+            referencedColumns: ["code", "effective_date"]
+          },
+          {
+            foreignKeyName: "eob_denial_mappings_rarc_code_effective_date_fkey"
+            columns: ["rarc_code", "effective_date"]
+            isOneToOne: false
+            referencedRelation: "rarc_codes"
+            referencedColumns: ["code", "effective_date"]
+          },
+          {
+            foreignKeyName: "eob_denial_mappings_rarc_code_effective_date_fkey"
+            columns: ["rarc_code", "effective_date"]
+            isOneToOne: false
+            referencedRelation: "rarc_codes_latest"
+            referencedColumns: ["code", "effective_date"]
+          },
+        ]
+      }
+      rarc_codes_latest: {
+        Row: {
+          category: string | null
+          code: string | null
+          created_at: string | null
+          description: string | null
+          effective_date: string | null
+          is_active: boolean | null
+          plain_english: string | null
+        }
+        Insert: {
+          category?: string | null
+          code?: string | null
+          created_at?: string | null
+          description?: string | null
+          effective_date?: string | null
+          is_active?: boolean | null
+          plain_english?: string | null
+        }
+        Update: {
+          category?: string | null
+          code?: string | null
+          created_at?: string | null
+          description?: string | null
+          effective_date?: string | null
+          is_active?: boolean | null
+          plain_english?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       check_appeal_access: { Args: { p_phone: string }; Returns: string }
@@ -974,6 +1223,16 @@ export type Database = {
           p_successful_arguments?: string[]
         }
         Returns: string
+      }
+      search_denial_codes: {
+        Args: { search_text: string }
+        Returns: {
+          category: string
+          code: string
+          code_type: string
+          description: string
+          plain_english: string
+        }[]
       }
       track_user_event: {
         Args: {

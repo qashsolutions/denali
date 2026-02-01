@@ -28,6 +28,11 @@ import {
   CircuitOpenError,
   RateLimitError,
 } from "../rate-limiter";
+import {
+  getAppealStrategyForCARC,
+  getDenialPatternsForCPT,
+} from "../denial-patterns";
+import { createClient } from "../supabase";
 
 // =============================================================================
 // MCP SERVERS PROVIDE CORE DATA (No local fallbacks)
@@ -240,6 +245,51 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         },
       },
       required: ["drug_name"],
+    },
+  },
+
+  // Denial Code Lookup (CARC/RARC)
+  {
+    name: "lookup_denial_code",
+    description:
+      "Look up a Medicare denial reason code (CARC or RARC) to get its meaning in plain English, plus the appeal strategy if available. Use when a patient mentions a denial code from their EOB or denial letter. Can also search by description or EOB code.",
+    input_schema: {
+      type: "object",
+      properties: {
+        code: {
+          type: "string",
+          description: "CARC or RARC code (e.g., 'CO-50', '50', 'N362', 'M86')",
+        },
+        description_search: {
+          type: "string",
+          description: "Free-text search of denial code descriptions (e.g., 'medically necessary', 'documentation')",
+        },
+        eob_code: {
+          type: "string",
+          description: "EOB code from patient's Explanation of Benefits document",
+        },
+      },
+    },
+  },
+
+  // Common Denials for a Procedure
+  {
+    name: "get_common_denials",
+    description:
+      "Get the most common denial reasons for a specific procedure. Use this proactively after coverage guidance to warn patients about common pitfalls and what to make sure their doctor documents.",
+    input_schema: {
+      type: "object",
+      properties: {
+        procedure_description: {
+          type: "string",
+          description: "Plain English procedure description (e.g., 'lumbar MRI', 'knee replacement', 'sleep study')",
+        },
+        cpt_code: {
+          type: "string",
+          description: "CPT code if known",
+        },
+      },
+      required: ["procedure_description"],
     },
   },
 ];
@@ -747,6 +797,284 @@ const checkSADListExecutor: ToolExecutor = async (input) => {
 };
 
 // =============================================================================
+// DENIAL CODE LOOKUP EXECUTOR
+// =============================================================================
+
+const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
+  try {
+    const code = input.code as string | undefined;
+    const descriptionSearch = input.description_search as string | undefined;
+    const eobCode = input.eob_code as string | undefined;
+
+    if (!code && !descriptionSearch && !eobCode) {
+      return {
+        success: false,
+        error: "Provide at least one of: code, description_search, or eob_code",
+      };
+    }
+
+    const supabase = createClient();
+
+    // If EOB code provided, look up via mapping table
+    if (eobCode) {
+      const { data: mappings, error } = await supabase
+        .from("eob_denial_mappings_latest")
+        .select("*")
+        .eq("eob_code", eobCode.trim())
+        .limit(5);
+
+      if (error) {
+        console.error("[Tool:lookup_denial_code] EOB lookup error:", error);
+      }
+
+      if (mappings && mappings.length > 0) {
+        // Get CARC details for each mapping
+        const results = [];
+        for (const mapping of mappings) {
+          const { data: carc } = await supabase
+            .from("carc_codes_latest")
+            .select("*")
+            .eq("code", mapping.carc_code!)
+            .single();
+
+          let rarc = null;
+          if (mapping.rarc_code) {
+            const { data: rarcData } = await supabase
+              .from("rarc_codes_latest")
+              .select("*")
+              .eq("code", mapping.rarc_code)
+              .single();
+            rarc = rarcData;
+          }
+
+          const appealStrategy = getAppealStrategyForCARC(mapping.carc_code!);
+
+          results.push({
+            eob_code: mapping.eob_code,
+            eob_description: mapping.eob_description,
+            carc_code: mapping.carc_code,
+            carc_description: carc?.description || "Unknown",
+            carc_category: carc?.category || null,
+            carc_plain_english: carc?.plain_english || null,
+            rarc_code: mapping.rarc_code,
+            rarc_description: rarc?.description || null,
+            appeal_strategy: appealStrategy,
+          });
+        }
+
+        return {
+          success: true,
+          data: { type: "eob_lookup", results, count: results.length },
+        };
+      }
+    }
+
+    // If code provided, look up directly
+    if (code) {
+      // Normalize code: strip prefix like "CO-", "PR-" for CARC lookup
+      const normalized = code.replace(/^(CO|PR|OA|CR|PI)-?/i, "").trim();
+
+      // Try CARC first
+      const { data: carc } = await supabase
+        .from("carc_codes_latest")
+        .select("*")
+        .eq("code", normalized)
+        .single();
+
+      if (carc) {
+        const appealStrategy = getAppealStrategyForCARC(normalized);
+        return {
+          success: true,
+          data: {
+            type: "CARC",
+            code: carc.code,
+            description: carc.description,
+            category: carc.category,
+            plain_english: carc.plain_english,
+            appeal_strategy: appealStrategy,
+          },
+        };
+      }
+
+      // Try RARC
+      const { data: rarc } = await supabase
+        .from("rarc_codes_latest")
+        .select("*")
+        .eq("code", code.trim())
+        .single();
+
+      if (rarc) {
+        return {
+          success: true,
+          data: {
+            type: "RARC",
+            code: rarc.code,
+            description: rarc.description,
+            category: rarc.category,
+            plain_english: rarc.plain_english,
+          },
+        };
+      }
+
+      return {
+        success: true,
+        data: { type: "not_found", code, message: "Code not found in CARC or RARC database" },
+      };
+    }
+
+    // Free-text search
+    if (descriptionSearch) {
+      const { data: results } = await supabase
+        .rpc("search_denial_codes", { search_text: descriptionSearch });
+
+      if (results && results.length > 0) {
+        const enriched = results.slice(0, 10).map((r: { code_type: string; code: string; description: string; category: string | null; plain_english: string | null }) => ({
+          ...r,
+          appeal_strategy: r.code_type === "CARC" ? getAppealStrategyForCARC(r.code) : null,
+        }));
+
+        return {
+          success: true,
+          data: { type: "search", results: enriched, count: enriched.length },
+        };
+      }
+
+      return {
+        success: true,
+        data: { type: "search", results: [], count: 0, message: "No matching denial codes found" },
+      };
+    }
+
+    return { success: false, error: "No valid search criteria provided" };
+  } catch (error) {
+    console.error("[Tool:lookup_denial_code] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to look up denial code",
+    };
+  }
+};
+
+// =============================================================================
+// COMMON DENIALS EXECUTOR
+// =============================================================================
+
+const getCommonDenialsExecutor: ToolExecutor = async (input) => {
+  try {
+    const procedureDescription = input.procedure_description as string;
+    const cptCode = input.cpt_code as string | undefined;
+
+    // Search for CPT codes matching the procedure
+    let cptCodes: string[] = [];
+    if (cptCode) {
+      cptCodes = [cptCode];
+    } else {
+      const searchResults = searchCPT(procedureDescription, 3);
+      cptCodes = searchResults.map((r) => r.code);
+    }
+
+    // Get denial patterns for each CPT code
+    const denialPatterns = new Map<string, { pattern: ReturnType<typeof getDenialPatternsForCPT>[0]; cptCodes: string[] }>();
+
+    for (const code of cptCodes) {
+      const patterns = getDenialPatternsForCPT(code);
+      for (const pattern of patterns) {
+        const key = pattern.reason;
+        if (denialPatterns.has(key)) {
+          denialPatterns.get(key)!.cptCodes.push(code);
+        } else {
+          denialPatterns.set(key, { pattern, cptCodes: [code] });
+        }
+      }
+    }
+
+    // Enrich with CARC code descriptions from Supabase
+    const supabase = createClient();
+    const results = [];
+
+    for (const [, { pattern }] of denialPatterns) {
+      const carcCodes = (pattern.reasonCodes || [])
+        .map((rc) => rc.replace(/^(CO|PR|OA)-?/i, "").trim());
+
+      // Fetch CARC descriptions
+      let carcDescriptions: { code: string; plain_english: string | null }[] = [];
+      if (carcCodes.length > 0) {
+        const { data } = await supabase
+          .from("carc_codes_latest")
+          .select("code, plain_english")
+          .in("code", carcCodes);
+        carcDescriptions = (data || []).map((d) => ({ code: d.code!, plain_english: d.plain_english }));
+      }
+
+      results.push({
+        denial_reason: pattern.reason,
+        carc_codes: pattern.reasonCodes || [],
+        plain_english: carcDescriptions.find((c) => c.plain_english)?.plain_english || null,
+        prevention_tip: pattern.documentationChecklist.slice(0, 3).join("; "),
+        appeal_success_rate: pattern.estimatedSuccessRate || "unknown",
+        appeal_deadline_days: pattern.appealDeadlineDays,
+      });
+    }
+
+    // If no results from CPT matching, provide general common denials
+    if (results.length === 0) {
+      const generalDenials = [
+        {
+          denial_reason: "Not medically necessary",
+          carc_codes: ["CO-50", "PR-50"],
+          plain_english: "Medicare decided this service wasn't medically necessary for your condition.",
+          prevention_tip: "Make sure your doctor documents symptoms, duration, failed treatments, and functional limitations",
+          appeal_success_rate: "high",
+          appeal_deadline_days: 120,
+        },
+        {
+          denial_reason: "Insufficient documentation",
+          carc_codes: ["CO-16"],
+          plain_english: "The claim is missing information needed to process it.",
+          prevention_tip: "Ensure complete medical records, exam findings, and physician's order are included",
+          appeal_success_rate: "high",
+          appeal_deadline_days: 120,
+        },
+        {
+          denial_reason: "Diagnosis doesn't support procedure",
+          carc_codes: ["CO-167"],
+          plain_english: "The diagnosis code doesn't match or support this procedure.",
+          prevention_tip: "Verify the doctor uses the most specific diagnosis code that supports the procedure",
+          appeal_success_rate: "high",
+          appeal_deadline_days: 120,
+        },
+      ];
+      return {
+        success: true,
+        data: {
+          procedure: procedureDescription,
+          cpt_codes_checked: cptCodes,
+          common_denials: generalDenials,
+          count: generalDenials.length,
+          note: "These are the most common denial reasons across Medicare claims.",
+        },
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        procedure: procedureDescription,
+        cpt_codes_checked: cptCodes,
+        common_denials: results,
+        count: results.length,
+      },
+    };
+  } catch (error) {
+    console.error("[Tool:get_common_denials] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to get common denials",
+    };
+  }
+};
+
+// =============================================================================
 // TOOL EXECUTOR MAP
 // =============================================================================
 
@@ -766,6 +1094,8 @@ export function createToolExecutorMap(): Map<string, ToolExecutor> {
   executors.set("search_pubmed", searchPubMedExecutor);
   executors.set("generate_appeal_letter", generateAppealLetterExecutor);
   executors.set("check_sad_list", checkSADListExecutor);
+  executors.set("lookup_denial_code", lookupDenialCodeExecutor);
+  executors.set("get_common_denials", getCommonDenialsExecutor);
 
   return executors;
 }

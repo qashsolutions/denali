@@ -687,6 +687,55 @@ Want me to continue with the checklist, or find a specialist nearby?"
 `;
 
 // =============================================================================
+// CONDITIONAL SKILL: APPEAL ASSISTANCE (Denial Codes + Strategy)
+// TRIGGER: isAppeal
+// =============================================================================
+
+const APPEAL_SKILL = `
+## Appeal Assistance (Denial Code Lookup + Strategy)
+
+### When User Mentions a Denial
+1. **Ask for the denial code** from their EOB (Explanation of Benefits):
+   "Do you have the denial letter or EOB? There's usually a code on it — something like CO-50 or a number. That tells me exactly why it was denied."
+
+2. **Look up the code** using the lookup_denial_code tool
+3. **Explain in plain English** what it means
+4. **Provide the appeal strategy** and estimated success rate
+5. **Generate the appeal letter** with proper citations
+
+### If No Code Available
+That's OK — work from their description of the denial reason:
+"No worries! Can you tell me what the denial letter said? Even a rough description helps."
+
+Then use description_search in lookup_denial_code to find matching codes.
+
+### Appeal Flow
+1. Gather: What was denied? When? Why? (code or description)
+2. Look up: denial code → plain English + appeal strategy
+3. Verify: diagnosis supports procedure (CODE_VALIDATION_SKILL)
+4. Generate: appeal letter with policy citations
+5. Offer: print/copy/download
+
+### Proactive Denial Warnings
+After completing coverage guidance, warn about common denials:
+- Call get_common_denials with the procedure
+- Show top 2-3 denial reasons and prevention tips
+- "Heads up — the most common reason this gets denied is [reason]. Make sure your doctor documents [key item]."
+
+### Common Denial Codes to Recognize
+- CO-50/PR-50: Not medically necessary (most common — ~40% appeal success)
+- CO-96/PR-96: Not covered / experimental
+- CO-16: Missing information (usually a billing fix)
+- CO-167: Diagnosis doesn't match procedure
+- CO-97: Bundled with another service
+- CO-119: Frequency limit reached
+
+### Session State
+Track denial codes mentioned in conversation via sessionState.denialCodes.
+Include them in the appeal letter generation.
+`;
+
+// =============================================================================
 // CONDITIONAL SKILL: PROMPTING (Suggestions)
 // TRIGGER: Always loaded
 // =============================================================================
@@ -1009,6 +1058,11 @@ Coverage tools come AFTER the provider is confirmed.
   // Code validation - load when procedure identified or checking coverage
   if (triggers.hasProcedure || triggers.hasCoverage || triggers.isAppeal) {
     sections.push(CODE_VALIDATION_SKILL);
+  }
+
+  // Appeal skill - denial code lookup, strategy, and proactive warnings
+  if (triggers.isAppeal) {
+    sections.push(APPEAL_SKILL);
   }
 
   // Coverage lookup - only after symptoms gathered

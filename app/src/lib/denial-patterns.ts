@@ -642,3 +642,40 @@ export function getDenialReasonByCode(
 ): { code: string; description: string; category: string } | null {
   return DENIAL_REASON_CODES[code.toUpperCase()] || null;
 }
+
+/**
+ * Get appeal strategy for a CARC code.
+ * Maps CARC code (e.g., "50", "CO-50", "PR-50") to matching DENIAL_PATTERNS entry
+ * via the reasonCodes field.
+ */
+export function getAppealStrategyForCARC(carcCode: string): {
+  strategy: string;
+  checklist: string[];
+  estimatedSuccess: string;
+  deadline: number;
+  reason: string;
+} | null {
+  // Normalize: extract numeric/alphanumeric part (e.g., "CO-50" → "50", "50" → "50")
+  const normalized = carcCode.replace(/^(CO|PR|OA|CR|PI)-?/i, "").trim();
+
+  for (const pattern of DENIAL_PATTERNS) {
+    if (!pattern.reasonCodes) continue;
+
+    const matches = pattern.reasonCodes.some((rc) => {
+      const rcNormalized = rc.replace(/^(CO|PR|OA|CR|PI)-?/i, "").trim();
+      return rcNormalized === normalized;
+    });
+
+    if (matches) {
+      return {
+        strategy: pattern.appealStrategy,
+        checklist: pattern.documentationChecklist,
+        estimatedSuccess: pattern.estimatedSuccessRate || "unknown",
+        deadline: pattern.appealDeadlineDays,
+        reason: pattern.reason,
+      };
+    }
+  }
+
+  return null;
+}

@@ -100,6 +100,9 @@ export interface SessionState {
 
   // Specialty validation
   specialtyMismatchWarning: string | null;     // Warning if provider specialty doesn't match procedure
+
+  // Denial codes (CARC/RARC from denial letters)
+  denialCodes: string[];                       // CARC/RARC codes mentioned in conversation
 }
 
 export interface ChatRequest {
@@ -179,6 +182,9 @@ export function createDefaultSessionState(): SessionState {
 
     // Specialty validation
     specialtyMismatchWarning: null,
+
+    // Denial codes
+    denialCodes: [],
   };
 }
 
