@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      appeal_levels: {
+        Row: {
+          created_at: string | null
+          decision_timeframe: string
+          description: string
+          effective_date: string
+          id: string
+          level: number
+          name: string
+          success_rate: string | null
+          time_limit: string
+        }
+        Insert: {
+          created_at?: string | null
+          decision_timeframe: string
+          description: string
+          effective_date?: string
+          id?: string
+          level: number
+          name: string
+          success_rate?: string | null
+          time_limit: string
+        }
+        Update: {
+          created_at?: string | null
+          decision_timeframe?: string
+          description?: string
+          effective_date?: string
+          id?: string
+          level?: number
+          name?: string
+          success_rate?: string | null
+          time_limit?: string
+        }
+        Relationships: []
+      }
       appeal_outcomes: {
         Row: {
           appeal_id: string | null
@@ -312,6 +348,54 @@ export type Database = {
           ncd_id?: string | null
           outcome?: string
           use_count?: number
+        }
+        Relationships: []
+      }
+      denial_patterns: {
+        Row: {
+          appeal_deadline_days: number
+          appeal_strategy: string
+          category: string
+          common_cpts: string[] | null
+          common_diagnoses: string[] | null
+          created_at: string | null
+          documentation_checklist: string[] | null
+          effective_date: string
+          estimated_success_rate: string | null
+          id: string
+          is_active: boolean | null
+          reason: string
+          reason_codes: string[] | null
+        }
+        Insert: {
+          appeal_deadline_days?: number
+          appeal_strategy: string
+          category: string
+          common_cpts?: string[] | null
+          common_diagnoses?: string[] | null
+          created_at?: string | null
+          documentation_checklist?: string[] | null
+          effective_date?: string
+          estimated_success_rate?: string | null
+          id?: string
+          is_active?: boolean | null
+          reason: string
+          reason_codes?: string[] | null
+        }
+        Update: {
+          appeal_deadline_days?: number
+          appeal_strategy?: string
+          category?: string
+          common_cpts?: string[] | null
+          common_diagnoses?: string[] | null
+          created_at?: string | null
+          documentation_checklist?: string[] | null
+          effective_date?: string
+          estimated_success_rate?: string | null
+          id?: string
+          is_active?: boolean | null
+          reason?: string
+          reason_codes?: string[] | null
         }
         Relationships: []
       }
@@ -1020,6 +1104,42 @@ export type Database = {
       }
     }
     Views: {
+      appeal_levels_latest: {
+        Row: {
+          created_at: string | null
+          decision_timeframe: string | null
+          description: string | null
+          effective_date: string | null
+          id: string | null
+          level: number | null
+          name: string | null
+          success_rate: string | null
+          time_limit: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          decision_timeframe?: string | null
+          description?: string | null
+          effective_date?: string | null
+          id?: string | null
+          level?: number | null
+          name?: string | null
+          success_rate?: string | null
+          time_limit?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          decision_timeframe?: string | null
+          description?: string | null
+          effective_date?: string | null
+          id?: string | null
+          level?: number | null
+          name?: string | null
+          success_rate?: string | null
+          time_limit?: string | null
+        }
+        Relationships: []
+      }
       carc_codes_latest: {
         Row: {
           category: string | null
@@ -1050,6 +1170,54 @@ export type Database = {
           group_code?: string | null
           is_active?: boolean | null
           plain_english?: string | null
+        }
+        Relationships: []
+      }
+      denial_patterns_latest: {
+        Row: {
+          appeal_deadline_days: number | null
+          appeal_strategy: string | null
+          category: string | null
+          common_cpts: string[] | null
+          common_diagnoses: string[] | null
+          created_at: string | null
+          documentation_checklist: string[] | null
+          effective_date: string | null
+          estimated_success_rate: string | null
+          id: string | null
+          is_active: boolean | null
+          reason: string | null
+          reason_codes: string[] | null
+        }
+        Insert: {
+          appeal_deadline_days?: number | null
+          appeal_strategy?: string | null
+          category?: string | null
+          common_cpts?: string[] | null
+          common_diagnoses?: string[] | null
+          created_at?: string | null
+          documentation_checklist?: string[] | null
+          effective_date?: string | null
+          estimated_success_rate?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          reason?: string | null
+          reason_codes?: string[] | null
+        }
+        Update: {
+          appeal_deadline_days?: number | null
+          appeal_strategy?: string | null
+          category?: string | null
+          common_cpts?: string[] | null
+          common_diagnoses?: string[] | null
+          created_at?: string | null
+          documentation_checklist?: string[] | null
+          effective_date?: string | null
+          estimated_success_rate?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          reason?: string | null
+          reason_codes?: string[] | null
         }
         Relationships: []
       }
@@ -1168,6 +1336,35 @@ export type Database = {
       }
       get_appeal_count: { Args: { p_phone: string }; Returns: number }
       get_current_practice_id: { Args: never; Returns: string }
+      get_denial_pattern_for_carc: {
+        Args: { carc_code_input: string }
+        Returns: {
+          appeal_deadline_days: number
+          appeal_strategy: string
+          category: string
+          documentation_checklist: string[]
+          estimated_success_rate: string
+          reason: string
+        }[]
+      }
+      get_denial_patterns_for_cpt: {
+        Args: { cpt_code_input: string }
+        Returns: {
+          appeal_deadline_days: number
+          appeal_strategy: string
+          category: string
+          common_cpts: string[]
+          common_diagnoses: string[]
+          created_at: string
+          documentation_checklist: string[]
+          effective_date: string
+          estimated_success_rate: string
+          id: string
+          is_active: boolean
+          reason: string
+          reason_codes: string[]
+        }[]
+      }
       get_learning_context: {
         Args: {
           p_cpt_codes?: string[]

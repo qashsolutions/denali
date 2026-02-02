@@ -1,12 +1,12 @@
 /**
  * Medicare Denial Patterns
  *
- * Common denial reasons for Medicare claims and strategies for appeals.
- * Used by the appeal generator to provide targeted guidance.
+ * Queries Supabase for denial patterns and appeal levels.
+ * All data is maintained in the database — no hardcoded arrays.
  */
 
-import type { CPTCode, ICD10Code } from "./medicare-codes";
 import { MEDICARE_CONSTANTS } from "@/config";
+import { createClient } from "./supabase";
 
 // =============================================================================
 // TYPES
@@ -37,352 +37,6 @@ export interface DenialCategory {
   patterns: DenialPattern[];
 }
 
-// =============================================================================
-// COMMON DENIAL PATTERNS
-// =============================================================================
-
-export const DENIAL_PATTERNS: DenialPattern[] = [
-  // ---------------------------------------------------------------------------
-  // Medical Necessity Denials
-  // ---------------------------------------------------------------------------
-  {
-    reason: "Not medically necessary",
-    reasonCodes: ["PR-50", "CO-50", "M62"],
-    commonCPTs: [
-      "27447", "27130", // Joint replacements
-      "72148", "72149", // MRI spine
-      "73721", "73722", // MRI knee
-      "66984", // Cataract surgery
-      "95810", "95811", // Sleep studies
-    ],
-    appealStrategy:
-      "Document functional limitations, failed conservative treatment over adequate time period, and impact on activities of daily living (ADLs). Include specific measurable outcomes.",
-    documentationChecklist: [
-      "Duration of symptoms (minimum 6 weeks for most procedures)",
-      "List of conservative treatments tried and failed",
-      "Specific functional limitations (walking distance, stairs, sleep quality)",
-      "Impact on daily activities (dressing, bathing, cooking)",
-      "Physical examination findings",
-      "Relevant imaging or test results",
-      "Statement of medical necessity from treating physician",
-    ],
-    estimatedSuccessRate: "high",
-    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
-  },
-
-  {
-    reason: "Experimental or investigational",
-    reasonCodes: ["PR-96", "CO-96"],
-    commonCPTs: [
-      "0274T", "0275T", // Newer procedures
-      "96413", "96415", // Certain chemotherapy
-    ],
-    appealStrategy:
-      "Provide peer-reviewed literature supporting efficacy. Cite FDA approvals, clinical guidelines from specialty societies, and similar coverage decisions from other MACs.",
-    documentationChecklist: [
-      "FDA approval documentation if applicable",
-      "Peer-reviewed clinical studies",
-      "Professional society guidelines recommending the treatment",
-      "Evidence that treatment is standard of care",
-      "Similar coverage decisions from other Medicare contractors",
-    ],
-    estimatedSuccessRate: "medium",
-    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
-  },
-
-  // ---------------------------------------------------------------------------
-  // Documentation Denials
-  // ---------------------------------------------------------------------------
-  {
-    reason: "Insufficient documentation",
-    reasonCodes: ["M79", "M86"],
-    commonCPTs: [
-      "99213", "99214", "99215", // E/M visits
-      "97110", "97140", "97530", // Therapy codes
-      "G0438", "G0439", // AWV
-    ],
-    appealStrategy:
-      "Submit complete medical records with highlighted relevant sections. Include physician attestation and any missing documentation.",
-    documentationChecklist: [
-      "Complete history and physical examination",
-      "Chief complaint and history of present illness",
-      "Review of systems",
-      "Physical examination findings",
-      "Medical decision-making documentation",
-      "Plan of care with specific goals",
-      "Physician signature and date",
-    ],
-    estimatedSuccessRate: "high",
-    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
-  },
-
-  {
-    reason: "Missing prior authorization",
-    reasonCodes: ["CO-15", "N20"],
-    commonCPTs: [
-      "27447", "27130", // Joint replacements
-      "72148", "72149", // MRI spine
-      "95810", // Sleep study
-      "E0601", // CPAP
-    ],
-    appealStrategy:
-      "If authorization was obtained, submit proof. If not obtained due to urgency, document emergency circumstances. Request retroactive authorization if policy allows.",
-    documentationChecklist: [
-      "Prior authorization number if obtained",
-      "Documentation of authorization request date",
-      "Emergency circumstances if applicable",
-      "Medical necessity documentation",
-      "Request for retroactive authorization",
-    ],
-    estimatedSuccessRate: "medium",
-    appealDeadlineDays: 60,
-  },
-
-  // ---------------------------------------------------------------------------
-  // Coverage Denials
-  // ---------------------------------------------------------------------------
-  {
-    reason: "Service not covered by Medicare",
-    reasonCodes: ["PR-96", "CO-96", "N130"],
-    commonCPTs: [
-      "99211", // Minimal E/M (often questioned)
-      "D0120", // Dental (not covered)
-    ],
-    commonDiagnoses: ["Z00.00", "Z00.01"], // Routine exams without symptoms
-    appealStrategy:
-      "Review LCD/NCD to confirm non-coverage. If service should be covered, cite specific policy language. Consider if different coding would be appropriate.",
-    documentationChecklist: [
-      "Review of applicable LCD/NCD",
-      "Documentation showing service meets coverage criteria",
-      "Medical necessity for the specific service",
-      "Alternative diagnosis codes if appropriate",
-    ],
-    estimatedSuccessRate: "low",
-    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
-  },
-
-  {
-    reason: "Frequency limits exceeded",
-    reasonCodes: ["PR-119", "CO-119"],
-    commonCPTs: [
-      "77067", // Mammography
-      "G0439", // AWV (once per year)
-      "90732", // Pneumococcal vaccine
-      "G0105", // Colonoscopy (once per 10 years)
-    ],
-    appealStrategy:
-      "If medically necessary to exceed frequency, document specific clinical circumstances. Cite guidelines supporting more frequent testing for high-risk patients.",
-    documentationChecklist: [
-      "Date of previous service",
-      "Clinical indication for repeat service",
-      "Risk factors justifying increased frequency",
-      "Specialty society guidelines if applicable",
-      "Change in clinical status since last service",
-    ],
-    estimatedSuccessRate: "medium",
-    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
-  },
-
-  // ---------------------------------------------------------------------------
-  // Coding Denials
-  // ---------------------------------------------------------------------------
-  {
-    reason: "Diagnosis does not support procedure",
-    reasonCodes: ["CO-167", "M51"],
-    commonCPTs: [
-      "72148", // MRI lumbar - needs specific diagnosis
-      "95810", // Sleep study - needs sleep disorder diagnosis
-      "93000", // ECG - needs cardiac indication
-    ],
-    appealStrategy:
-      "Review diagnosis codes used. If correct diagnosis was present but not coded, submit corrected claim. If LCD requires specific diagnosis, document that condition.",
-    documentationChecklist: [
-      "Primary diagnosis supporting medical necessity",
-      "Secondary diagnoses if applicable",
-      "Documentation of symptoms matching diagnosis",
-      "LCD coverage criteria met",
-    ],
-    estimatedSuccessRate: "high",
-    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
-  },
-
-  {
-    reason: "Bundled service - included in another code",
-    reasonCodes: ["CO-97", "M15"],
-    commonCPTs: [
-      "36415", // Venipuncture (often bundled)
-      "99000", // Specimen handling (often bundled)
-      "96360", // IV infusion (bundled with drugs)
-    ],
-    appealStrategy:
-      "Review NCCI edits. If modifier should allow separate payment, resubmit with appropriate modifier. Document that services were distinct.",
-    documentationChecklist: [
-      "Documentation that services were separate and distinct",
-      "Different body sites or sessions if applicable",
-      "Appropriate modifier use (59, XE, XS, XP, XU)",
-      "Time documentation if relevant",
-    ],
-    estimatedSuccessRate: "medium",
-    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
-  },
-
-  // ---------------------------------------------------------------------------
-  // DME Denials
-  // ---------------------------------------------------------------------------
-  {
-    reason: "DME not medically necessary",
-    reasonCodes: ["CO-50", "M62"],
-    commonCPTs: [
-      "E0601", // CPAP
-      "E1390", // Oxygen concentrator
-      "K0001", "K0010", // Wheelchairs
-      "E0260", // Hospital bed
-    ],
-    appealStrategy:
-      "Document functional limitations and how DME addresses them. Include face-to-face evaluation, detailed written order, and proof of delivery.",
-    documentationChecklist: [
-      "Face-to-face evaluation within required timeframe",
-      "Detailed written order (DWO) with all required elements",
-      "Medical necessity documentation",
-      "Proof of delivery",
-      "For CPAP: sleep study results meeting criteria (AHI ≥ 5)",
-      "For oxygen: qualifying blood gas or oximetry results",
-      "For wheelchairs: mobility examination findings",
-    ],
-    estimatedSuccessRate: "medium",
-    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
-  },
-
-  {
-    reason: "DME supplier not enrolled",
-    reasonCodes: ["CO-8", "N95"],
-    commonCPTs: ["E0601", "E1390", "K0001", "E0260"],
-    appealStrategy:
-      "Verify supplier enrollment status. If enrolled, submit proof. If beneficiary obtained from non-enrolled supplier unknowingly, document circumstances.",
-    documentationChecklist: [
-      "Supplier enrollment verification",
-      "Proof of DMEPOS accreditation",
-      "Documentation of beneficiary's good faith",
-    ],
-    estimatedSuccessRate: "low",
-    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
-  },
-
-  // ---------------------------------------------------------------------------
-  // Therapy Denials
-  // ---------------------------------------------------------------------------
-  {
-    reason: "Therapy services not skilled",
-    reasonCodes: ["PR-50", "N362"],
-    commonCPTs: [
-      "97110", "97112", "97116", // Therapeutic exercises
-      "97140", "97530", // Manual therapy, activities
-      "97161", "97162", "97163", // PT evaluations
-    ],
-    appealStrategy:
-      "Document complexity requiring skilled intervention. Show measurable functional improvements. Explain why maintenance program or unskilled care would not be appropriate.",
-    documentationChecklist: [
-      "Skilled intervention required (not maintenance)",
-      "Complexity of condition requiring professional judgment",
-      "Measurable functional goals",
-      "Progress toward goals",
-      "Objective measurements (ROM, strength, function)",
-      "Plan for discharge/transition",
-    ],
-    estimatedSuccessRate: "medium",
-    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
-  },
-
-  {
-    reason: "Therapy cap exceeded",
-    reasonCodes: ["CO-119", "N362"],
-    commonCPTs: ["97110", "97140", "97530", "92507"],
-    appealStrategy:
-      "Request exceptions process if applicable. Document continued medical necessity and why additional therapy is needed to achieve functional goals.",
-    documentationChecklist: [
-      "KX modifier attestation documentation",
-      "Continued medical necessity",
-      "Functional progress to date",
-      "Remaining functional goals",
-      "Estimated additional visits needed",
-    ],
-    estimatedSuccessRate: "high",
-    appealDeadlineDays: MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS,
-  },
-];
-
-// =============================================================================
-// DENIAL CATEGORIES
-// =============================================================================
-
-export const DENIAL_CATEGORIES: DenialCategory[] = [
-  {
-    category: "Medical Necessity",
-    description:
-      "Denials based on the service not being medically necessary for the patient's condition",
-    patterns: DENIAL_PATTERNS.filter((p) =>
-      ["Not medically necessary", "Experimental or investigational"].includes(
-        p.reason
-      )
-    ),
-  },
-  {
-    category: "Documentation",
-    description:
-      "Denials due to missing or insufficient documentation to support the claim",
-    patterns: DENIAL_PATTERNS.filter((p) =>
-      ["Insufficient documentation", "Missing prior authorization"].includes(
-        p.reason
-      )
-    ),
-  },
-  {
-    category: "Coverage",
-    description:
-      "Denials based on the service not being covered under Medicare or frequency limits",
-    patterns: DENIAL_PATTERNS.filter((p) =>
-      ["Service not covered by Medicare", "Frequency limits exceeded"].includes(
-        p.reason
-      )
-    ),
-  },
-  {
-    category: "Coding",
-    description:
-      "Denials due to coding errors, mismatches, or bundling issues",
-    patterns: DENIAL_PATTERNS.filter((p) =>
-      [
-        "Diagnosis does not support procedure",
-        "Bundled service - included in another code",
-      ].includes(p.reason)
-    ),
-  },
-  {
-    category: "DME",
-    description:
-      "Denials specific to durable medical equipment claims",
-    patterns: DENIAL_PATTERNS.filter((p) =>
-      ["DME not medically necessary", "DME supplier not enrolled"].includes(
-        p.reason
-      )
-    ),
-  },
-  {
-    category: "Therapy",
-    description:
-      "Denials specific to physical, occupational, and speech therapy services",
-    patterns: DENIAL_PATTERNS.filter((p) =>
-      ["Therapy services not skilled", "Therapy cap exceeded"].includes(
-        p.reason
-      )
-    ),
-  },
-];
-
-// =============================================================================
-// APPEAL LEVELS
-// =============================================================================
-
 export interface AppealLevel {
   level: number;
   name: string;
@@ -392,49 +46,52 @@ export interface AppealLevel {
   successRate?: string;
 }
 
-export const MEDICARE_APPEAL_LEVELS: AppealLevel[] = [
-  {
-    level: 1,
-    name: "Redetermination",
-    description:
-      "First level appeal submitted to the Medicare Administrative Contractor (MAC) that processed the original claim",
-    timeLimit: "120 days from denial date",
-    decisionTimeframe: "60 days",
-    successRate: "~40% of denials overturned",
-  },
-  {
-    level: 2,
-    name: "Reconsideration",
-    description:
-      "Second level appeal reviewed by a Qualified Independent Contractor (QIC), separate from the MAC",
-    timeLimit: "180 days from redetermination decision",
-    decisionTimeframe: "60 days",
-    successRate: "~50% of Level 1 upheld denials overturned",
-  },
-  {
-    level: 3,
-    name: "Administrative Law Judge (ALJ) Hearing",
-    description: `Third level appeal heard by an Administrative Law Judge if amount in controversy meets threshold ($${MEDICARE_CONSTANTS.getCurrentThresholds().ALJ_THRESHOLD} for ${MEDICARE_CONSTANTS.getCurrentThresholds().year})`,
-    timeLimit: "60 days from reconsideration decision",
-    decisionTimeframe: "90 days",
-    successRate: "~70% of cases decided in beneficiary's favor",
-  },
-  {
-    level: 4,
-    name: "Medicare Appeals Council Review",
-    description:
-      "Fourth level review by the Medicare Appeals Council within HHS",
-    timeLimit: "60 days from ALJ decision",
-    decisionTimeframe: "90 days",
-  },
-  {
-    level: 5,
-    name: "Federal District Court",
-    description: `Final level - judicial review in federal court if amount in controversy meets threshold ($${MEDICARE_CONSTANTS.getCurrentThresholds().FEDERAL_COURT_THRESHOLD.toLocaleString()} for ${MEDICARE_CONSTANTS.getCurrentThresholds().year})`,
-    timeLimit: "60 days from Appeals Council decision",
-    decisionTimeframe: "Varies",
-  },
-];
+// =============================================================================
+// HELPERS
+// =============================================================================
+
+/** Map a Supabase denial_patterns row to a DenialPattern */
+function rowToPattern(row: {
+  reason: string | null;
+  category: string | null;
+  reason_codes: string[] | null;
+  common_cpts: string[] | null;
+  common_diagnoses: string[] | null;
+  appeal_strategy: string | null;
+  documentation_checklist: string[] | null;
+  estimated_success_rate: string | null;
+  appeal_deadline_days: number | null;
+}): DenialPattern {
+  return {
+    reason: row.reason ?? "",
+    reasonCodes: row.reason_codes ?? [],
+    commonCPTs: row.common_cpts ?? [],
+    commonDiagnoses: row.common_diagnoses ?? [],
+    appealStrategy: row.appeal_strategy ?? "",
+    documentationChecklist: row.documentation_checklist ?? [],
+    estimatedSuccessRate: (row.estimated_success_rate as DenialPattern["estimatedSuccessRate"]) ?? undefined,
+    appealDeadlineDays: row.appeal_deadline_days ?? 120,
+  };
+}
+
+/** Map a Supabase appeal_levels row to an AppealLevel */
+function rowToAppealLevel(row: {
+  level: number | null;
+  name: string | null;
+  description: string | null;
+  time_limit: string | null;
+  decision_timeframe: string | null;
+  success_rate: string | null;
+}): AppealLevel {
+  return {
+    level: row.level ?? 0,
+    name: row.name ?? "",
+    description: row.description ?? "",
+    timeLimit: row.time_limit ?? "",
+    decisionTimeframe: row.decision_timeframe ?? "",
+    successRate: row.success_rate ?? undefined,
+  };
+}
 
 // =============================================================================
 // LOOKUP FUNCTIONS
@@ -443,55 +100,70 @@ export const MEDICARE_APPEAL_LEVELS: AppealLevel[] = [
 /**
  * Find denial patterns matching a reason text
  */
-export function findDenialPattern(reasonText: string): DenialPattern[] {
-  const lower = reasonText.toLowerCase();
+export async function findDenialPattern(reasonText: string): Promise<DenialPattern[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("denial_patterns_latest")
+    .select("*")
+    .or(`reason.ilike.%${reasonText}%,appeal_strategy.ilike.%${reasonText}%`);
 
-  return DENIAL_PATTERNS.filter(
-    (pattern) =>
-      pattern.reason.toLowerCase().includes(lower) ||
-      pattern.reasonCodes?.some((code) =>
-        lower.includes(code.toLowerCase())
-      ) ||
-      pattern.appealStrategy.toLowerCase().includes(lower)
-  );
+  if (error || !data) return [];
+  return data.map(rowToPattern);
 }
 
 /**
  * Get denial patterns for a specific CPT code
  */
-export function getDenialPatternsForCPT(cptCode: string): DenialPattern[] {
-  return DENIAL_PATTERNS.filter((pattern) =>
-    pattern.commonCPTs.includes(cptCode)
-  );
+export async function getDenialPatternsForCPT(cptCode: string): Promise<DenialPattern[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .rpc("get_denial_patterns_for_cpt", { cpt_code_input: cptCode });
+
+  if (error || !data) return [];
+  return (data as Array<{
+    reason: string;
+    category: string;
+    reason_codes: string[] | null;
+    common_cpts: string[] | null;
+    common_diagnoses: string[] | null;
+    appeal_strategy: string;
+    documentation_checklist: string[] | null;
+    estimated_success_rate: string | null;
+    appeal_deadline_days: number;
+  }>).map(rowToPattern);
 }
 
 /**
  * Get denial patterns by category
  */
-export function getDenialPatternsByCategory(
+export async function getDenialPatternsByCategory(
   category: string
-): DenialPattern[] {
-  const cat = DENIAL_CATEGORIES.find(
-    (c) => c.category.toLowerCase() === category.toLowerCase()
-  );
-  return cat?.patterns || [];
+): Promise<DenialPattern[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("denial_patterns_latest")
+    .select("*")
+    .ilike("category", category);
+
+  if (error || !data) return [];
+  return data.map(rowToPattern);
 }
 
 /**
  * Get appeal strategy for a denial reason and CPT code
  */
-export function getAppealStrategy(
+export async function getAppealStrategy(
   denialReason: string,
   cptCode?: string
-): {
+): Promise<{
   strategy: string;
   checklist: string[];
   estimatedSuccess: string;
   deadline: number;
-} | null {
+} | null> {
   // First try to match by CPT code
   if (cptCode) {
-    const cptPatterns = getDenialPatternsForCPT(cptCode);
+    const cptPatterns = await getDenialPatternsForCPT(cptCode);
     const match = cptPatterns.find((p) =>
       denialReason.toLowerCase().includes(p.reason.toLowerCase())
     );
@@ -506,7 +178,7 @@ export function getAppealStrategy(
   }
 
   // Fall back to matching by denial reason
-  const patterns = findDenialPattern(denialReason);
+  const patterns = await findDenialPattern(denialReason);
   if (patterns.length > 0) {
     const pattern = patterns[0];
     return {
@@ -523,159 +195,97 @@ export function getAppealStrategy(
 /**
  * Get the appropriate appeal level based on previous appeals
  */
-export function getNextAppealLevel(
+export async function getNextAppealLevel(
   previousLevels: number[] = []
-): AppealLevel | null {
+): Promise<AppealLevel | null> {
   const maxLevel = Math.max(0, ...previousLevels);
   const nextLevel = maxLevel + 1;
 
-  return (
-    MEDICARE_APPEAL_LEVELS.find((level) => level.level === nextLevel) || null
-  );
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("appeal_levels_latest")
+    .select("*")
+    .eq("level", nextLevel)
+    .single();
+
+  if (error || !data) return null;
+  return rowToAppealLevel(data);
 }
 
 /**
  * Calculate appeal deadline from denial date
  */
-export function calculateAppealDeadline(
+export async function calculateAppealDeadline(
   denialDate: Date,
   appealLevel: number = 1
-): Date {
-  const level = MEDICARE_APPEAL_LEVELS.find((l) => l.level === appealLevel);
-  if (!level) {
-    // Default to standard appeal deadline if level not found
-    const deadline = new Date(denialDate);
-    deadline.setDate(deadline.getDate() + MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS);
-    return deadline;
-  }
+): Promise<Date> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("appeal_levels_latest")
+    .select("time_limit")
+    .eq("level", appealLevel)
+    .single();
 
-  // Parse time limit (e.g., "120 days from denial date")
-  const daysMatch = level.timeLimit.match(/(\d+)\s*days/i);
-  const days = daysMatch ? parseInt(daysMatch[1], 10) : MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS;
+  let days: number = MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS;
+  if (data?.time_limit) {
+    const daysMatch = data.time_limit.match(/(\d+)\s*days/i);
+    if (daysMatch) {
+      days = parseInt(daysMatch[1], 10);
+    }
+  }
 
   const deadline = new Date(denialDate);
   deadline.setDate(deadline.getDate() + days);
   return deadline;
 }
 
-// =============================================================================
-// COMMON DENIAL REASON CODES
-// =============================================================================
-
-export const DENIAL_REASON_CODES: Record<
-  string,
-  { code: string; description: string; category: string }
-> = {
-  "CO-4": {
-    code: "CO-4",
-    description:
-      "The procedure code is inconsistent with the modifier used or a required modifier is missing",
-    category: "Coding",
-  },
-  "CO-8": {
-    code: "CO-8",
-    description: "The procedure code is not payable at this location",
-    category: "Coverage",
-  },
-  "CO-15": {
-    code: "CO-15",
-    description:
-      "The authorization number is missing, invalid, or does not apply",
-    category: "Documentation",
-  },
-  "CO-16": {
-    code: "CO-16",
-    description: "Claim/service lacks information needed for adjudication",
-    category: "Documentation",
-  },
-  "CO-50": {
-    code: "CO-50",
-    description:
-      "These are non-covered services because this is not deemed a medical necessity",
-    category: "Medical Necessity",
-  },
-  "CO-96": {
-    code: "CO-96",
-    description: "Non-covered charge(s)",
-    category: "Coverage",
-  },
-  "CO-97": {
-    code: "CO-97",
-    description:
-      "The benefit for this service is included in the payment/allowance for another service",
-    category: "Coding",
-  },
-  "CO-119": {
-    code: "CO-119",
-    description:
-      "Benefit maximum for this time period or occurrence has been reached",
-    category: "Coverage",
-  },
-  "CO-167": {
-    code: "CO-167",
-    description:
-      "This (these) diagnosis(es) is (are) not covered, missing, or invalid",
-    category: "Coding",
-  },
-  "PR-50": {
-    code: "PR-50",
-    description: "Non-covered services - not medically necessary (patient responsibility)",
-    category: "Medical Necessity",
-  },
-  "PR-96": {
-    code: "PR-96",
-    description: "Non-covered charge(s) (patient responsibility)",
-    category: "Coverage",
-  },
-  "PR-119": {
-    code: "PR-119",
-    description: "Benefit maximum reached (patient responsibility)",
-    category: "Coverage",
-  },
-};
-
 /**
- * Get denial reason details by code
+ * Get denial reason details by code.
+ * Queries the carc_codes_latest table (already in Supabase).
  */
-export function getDenialReasonByCode(
+export async function getDenialReasonByCode(
   code: string
-): { code: string; description: string; category: string } | null {
-  return DENIAL_REASON_CODES[code.toUpperCase()] || null;
+): Promise<{ code: string; description: string; category: string } | null> {
+  const normalized = code.replace(/^(CO|PR|OA|CR|PI)-?/i, "").trim();
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("carc_codes_latest")
+    .select("code, description, category")
+    .eq("code", normalized)
+    .single();
+
+  if (error || !data) return null;
+  return {
+    code: data.code!,
+    description: data.description!,
+    category: data.category || "Unknown",
+  };
 }
 
 /**
  * Get appeal strategy for a CARC code.
- * Maps CARC code (e.g., "50", "CO-50", "PR-50") to matching DENIAL_PATTERNS entry
- * via the reasonCodes field.
+ * Maps CARC code (e.g., "50", "CO-50", "PR-50") to matching denial pattern
+ * via the reason_codes field.
  */
-export function getAppealStrategyForCARC(carcCode: string): {
+export async function getAppealStrategyForCARC(carcCode: string): Promise<{
   strategy: string;
   checklist: string[];
   estimatedSuccess: string;
   deadline: number;
   reason: string;
-} | null {
-  // Normalize: extract numeric/alphanumeric part (e.g., "CO-50" → "50", "50" → "50")
-  const normalized = carcCode.replace(/^(CO|PR|OA|CR|PI)-?/i, "").trim();
+} | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .rpc("get_denial_pattern_for_carc", { carc_code_input: carcCode });
 
-  for (const pattern of DENIAL_PATTERNS) {
-    if (!pattern.reasonCodes) continue;
+  if (error || !data || (Array.isArray(data) && data.length === 0)) return null;
 
-    const matches = pattern.reasonCodes.some((rc) => {
-      const rcNormalized = rc.replace(/^(CO|PR|OA|CR|PI)-?/i, "").trim();
-      return rcNormalized === normalized;
-    });
-
-    if (matches) {
-      return {
-        strategy: pattern.appealStrategy,
-        checklist: pattern.documentationChecklist,
-        estimatedSuccess: pattern.estimatedSuccessRate || "unknown",
-        deadline: pattern.appealDeadlineDays,
-        reason: pattern.reason,
-      };
-    }
-  }
-
-  return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    strategy: row.appeal_strategy,
+    checklist: row.documentation_checklist ?? [],
+    estimatedSuccess: row.estimated_success_rate || "unknown",
+    deadline: row.appeal_deadline_days,
+    reason: row.reason,
+  };
 }

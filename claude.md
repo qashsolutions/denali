@@ -93,7 +93,7 @@ Where to find specific logic in the codebase.
 | `src/lib/claude.ts` | Claude API client. MCP server config, Beta API call, tool-use loop, SessionState type |
 | `src/lib/tools/index.ts` | All 12 local tool definitions + executors (search_cpt, lookup_denial_code, generate_appeal_letter, etc.) |
 | `src/lib/skills-loader.ts` | Conditional prompt builder. Loads skill sections based on SkillTriggers (onboarding, symptom gathering, coverage, appeal, etc.) |
-| `src/lib/denial-patterns.ts` | 13 denial categories with appeal strategies. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
+| `src/lib/denial-patterns.ts` | Async Supabase queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
 | `src/types/database.ts` | Supabase-generated TypeScript types. Regenerate with `npx supabase gen types` |
 | `src/app/api/chat/route.ts` | Request flow: parse messages, restore sessionState, detect triggers, build prompt, run chat loop, persist learning |
 
@@ -169,7 +169,7 @@ User-facing (plain English):        Internal (codes, never shown):
 | `generate_appeal_letter` | Build Level 1 appeal with inline codes + citations | Combines multiple sources |
 | `check_sad_list` | Part B (physician) vs Part D (self-administered) drug routing | CMS SAD list |
 | `lookup_denial_code` | CARC/RARC code lookup + appeal strategy | Supabase `carc_codes`, `rarc_codes`, `eob_denial_mappings` |
-| `get_common_denials` | Top denial reasons for a procedure + prevention tips | Supabase + `denial-patterns.ts` |
+| `get_common_denials` | Top denial reasons for a procedure + prevention tips | Supabase (`denial_patterns` + `carc_codes`) |
 
 ### Data Inventory
 
@@ -208,8 +208,10 @@ User-facing (plain English):        Internal (codes, never shown):
 | `carc_codes` | Claim Adjustment Reason Codes (the "why" of a denial) | 90 |
 | `rarc_codes` | Remittance Advice Remark Codes (additional detail) | 195 |
 | `eob_denial_mappings` | Maps payer EOB codes to standard CARC/RARC | 1,873 |
+| `denial_patterns` | Common denial reasons with appeal strategies, CPT lists, checklists, success rates | 12 |
+| `appeal_levels` | Medicare's 5 appeal levels with timeframes and success rates | 5 |
 
-**Versioning**: All three tables use `effective_date` column. Views `carc_codes_latest`, `rarc_codes_latest`, `eob_denial_mappings_latest` always return `WHERE effective_date = MAX(effective_date)`. When CMS publishes updates, insert new rows with a newer `effective_date`; old rows stay for history.
+**Versioning**: All five tables use `effective_date` column. Views `carc_codes_latest`, `rarc_codes_latest`, `eob_denial_mappings_latest`, `denial_patterns_latest`, `appeal_levels_latest` always return `WHERE effective_date = MAX(effective_date)`. When CMS publishes updates, insert new rows with a newer `effective_date`; old rows stay for history.
 
 ### Learning Tables (No User Link)
 
@@ -236,6 +238,8 @@ User-facing (plain English):        Internal (codes, never shown):
 | `record_appeal_outcome(appeal_id, outcome, ...)` | Store user-reported result |
 | `get_learning_context(symptoms, procedures)` | Get learned data for prompts |
 | `search_denial_codes(search_text)` | Full-text search across CARC/RARC/EOB tables |
+| `get_denial_pattern_for_carc(carc_code)` | Match CARC code to denial pattern with appeal strategy |
+| `get_denial_patterns_for_cpt(cpt_code)` | Get denial patterns commonly associated with a CPT code |
 | `delete_user_cascade(user_id)` | GDPR/CCPA compliant deletion |
 
 ---

@@ -847,7 +847,7 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
             rarc = rarcData;
           }
 
-          const appealStrategy = getAppealStrategyForCARC(mapping.carc_code!);
+          const appealStrategy = await getAppealStrategyForCARC(mapping.carc_code!);
 
           results.push({
             eob_code: mapping.eob_code,
@@ -882,7 +882,7 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
         .single();
 
       if (carc) {
-        const appealStrategy = getAppealStrategyForCARC(normalized);
+        const appealStrategy = await getAppealStrategyForCARC(normalized);
         return {
           success: true,
           data: {
@@ -928,10 +928,12 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
         .rpc("search_denial_codes", { search_text: descriptionSearch });
 
       if (results && results.length > 0) {
-        const enriched = results.slice(0, 10).map((r: { code_type: string; code: string; description: string; category: string | null; plain_english: string | null }) => ({
-          ...r,
-          appeal_strategy: r.code_type === "CARC" ? getAppealStrategyForCARC(r.code) : null,
-        }));
+        const enriched = await Promise.all(
+          results.slice(0, 10).map(async (r: { code_type: string; code: string; description: string; category: string | null; plain_english: string | null }) => ({
+            ...r,
+            appeal_strategy: r.code_type === "CARC" ? await getAppealStrategyForCARC(r.code) : null,
+          }))
+        );
 
         return {
           success: true,
@@ -974,10 +976,10 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
     }
 
     // Get denial patterns for each CPT code
-    const denialPatterns = new Map<string, { pattern: ReturnType<typeof getDenialPatternsForCPT>[0]; cptCodes: string[] }>();
+    const denialPatterns = new Map<string, { pattern: Awaited<ReturnType<typeof getDenialPatternsForCPT>>[0]; cptCodes: string[] }>();
 
     for (const code of cptCodes) {
-      const patterns = getDenialPatternsForCPT(code);
+      const patterns = await getDenialPatternsForCPT(code);
       for (const pattern of patterns) {
         const key = pattern.reason;
         if (denialPatterns.has(key)) {
@@ -994,7 +996,7 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
 
     for (const [, { pattern }] of denialPatterns) {
       const carcCodes = (pattern.reasonCodes || [])
-        .map((rc) => rc.replace(/^(CO|PR|OA)-?/i, "").trim());
+        .map((rc: string) => rc.replace(/^(CO|PR|OA)-?/i, "").trim());
 
       // Fetch CARC descriptions
       let carcDescriptions: { code: string; plain_english: string | null }[] = [];
@@ -1016,44 +1018,56 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
       });
     }
 
-    // If no results from CPT matching, provide general common denials
+    // If no results from CPT matching, fetch top 3 general denial patterns from Supabase
     if (results.length === 0) {
-      const generalDenials = [
-        {
-          denial_reason: "Not medically necessary",
-          carc_codes: ["CO-50", "PR-50"],
-          plain_english: "Medicare decided this service wasn't medically necessary for your condition.",
-          prevention_tip: "Make sure your doctor documents symptoms, duration, failed treatments, and functional limitations",
-          appeal_success_rate: "high",
-          appeal_deadline_days: 120,
-        },
-        {
-          denial_reason: "Insufficient documentation",
-          carc_codes: ["CO-16"],
-          plain_english: "The claim is missing information needed to process it.",
-          prevention_tip: "Ensure complete medical records, exam findings, and physician's order are included",
-          appeal_success_rate: "high",
-          appeal_deadline_days: 120,
-        },
-        {
-          denial_reason: "Diagnosis doesn't support procedure",
-          carc_codes: ["CO-167"],
-          plain_english: "The diagnosis code doesn't match or support this procedure.",
-          prevention_tip: "Verify the doctor uses the most specific diagnosis code that supports the procedure",
-          appeal_success_rate: "high",
-          appeal_deadline_days: 120,
-        },
-      ];
-      return {
-        success: true,
-        data: {
-          procedure: procedureDescription,
-          cpt_codes_checked: cptCodes,
-          common_denials: generalDenials,
-          count: generalDenials.length,
-          note: "These are the most common denial reasons across Medicare claims.",
-        },
-      };
+      const { data: fallbackPatterns } = await supabase
+        .from("denial_patterns_latest")
+        .select("*")
+        .in("category", ["Medical Necessity", "Documentation", "Coding"])
+        .limit(3);
+
+      if (fallbackPatterns && fallbackPatterns.length > 0) {
+        // Deduplicate by category, taking the first from each
+        const seen = new Set<string>();
+        const generalDenials = fallbackPatterns
+          .filter((p) => {
+            if (seen.has(p.category!)) return false;
+            seen.add(p.category!);
+            return true;
+          })
+          .map((p) => ({
+            denial_reason: p.reason,
+            carc_codes: p.reason_codes || [],
+            plain_english: null as string | null,
+            prevention_tip: (p.documentation_checklist || []).slice(0, 3).join("; "),
+            appeal_success_rate: p.estimated_success_rate || "unknown",
+            appeal_deadline_days: p.appeal_deadline_days,
+          }));
+
+        // Enrich with CARC plain english
+        for (const denial of generalDenials) {
+          const firstCarc = (denial.carc_codes[0] || "").replace(/^(CO|PR|OA)-?/i, "").trim();
+          if (firstCarc) {
+            const { data: carcData } = await supabase
+              .from("carc_codes_latest")
+              .select("plain_english")
+              .eq("code", firstCarc)
+              .single();
+            denial.plain_english = carcData?.plain_english || null;
+          }
+        }
+
+        return {
+          success: true,
+          data: {
+            procedure: procedureDescription,
+            cpt_codes_checked: cptCodes,
+            common_denials: generalDenials,
+            count: generalDenials.length,
+            note: "These are the most common denial reasons across Medicare claims.",
+          },
+        };
+      }
     }
 
     return {
