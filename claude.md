@@ -347,25 +347,128 @@ How ICD-10, CMS coverage, CARC/RARC, and NPI data come together in end-to-end to
 
 ### Flow 1: Coverage Guidance (Proactive Denial Prevention)
 
-**Trigger**: User asks about Medicare coverage for a procedure.
+**Trigger**: User asks about Medicare coverage for a procedure or treatment.
 
 **Example**: "Will Medicare cover a lumbar MRI for my back pain?"
 
-| Step | Who | Tool / Action | Input | Output | Stored In |
-|------|-----|--------------|-------|--------|-----------|
-| 1 | Claude | No tools (ONBOARDING gate) | — | Ask name, ZIP | `sessionState.name`, `.zip` |
-| 2 | Claude | No tools (SYMPTOM gate) | — | Ask symptoms, duration, prior treatments | `.symptoms`, `.duration`, `.priorTreatments` |
-| 3 | MCP | `npi_search` (npi-registry) | Doctor name + ZIP | NPI, specialty, Medicare enrollment status | `.provider`, `.providerNPI` |
-| 4 | MCP | `search_icd10` (icd10-codes) | "chronic low back pain radiating to left leg" | M54.5, M54.41 | `.diagnosisCodes` |
-| 5 | Local | `search_cpt` | "lumbar MRI" | 72148, 72149 | `.procedureCodes` |
-| 6 | MCP | `search_local_coverage` (cms-coverage) | CPT 72148 + ICD M54.5 + state from ZIP | LCD L35936, coverage criteria text | `.coverageCriteria`, `.policyReferences` |
-| 7 | Claude | REQUIREMENT_VERIFICATION skill | LCD criteria vs. user's answers | Requirements met/not met | `.requirementAnswers` |
-| 8 | Local | `get_common_denials` | CPT 72148 | Top 3 denial reasons (CO-50, CO-96, CO-167) + prevention tips | Used in guidance output |
-| 9 | Claude | GUIDANCE_DELIVERY skill | All accumulated data | Plain English checklist with policy ref, requirements AS-IS, denial warnings | Final response to user |
+**Goal**: Walk the user through every check needed so that when they show up for treatment, the claim does NOT get denied. This means verifying the provider, the codes, the policy, the requirements, and warning about common denial traps — all before the service happens.
 
-**Data handoff chain**: Symptoms -> ICD-10 -> CPT -> LCD policy -> Requirements -> Guidance + Denial warnings
+#### Phase 1: Intake (No Tools — TOOL_RESTRAINT active)
 
-**Key rule**: Steps 1-3 are gated. No tools fire until onboarding and symptom intake are complete. Provider verification can be skipped if user says "show coverage first."
+No tool calls allowed during this phase. Claude gathers context through conversation only.
+
+| Step | Action | What Claude Asks | Why (Denial It Prevents) | Stored In |
+|------|--------|-----------------|--------------------------|-----------|
+| 1a | Get name | "What's your name?" | Personalization, used in checklist | `.name` |
+| 1b | Get ZIP | "What ZIP code are you in?" | Determines MAC jurisdiction for regional LCD lookup | `.zip` |
+| 2a | Get symptoms | "Can you tell me what's going on?" | Maps to ICD-10 diagnosis — wrong diagnosis = denial | `.symptoms` |
+| 2b | Get duration | "How long has this been going on?" | Many LCDs require minimum duration (e.g., 6 weeks conservative treatment) | `.duration` |
+| 2c | Get prior treatments | "What have you tried so far?" | LCDs often require failed conservative treatment before approving imaging/surgery | `.priorTreatments` |
+| 2d | Get red flags | Claude listens for: bowel/bladder issues, progressive weakness, fever, trauma, weight loss | Red flags can EXPEDITE approval and bypass duration requirements | `.redFlagsPresent` |
+
+**Gate**: All of 2a-2c must be answered before tools unlock. If user has asked about 2+ procedures before (rush mode), symptom gathering can be abbreviated.
+
+#### Phase 2: Provider Verification (NPI Tools Only)
+
+Only NPI registry tools allowed. No ICD-10, CPT, or coverage lookups yet.
+
+| Step | Tool | Input | What It Checks | Why (Denial It Prevents) |
+|------|------|-------|---------------|--------------------------|
+| 3a | Claude (no tool) | — | "Do you have a doctor for this?" | — |
+| 3b | MCP: `npi_search` | Doctor name + ZIP | NPI number, Medicare enrollment status | **Non-enrolled provider = automatic denial.** Medicare won't pay providers not enrolled in their system |
+| 3c | MCP: `npi_search` result | — | Provider's specialty | **Specialty mismatch = higher denial risk.** E.g., family medicine ordering advanced imaging may trigger review |
+| 3d | Local: `validateSpecialtyMatch()` (internal) | Procedure + provider specialty | Does specialty match the procedure? | If mismatch: warn user, suggest referral or strong medical necessity documentation |
+
+**Stored**: `.provider` (name, NPI, specialty), `.providerNPI`
+
+**Skippable**: User can say "not yet" or "show coverage first" to skip. Claude proceeds but notes the gap.
+
+**What to tell the user**:
+- If provider IS enrolled: "Dr. Chen is enrolled in Medicare — good."
+- If specialty mismatch: "Dr. Chen is Family Medicine. She can order this, but a referral from a specialist (orthopedist, neurologist) strengthens the case."
+- If provider NOT found: "I couldn't find that provider in Medicare's system. Double-check the name, or confirm they accept Medicare before your visit."
+
+#### Phase 3: Code Validation (All Tools Unlock)
+
+| Step | Tool | Input | Output | Why (Denial It Prevents) |
+|------|------|-------|--------|--------------------------|
+| 4 | MCP: `search_icd10` | User's symptom description | ICD-10 codes (e.g., M54.5, M54.41) | **Wrong diagnosis code = denial.** The ICD-10 must match the LCD's covered indications |
+| 5 | Local: `search_cpt` | User's procedure description | CPT codes (e.g., 72148, 72149) | **Wrong procedure code = denial.** CPT must be on the LCD's covered procedure list |
+| 5a | Local: `get_related_diagnoses` | CPT code | Related ICD-10 codes that support this CPT | Cross-validates: does the diagnosis actually justify the procedure? |
+| 5b | Local: `check_preventive` | CPT code | Is this a preventive service? | **If preventive: no cost-sharing** (no deductible, no coinsurance). Different coverage path |
+| 5c | Local: `check_prior_auth` | CPT code | Does this commonly require prior authorization? | **Missing prior auth = denial.** Provider must submit PA request BEFORE the service |
+| 5d | Local: `check_sad_list` | Drug name (if applicable) | Part B vs Part D coverage | **Wrong Part = denial.** Self-administered drugs go to Part D, physician-administered to Part B |
+
+**Stored**: `.diagnosisCodes`, `.procedureCodes`
+
+**What to tell the user** (plain English, never codes):
+- If prior auth required: "Your doctor will need to get pre-approval from Medicare before scheduling this. Ask them to submit a prior authorization."
+- If preventive: "This is a preventive service — Medicare covers it with no out-of-pocket cost when done by a participating provider."
+- If SAD list applies: "This medication is covered under Part B (your doctor administers it) / Part D (you pick it up at a pharmacy)."
+
+#### Phase 4: Coverage Policy Lookup
+
+| Step | Tool | Input | Output | Why |
+|------|------|-------|--------|-----|
+| 6a | MCP: `search_local_coverage` | CPT + ICD-10 + state from ZIP | LCD (e.g., L35936) with full coverage criteria text | Regional policies (LCDs) have specific requirements per MAC jurisdiction |
+| 6b | MCP: `search_national_coverage` | CPT + ICD-10 | NCD (if applicable) | National policies override regional. Some procedures only have NCDs |
+| 6c | MCP: `get_coverage_document` | Policy ID from 6a/6b | Full policy text with indications, limitations, documentation requirements | The actual rules that determine approval or denial |
+
+**Stored**: `.coverageCriteria`, `.policyReferences`
+
+**Critical rule**: LCD/NCD requirements are shown **AS-IS** to the user. Do not simplify the medical language — the doctor needs to see the exact terms Medicare uses.
+
+#### Phase 5: Requirement Verification (Interactive Q&A)
+
+Claude walks through each LCD requirement one at a time, checking the user's situation against the policy.
+
+| Step | Action | Example | Why |
+|------|--------|---------|-----|
+| 7a | Ask about each unmet requirement | "Has she had symptoms for at least 6 weeks?" | LCD L35936 requires 6-week duration of symptoms |
+| 7b | Ask about prior imaging | "Has she had an X-ray of the lower back already?" | Many LCDs require step therapy (X-ray before MRI) |
+| 7c | Ask about conservative treatment | "Has she tried physical therapy or anti-inflammatory medication?" | LCDs often require 4-6 weeks of failed conservative treatment |
+| 7d | Check red flags again | "Any numbness, tingling, or weakness in the legs? Bladder issues?" | Red flags bypass duration/conservative treatment requirements and expedite approval |
+
+**Stored**: `.requirementAnswers` (map of requirement -> met/not met)
+
+#### Phase 6: Proactive Denial Prevention + Guidance Delivery
+
+| Step | Tool | Input | Output |
+|------|------|-------|--------|
+| 8 | Local: `get_common_denials` | CPT code | Top 3 CARC denial reasons + prevention tips |
+| 9 | Claude: GUIDANCE_DELIVERY | All accumulated session data | Final personalized checklist |
+
+**What the user sees** (example output):
+
+```
+Based on what you've told me, here's what Medicare needs to approve this lumbar MRI.
+
+Policy: LCD L35936
+
+What your doctor needs to document:
+  [requirements shown AS-IS from LCD]
+
+Your situation:
+  Duration: 3 months of symptoms ✓
+  Conservative treatment: Physical therapy for 6 weeks ✓
+  Prior imaging: No X-ray yet ☐ — Ask your doctor about this
+
+Heads up — common reasons this gets denied:
+  1. "Not medically necessary" (CO-50) — Make sure your doctor documents
+     WHY the MRI is needed and what treatments have failed
+  2. "Insufficient documentation" (CO-167) — The doctor's notes must
+     include symptom duration, failed treatments, and functional limitations
+
+Provider: Dr. Chen (NPI verified, Medicare enrolled ✓)
+  Note: Dr. Chen is Family Medicine. Consider asking for a referral note
+  from a specialist to strengthen the claim.
+
+Print this checklist and bring it to your appointment.
+```
+
+**Data handoff chain**: Symptoms -> ICD-10 + CPT -> Provider NPI (enrolled? specialty match?) -> Prior auth check -> Preventive check -> SAD list (if drug) -> LCD/NCD policy -> Requirements Q&A -> Common denials -> Personalized checklist
+
+**Every check in this flow exists to prevent a specific denial reason.** If any check fails (provider not enrolled, prior auth missing, wrong diagnosis code, unmet LCD requirement), Claude warns the user and tells them how to fix it BEFORE the claim is submitted.
 
 ### Flow 2: Appeal (Reactive Denial Response)
 
@@ -425,34 +528,45 @@ How ICD-10, CMS coverage, CARC/RARC, and NPI data come together in end-to-end to
 How each data source connects to the others:
 
 ```
-                    User's words (plain English)
-                           |
-              +------------+------------+
-              |                         |
-              v                         v
-     MCP: icd10-codes           Local: search_cpt
-     (symptoms -> ICD-10)       (procedure -> CPT)
-              |                         |
-              +------------+------------+
-                           |
-                           v
-                  MCP: cms-coverage
-                  (ICD-10 + CPT -> LCD/NCD policy)
-                           |
-              +------------+------------+
-              |                         |
-              v                         v
-     Local: get_common_denials   GUIDANCE_DELIVERY
-     (CPT -> CARC codes          (policy + user data
-      -> prevention tips)         -> checklist)
-              |                         |
-              v                         v
-     Supabase: carc_codes       User sees: plain English
-     + denial-patterns.ts       requirements + warnings
-              |
-              v
-     Local: generate_appeal_letter
-     (all codes + policy -> formatted letter)
+                       User's words (plain English)
+                                  |
+                 +----------------+----------------+
+                 |                |                 |
+                 v                v                 v
+        MCP: icd10-codes   Local: search_cpt   MCP: npi-registry
+        (symptoms->ICD-10) (procedure->CPT)    (doctor->NPI)
+                 |                |                 |
+                 |                +---+---+         |
+                 |                    |   |         |
+                 |                    v   v         v
+                 |        Local: check_   Local:   Enrolled in
+                 |        prior_auth    check_     Medicare?
+                 |        check_prev    sad_list   Specialty
+                 |        (PA needed?)  (B vs D?)  match?
+                 |                    |
+                 +--------+-----------+
+                          |
+                          v
+                 MCP: cms-coverage
+                 (ICD-10 + CPT + ZIP -> LCD/NCD policy)
+                          |
+             +------------+------------+
+             |                         |
+             v                         v
+    Claude: Requirement       Local: get_common_denials
+    Verification Q&A          (CPT -> CARC codes
+    (LCD reqs vs user data)    -> prevention tips)
+             |                         |
+             v                         v
+    GUIDANCE_DELIVERY:         Supabase: carc_codes
+    Personalized checklist     + denial-patterns.ts
+    with policy ref +          (appeal strategies)
+    user's data mapped              |
+    to requirements                 v
+             |              Local: generate_appeal_letter
+             v              (if denied later)
+    User sees: plain English
+    checklist + denial warnings
 ```
 
 ---
