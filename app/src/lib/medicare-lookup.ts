@@ -156,9 +156,18 @@ const CONDITION_KEYWORDS: Record<string, { category: string; keywords: string[] 
   "cancer screening": { category: "Oncology", keywords: ["cancer screening", "mammogram", "colonoscopy screening"] },
   "chemotherapy": { category: "Oncology", keywords: ["chemo", "chemotherapy", "cancer treatment"] },
 
-  // Imaging
-  "mri": { category: "Orthopedics", keywords: ["mri", "magnetic resonance", "scan"] },
-  "ct scan": { category: "Pulmonary", keywords: ["ct", "cat scan", "computed tomography"] },
+  // Imaging — body-region-specific (must come before generic fallbacks for longest-match-wins)
+  "brain mri": { category: "Neurology", keywords: ["brain mri", "head mri", "brain scan"] },
+  "spine mri": { category: "Orthopedics", keywords: ["spine mri", "back mri", "lumbar mri", "cervical mri", "thoracic mri", "spinal mri"] },
+  "knee mri": { category: "Orthopedics", keywords: ["knee mri", "knee scan"] },
+  "shoulder mri": { category: "Orthopedics", keywords: ["shoulder mri"] },
+  "chest ct": { category: "Pulmonary", keywords: ["chest ct", "lung ct", "lung scan"] },
+  "abdomen ct": { category: "GI", keywords: ["abdomen ct", "abdominal ct", "belly ct"] },
+  "head ct": { category: "Neurology", keywords: ["head ct", "brain ct"] },
+
+  // Imaging — generic fallbacks
+  "mri": { category: "Orthopedics", keywords: ["mri", "magnetic resonance"] },
+  "ct scan": { category: "Pulmonary", keywords: ["ct scan", "cat scan", "computed tomography"] },
   "x-ray": { category: "Orthopedics", keywords: ["xray", "x-ray", "radiograph"] },
 };
 
@@ -168,24 +177,31 @@ const CONDITION_KEYWORDS: Record<string, { category: string; keywords: string[] 
 export function getCPTsForCondition(condition: string): CPTCode[] {
   const lower = condition.toLowerCase();
 
-  // Check for exact condition matches
+  // Longest-match-wins: find the most specific keyword match
+  let bestMatch: { category: string; matchLength: number } | null = null;
   for (const [, config] of Object.entries(CONDITION_KEYWORDS)) {
-    if (config.keywords.some((kw) => lower.includes(kw))) {
-      const categoryResults = ALL_CPT.filter(
-        (cpt) => cpt.category === config.category
-      );
-
-      // Category can be very broad (e.g., all Orthopedics).
-      // Narrow by filtering to codes whose description matches query words.
-      const queryWords = lower.split(/\s+/).filter((w) => w.length > 2);
-      const narrowed = categoryResults.filter((cpt) => {
-        const desc = cpt.description.toLowerCase();
-        return queryWords.some((w) => desc.includes(w));
-      });
-
-      // Use narrowed results if we got any, otherwise fall back to category
-      return narrowed.length > 0 ? narrowed : categoryResults;
+    for (const kw of config.keywords) {
+      if (lower.includes(kw) && (!bestMatch || kw.length > bestMatch.matchLength)) {
+        bestMatch = { category: config.category, matchLength: kw.length };
+      }
     }
+  }
+
+  if (bestMatch) {
+    const categoryResults = ALL_CPT.filter(
+      (cpt) => cpt.category === bestMatch.category
+    );
+
+    // Category can be very broad (e.g., all Orthopedics).
+    // Narrow by filtering to codes whose description matches query words.
+    const queryWords = lower.split(/\s+/).filter((w) => w.length > 2);
+    const narrowed = categoryResults.filter((cpt) => {
+      const desc = cpt.description.toLowerCase();
+      return queryWords.some((w) => desc.includes(w));
+    });
+
+    // Use narrowed results if we got any, otherwise fall back to category
+    return narrowed.length > 0 ? narrowed : categoryResults;
   }
 
   // Fallback to general search
@@ -198,13 +214,30 @@ export function getCPTsForCondition(condition: string): CPTCode[] {
 export function getICD10sForCondition(condition: string): ICD10Code[] {
   const lower = condition.toLowerCase();
 
-  // Check for exact condition matches
+  // Longest-match-wins: find the most specific keyword match
+  let bestMatch: { category: string; matchLength: number } | null = null;
   for (const [, config] of Object.entries(CONDITION_KEYWORDS)) {
-    if (config.keywords.some((kw) => lower.includes(kw))) {
-      return ALL_ICD10.filter(
-        (icd) => icd.category === config.category
-      );
+    for (const kw of config.keywords) {
+      if (lower.includes(kw) && (!bestMatch || kw.length > bestMatch.matchLength)) {
+        bestMatch = { category: config.category, matchLength: kw.length };
+      }
     }
+  }
+
+  if (bestMatch) {
+    const categoryResults = ALL_ICD10.filter(
+      (icd) => icd.category === bestMatch.category
+    );
+
+    // Narrow by filtering to codes whose description matches query words
+    // (prevents returning ALL 129 Cardiology codes for "heart failure")
+    const queryWords = lower.split(/\s+/).filter((w) => w.length > 2);
+    const narrowed = categoryResults.filter((icd) => {
+      const desc = icd.description.toLowerCase();
+      return queryWords.some((w) => desc.includes(w));
+    });
+
+    return narrowed.length > 0 ? narrowed : categoryResults;
   }
 
   // Fallback to general search

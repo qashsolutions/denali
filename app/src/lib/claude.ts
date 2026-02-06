@@ -359,6 +359,11 @@ export async function chat(
   while (iterations < maxIterations) {
     iterations++;
 
+    // Soft cap: warn Claude to wrap up 2 iterations before the hard limit
+    if (iterations === maxIterations - 1) {
+      request.systemPrompt += `\n\n## URGENT: Approaching Tool Limit\nYou have used ${iterations - 1} of ${maxIterations} tool rounds. STOP calling tools after this round.\nUse the data you already have to respond to the user. Generate your response NOW.`;
+    }
+
     // DEBUG: Log what we're sending to Claude
     console.log("========================================");
     console.log("[CLAUDE API] Iteration:", iterations, "of", maxIterations);
@@ -503,7 +508,39 @@ export async function chat(
     };
   }
 
-  throw new Error("Max tool calling iterations reached");
+  // Graceful fallback: extract any text from the last assistant message
+  // instead of crashing with an error
+  console.warn(`[CLAUDE API] Hit max iterations (${maxIterations}). Returning best available content.`);
+
+  // Walk backwards through messages to find the last assistant response with text
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role === "assistant" && Array.isArray(msg.content)) {
+      const textBlocks = (msg.content as ContentBlock[]).filter(
+        (block): block is Anthropic.TextBlock => block.type === "text"
+      );
+      if (textBlocks.length > 0) {
+        const partialContent = textBlocks.map((b) => b.text).join("\n");
+        updateSessionState(sessionState, partialContent, toolsUsed);
+        const { cleanContent, suggestions } = extractSuggestionsAndClean(partialContent, sessionState);
+
+        return {
+          content: cleanContent || "I gathered some information but ran out of processing time. Here's what I have so far — could you try asking again so I can finish?",
+          suggestions: suggestions.length > 0 ? suggestions : ["Try again", "Start over"],
+          sessionState,
+          toolsUsed,
+        };
+      }
+    }
+  }
+
+  // Absolute last resort: no text found anywhere
+  return {
+    content: "I wasn't able to complete the lookup in time. Could you try again? If you're appealing a denial, try giving me the denial code directly (like CO-50).",
+    suggestions: ["Try again", "Start over"],
+    sessionState,
+    toolsUsed,
+  };
 }
 
 // Update session state from local tool results (called during tool loop)
