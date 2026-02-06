@@ -413,19 +413,21 @@ function extractSuggestionsAndClean(content: string, sessionState: SessionState)
 } {
   console.log("[extractSuggestions] Parsing content for [SUGGESTIONS] block...");
 
-  // Try to extract [SUGGESTIONS] block
-  const suggestionsMatch = content.match(/\[SUGGESTIONS\]\s*([\s\S]*?)\s*\[\/SUGGESTIONS\]/i);
+  // Try to extract [SUGGESTIONS] block (with or without closing tag)
+  const suggestionsMatch = content.match(/\[SUGGESTIONS\]\s*([\s\S]*?)\s*\[\/SUGGESTIONS\]/i)
+    || content.match(/\[SUGGESTIONS\]\s*([\s\S]+)$/i); // Fallback: unclosed block at end
 
   if (suggestionsMatch) {
     const suggestionsBlock = suggestionsMatch[1];
     const suggestions = suggestionsBlock
       .split(/\n/)
-      .map((line) => line.trim())
+      .map((line) => line.replace(/^\[\/SUGGESTIONS\].*/i, "").trim()) // Strip any stray closing tag
       .filter((line) => line.length > 0 && line.length < 50);
 
-    // Remove the suggestions block from content
+    // Remove the suggestions block from content (both closed and unclosed forms)
     const cleanContent = content
       .replace(/\[SUGGESTIONS\][\s\S]*?\[\/SUGGESTIONS\]/i, "")
+      .replace(/\[SUGGESTIONS\][\s\S]*$/i, "") // Also strip unclosed block at end
       .replace(/---\s*$/m, "") // Remove trailing ---
       .replace(/\n{3,}/g, "\n\n") // Clean up extra newlines
       .trim();
