@@ -420,22 +420,27 @@ export function useAuth(): UseAuthReturn {
           return "allowed";
         }
 
-        const { data: usage } = await supabase
+        const { data: usage, error: usageError } = await supabase
           .from("usage")
           .select("appeal_count")
           .eq("email", authState.email)
           .single();
 
-        const appealCount = usage?.appeal_count || 0;
+        // No usage record yet = new user = free
+        if (usageError || !usage) {
+          return "free";
+        }
 
-        if (appealCount === 0) {
+        const appealCount = usage.appeal_count || 0;
+
+        if (appealCount < 3) {
           return "free";
         }
 
         return "paywall";
       } catch (error) {
         console.error("Error checking appeal access:", error);
-        return "paywall";
+        return "free";
       }
     }, [authState, supabase]);
 

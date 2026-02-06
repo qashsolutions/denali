@@ -34,3 +34,5 @@ npm-debug.log*
 .vscode/
 *.swp
 *.swo
+.vercel
+.env*.local
