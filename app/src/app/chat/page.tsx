@@ -9,9 +9,10 @@ import { Message, LoadingMessage } from "@/components/chat/Message";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { PrintableChecklist } from "@/components/chat/PrintableChecklist";
 import { EmailPrompt } from "@/components/chat/EmailPrompt";
-import { AppealLetterModal, AppealOutcomePrompt } from "@/components/appeal";
+import { AppealCard, AppealLetterModal, AppealOutcomePrompt } from "@/components/appeal";
 import { useTheme } from "@/components/ThemeProvider";
 import { useChat } from "@/hooks/useChat";
+import { useAuth } from "@/hooks/useAuth";
 import { MountainIcon, SunIcon, MoonIcon } from "@/components/icons";
 import { BRAND } from "@/config";
 
@@ -19,9 +20,13 @@ function ChatContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { isDark, toggleTheme } = useTheme();
+  const { authState } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [pendingInput, setPendingInput] = useState<string | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Read conversation ID from URL params for loading past conversations
+  const urlConversationId = searchParams.get("id") || undefined;
 
   const {
     messages,
@@ -35,10 +40,14 @@ function ChatContent() {
     sendEmail,
     triggerEmail,
     triggerOutcomeReport,
+    showAppealModal,
     submitAppealOutcome,
     resetChat,
     conversationId,
-  } = useChat();
+  } = useChat({
+    conversationId: urlConversationId,
+    userId: authState.userId || undefined,
+  });
 
   // Handle initial message from URL params
   useEffect(() => {
@@ -187,6 +196,14 @@ function ChatContent() {
                         onCancel={dismissAction}
                       />
                     </div>
+                  )}
+
+                  {/* Inline Appeal Card - shown when appeal letter exists */}
+                  {appealData && currentAction.type !== "show_appeal" && (
+                    <AppealCard
+                      data={appealData}
+                      onView={showAppealModal}
+                    />
                   )}
 
                   <div ref={messagesEndRef} />

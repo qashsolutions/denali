@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 export interface AuthState {
+  userId: string | null;
   email: string | null;
   isEmailVerified: boolean;
   isMfaEnrolled: boolean;
@@ -29,6 +30,7 @@ interface UseAuthReturn {
 }
 
 const DEFAULT_AUTH_STATE: AuthState = {
+  userId: null,
   email: null,
   isEmailVerified: false,
   isMfaEnrolled: false,
@@ -97,6 +99,7 @@ export function useAuth(): UseAuthReturn {
             : "free";
 
           setAuthState({
+            userId: session.user.id,
             email,
             isEmailVerified:
               !!email && session.user.email_confirmed_at !== null,
@@ -124,6 +127,7 @@ export function useAuth(): UseAuthReturn {
           const email = session.user.email || null;
           setAuthState((prev) => ({
             ...prev,
+            userId: session.user.id,
             email,
             isEmailVerified:
               !!email && session.user.email_confirmed_at !== null,

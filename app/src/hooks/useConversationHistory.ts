@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   loadRecentConversations,
-  hasActiveSubscription,
   type ConversationData,
 } from "@/lib/conversation-service";
 import { createClient } from "@/lib/supabase";
@@ -19,7 +18,7 @@ export interface ConversationHistoryItem {
 interface UseConversationHistoryReturn {
   conversations: ConversationHistoryItem[];
   isLoading: boolean;
-  isPaidUser: boolean;
+  isVerifiedUser: boolean;
   refresh: () => Promise<void>;
 }
 
@@ -30,7 +29,7 @@ interface UseConversationHistoryReturn {
 export function useConversationHistory(): UseConversationHistoryReturn {
   const [conversations, setConversations] = useState<ConversationHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isPaidUser, setIsPaidUser] = useState(false);
+  const [isVerifiedUser, setIsVerifiedUser] = useState(false);
   const supabase = createClient();
 
   const fetchHistory = useCallback(async () => {
@@ -42,17 +41,17 @@ export function useConversationHistory(): UseConversationHistoryReturn {
 
       if (!session?.user) {
         setConversations([]);
-        setIsPaidUser(false);
+        setIsVerifiedUser(false);
         setIsLoading(false);
         return;
       }
 
-      // Check if user has active subscription (paid user)
-      const hasSub = await hasActiveSubscription(session.user.id);
-      setIsPaidUser(hasSub);
+      // Check if user has verified their email
+      const emailVerified = session.user.email_confirmed_at !== null;
+      setIsVerifiedUser(emailVerified);
 
-      // Only load conversations for paid users
-      if (!hasSub) {
+      // Only load conversations for verified users
+      if (!emailVerified) {
         setConversations([]);
         setIsLoading(false);
         return;
@@ -90,7 +89,7 @@ export function useConversationHistory(): UseConversationHistoryReturn {
   return {
     conversations,
     isLoading,
-    isPaidUser,
+    isVerifiedUser,
     refresh: fetchHistory,
   };
 }

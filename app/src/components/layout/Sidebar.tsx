@@ -25,7 +25,7 @@ export function Sidebar({
   onNewChat,
 }: SidebarProps) {
   const router = useRouter();
-  const { conversations, isLoading, isPaidUser } = useConversationHistory();
+  const { conversations, isLoading, isVerifiedUser } = useConversationHistory();
   const groupedConversations = groupConversationsByDate(conversations);
 
   // Close sidebar on escape key
@@ -107,11 +107,11 @@ export function Sidebar({
 
         {/* Conversation History */}
         <div className="flex-1 overflow-y-auto px-3 pb-3">
-          {!isPaidUser ? (
+          {!isVerifiedUser ? (
             <div className="text-center py-8 px-4">
               <LockIcon className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-3" />
               <p className="text-sm text-[var(--text-muted)]">
-                Chat history is available for subscribers
+                Verify your email to see chat history
               </p>
             </div>
           ) : isLoading ? (

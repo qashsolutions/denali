@@ -9,6 +9,8 @@ import {
   createConversation,
   saveMessage,
   loadConversation,
+  loadAppealsForConversation,
+  updateConversationUserId,
   submitMessageFeedback,
   trackEvent,
 } from "@/lib/conversation-service";
@@ -24,6 +26,7 @@ export interface AppealLetterData {
 
 export interface UseChatOptions {
   conversationId?: string;
+  userId?: string;
   initialMessages?: Message[];
   onError?: (error: Error) => void;
 }
@@ -53,6 +56,7 @@ interface UseChatReturn {
   triggerPrint: () => void;
   triggerEmail: () => void;
   triggerOutcomeReport: () => void;
+  showAppealModal: () => void;
   setUserEmail: (email: string) => void;
   sendEmail: (email: string) => Promise<void>;
   submitAppealOutcome: (outcome: "approved" | "denied" | "partial", daysToDecision?: number) => Promise<void>;
@@ -147,7 +151,7 @@ function generateId(): string {
 }
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
-  const { initialMessages = [], onError } = options;
+  const { initialMessages = [], onError, userId } = options;
 
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
@@ -187,8 +191,33 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           setConversationId(data.id);
         }
       });
+
+      // Also load appeals for this conversation
+      loadAppealsForConversation(options.conversationId).then((appeals) => {
+        if (appeals.length > 0) {
+          const latest = appeals[0];
+          setAppealData({
+            letterContent: latest.appealLetter,
+            denialCodes: latest.carcCodes,
+            policyReferences: [...latest.lcdRefs, ...latest.ncdRefs],
+            denialDate: latest.denialDate,
+            appealDeadline: latest.deadline,
+            conversationId: options.conversationId || null,
+          });
+          setAppealId(latest.id);
+        }
+      });
     }
   }, [options.conversationId]);
+
+  // Link anonymous conversation to user after auth
+  useEffect(() => {
+    if (userId && conversationId) {
+      updateConversationUserId(conversationId, userId).catch((err) =>
+        console.warn("Failed to link conversation to user:", err)
+      );
+    }
+  }, [userId, conversationId]);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
@@ -218,6 +247,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       let currentConversationId = conversationId;
       if (!currentConversationId) {
         const newConvId = await createConversation({
+          userId: userId || undefined,
           isAppeal: content.toLowerCase().includes("denied") || content.toLowerCase().includes("appeal"),
         });
         if (newConvId) {
@@ -253,6 +283,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           messages: apiMessages,
           conversationId,
           sessionState,
+          userId: userId || undefined,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -319,7 +350,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           conversationId: currentConversationId || null,
         };
         setAppealData(appeal);
-        setCurrentAction({ type: "show_appeal", data: appeal });
+        // Don't auto-open modal — inline AppealCard will render instead
         trackEvent("appeal_completed", {
           conversationId: currentConversationId || undefined,
           appealId: data.appealId || undefined,
@@ -362,7 +393,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [conversationId, onError, checklistData, userEmail, messages, sessionState]);
+  }, [conversationId, onError, checklistData, userEmail, messages, sessionState, userId]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);
@@ -509,6 +540,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     }
   }, [appealId]);
 
+  const showAppealModal = useCallback(() => {
+    if (appealData) {
+      setCurrentAction({ type: "show_appeal", data: appealData });
+    }
+  }, [appealData]);
+
   const submitAppealOutcome = useCallback(async (
     outcome: "approved" | "denied" | "partial",
     daysToDecision?: number
@@ -576,6 +613,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     triggerPrint,
     triggerEmail,
     triggerOutcomeReport,
+    showAppealModal,
     setUserEmail,
     sendEmail,
     submitAppealOutcome,

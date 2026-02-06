@@ -414,6 +414,80 @@ export async function checkAppealAccess(
 }
 
 /**
+ * Summary of an appeal record for inline display
+ */
+export interface AppealSummary {
+  id: string;
+  appealLetter: string;
+  denialReason: string | null;
+  denialDate: string | null;
+  deadline: string | null;
+  carcCodes: string[];
+  cptCodes: string[];
+  lcdRefs: string[];
+  ncdRefs: string[];
+  status: string;
+  createdAt: Date;
+}
+
+/**
+ * Load appeals associated with a conversation
+ */
+export async function loadAppealsForConversation(
+  conversationId: string
+): Promise<AppealSummary[]> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("appeals")
+    .select("*")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) {
+    console.error("Failed to load appeals for conversation:", error);
+    return [];
+  }
+
+  return data.map((appeal) => ({
+    id: appeal.id,
+    appealLetter: appeal.appeal_letter,
+    denialReason: appeal.denial_reason,
+    denialDate: appeal.denial_date,
+    deadline: appeal.deadline,
+    carcCodes: appeal.carc_codes || [],
+    cptCodes: appeal.cpt_codes || [],
+    lcdRefs: appeal.lcd_refs || [],
+    ncdRefs: appeal.ncd_refs || [],
+    status: appeal.status || "draft",
+    createdAt: new Date(appeal.created_at),
+  }));
+}
+
+/**
+ * Link an anonymous conversation to a user after authentication
+ */
+export async function updateConversationUserId(
+  conversationId: string,
+  userId: string
+): Promise<boolean> {
+  const supabase = createClient();
+
+  const { error } = await supabase
+    .from("conversations")
+    .update({ user_id: userId })
+    .eq("id", conversationId)
+    .is("user_id", null);
+
+  if (error) {
+    console.error("Failed to update conversation user_id:", error);
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Get appeal count for a phone number
  */
 export async function getAppealCount(email: string): Promise<number> {
