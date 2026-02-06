@@ -172,9 +172,15 @@ export async function POST(request: NextRequest) {
 
     if (!conversationId) {
       // Create new conversation in database (required for FK constraints)
+      // Use the first user message as the title
+      const firstUserMsg = body.messages.find((m) => m.role === "user");
+      const title = firstUserMsg
+        ? firstUserMsg.content.slice(0, 60) + (firstUserMsg.content.length > 60 ? "..." : "")
+        : null;
       console.log("[Chat API] Creating new conversation...");
       const newConvId = await createConversation({
         isAppeal: result.sessionState.isAppeal,
+        title: title || undefined,
       });
 
       if (newConvId) {
