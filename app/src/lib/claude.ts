@@ -128,6 +128,7 @@ export interface ChatResult {
   suggestions: string[];
   sessionState: SessionState;
   toolsUsed: string[];
+  appealLetter?: string;
 }
 
 // Initialize Claude client
@@ -552,6 +553,7 @@ export async function chat(
   const claude = getClaudeClient();
   const sessionState = request.sessionState ?? createDefaultSessionState();
   const toolsUsed: string[] = [];
+  let appealLetter: string | undefined;
   const model = request.modelOverride || API_CONFIG.claude.model;
   // Opus (appeal mode) needs longer timeout — heavy reasoning with tool results
   const isAppealModel = model.includes("opus");
@@ -683,6 +685,13 @@ export async function chat(
           try {
             const parsed = JSON.parse(resultContent) as ToolResult;
             updateSessionFromToolResults(sessionState, toolUseBlocks[i].name, parsed);
+            // Capture the formal letter from generate_appeal_letter
+            if (toolUseBlocks[i].name === "generate_appeal_letter" && parsed.success) {
+              const toolData = parsed.data as { letter?: string } | undefined;
+              if (toolData?.letter) {
+                appealLetter = toolData.letter;
+              }
+            }
           } catch {
             // Not valid JSON, skip
           }
@@ -733,6 +742,7 @@ export async function chat(
       suggestions,
       sessionState,
       toolsUsed,
+      appealLetter,
     };
   }
 
@@ -761,6 +771,7 @@ export async function chat(
           suggestions: suggestions.length > 0 ? suggestions : ["Try again", "Start over"],
           sessionState,
           toolsUsed,
+          appealLetter,
         };
       }
     }

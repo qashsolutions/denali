@@ -311,7 +311,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           deadline = deadlineDate.toISOString();
         }
         const appeal: AppealLetterData = {
-          letterContent: data.content,
+          letterContent: data.appealLetter || data.content,
           denialCodes: ss.denialCodes || [],
           policyReferences: ss.policyReferences || [],
           denialDate: ss.denialDate || null,

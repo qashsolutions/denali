@@ -56,6 +56,7 @@ interface ChatResponseBody {
   sessionState: SessionState;
   toolsUsed: string[];
   appealId?: string;
+  appealLetter?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -202,7 +203,7 @@ export async function POST(request: NextRequest) {
       const ncdRefs = ss.policyReferences.filter((r) => r.startsWith("NCD"));
       try {
         const savedAppealId = await saveAppeal(conversationId, "", {
-          appealLetter: result.content,
+          appealLetter: result.appealLetter || result.content,
           denialReason: ss.denialCodes.length > 0 ? `CARC ${ss.denialCodes.join(", ")}` : undefined,
           denialDate: ss.denialDate || undefined,
           icd10Codes: ss.diagnosisCodes.length > 0 ? ss.diagnosisCodes : undefined,
@@ -227,6 +228,7 @@ export async function POST(request: NextRequest) {
       sessionState: result.sessionState,
       toolsUsed: result.toolsUsed,
       appealId,
+      appealLetter: result.appealLetter,
     };
 
     console.log("[Chat API] Sending response with", response.suggestions.length, "suggestions");
