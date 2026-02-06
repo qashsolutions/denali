@@ -46,7 +46,6 @@ interface ChatRequestBody {
   }>;
   conversationId?: string;
   sessionState?: SessionState;
-  userId?: string;
 }
 
 // Response type
@@ -175,7 +174,6 @@ export async function POST(request: NextRequest) {
       // Create new conversation in database (required for FK constraints)
       console.log("[Chat API] Creating new conversation...");
       const newConvId = await createConversation({
-        userId: body.userId,
         isAppeal: result.sessionState.isAppeal,
       });
 

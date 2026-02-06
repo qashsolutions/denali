@@ -247,7 +247,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       let currentConversationId = conversationId;
       if (!currentConversationId) {
         const newConvId = await createConversation({
-          userId: userId || undefined,
           isAppeal: content.toLowerCase().includes("denied") || content.toLowerCase().includes("appeal"),
         });
         if (newConvId) {
@@ -283,7 +282,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           messages: apiMessages,
           conversationId,
           sessionState,
-          userId: userId || undefined,
         }),
         signal: abortControllerRef.current.signal,
       });
