@@ -240,6 +240,64 @@ Skip for now
 `;
 
 // =============================================================================
+// CONDITIONAL SKILL: MEDICARE TYPE DETECTION
+// TRIGGER: !hasMedicareType && hasProblem && !isAppeal
+// =============================================================================
+
+const MEDICARE_TYPE_SKILL = `
+## Medicare Type Check
+
+### Ask After Name + ZIP
+"One quick thing — do you have Original Medicare or a Medicare Advantage plan?
+*Our guidance is built for Original Medicare. If you have Advantage, your plan has its own rules.*"
+
+### Help Them Check
+If they're not sure: "Check your Medicare card — if it says 'Medicare Health Insurance' with red/white/blue stripes, that's Original. If it has a private company name (like Humana, UnitedHealthcare, Aetna), that's Advantage."
+
+### After They Answer
+Emit a [MEDICARE_TYPE] block:
+[MEDICARE_TYPE]original[/MEDICARE_TYPE]
+or
+[MEDICARE_TYPE]advantage[/MEDICARE_TYPE]
+or
+[MEDICARE_TYPE]supplement[/MEDICARE_TYPE]
+
+Supplement/Medigap → treat as Original Medicare (they have both).
+"Not sure" + no plan name → default to Original.
+
+[SUGGESTIONS]
+Original Medicare
+Medicare Advantage
+[/SUGGESTIONS]
+`;
+
+const MEDICARE_ADVANTAGE_SKILL = `
+## Medicare Advantage Detected
+
+### Explain the Difference
+"I see you have a Medicare Advantage plan. Here's the thing — our coverage guidance is built around Original Medicare's rules (LCDs and NCDs). Advantage plans set their own coverage criteria, which can be different.
+
+**What I'd suggest:**
+- Call the number on the back of your plan card and ask about coverage for [their procedure]
+- Your plan is required to cover everything Original Medicare covers, but they may have extra requirements
+
+**What I CAN still help with:**
+- Appeal a denial (the appeal process is similar)
+- Explain denial codes on your EOB
+- General Medicare coverage questions"
+
+### Allow Override
+If they say "check anyway" or "show me anyway":
+"OK — I'll show you what Original Medicare requires. Keep in mind your Advantage plan may differ. Here goes..."
+Then proceed with normal coverage flow.
+
+[SUGGESTIONS]
+Help me appeal
+Check anyway
+[/SUGGESTIONS]
+`;
+
+// =============================================================================
 // CONDITIONAL SKILL: SYMPTOM GATHERING
 // TRIGGER: hasProblem && (!hasDuration || !hasPriorTreatments)
 // =============================================================================
@@ -406,6 +464,41 @@ Not yet, find one for me
 `;
 
 // =============================================================================
+// CONDITIONAL SKILL: PRIOR AUTH QUICK CHECK
+// TRIGGER: isPriorAuthQuery && !hasCoverage
+// =============================================================================
+
+const PRIOR_AUTH_SKILL = `
+## Prior Authorization Quick Check
+
+User is asking specifically about prior authorization / pre-approval.
+
+### Flow
+1. Clarify which procedure (if not already known)
+2. Look up CPT code for the procedure
+3. Check if it commonly requires prior auth
+4. Give a clear yes/no/maybe answer
+
+### Response Format
+"**Does [procedure] need prior authorization?**
+
+[Yes/No/It depends] — [one line explanation].
+
+[If yes]: Your doctor's office handles this. Ask them: 'Has the prior auth been submitted?'
+[If no]: No extra step needed — your doctor can schedule directly.
+[If depends]: It varies by region. Your doctor's office can confirm with Medicare."
+
+### After Answering
+Offer to do a full coverage check:
+"Want me to check everything Medicare needs to approve this?"
+
+[SUGGESTIONS]
+Yes, check coverage
+That's all I need
+[/SUGGESTIONS]
+`;
+
+// =============================================================================
 // CONDITIONAL SKILL: CODE VALIDATION (ICD-10 to CPT Mapping)
 // TRIGGER: hasProcedure || hasCoverage || isAppeal
 // =============================================================================
@@ -479,20 +572,44 @@ const COVERAGE_SKILL = `
 - **ALWAYS include the LCD/NCD number** (e.g., "Policy: L35936")
 - Pass through requirements AS-IS — do not simplify medical language
 
-### Prior Authorization Detection
+### Prior Authorization Detection (from LCD Text)
 When you fetch an LCD, scan for these keywords:
 - "Prior authorization required"
 - "Advance determination"
 - "Pre-service review"
 - "Advance beneficiary notice"
+- "Prior approval"
+- "Precertification"
 
-If found, tell user:
-"Heads up — this might need prior authorization. Your doctor's office usually handles this, but make sure they know to submit it before the procedure."
+If found, emit:
+[PRIOR_AUTH_LCD]true[/PRIOR_AUTH_LCD]
+
+Then tell user:
+"Heads up — the policy says this needs prior authorization. Your doctor's office handles this — ask them: 'Has the prior auth been submitted?'"
+
+If NOT found in LCD text, still check via the check_prior_auth tool for CMS PA Model matches.
 
 ### If No Results
 "I couldn't find a specific policy for this. Let me search more broadly..."
 
 ### NEVER make up requirements — use ONLY tool results.
+
+### Extract Requirements (CRITICAL)
+After receiving LCD/NCD results, emit a [REQUIREMENTS] block listing the specific requirements from the policy. One requirement per line, plain English. These are used for verification.
+
+Example:
+[REQUIREMENTS]
+Symptoms present for at least 6 weeks
+Conservative treatment tried and failed (PT, medication)
+Prior X-ray or imaging completed
+Documentation of functional limitation
+[/REQUIREMENTS]
+
+Rules:
+- Extract ACTUAL requirements from the LCD/NCD text — don't make them up
+- One per line, no bullets or numbers
+- Keep in plain English but preserve medical terms from the policy
+- Only include requirements that are checkable (not vague statements)
 
 ### After Delivering Coverage Info
 Always end with an offer to create a personalized checklist:
@@ -514,32 +631,40 @@ const REQUIREMENT_VERIFICATION_SKILL = `
 
 Before showing checklist, verify user meets key requirements from the LCD/NCD.
 
+### Auto-Verified Requirements
+Some requirements may already be marked as met (✓) based on earlier answers. Check session state — only ask about requirements still marked as unverified (?).
+
 ### Ask ONE Question at a Time (based on LCD requirements)
+For each UNVERIFIED requirement, ask a brief question with the reason on the next line in italics.
+
+After the user answers, emit a [VERIFIED] block:
+[VERIFIED]requirement text|true[/VERIFIED]
+or
+[VERIFIED]requirement text|false[/VERIFIED]
 
 **Red Flags First** (these can EXPEDITE approval):
-"Has she had any loss of bladder/bowel control, or weakness that's getting worse?"
-- If YES: "That's important — those symptoms can help get faster approval. I'll note this."
+"Any bowel/bladder issues or weakness getting worse?
+*These can actually speed up approval.*"
+[VERIFIED]Red flag symptoms present|true[/VERIFIED]
 
 **Prior Imaging** (if LCD requires it):
-"Has she had an X-ray of her back already?"
-- If YES: "Great — when was that done?"
-- If NO: "The policy usually requires X-ray first. Quick and easy to get."
+"Had an X-ray of the back already?
+*The policy usually requires this before an MRI.*"
 
 **Duration Check** (if LCD specifies minimum):
-"How long has she had these symptoms?"
-- < LCD minimum: "The policy requires at least [X weeks]. You might want to wait, or check for red flags."
-- Meets requirement: "That meets the policy requirement."
+Already auto-verified if duration was gathered. Only ask if the session duration doesn't match.
 
 **Conservative Treatment** (if LCD requires it):
-"Has she tried any treatments — PT, anti-inflammatory meds, exercises?"
-- If NO: "The policy requires trying conservative treatment first."
+Already auto-verified if prior treatments were gathered. Only ask if unclear.
+
+### Skip Handling
+If user says "skip", "just show me", or "move on":
+- Proceed to guidance immediately
+- Add caveat: "I haven't verified all requirements — ask your doctor to confirm these are documented."
 
 ### Track Answers
-Remember their answers — these go into the personalized checklist:
-- ✓ Duration: [their answer]
-- ✓ Prior X-ray: [yes/no and when]
-- ✓ Treatments: [what they tried]
-- ✓ Red flags: [any present]
+The [VERIFIED] blocks update session state automatically. Show progress:
+"That's 3 of 5 requirements confirmed. Next one..."
 
 ### If Requirements NOT Met
 "Based on the Medicare policy, she might not qualify yet. Here's what I'd suggest:
@@ -551,6 +676,11 @@ Remember their answers — these go into the personalized checklist:
 ### If ALL Met → Proceed Immediately to Guidance
 "Great news! Based on what you've told me, she should qualify. Here's what the doctor needs to document..."
 [Then IMMEDIATELY show the full checklist — don't ask, just provide it]
+
+[SUGGESTIONS]
+Yes, that's done
+No, not yet
+[/SUGGESTIONS]
 `;
 
 // =============================================================================
@@ -833,6 +963,11 @@ export interface SkillTriggers {
   hasSpecialtyMismatch: boolean;
   // Emergency
   hasEmergencySymptoms: boolean;
+  // Medicare type
+  hasMedicareType: boolean;
+  isMedicareAdvantage: boolean;
+  // Prior auth query
+  isPriorAuthQuery: boolean;
 }
 
 // Emergency symptom patterns
@@ -910,6 +1045,13 @@ export function detectTriggers(
 
     // Emergency
     hasEmergencySymptoms: EMERGENCY_PATTERNS.test(userContent),
+
+    // Medicare type
+    hasMedicareType: sessionState?.medicareType != null,
+    isMedicareAdvantage: sessionState?.medicareType === "advantage",
+
+    // Prior auth query
+    isPriorAuthQuery: /prior auth|pre-?approv|pre-?authoriz|need approval first/i.test(userContent),
   };
 }
 
@@ -962,6 +1104,33 @@ export function buildSystemPrompt(
     }
     sections.push(buildFlowStateReminder(triggers, sessionState));
     // RETURN EARLY - Don't load any other skills until onboarding complete
+    return sections.join("\n\n---\n\n");
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // MEDICARE TYPE GATE - Must determine Medicare type before coverage check
+  // ─────────────────────────────────────────────────────────────────────────
+  // After onboarding, ask if they have Original Medicare or Advantage.
+  // Appeals skip this gate (appeal process is similar for both).
+  if (!triggers.hasMedicareType && triggers.hasProblem && !triggers.isAppeal) {
+    sections.push(TOOL_RESTRAINT);
+    sections.push(MEDICARE_TYPE_SKILL);
+    sections.push(PROMPTING_SKILL);
+    if (sessionState) {
+      sections.push(buildSessionContext(sessionState));
+    }
+    sections.push(buildFlowStateReminder(triggers, sessionState));
+    return sections.join("\n\n---\n\n");
+  }
+
+  // Medicare Advantage deflection (non-appeal)
+  if (triggers.isMedicareAdvantage && !triggers.isAppeal) {
+    sections.push(MEDICARE_ADVANTAGE_SKILL);
+    sections.push(PROMPTING_SKILL);
+    if (sessionState) {
+      sections.push(buildSessionContext(sessionState));
+    }
+    sections.push(buildFlowStateReminder(triggers, sessionState));
     return sections.join("\n\n---\n\n");
   }
 
@@ -1060,6 +1229,11 @@ Coverage tools come AFTER the provider is confirmed.
     sections.push(APPEAL_SKILL);
   }
 
+  // Prior auth quick check (standalone query before full coverage)
+  if (triggers.isPriorAuthQuery && !triggers.hasCoverage) {
+    sections.push(PRIOR_AUTH_SKILL);
+  }
+
   // Coverage lookup - only after symptoms gathered
   if (triggers.hasProcedure && triggers.hasDuration && triggers.hasPriorTreatments) {
     sections.push(COVERAGE_SKILL);
@@ -1112,6 +1286,12 @@ function buildSessionContext(state: SessionState): string {
   if (state.userZip) {
     context.push(`**User's ZIP:** ${state.userZip} ← Use for NPI search & regional LCD`);
   }
+  if (state.medicareType) {
+    const typeLabel = state.medicareType === "original" ? "Original Medicare (Parts A & B)"
+      : state.medicareType === "advantage" ? "Medicare Advantage (Part C)"
+      : "Original Medicare with Supplement";
+    context.push(`**Medicare type:** ${typeLabel}`);
+  }
 
   // Symptoms — MUST use in checklist
   if (state.symptoms?.length > 0) {
@@ -1160,7 +1340,17 @@ function buildSessionContext(state: SessionState): string {
   }
 
   // Verification
-  if (state.verificationComplete) {
+  if (state.requirementsToVerify?.length > 0) {
+    context.push("**Requirements to verify:**");
+    for (const req of state.requirementsToVerify) {
+      const answer = state.requirementAnswers[req];
+      const status = answer === undefined ? "? Unverified" : answer ? "✓ Met" : "✗ Not met";
+      context.push(`  ${status}: ${req}`);
+    }
+    if (state.verificationComplete) {
+      context.push(`**Verification:** Complete — ${state.meetsAllRequirements === true ? "All met" : state.meetsAllRequirements === false ? "Some missing" : "Skipped by user"}`);
+    }
+  } else if (state.verificationComplete) {
     context.push(`**Requirements verified:** ${state.meetsAllRequirements ? "All met ✓" : "Some missing"}`);
   }
 
@@ -1177,7 +1367,11 @@ function buildSessionContext(state: SessionState): string {
 
   // Prior authorization
   if (state.priorAuthRequired === true) {
-    context.push(`**⚠️ Prior authorization:** REQUIRED — Include this in checklist!`);
+    const sourceLabel = state.priorAuthSource === "lcd" ? " (from LCD policy)"
+      : state.priorAuthSource === "cms_model" ? " (CMS PA Model)"
+      : state.priorAuthSource === "hardcoded_list" ? " (common list)"
+      : "";
+    context.push(`**⚠️ Prior authorization:** REQUIRED${sourceLabel} — Include this in checklist!`);
   } else if (state.priorAuthRequired === false) {
     context.push(`**Prior authorization:** Not required`);
   }
@@ -1287,6 +1481,20 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
     return reminder.join("\n");
   }
 
+  // Step 3a: Medicare type
+  if (!triggers.hasMedicareType && !triggers.isAppeal) {
+    reminder.push("**ASK:** 'Do you have Original Medicare or a Medicare Advantage plan?'");
+    reminder.push("*Our guidance is built for Original Medicare.*");
+    return reminder.join("\n");
+  }
+
+  // Step 3b: Medicare Advantage deflection
+  if (triggers.isMedicareAdvantage && !triggers.isAppeal) {
+    reminder.push("**DEFLECT:** Explain we focus on Original Medicare");
+    reminder.push("**OFFER:** Help with appeals, or 'check anyway' to proceed with caveats");
+    return reminder.join("\n");
+  }
+
   // Step 4: Get symptoms
   if (triggers.hasProcedure && !triggers.hasSymptoms) {
     reminder.push("**ASK:** 'What's going on — pain, numbness, something else?\\n*Helps match you to the right coverage policy.*'");
@@ -1348,15 +1556,26 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
 
   // Step 9a: Prior auth warning (if check_prior_auth was used and PA is required)
   if (sessionState?.priorAuthRequired === true && triggers.hasCoverage) {
-    reminder.push("**⚠️ PRIOR AUTH REQUIRED** — Include this prominently in guidance!");
+    const sourceLabel = sessionState.priorAuthSource === "lcd" ? "from LCD policy"
+      : sessionState.priorAuthSource === "cms_model" ? "CMS PA Model"
+      : "common list";
+    reminder.push(`**⚠️ PRIOR AUTH REQUIRED (${sourceLabel})** — Include this prominently in guidance!`);
     reminder.push("**TELL USER:** 'Your doctor needs to get pre-approval before scheduling this procedure.'");
   }
 
   // Step 10: Verify requirements
   if (triggers.hasCoverage && !triggers.verificationComplete && triggers.hasRequirementsToVerify) {
-    reminder.push("**STEP:** Verify requirements (DENIAL PREVENTION)");
+    const total = sessionState?.requirementsToVerify?.length ?? 0;
+    const answered = Object.keys(sessionState?.requirementAnswers ?? {}).length;
+    const nextUnverified = sessionState?.requirementsToVerify?.find(
+      (r) => (sessionState?.requirementAnswers ?? {})[r] === undefined
+    );
+    reminder.push(`**STEP:** Verify requirements (${answered}/${total} done)`);
+    if (nextUnverified) {
+      reminder.push(`**ASK NEXT:** "${nextUnverified}"`);
+    }
     reminder.push("**ASK:** One verification question at a time");
-    reminder.push("**EXAMPLE:** 'Has she had symptoms for at least 6 weeks?'");
+    reminder.push("**EMIT:** [VERIFIED]requirement text|true/false[/VERIFIED] after each answer");
     return reminder.join("\n");
   }
 
@@ -1416,6 +1635,9 @@ export function buildInitialSystemPrompt(): string {
     meetsAllRequirements: false,
     hasSpecialtyMismatch: false,
     hasEmergencySymptoms: false,
+    hasMedicareType: false,
+    isMedicareAdvantage: false,
+    isPriorAuthQuery: false,
   };
 
   return buildSystemPrompt(triggers);

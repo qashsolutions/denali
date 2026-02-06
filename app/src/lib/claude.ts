@@ -55,6 +55,9 @@ export interface SessionState {
   userName: string | null;           // "John" - use in responses!
   userZip: string | null;            // "94305" - use for NPI searches!
 
+  // Medicare type
+  medicareType: "original" | "advantage" | "supplement" | null;
+
   // Symptoms
   symptoms: string[];
   duration: string | null;
@@ -87,6 +90,7 @@ export interface SessionState {
 
   // Prior authorization
   priorAuthRequired: boolean | null;           // Whether procedure requires prior auth
+  priorAuthSource: "lcd" | "cms_model" | "hardcoded_list" | null;
 
   // Requirement verification (denial prevention)
   requirementsToVerify: string[];              // List of requirements to ask about
@@ -147,6 +151,9 @@ export function createDefaultSessionState(): SessionState {
     userName: null,
     userZip: null,
 
+    // Medicare type
+    medicareType: null,
+
     // Symptoms
     symptoms: [],
     duration: null,
@@ -174,6 +181,7 @@ export function createDefaultSessionState(): SessionState {
 
     // Prior authorization
     priorAuthRequired: null,
+    priorAuthSource: null,
 
     // Requirement verification
     requirementsToVerify: [],
@@ -196,6 +204,205 @@ export function createDefaultSessionState(): SessionState {
     // Denial codes
     denialCodes: [],
   };
+}
+
+// Extract [MEDICARE_TYPE] block from Claude's response
+function extractMedicareType(content: string, sessionState: SessionState): string {
+  const match = content.match(/\[MEDICARE_TYPE\]\s*(original|advantage|supplement)\s*\[\/MEDICARE_TYPE\]/i);
+  if (!match) return content;
+
+  const type = match[1].toLowerCase() as "original" | "advantage" | "supplement";
+  // Supplement maps to original (they have Original Medicare + Medigap)
+  sessionState.medicareType = type === "supplement" ? "original" : type;
+  console.log("[extractMedicareType] Set type:", sessionState.medicareType);
+
+  // Remove block from content
+  return content
+    .replace(/\[MEDICARE_TYPE\][\s\S]*?\[\/MEDICARE_TYPE\]/i, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// Extract [REQUIREMENTS] block from Claude's response
+// Claude emits this after coverage tools return with LCD/NCD results
+function extractRequirementsAndClean(content: string, sessionState: SessionState): {
+  cleanContent: string;
+  requirements: string[];
+} {
+  const match = content.match(/\[REQUIREMENTS\]\s*([\s\S]*?)\s*\[\/REQUIREMENTS\]/i);
+
+  if (!match) {
+    return { cleanContent: content, requirements: [] };
+  }
+
+  const requirements = match[1]
+    .split(/\n/)
+    .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+    .filter((line) => line.length > 0);
+
+  // Remove the block from content
+  const cleanContent = content
+    .replace(/\[REQUIREMENTS\][\s\S]*?\[\/REQUIREMENTS\]/i, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (requirements.length > 0) {
+    // Populate session state with requirements
+    sessionState.requirementsToVerify = requirements;
+    console.log("[extractRequirements] Found requirements:", requirements);
+
+    // Auto-verify requirements that are already met based on session data
+    autoVerifyRequirements(sessionState);
+  }
+
+  return { cleanContent, requirements };
+}
+
+// Auto-verify requirements that are already met from session state data
+function autoVerifyRequirements(sessionState: SessionState): void {
+  const { requirementsToVerify, requirementAnswers } = sessionState;
+  if (requirementsToVerify.length === 0) return;
+
+  for (const req of requirementsToVerify) {
+    const lower = req.toLowerCase();
+    // Already answered — skip
+    if (requirementAnswers[req] !== undefined) continue;
+
+    // Duration check
+    if (sessionState.duration && (lower.includes("duration") || lower.includes("weeks") || lower.includes("months"))) {
+      const reqWeeks = extractWeeksFromText(req);
+      const userWeeks = extractWeeksFromText(sessionState.duration);
+      if (reqWeeks !== null && userWeeks !== null && userWeeks >= reqWeeks) {
+        requirementAnswers[req] = true;
+        console.log("[autoVerify] Duration met:", req);
+      }
+    }
+
+    // Conservative treatment check
+    if (sessionState.priorTreatments.length > 0 &&
+        (lower.includes("conservative") || lower.includes("treatment") || lower.includes("therapy") || lower.includes("medication"))) {
+      requirementAnswers[req] = true;
+      console.log("[autoVerify] Treatment met:", req);
+    }
+
+    // Prior imaging check
+    if (sessionState.priorImagingDone === true &&
+        (lower.includes("imaging") || lower.includes("x-ray") || lower.includes("xray") || lower.includes("radiograph"))) {
+      requirementAnswers[req] = true;
+      console.log("[autoVerify] Prior imaging met:", req);
+    }
+  }
+
+  // Check if all verified
+  const allAnswered = requirementsToVerify.every((r) => requirementAnswers[r] !== undefined);
+  if (allAnswered) {
+    sessionState.verificationComplete = true;
+    sessionState.meetsAllRequirements = requirementsToVerify.every((r) => requirementAnswers[r] === true);
+    console.log("[autoVerify] All requirements verified:", sessionState.meetsAllRequirements);
+  }
+}
+
+// Extract a week count from text like "6 weeks", "3 months", "1 year"
+function extractWeeksFromText(text: string): number | null {
+  const match = text.match(/(\d+)\s*(week|month|year|day)s?/i);
+  if (!match) return null;
+  const num = parseInt(match[1], 10);
+  switch (match[2].toLowerCase()) {
+    case "day": return num / 7;
+    case "week": return num;
+    case "month": return num * 4.33;
+    case "year": return num * 52;
+    default: return null;
+  }
+}
+
+// Extract [VERIFIED] blocks from Claude's response
+// Claude emits these after user answers verification questions
+function extractVerificationUpdates(content: string, sessionState: SessionState): string {
+  const pattern = /\[VERIFIED\]([\s\S]*?)\[\/VERIFIED\]/gi;
+  let match;
+  let cleanContent = content;
+
+  while ((match = pattern.exec(content)) !== null) {
+    const block = match[1].trim();
+    // Format: requirement text|true/false
+    const pipeIdx = block.lastIndexOf("|");
+    if (pipeIdx === -1) continue;
+
+    const reqText = block.substring(0, pipeIdx).trim();
+    const metStr = block.substring(pipeIdx + 1).trim().toLowerCase();
+    const met = metStr === "true" || metStr === "yes" || metStr === "met";
+
+    // Fuzzy-match to requirementsToVerify entries
+    const bestMatch = sessionState.requirementsToVerify.find((r) => {
+      const rLower = r.toLowerCase();
+      const reqLower = reqText.toLowerCase();
+      return rLower === reqLower ||
+        rLower.includes(reqLower) ||
+        reqLower.includes(rLower) ||
+        // Word overlap: at least 60% of words match
+        wordOverlap(rLower, reqLower) >= 0.6;
+    });
+
+    if (bestMatch) {
+      sessionState.requirementAnswers[bestMatch] = met;
+      console.log("[extractVerification] Matched:", bestMatch, "→", met);
+    } else {
+      console.log("[extractVerification] No match for:", reqText);
+    }
+  }
+
+  // Remove all [VERIFIED] blocks from content
+  cleanContent = cleanContent.replace(/\[VERIFIED\][\s\S]*?\[\/VERIFIED\]/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  // Check if all requirements now answered
+  if (sessionState.requirementsToVerify.length > 0) {
+    const allAnswered = sessionState.requirementsToVerify.every(
+      (r) => sessionState.requirementAnswers[r] !== undefined
+    );
+    if (allAnswered) {
+      sessionState.verificationComplete = true;
+      sessionState.meetsAllRequirements = sessionState.requirementsToVerify.every(
+        (r) => sessionState.requirementAnswers[r] === true
+      );
+      console.log("[extractVerification] All verified:", sessionState.meetsAllRequirements);
+    }
+  }
+
+  return cleanContent;
+}
+
+// Calculate word overlap ratio between two strings
+function wordOverlap(a: string, b: string): number {
+  const wordsA = new Set(a.split(/\s+/).filter((w) => w.length > 2));
+  const wordsB = new Set(b.split(/\s+/).filter((w) => w.length > 2));
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+  let overlap = 0;
+  for (const word of wordsA) {
+    if (wordsB.has(word)) overlap++;
+  }
+  return overlap / Math.min(wordsA.size, wordsB.size);
+}
+
+// Extract [PRIOR_AUTH_LCD] block from Claude's response
+// Claude emits this when LCD text indicates prior auth is required
+function extractPriorAuthFromLCD(content: string, sessionState: SessionState): string {
+  const match = content.match(/\[PRIOR_AUTH_LCD\]\s*(true|false)\s*\[\/PRIOR_AUTH_LCD\]/i);
+  if (!match) return content;
+
+  const required = match[1].toLowerCase() === "true";
+  if (required) {
+    sessionState.priorAuthRequired = true;
+    sessionState.priorAuthSource = "lcd";
+    console.log("[extractPriorAuthFromLCD] PA required (from LCD)");
+  }
+
+  return content
+    .replace(/\[PRIOR_AUTH_LCD\][\s\S]*?\[\/PRIOR_AUTH_LCD\]/i, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 // Extract suggestions from Claude's response and return cleaned content
@@ -493,8 +700,17 @@ export async function chat(
     // Update session state based on response content
     updateSessionState(sessionState, rawContent, toolsUsed);
 
-    // Extract suggestions and clean content (remove [SUGGESTIONS] block)
-    const { cleanContent, suggestions } = extractSuggestionsAndClean(rawContent, sessionState);
+    // Extraction pipeline: parse structured blocks, update sessionState, clean content
+    // 1. Extract [MEDICARE_TYPE] → set medicareType
+    const afterMedicare = extractMedicareType(rawContent, sessionState);
+    // 2. Extract [REQUIREMENTS] → populate requirementsToVerify + auto-verify
+    const { cleanContent: afterReqs } = extractRequirementsAndClean(afterMedicare, sessionState);
+    // 3. Extract [VERIFIED] blocks → update requirementAnswers
+    const afterVerify = extractVerificationUpdates(afterReqs, sessionState);
+    // 4. Extract [PRIOR_AUTH_LCD] → set priorAuthRequired from LCD
+    const afterPA = extractPriorAuthFromLCD(afterVerify, sessionState);
+    // 5. Extract [SUGGESTIONS] → always last
+    const { cleanContent, suggestions } = extractSuggestionsAndClean(afterPA, sessionState);
 
     console.log("[chat] Raw content length:", rawContent.length);
     console.log("[chat] Clean content length:", cleanContent.length);
@@ -522,7 +738,11 @@ export async function chat(
       if (textBlocks.length > 0) {
         const partialContent = textBlocks.map((b) => b.text).join("\n");
         updateSessionState(sessionState, partialContent, toolsUsed);
-        const { cleanContent, suggestions } = extractSuggestionsAndClean(partialContent, sessionState);
+        const afterMedicare = extractMedicareType(partialContent, sessionState);
+        const { cleanContent: afterReqs } = extractRequirementsAndClean(afterMedicare, sessionState);
+        const afterVerify = extractVerificationUpdates(afterReqs, sessionState);
+        const afterPA = extractPriorAuthFromLCD(afterVerify, sessionState);
+        const { cleanContent, suggestions } = extractSuggestionsAndClean(afterPA, sessionState);
 
         return {
           content: cleanContent || "I gathered some information but ran out of processing time. Here's what I have so far — could you try asking again so I can finish?",
@@ -570,6 +790,15 @@ function updateSessionFromToolResults(
       const requiresAuth = data.commonly_requires_prior_auth as boolean | undefined;
       if (requiresAuth !== undefined) {
         state.priorAuthRequired = requiresAuth;
+      }
+      // Determine source from tool result
+      const source = data.source as string | undefined;
+      if (source && requiresAuth) {
+        if (source.includes("CMS Prior Authorization Model")) {
+          state.priorAuthSource = "cms_model";
+        } else {
+          state.priorAuthSource = "hardcoded_list";
+        }
       }
       break;
     }
@@ -729,6 +958,32 @@ export function extractUserInfo(
     const doctorMatch = content.match(/(?:dr\.?|doctor)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i);
     if (doctorMatch && !updatedState.providerName) {
       updatedState.providerName = doctorMatch[1];
+    }
+
+    // Detect Medicare type from user messages
+    if (!updatedState.medicareType) {
+      const lower = content.toLowerCase();
+      // Medicare Advantage / Part C
+      if (/medicare\s*advantage|part\s*c\b|\b(humana|unitedhealth|aetna|cigna|anthem|kaiser|wellcare|centene|molina|devoted|clover|oscar|alignment)\b/i.test(content)) {
+        updatedState.medicareType = "advantage";
+      }
+      // Original Medicare / Fee-for-service
+      else if (/original\s*medicare|parts?\s*a\s*(and|&)\s*b|fee.for.service|traditional\s*medicare/i.test(content)) {
+        updatedState.medicareType = "original";
+      }
+      // Supplement / Medigap → maps to original (they have both)
+      else if (/medigap|medicare\s*supplement|supplemental?\s*(plan|insurance|coverage)/i.test(lower)) {
+        updatedState.medicareType = "original";
+      }
+    }
+
+    // Detect requirement verification skip
+    if (updatedState.requirementsToVerify.length > 0 &&
+        !updatedState.verificationComplete &&
+        /\b(skip|just show me|move on|don't need|go ahead|show checklist)\b/i.test(content)) {
+      updatedState.verificationComplete = true;
+      // Leave meetsAllRequirements as null to indicate skipped
+      console.log("[extractUserInfo] User skipped requirement verification");
     }
 
     // Detect appeal intent from USER messages only

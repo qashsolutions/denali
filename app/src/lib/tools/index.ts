@@ -407,6 +407,20 @@ const checkPriorAuthExecutor: ToolExecutor = async (input) => {
     const requiresAuth = commonlyRequiresPriorAuth(cptCode);
     const codeDetails = getCPTCode(cptCode);
 
+    // Determine source detail for CMS PA Model vs general list
+    const CMS_PA_MODEL_CODES = [
+      "15820", "15821", "15822", "15823",  // Blepharoplasty
+      "64615",                              // Botulinum toxin
+      "22551", "22552", "22554",            // Cervical fusion
+      "64490", "64491", "64492", "64493", "64494", "64495",  // Facet joint
+      "27130", "27132", "27447",            // Hip/knee replacement
+      "63650", "63685", "63688",            // Spinal neurostimulators
+    ];
+    const isCmsModel = CMS_PA_MODEL_CODES.includes(cptCode);
+    const sourceDetail = requiresAuth
+      ? (isCmsModel ? "CMS Prior Authorization Model" : "Common prior auth list")
+      : "Not on prior auth lists";
+
     return {
       success: true,
       data: {
@@ -414,6 +428,7 @@ const checkPriorAuthExecutor: ToolExecutor = async (input) => {
         description: codeDetails?.description || "Unknown procedure",
         commonly_requires_prior_auth: requiresAuth,
         source: requiresAuth ? "CMS Prior Authorization Model / common list" : "common list (not found)",
+        source_detail: sourceDetail,
         recommendation: requiresAuth
           ? "Prior authorization is commonly required. The provider should submit the request BEFORE scheduling the service."
           : "Prior authorization is typically not required, but the provider should confirm with the MAC. Coverage depends on medical necessity.",
