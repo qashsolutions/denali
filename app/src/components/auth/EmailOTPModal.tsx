@@ -31,14 +31,16 @@ export function EmailOTPModal({
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Reset state when modal opens
+  // Reset state only when modal first opens (not on re-renders while open)
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpen.current) {
       setStep("email");
       setEmail("");
       setCode(["", "", "", "", "", ""]);
       clearError();
     }
+    wasOpen.current = isOpen;
   }, [isOpen, clearError]);
 
   const isValidEmail = (value: string) =>

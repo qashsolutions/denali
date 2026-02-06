@@ -44,17 +44,17 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
-  // Check access on mount and when auth state changes
+  // Check access on mount and when email verification status changes
+  // Only depends on isEmailVerified (not the whole authState) to avoid re-running on every loading toggle
   useEffect(() => {
     const check = async () => {
-      setIsChecking(true);
-
       if (!authState.isEmailVerified) {
-        setAccessStatus("paywall"); // Will show auth modal
+        setAccessStatus("paywall");
         setIsChecking(false);
         return;
       }
 
+      setIsChecking(true);
       const status = await checkAppealAccess();
       setAccessStatus(status);
       setIsChecking(false);
@@ -65,7 +65,8 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
     };
 
     check();
-  }, [authState.isEmailVerified, checkAppealAccess, onAccessGranted]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authState.isEmailVerified]);
 
   // Handle successful email verification
   const handleEmailVerified = async () => {
@@ -131,37 +132,6 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
       setShowPaywallModal(true);
     }
   };
-
-  // Show loading state while checking
-  if (isChecking) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="flex items-center gap-3 text-slate-400">
-          <svg
-            className="animate-spin h-5 w-5"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-          <span>Checking access...</span>
-        </div>
-      </div>
-    );
-  }
 
   // If access granted (free first appeal or subscription), show children
   if (accessStatus === "free" || accessStatus === "allowed") {
