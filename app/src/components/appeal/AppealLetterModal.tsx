@@ -20,6 +20,10 @@ export function AppealLetterModal({
 }: AppealLetterModalProps) {
   const [accessGranted, setAccessGranted] = useState(false);
 
+  const handleAccessGranted = useCallback(() => {
+    setAccessGranted(true);
+  }, []);
+
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(data.letterContent);
@@ -99,7 +103,7 @@ export function AppealLetterModal({
 
         {/* Content wrapped in AppealGate */}
         <div className="p-8 print:p-4">
-          <AppealGate onAccessGranted={() => setAccessGranted(true)}>
+          <AppealGate onAccessGranted={handleAccessGranted}>
             <MarkdownContent content={data.letterContent} />
           </AppealGate>
         </div>

@@ -5,6 +5,13 @@ import type { Message } from "@/types";
 import type { ChecklistData } from "@/components/chat/PrintableChecklist";
 import type { SessionState } from "@/lib/claude";
 import { MEDICARE_CONSTANTS } from "@/config";
+import {
+  createConversation,
+  saveMessage,
+  loadConversation,
+  submitMessageFeedback,
+  trackEvent,
+} from "@/lib/conversation-service";
 
 export interface AppealLetterData {
   letterContent: string;
@@ -14,13 +21,6 @@ export interface AppealLetterData {
   appealDeadline: string | null;
   conversationId: string | null;
 }
-import {
-  createConversation,
-  saveMessage,
-  loadConversation,
-  submitMessageFeedback,
-  trackEvent,
-} from "@/lib/conversation-service";
 
 export interface UseChatOptions {
   conversationId?: string;
