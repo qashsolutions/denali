@@ -600,6 +600,8 @@ All guidance must be PERSONALIZED based on what you gathered:
 - 'Please note how this affects my daily activities'
 - 'Make sure the diagnosis code supports the MRI'
 
+**Prior Authorization:** [IF REQUIRED: "REQUIRED — Your doctor must get pre-approval before scheduling. Ask: 'Has the prior auth been submitted?'" / IF NOT REQUIRED: "Not required — doctor can schedule directly." / IF UNKNOWN: "Check with your doctor's office to confirm."]
+
 **Provider:** [IF CONFIRMED: "Dr. Chen (Orthopedic Surgery) — accepts Medicare ✓"]
 "
 
@@ -710,8 +712,16 @@ Then use description_search in lookup_denial_code to find matching codes.
 1. Gather: What was denied? When? Why? (code or description)
 2. Look up: denial code → plain English + appeal strategy
 3. Verify: diagnosis supports procedure (CODE_VALIDATION_SKILL)
-4. Generate: appeal letter with policy citations
-5. Offer: print/copy/download
+4. Search PubMed for clinical evidence supporting medical necessity
+5. Generate: appeal letter with policy citations + PubMed evidence
+6. Offer: print/copy/download
+
+### Clinical Evidence (PubMed)
+After gathering denial details and before generating the letter, search for clinical evidence:
+- Search for studies supporting medical necessity of the procedure for the diagnosis
+- Focus on systematic reviews, meta-analyses, and clinical guidelines
+- Use search terms like: "[condition] AND [procedure] AND (medical necessity OR clinical evidence OR outcomes)"
+- Include 1-3 strongest citations in the appeal letter
 
 ### Common Denial Codes to Recognize
 - CO-50/PR-50: Not medically necessary (most common — ~40% appeal success)
@@ -1026,7 +1036,8 @@ Coverage tools come AFTER the provider is confirmed.
     sections.push(CODE_VALIDATION_SKILL);
   }
 
-  // Appeal skill - denial code lookup, strategy, and proactive warnings
+  // Appeal skill - denial code lookup, strategy, and letter generation
+  // Also loads for quick denial code lookups (user mentions a code)
   if (triggers.isAppeal) {
     sections.push(APPEAL_SKILL);
   }
@@ -1141,6 +1152,18 @@ function buildSessionContext(state: SessionState): string {
     context.push(`**⚠️ Specialty mismatch:** ${specialtyMatch.warning}`);
   }
 
+  // Policy references
+  if (state.policyReferences?.length > 0) {
+    context.push(`**Policy references:** ${state.policyReferences.join(", ")} ← Include these in guidance!`);
+  }
+
+  // Prior authorization
+  if (state.priorAuthRequired === true) {
+    context.push(`**⚠️ Prior authorization:** REQUIRED — Include this in checklist!`);
+  } else if (state.priorAuthRequired === false) {
+    context.push(`**Prior authorization:** Not required`);
+  }
+
   // Coverage
   if (state.coverageCriteria?.length > 0) {
     context.push(`**Coverage checked:** Yes ← Include LCD/NCD number in guidance!`);
@@ -1149,6 +1172,14 @@ function buildSessionContext(state: SessionState): string {
   // Mode
   if (state.isAppeal) {
     context.push(`**Mode:** Appeal assistance`);
+  }
+
+  // Denial info
+  if (state.denialCodes?.length > 0) {
+    context.push(`**[Internal] Denial codes (CARC):** ${state.denialCodes.join(", ")}`);
+  }
+  if (state.denialDate) {
+    context.push(`**Denial date:** ${state.denialDate}`);
   }
   if (state.guidanceGenerated) {
     context.push(`**Guidance:** Already delivered`);
@@ -1280,6 +1311,7 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
   if (!triggers.hasCoverage && triggers.hasProcedure && triggers.hasDuration && triggers.hasPriorTreatments && providerResolvedForCoverage) {
     reminder.push("**STEP:** Check Medicare coverage (provider step complete ✓)");
     reminder.push("**ACTION:** Look up NCD/LCD for procedure + diagnosis (use ZIP for regional LCD)");
+    reminder.push("**ALSO:** Check if prior authorization is required for this procedure");
     reminder.push("**SAVE:** The LCD/NCD policy number (e.g., L35936) — REQUIRED for guidance");
     reminder.push("**THEN:** IMMEDIATELY provide PERSONALIZED checklist using THEIR data:");
     reminder.push(`  - Name: ${userName}`);
@@ -1294,6 +1326,12 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
     }
     reminder.push("**POLICY:** Pass through LCD/NCD requirements AS-IS (we're not the doctor)");
     return reminder.join("\n");
+  }
+
+  // Step 9a: Prior auth warning (if check_prior_auth was used and PA is required)
+  if (sessionState?.priorAuthRequired === true && triggers.hasCoverage) {
+    reminder.push("**⚠️ PRIOR AUTH REQUIRED** — Include this prominently in guidance!");
+    reminder.push("**TELL USER:** 'Your doctor needs to get pre-approval before scheduling this procedure.'");
   }
 
   // Step 10: Verify requirements

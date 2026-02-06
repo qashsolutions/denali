@@ -222,6 +222,16 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           type: "string",
           description: "Date of the denial (YYYY-MM-DD format)",
         },
+        policy_references: {
+          type: "array",
+          items: { type: "string" },
+          description: "LCD/NCD policy numbers and text from coverage lookup (e.g., 'LCD L35936 - MRI of the Spine'). Include relevant coverage criteria text.",
+        },
+        pubmed_citations: {
+          type: "array",
+          items: { type: "string" },
+          description: "PubMed citations supporting medical necessity (from search_pubmed results)",
+        },
       },
       required: ["denial_reason", "procedure_description", "diagnosis_description"],
     },
@@ -403,9 +413,16 @@ const checkPriorAuthExecutor: ToolExecutor = async (input) => {
         cpt_code: cptCode,
         description: codeDetails?.description || "Unknown procedure",
         commonly_requires_prior_auth: requiresAuth,
+        source: requiresAuth ? "CMS Prior Authorization Model / common list" : "common list (not found)",
         recommendation: requiresAuth
-          ? "Prior authorization is commonly required. The provider should submit the request before the service."
-          : "Prior authorization is typically not required, but coverage depends on medical necessity.",
+          ? "Prior authorization is commonly required. The provider should submit the request BEFORE scheduling the service."
+          : "Prior authorization is typically not required, but the provider should confirm with the MAC. Coverage depends on medical necessity.",
+        timeline: requiresAuth
+          ? "Submit 10-14 business days before the service date."
+          : null,
+        action_for_patient: requiresAuth
+          ? "Ask your doctor's office: 'Has the prior authorization been submitted for my procedure?'"
+          : "No action needed — your doctor can schedule directly.",
       },
     };
   } catch (error) {
@@ -622,6 +639,8 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
     const priorTreatments = (input.prior_treatments as string[]) || [];
     const providerName = (input.provider_name as string) || "[Provider Name]";
     const denialDate = (input.denial_date as string) || new Date().toISOString().split("T")[0];
+    const policyReferences = (input.policy_references as string[]) || [];
+    const pubmedCitations = (input.pubmed_citations as string[]) || [];
 
     // Calculate appeal deadline
     const denialDateObj = new Date(denialDate);
@@ -688,13 +707,21 @@ ${requirements.requirements.map((r) => `• ${r}`).join("\n")}
 
 3. MEDICARE COVERAGE CRITERIA
 
-According to Medicare guidelines, this service is covered when medically necessary and properly documented. The documentation in the medical record supports coverage.
+${policyReferences.length > 0 ? `According to the following Medicare coverage policies, this service is covered when medically necessary:
+${policyReferences.map((ref) => `• ${ref}`).join("\n")}
+
+The documentation in the medical record demonstrates that the patient meets the coverage criteria outlined in these policies.` : "According to Medicare guidelines, this service is covered when medically necessary and properly documented. The documentation in the medical record supports coverage."}
 
 ${diagnosisCodes.length > 0 ? `Relevant diagnosis codes:
 ${diagnosisCodes.map((c) => `• ${c.code} - ${c.description}`).join("\n")}` : ""}
 
 ${procedureCodes.length > 0 ? `Procedure codes:
 ${procedureCodes.map((c) => `• ${c.code} - ${c.description}`).join("\n")}` : ""}
+
+${pubmedCitations.length > 0 ? `4. SUPPORTING CLINICAL EVIDENCE
+
+The medical necessity of ${procedureDescription} for this patient's condition is further supported by peer-reviewed literature:
+${pubmedCitations.map((cite) => `• ${cite}`).join("\n")}` : ""}
 
 REQUESTED ACTION:
 

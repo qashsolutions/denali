@@ -80,8 +80,13 @@ export interface SessionState {
 
   // Coverage & guidance
   coverageCriteria: string[];
+  policyReferences: string[];                  // LCD/NCD policy numbers (e.g., "L35936", "NCD 220.6")
   guidanceGenerated: boolean;
   isAppeal: boolean;
+  denialDate: string | null;                   // Date of denial (for appeal deadline calculation)
+
+  // Prior authorization
+  priorAuthRequired: boolean | null;           // Whether procedure requires prior auth
 
   // Requirement verification (denial prevention)
   requirementsToVerify: string[];              // List of requirements to ask about
@@ -162,8 +167,13 @@ export function createDefaultSessionState(): SessionState {
 
     // Coverage & guidance
     coverageCriteria: [],
+    policyReferences: [],
     guidanceGenerated: false,
     isAppeal: false,
+    denialDate: null,
+
+    // Prior authorization
+    priorAuthRequired: null,
 
     // Requirement verification
     requirementsToVerify: [],
@@ -442,6 +452,19 @@ export async function chat(
       // Execute LOCAL tools only (MCP tools are handled by API)
       const toolResults = await processToolCalls(toolUseBlocks, toolExecutors);
 
+      // Extract data from local tool results into session state
+      for (let i = 0; i < toolUseBlocks.length; i++) {
+        const resultContent = toolResults[i]?.content;
+        if (typeof resultContent === "string") {
+          try {
+            const parsed = JSON.parse(resultContent) as ToolResult;
+            updateSessionFromToolResults(sessionState, toolUseBlocks[i].name, parsed);
+          } catch {
+            // Not valid JSON, skip
+          }
+        }
+      }
+
       // Add assistant message and tool results to conversation
       messages.push({
         role: "assistant",
@@ -483,7 +506,78 @@ export async function chat(
   throw new Error("Max tool calling iterations reached");
 }
 
-// Update session state based on conversation
+// Update session state from local tool results (called during tool loop)
+function updateSessionFromToolResults(
+  state: SessionState,
+  toolName: string,
+  toolResult: ToolResult
+): void {
+  if (!toolResult.success || !toolResult.data) return;
+  const data = toolResult.data as Record<string, unknown>;
+
+  switch (toolName) {
+    case "search_cpt": {
+      // Extract CPT codes from search results
+      const codes = data.codes as Array<{ code: string }> | undefined;
+      if (codes && codes.length > 0) {
+        for (const c of codes) {
+          if (!state.procedureCodes.includes(c.code)) {
+            state.procedureCodes.push(c.code);
+          }
+        }
+      }
+      break;
+    }
+    case "check_prior_auth": {
+      // Extract prior auth requirement
+      const requiresAuth = data.commonly_requires_prior_auth as boolean | undefined;
+      if (requiresAuth !== undefined) {
+        state.priorAuthRequired = requiresAuth;
+      }
+      break;
+    }
+    case "lookup_denial_code": {
+      // Extract denial codes
+      const codeType = data.type as string | undefined;
+      const code = data.code as string | undefined;
+      if (codeType === "CARC" && code && !state.denialCodes.includes(code)) {
+        state.denialCodes.push(code);
+      }
+      // Also check EOB lookup results
+      const results = data.results as Array<{ carc_code?: string }> | undefined;
+      if (results) {
+        for (const r of results) {
+          if (r.carc_code && !state.denialCodes.includes(r.carc_code)) {
+            state.denialCodes.push(r.carc_code);
+          }
+        }
+      }
+      break;
+    }
+    case "generate_appeal_letter": {
+      // Extract codes from appeal letter generation
+      const dxCodes = data.diagnosis_codes as Array<{ code: string }> | undefined;
+      const pxCodes = data.procedure_codes as Array<{ code: string }> | undefined;
+      if (dxCodes) {
+        for (const c of dxCodes) {
+          if (!state.diagnosisCodes.includes(c.code)) {
+            state.diagnosisCodes.push(c.code);
+          }
+        }
+      }
+      if (pxCodes) {
+        for (const c of pxCodes) {
+          if (!state.procedureCodes.includes(c.code)) {
+            state.procedureCodes.push(c.code);
+          }
+        }
+      }
+      break;
+    }
+  }
+}
+
+// Update session state based on final response text + tool usage
 function updateSessionState(
   state: SessionState,
   content: string,
@@ -520,6 +614,38 @@ function updateSessionState(
   // MCP tool names: npi_search, npi_lookup
   if (toolsUsed.includes("npi_search") || toolsUsed.includes("npi_lookup")) {
     state.providerSearchAttempts = (state.providerSearchAttempts || 0) + 1;
+  }
+
+  // Extract policy references from Claude's text (MCP tool results are summarized by Claude)
+  // Match LCD numbers (L + 5 digits) and NCD numbers (NCD + digits)
+  const lcdMatches = content.match(/\bL\d{5}\b/g);
+  if (lcdMatches) {
+    for (const ref of lcdMatches) {
+      if (!state.policyReferences.includes(ref)) {
+        state.policyReferences.push(ref);
+      }
+    }
+  }
+  const ncdMatches = content.match(/\bNCD\s+\d+(?:\.\d+)?/g);
+  if (ncdMatches) {
+    for (const ref of ncdMatches) {
+      if (!state.policyReferences.includes(ref)) {
+        state.policyReferences.push(ref);
+      }
+    }
+  }
+
+  // Extract ICD-10 codes from text (MCP search_icd10 results referenced by Claude)
+  // Pattern: letter + 2 digits + optional dot + up to 4 alphanumerics
+  if (toolsUsed.includes("search_icd10") && state.diagnosisCodes.length === 0) {
+    const icd10Matches = content.match(/\b[A-TV-Z]\d{2}(?:\.\d{1,4})?\b/g);
+    if (icd10Matches) {
+      for (const code of icd10Matches) {
+        if (!state.diagnosisCodes.includes(code)) {
+          state.diagnosisCodes.push(code);
+        }
+      }
+    }
   }
 }
 
@@ -573,6 +699,17 @@ export function extractUserInfo(
     if (!updatedState.isAppeal) {
       if (/\b(appeal|appealing|denied|denial|rejected|refused)\b/i.test(content)) {
         updatedState.isAppeal = true;
+      }
+    }
+
+    // Extract denial date if in appeal mode
+    if (updatedState.isAppeal && !updatedState.denialDate) {
+      // Match common date formats: Jan 15, January 15, 1/15/2026, 2026-01-15
+      const dateMatch = content.match(
+        /(?:denied|denial|rejected).*?(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2}(?:,?\s*\d{4})?)/i
+      );
+      if (dateMatch) {
+        updatedState.denialDate = dateMatch[1];
       }
     }
   }

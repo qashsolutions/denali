@@ -294,20 +294,68 @@ export function isPreventiveCode(code: string): boolean {
  */
 export function commonlyRequiresPriorAuth(code: string): boolean {
   const priorAuthCodes = [
-    // Joint replacements
-    "27447", "27130", "27132",
-    // MRIs
-    "72148", "72149", "72141", "72142", "73721", "73722", "70551", "70552",
+    // === CMS Prior Authorization Model Categories ===
+
+    // Blepharoplasty (eyelid surgery)
+    "15820", "15821", "15822", "15823",
+
+    // Botulinum toxin injections
+    "64615",
+
+    // Cervical fusion
+    "22551", "22552", "22554",
+
+    // Facet joint interventions (spine injections)
+    "64490", "64491", "64492", "64493", "64494", "64495",
+
+    // Hip/knee replacements
+    "27130", "27132", "27447",
+
+    // Implanted spinal neurostimulators
+    "63650", "63685", "63688",
+
+    // Lumbar fusion
+    "22612", "22630", "22633", "22634",
+
+    // Rhinoplasty
+    "30400", "30410", "30420", "30430", "30435", "30450", "30460", "30462",
+
+    // Sacroiliac joint fusion
+    "27279",
+
+    // Vein ablation
+    "36473", "36474", "36475", "36476", "36478", "36479",
+
+    // === Additional commonly requiring PA ===
+
+    // Spine surgeries
+    "63030", "63042", "63047",
+
+    // Advanced imaging (MRI)
+    "70551", "70552", "70553",
+    "72141", "72142", "72148", "72149",
+    "73721", "73722",
+
     // CT scans
     "71250", "71260", "74176", "74177",
+
     // Sleep studies
     "95810", "95811",
+
     // DME
     "E0601", "E1390", "K0001", "K0010",
-    // Surgeries
+
+    // Cataract/eye surgeries
     "66984", "67028",
+
     // Specialty drugs/infusions
     "96413", "96415",
+
+    // Bariatric surgery
+    "43775", "43644", "43645",
+
+    // Cardiac procedures
+    "93452", "93453",
   ];
 
   return priorAuthCodes.includes(code);

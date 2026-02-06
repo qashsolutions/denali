@@ -142,7 +142,20 @@ User-facing (plain English):        Internal (codes, never shown):
   priorTreatments, provider            procedureCodes (CPT)
   requirementAnswers                   denialCodes (CARC/RARC)
   redFlags                             coverageCriteria, policyReferences
+                                       denialDate, priorAuthRequired
 ```
+
+**Population sources** — how fields get populated during the chat loop:
+
+| Field | Populated By | Mechanism |
+|-------|-------------|-----------|
+| `diagnosisCodes` | MCP `search_icd10` / Local `generate_appeal_letter` | Regex from Claude text / `updateSessionFromToolResults()` |
+| `procedureCodes` | Local `search_cpt` / `generate_appeal_letter` | `updateSessionFromToolResults()` |
+| `denialCodes` | Local `lookup_denial_code` | `updateSessionFromToolResults()` |
+| `policyReferences` | MCP `search_local_coverage` / `search_national_coverage` | Regex from Claude text (LCD L\d{5}, NCD patterns) |
+| `priorAuthRequired` | Local `check_prior_auth` | `updateSessionFromToolResults()` |
+| `denialDate` | User message | `extractUserInfo()` regex |
+| `isAppeal` | User message | `extractUserInfo()` keyword detection |
 
 ---
 
@@ -163,10 +176,10 @@ User-facing (plain English):        Internal (codes, never shown):
 | `search_cpt` | Map procedure descriptions to CPT codes | AMA API (dev only) |
 | `get_related_diagnoses` | CPT -> related ICD-10 codes | Local mappings |
 | `get_related_procedures` | ICD-10 -> related CPT codes | Local mappings |
-| `check_prior_auth` | Check if CPT requires prior auth | Local rules |
+| `check_prior_auth` | Check if CPT requires prior auth (CMS PA Model + expanded list) | Local rules + CMS PA Model categories |
 | `check_preventive` | Check if service is preventive (no cost-sharing) | Local rules |
 | `search_pubmed` | Clinical evidence search (rate-limited) | NCBI E-utilities |
-| `generate_appeal_letter` | Build Level 1 appeal with inline codes + citations | Combines multiple sources |
+| `generate_appeal_letter` | Build Level 1 appeal with inline codes + policy refs + PubMed citations | Combines multiple sources + policy_references + pubmed_citations inputs |
 | `check_sad_list` | Part B (physician) vs Part D (self-administered) drug routing | CMS SAD list |
 | `lookup_denial_code` | CARC/RARC code lookup + appeal strategy | Supabase `carc_codes`, `rarc_codes`, `eob_denial_mappings` |
 | `get_common_denials` | Top denial reasons for a procedure + prevention tips | Supabase (`denial_patterns` + `carc_codes`) |
@@ -259,11 +272,11 @@ The system uses gates that return early and prevent later skills from loading pr
 | 3 | Has procedure but missing symptoms/duration | SYMPTOM_GATHERING | + TOOL_RESTRAINT (+ PROCEDURE_SKILL for clarification) |
 | 4 | Has symptom info but no provider confirmed | PROVIDER_VERIFICATION | NPI tools only |
 | 5 | Has procedure or needs clarification | PROCEDURE_SKILL | Disambiguate procedure type/region |
-| 6 | Has procedure or coverage or appeal | CODE_VALIDATION | ICD-10 <-> CPT mapping |
+| 6 | Has procedure or coverage or appeal | CODE_VALIDATION | ICD-10 <-> CPT mapping + prior auth check + preventive check + SAD list |
 | 7 | Has coverage but not all requirements verified | REQUIREMENT_VERIFICATION | Ask 1 requirement at a time |
 | 8 | Provider confirmed + specialty mismatch | SPECIALTY_VALIDATION | Warn about ordering specialty risk |
-| 9 | Has coverage and all requirements verified | GUIDANCE_DELIVERY | Proactive checklist + denial warnings |
-| 10 | Appeal detected | APPEAL_SKILL | Denial code lookup + strategy |
+| 9 | Has coverage and all requirements verified | GUIDANCE_DELIVERY | Proactive checklist + denial warnings + prior auth status |
+| 10 | Appeal detected | APPEAL_SKILL | Denial code lookup + strategy + PubMed evidence + letter generation |
 
 **TOOL_RESTRAINT**: During onboarding and symptom gathering, the prompt explicitly forbids all tool calls. This prevents Claude from jumping ahead to code lookups before gathering enough context.
 
