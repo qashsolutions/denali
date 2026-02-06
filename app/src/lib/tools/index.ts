@@ -765,9 +765,6 @@ Sincerely,
 [PATIENT NAME OR AUTHORIZED REPRESENTATIVE]
 [PHONE NUMBER]
 [ADDRESS]
-
----
-IMPORTANT: This appeal must be submitted by ${deadlineStr} (${MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS} days from denial date).
 `.trim();
 
     return {
