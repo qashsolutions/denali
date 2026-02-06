@@ -4,6 +4,16 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import type { Message } from "@/types";
 import type { ChecklistData } from "@/components/chat/PrintableChecklist";
 import type { SessionState } from "@/lib/claude";
+import { MEDICARE_CONSTANTS } from "@/config";
+
+export interface AppealLetterData {
+  letterContent: string;
+  denialCodes: string[];
+  policyReferences: string[];
+  denialDate: string | null;
+  appealDeadline: string | null;
+  conversationId: string | null;
+}
 import {
   createConversation,
   saveMessage,
@@ -22,7 +32,9 @@ export type ChatAction =
   | { type: "none" }
   | { type: "show_print"; data: ChecklistData }
   | { type: "prompt_email"; existingEmail: string | null }
-  | { type: "email_sent"; email: string };
+  | { type: "email_sent"; email: string }
+  | { type: "show_appeal"; data: AppealLetterData }
+  | { type: "report_outcome"; appealId: string };
 
 interface UseChatReturn {
   messages: Message[];
@@ -33,14 +45,17 @@ interface UseChatReturn {
   currentAction: ChatAction;
   checklistData: ChecklistData | null;
   userEmail: string | null;
+  appealData: AppealLetterData | null;
   sendMessage: (content: string) => Promise<void>;
   clearMessages: () => void;
   resetChat: () => void;
   submitFeedback: (messageId: string, rating: "up" | "down") => Promise<void>;
   triggerPrint: () => void;
   triggerEmail: () => void;
+  triggerOutcomeReport: () => void;
   setUserEmail: (email: string) => void;
   sendEmail: (email: string) => Promise<void>;
+  submitAppealOutcome: (outcome: "approved" | "denied" | "partial", daysToDecision?: number) => Promise<void>;
   dismissAction: () => void;
 }
 
@@ -145,6 +160,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const [checklistData, setChecklistData] = useState<ChecklistData | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [sessionState, setSessionState] = useState<SessionState | null>(null);
+  const [appealData, setAppealData] = useState<AppealLetterData | null>(null);
+  const [appealId, setAppealId] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const isInitializedRef = useRef(false);
@@ -279,21 +296,51 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       setMessages((prev) => [...prev, assistantMessage]);
       setSuggestions(data.suggestions || []);
 
-      // Check if response contains checklist data
-      const extractedChecklist = extractChecklistData(data.content);
-      if (extractedChecklist) {
-        setChecklistData(extractedChecklist);
+      // Capture appealId from API response
+      if (data.appealId) {
+        setAppealId(data.appealId);
       }
 
-      // Handle special actions based on user input
-      const lower = content.toLowerCase();
-      if (lower.includes("print") && (lower.includes("checklist") || lower.includes("now"))) {
-        const data = checklistData || extractedChecklist;
-        if (data) {
-          setCurrentAction({ type: "show_print", data });
+      // Check if response generated an appeal letter
+      if (data.toolsUsed?.includes("generate_appeal_letter") && data.sessionState) {
+        const ss = data.sessionState as SessionState;
+        let deadline: string | null = null;
+        if (ss.denialDate) {
+          const deadlineDate = new Date(ss.denialDate);
+          deadlineDate.setDate(deadlineDate.getDate() + MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS);
+          deadline = deadlineDate.toISOString();
         }
-      } else if (lower.includes("email") && (lower.includes("me") || lower.includes("to me"))) {
-        setCurrentAction({ type: "prompt_email", existingEmail: userEmail });
+        const appeal: AppealLetterData = {
+          letterContent: data.content,
+          denialCodes: ss.denialCodes || [],
+          policyReferences: ss.policyReferences || [],
+          denialDate: ss.denialDate || null,
+          appealDeadline: deadline,
+          conversationId: currentConversationId || null,
+        };
+        setAppealData(appeal);
+        setCurrentAction({ type: "show_appeal", data: appeal });
+        trackEvent("appeal_completed", {
+          conversationId: currentConversationId || undefined,
+          appealId: data.appealId || undefined,
+        });
+      } else {
+        // Check if response contains checklist data
+        const extractedChecklist = extractChecklistData(data.content);
+        if (extractedChecklist) {
+          setChecklistData(extractedChecklist);
+        }
+
+        // Handle special actions based on user input
+        const lower = content.toLowerCase();
+        if (lower.includes("print") && (lower.includes("checklist") || lower.includes("now"))) {
+          const printData = checklistData || extractedChecklist;
+          if (printData) {
+            setCurrentAction({ type: "show_print", data: printData });
+          }
+        } else if (lower.includes("email") && (lower.includes("me") || lower.includes("to me"))) {
+          setCurrentAction({ type: "prompt_email", existingEmail: userEmail });
+        }
       }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
@@ -325,6 +372,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     setChecklistData(null);
     setCurrentAction({ type: "none" });
     setSessionState(null);
+    setAppealData(null);
+    setAppealId(null);
   }, []);
 
   const submitFeedback = useCallback(async (messageId: string, rating: "up" | "down") => {
@@ -454,6 +503,58 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     }
   }, [checklistData, conversationId]);
 
+  const triggerOutcomeReport = useCallback(() => {
+    if (appealId) {
+      setCurrentAction({ type: "report_outcome", appealId });
+    }
+  }, [appealId]);
+
+  const submitAppealOutcome = useCallback(async (
+    outcome: "approved" | "denied" | "partial",
+    daysToDecision?: number
+  ) => {
+    if (!appealId) return;
+
+    try {
+      const response = await fetch("/api/appeal-outcome", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appealId, outcome, daysToDecision }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to submit outcome");
+      }
+
+      // Add confirmation message
+      const outcomeLabels = { approved: "approved", denied: "denied", partial: "partially approved" };
+      const confirmMessage: Message = {
+        id: generateId(),
+        role: "assistant",
+        content: `Thank you for letting us know your appeal was **${outcomeLabels[outcome]}**. This helps us improve our recommendations for others.`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, confirmMessage]);
+      setCurrentAction({ type: "none" });
+
+      trackEvent("outcome_reported", {
+        conversationId: conversationId || undefined,
+        appealId,
+        eventData: { outcome, daysToDecision },
+      });
+    } catch (err) {
+      console.error("Failed to submit appeal outcome:", err);
+      const errorMessage: Message = {
+        id: generateId(),
+        role: "assistant",
+        content: "Sorry, I couldn't save your outcome. Please try again.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      setCurrentAction({ type: "none" });
+    }
+  }, [appealId, conversationId]);
+
   const dismissAction = useCallback(() => {
     setCurrentAction({ type: "none" });
   }, []);
@@ -467,14 +568,17 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     currentAction,
     checklistData,
     userEmail,
+    appealData,
     sendMessage,
     clearMessages,
     resetChat: clearMessages, // Alias for sidebar integration
     submitFeedback,
     triggerPrint,
     triggerEmail,
+    triggerOutcomeReport,
     setUserEmail,
     sendEmail,
+    submitAppealOutcome,
     dismissAction,
   };
 }

@@ -9,6 +9,7 @@ import { Message, LoadingMessage } from "@/components/chat/Message";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { PrintableChecklist } from "@/components/chat/PrintableChecklist";
 import { EmailPrompt } from "@/components/chat/EmailPrompt";
+import { AppealLetterModal, AppealOutcomePrompt } from "@/components/appeal";
 import { useTheme } from "@/components/ThemeProvider";
 import { useChat } from "@/hooks/useChat";
 import { MountainIcon, SunIcon, MoonIcon } from "@/components/icons";
@@ -27,11 +28,14 @@ function ChatContent() {
     isLoading,
     suggestions,
     currentAction,
+    appealData,
     sendMessage,
     submitFeedback,
     dismissAction,
     sendEmail,
     triggerEmail,
+    triggerOutcomeReport,
+    submitAppealOutcome,
     resetChat,
     conversationId,
   } = useChat();
@@ -82,6 +86,11 @@ function ChatContent() {
     dismissAction();
     triggerEmail();
   }, [dismissAction, triggerEmail]);
+
+  const handleReportOutcome = useCallback(() => {
+    dismissAction();
+    triggerOutcomeReport();
+  }, [dismissAction, triggerOutcomeReport]);
 
   const handleNewChat = useCallback(() => {
     resetChat();
@@ -170,6 +179,16 @@ function ChatContent() {
                     </div>
                   )}
 
+                  {/* Appeal Outcome Prompt - inline in messages */}
+                  {currentAction.type === "report_outcome" && (
+                    <div className="max-w-[85%]">
+                      <AppealOutcomePrompt
+                        onSubmit={submitAppealOutcome}
+                        onCancel={dismissAction}
+                      />
+                    </div>
+                  )}
+
                   <div ref={messagesEndRef} />
                 </div>
               )}
@@ -208,6 +227,15 @@ function ChatContent() {
             onClose={dismissAction}
             onPrint={handlePrintComplete}
             onEmail={handleEmailFromPrint}
+          />
+        )}
+
+        {/* Appeal Letter Modal */}
+        {currentAction.type === "show_appeal" && appealData && (
+          <AppealLetterModal
+            data={appealData}
+            onClose={dismissAction}
+            onReportOutcome={handleReportOutcome}
           />
         )}
       </div>

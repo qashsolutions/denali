@@ -35,7 +35,7 @@ import {
   recordCoveragePath,
   type ExtractedEntities,
 } from "@/lib/learning";
-import { createConversation } from "@/lib/conversation-service";
+import { createConversation, saveAppeal } from "@/lib/conversation-service";
 import { FEEDBACK_CONFIG, API_CONFIG } from "@/config";
 
 // Request body type
@@ -55,6 +55,7 @@ interface ChatResponseBody {
   conversationId: string;
   sessionState: SessionState;
   toolsUsed: string[];
+  appealId?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -192,6 +193,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Persist appeal if generate_appeal_letter was used
+    let appealId: string | undefined;
+    if (result.toolsUsed.includes("generate_appeal_letter") && conversationId) {
+      const ss = result.sessionState;
+      // Separate LCD and NCD policy references
+      const lcdRefs = ss.policyReferences.filter((r) => r.startsWith("L"));
+      const ncdRefs = ss.policyReferences.filter((r) => r.startsWith("NCD"));
+      try {
+        const savedAppealId = await saveAppeal(conversationId, "", {
+          appealLetter: result.content,
+          denialReason: ss.denialCodes.length > 0 ? `CARC ${ss.denialCodes.join(", ")}` : undefined,
+          denialDate: ss.denialDate || undefined,
+          icd10Codes: ss.diagnosisCodes.length > 0 ? ss.diagnosisCodes : undefined,
+          cptCodes: ss.procedureCodes.length > 0 ? ss.procedureCodes : undefined,
+          lcdRefs: lcdRefs.length > 0 ? lcdRefs : undefined,
+          ncdRefs: ncdRefs.length > 0 ? ncdRefs : undefined,
+        });
+        if (savedAppealId) {
+          appealId = savedAppealId;
+          console.log("[Chat API] Appeal saved:", appealId);
+        }
+      } catch (err) {
+        console.warn("Failed to save appeal:", err);
+      }
+    }
+
     // Build response
     const response: ChatResponseBody = {
       content: result.content,
@@ -199,6 +226,7 @@ export async function POST(request: NextRequest) {
       conversationId,
       sessionState: result.sessionState,
       toolsUsed: result.toolsUsed,
+      appealId,
     };
 
     console.log("[Chat API] Sending response with", response.suggestions.length, "suggestions");
