@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import jsPDF from "jspdf";
 import { Button } from "@/components/ui/Button";
 import { AppealGate } from "./AppealGate";
@@ -9,11 +9,11 @@ import { BRAND } from "@/config";
 import type { AppealLetterData } from "@/hooks/useChat";
 
 /**
- * Extract the formal letter from Claude's full response.
- * The letter runs from "MEDICARE APPEAL REQUEST" through the signature block
- * (two lines after "Sincerely,"). Strips markdown formatting for plain-text copy/PDF.
+ * Extract the formal letter portion from Claude's full response.
+ * Returns content from "MEDICARE APPEAL REQUEST" through the signature block,
+ * with markdown intact (for modal display).
  */
-function getCleanLetter(content: string): string {
+function extractLetterContent(content: string): string {
   const lines = content.split("\n");
   let startIdx = -1;
   let endIdx = -1;
@@ -22,35 +22,62 @@ function getCleanLetter(content: string): string {
     if (startIdx === -1 && lines[i].includes("MEDICARE APPEAL REQUEST")) {
       startIdx = i;
     }
-    // Find "Sincerely," then include the next few non-empty lines (signature block)
     if (startIdx !== -1 && /sincerely,?/i.test(lines[i])) {
       endIdx = i;
       // Include up to 3 lines after Sincerely for signature block
       for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
-        if (lines[j].trim() === "") {
-          // Skip blank lines between Sincerely and signature
-          continue;
-        }
-        if (lines[j].startsWith("---") || lines[j].startsWith("##") || lines[j].startsWith("**")) {
-          break; // Hit Claude's commentary section
-        }
+        if (lines[j].trim() === "") continue;
+        if (lines[j].startsWith("---") || lines[j].startsWith("##") || lines[j].startsWith("**")) break;
         endIdx = j;
       }
       break;
     }
   }
 
-  const letterLines =
-    startIdx !== -1 && endIdx !== -1
-      ? lines.slice(startIdx, endIdx + 1)
-      : lines;
+  if (startIdx !== -1 && endIdx !== -1) {
+    return lines.slice(startIdx, endIdx + 1).join("\n").trim();
+  }
+  return content; // fallback: return everything
+}
 
-  return letterLines
-    .join("\n")
+/**
+ * Plain-text version of the letter for copy and PDF.
+ * Strips markdown formatting.
+ */
+function getCleanLetter(content: string): string {
+  return extractLetterContent(content)
     .replace(/\*\*(.*?)\*\*/g, "$1") // bold
     .replace(/#{1,6}\s*/g, "") // headings
     .replace(/`([^`]+)`/g, "$1") // inline code
     .trim();
+}
+
+/**
+ * Generate a PDF document from the clean letter text.
+ */
+function buildPDF(cleanText: string): jsPDF {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const margin = 72; // 1 inch
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const lineWidth = pageWidth - margin * 2;
+
+  doc.setFont("helvetica");
+  doc.setFontSize(11);
+
+  const lines = doc.splitTextToSize(cleanText, lineWidth);
+  let y = margin;
+  const lineHeight = 14;
+
+  for (const line of lines) {
+    if (y + lineHeight > doc.internal.pageSize.getHeight() - margin) {
+      doc.addPage();
+      y = margin;
+    }
+    doc.text(line, margin, y);
+    y += lineHeight;
+  }
+
+  return doc;
 }
 
 interface AppealLetterModalProps {
@@ -67,6 +94,12 @@ export function AppealLetterModal({
   const [accessGranted, setAccessGranted] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Extract only the formal letter (no Claude commentary)
+  const letterMarkdown = useMemo(
+    () => extractLetterContent(data.letterContent),
+    [data.letterContent]
+  );
+
   const handleAccessGranted = useCallback(() => {
     setAccessGranted(true);
   }, []);
@@ -76,7 +109,6 @@ export function AppealLetterModal({
     try {
       await navigator.clipboard.writeText(cleanText);
     } catch {
-      // Fallback for older browsers
       const textarea = document.createElement("textarea");
       textarea.value = cleanText;
       document.body.appendChild(textarea);
@@ -89,34 +121,24 @@ export function AppealLetterModal({
   }, [data.letterContent]);
 
   const handleDownload = useCallback(() => {
-    const doc = new jsPDF({ unit: "pt", format: "letter" });
     const cleanText = getCleanLetter(data.letterContent);
-    const margin = 72; // 1 inch
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const lineWidth = pageWidth - margin * 2;
-
-    doc.setFont("helvetica");
-    doc.setFontSize(11);
-
-    const lines = doc.splitTextToSize(cleanText, lineWidth);
-    let y = margin;
-    const lineHeight = 14;
-
-    for (const line of lines) {
-      if (y + lineHeight > doc.internal.pageSize.getHeight() - margin) {
-        doc.addPage();
-        y = margin;
-      }
-      doc.text(line, margin, y);
-      y += lineHeight;
-    }
-
+    const doc = buildPDF(cleanText);
     doc.save(`appeal-letter-${new Date().toISOString().slice(0, 10)}.pdf`);
   }, [data.letterContent]);
 
   const handlePrint = useCallback(() => {
-    window.print();
-  }, []);
+    const cleanText = getCleanLetter(data.letterContent);
+    const doc = buildPDF(cleanText);
+    // Open PDF in new tab for native print
+    const blob = doc.output("blob");
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      win.addEventListener("load", () => {
+        win.print();
+      });
+    }
+  }, [data.letterContent]);
 
   const handleReportOutcome = useCallback(() => {
     onClose();
@@ -135,8 +157,8 @@ export function AppealLetterModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white text-black max-w-2xl w-full max-h-[90vh] overflow-auto rounded-lg shadow-2xl">
-        {/* Header - always visible */}
-        <div className="no-print sticky top-0 bg-white border-b p-4 flex items-center justify-between">
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b p-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Appeal Letter</h2>
           <div className="flex gap-2">
             {accessGranted && (
@@ -145,7 +167,7 @@ export function AppealLetterModal({
                   {copied ? "Copied!" : "Copy"}
                 </Button>
                 <Button variant="secondary" size="sm" onClick={handleDownload}>
-                  Download
+                  Download PDF
                 </Button>
                 <Button variant="primary" size="sm" onClick={handlePrint}>
                   Print
@@ -160,63 +182,20 @@ export function AppealLetterModal({
 
         {/* Deadline banner */}
         {deadlineDisplay && (
-          <div className="no-print bg-red-50 border-b border-red-200 px-4 py-3 text-red-800 text-sm font-medium">
+          <div className="bg-red-50 border-b border-red-200 px-4 py-3 text-red-800 text-sm font-medium">
             Appeal deadline: {deadlineDisplay} (120 days from denial date)
           </div>
         )}
 
-        {/* Content wrapped in AppealGate */}
-        <div className="p-8 print:p-4">
+        {/* Letter content only (no Claude commentary) */}
+        <div className="p-8">
           <AppealGate onAccessGranted={handleAccessGranted}>
-            <MarkdownContent content={data.letterContent} />
+            <MarkdownContent content={letterMarkdown} />
           </AppealGate>
         </div>
 
-        {/* Instructions - visible in modal only, not in copy/download/print */}
-        {accessGranted && (
-          <div className="no-print border-t border-gray-200 mx-8 pb-6 pt-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">
-              Before you mail it
-            </h3>
-            <ul className="text-sm text-gray-600 space-y-1.5">
-              <li className="flex gap-2">
-                <span className="text-gray-400">1.</span>
-                <span>
-                  Write in your <strong>last name</strong>,{" "}
-                  <strong>Medicare number</strong>,{" "}
-                  <strong>claim number</strong>, and{" "}
-                  <strong>date of service</strong> on the blank lines
-                </span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-gray-400">2.</span>
-                Sign and date the letter, add your phone number and address
-              </li>
-              <li className="flex gap-2">
-                <span className="text-gray-400">3.</span>
-                Attach a copy of the denial notice
-              </li>
-              <li className="flex gap-2">
-                <span className="text-gray-400">4.</span>
-                Include relevant medical records and physician&apos;s notes
-              </li>
-              <li className="flex gap-2">
-                <span className="text-gray-400">5.</span>
-                <span>
-                  Mail to the address on your denial notice
-                  {deadlineDisplay && (
-                    <span className="font-medium text-red-700">
-                      {" "}by {deadlineDisplay}
-                    </span>
-                  )}
-                </span>
-              </li>
-            </ul>
-          </div>
-        )}
-
         {/* Footer - policy references + outcome link */}
-        <div className="no-print border-t p-4">
+        <div className="border-t p-4">
           {data.policyReferences.length > 0 && (
             <p className="text-xs text-gray-500 mb-2">
               Policy references: {data.policyReferences.join(", ")}
