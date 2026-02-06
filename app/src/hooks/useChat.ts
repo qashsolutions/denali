@@ -167,46 +167,57 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const [appealId, setAppealId] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
-  const isInitializedRef = useRef(false);
+  const loadedConversationRef = useRef<string | null>(null);
 
-  // Load existing conversation if ID provided
+  // Load existing conversation if ID provided (or changed via sidebar click)
   useEffect(() => {
-    if (options.conversationId && !isInitializedRef.current) {
-      isInitializedRef.current = true;
-      loadConversation(options.conversationId).then((data) => {
-        if (data) {
-          setMessages(
-            data.messages.map((msg) => ({
-              id: msg.id,
-              role: msg.role,
-              content: msg.content,
-              timestamp: msg.timestamp,
-              icd10Codes: msg.icd10Codes,
-              cptCodes: msg.cptCodes,
-              npi: msg.npi,
-              policyRefs: msg.policyRefs,
-            }))
-          );
-          setConversationId(data.id);
-        }
-      });
+    if (!options.conversationId) return;
+    // Skip if we already loaded this exact conversation
+    if (loadedConversationRef.current === options.conversationId) return;
+    loadedConversationRef.current = options.conversationId;
 
-      // Also load appeals for this conversation
-      loadAppealsForConversation(options.conversationId).then((appeals) => {
-        if (appeals.length > 0) {
-          const latest = appeals[0];
-          setAppealData({
-            letterContent: latest.appealLetter,
-            denialCodes: latest.carcCodes,
-            policyReferences: [...latest.lcdRefs, ...latest.ncdRefs],
-            denialDate: latest.denialDate,
-            appealDeadline: latest.deadline,
-            conversationId: options.conversationId || null,
-          });
-          setAppealId(latest.id);
-        }
-      });
-    }
+    // Reset state for the new conversation
+    setMessages([]);
+    setSuggestions([]);
+    setChecklistData(null);
+    setCurrentAction({ type: "none" });
+    setSessionState(null);
+    setAppealData(null);
+    setAppealId(null);
+    setConversationId(options.conversationId);
+
+    loadConversation(options.conversationId).then((data) => {
+      if (data) {
+        setMessages(
+          data.messages.map((msg) => ({
+            id: msg.id,
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp,
+            icd10Codes: msg.icd10Codes,
+            cptCodes: msg.cptCodes,
+            npi: msg.npi,
+            policyRefs: msg.policyRefs,
+          }))
+        );
+      }
+    });
+
+    // Also load appeals for this conversation
+    loadAppealsForConversation(options.conversationId).then((appeals) => {
+      if (appeals.length > 0) {
+        const latest = appeals[0];
+        setAppealData({
+          letterContent: latest.appealLetter,
+          denialCodes: latest.carcCodes,
+          policyReferences: [...latest.lcdRefs, ...latest.ncdRefs],
+          denialDate: latest.denialDate,
+          appealDeadline: latest.deadline,
+          conversationId: options.conversationId || null,
+        });
+        setAppealId(latest.id);
+      }
+    });
   }, [options.conversationId]);
 
   // Claim anonymous conversation for authenticated user
