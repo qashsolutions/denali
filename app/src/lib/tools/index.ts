@@ -214,6 +214,10 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           items: { type: "string" },
           description: "List of prior treatments attempted",
         },
+        patient_name: {
+          type: "string",
+          description: "Patient's first name (from conversation)",
+        },
         provider_name: {
           type: "string",
           description: "Name of the ordering physician",
@@ -660,6 +664,7 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
     const diagnosisDescription = input.diagnosis_description as string;
     const patientHistory = (input.patient_history as string) || "";
     const priorTreatments = (input.prior_treatments as string[]) || [];
+    const patientName = (input.patient_name as string) || "";
     const providerName = (input.provider_name as string) || "[Provider Name]";
     const denialDate = (input.denial_date as string) || new Date().toISOString().split("T")[0];
     const policyReferences = (input.policy_references as string[]) || [];
@@ -690,6 +695,10 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
     const requirements = COVERAGE_REQUIREMENTS[coveragePattern] || COVERAGE_REQUIREMENTS.default;
 
     // Generate letter content
+    const beneficiaryLine = patientName
+      ? `Beneficiary Name: ${patientName} _______________`
+      : "Beneficiary Name: _______________";
+
     const letter = `
 MEDICARE APPEAL REQUEST
 Level 1 Redetermination
@@ -699,10 +708,10 @@ Date: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long",
 To: Medicare Administrative Contractor
 Re: Appeal of Denied Claim
 
-Beneficiary Name: [PATIENT NAME]
-Medicare Number: [MEDICARE NUMBER]
-Date of Service: [DATE OF SERVICE]
-Claim Number: [CLAIM NUMBER]
+${beneficiaryLine}
+Medicare Number: _______________
+Date of Service: _______________
+Claim Number: _______________
 
 Dear Medicare Appeals Department,
 
@@ -761,10 +770,8 @@ ${providerName}
 
 Sincerely,
 
-[SIGNATURE]
-[PATIENT NAME OR AUTHORIZED REPRESENTATIVE]
-[PHONE NUMBER]
-[ADDRESS]
+_______________
+${patientName || "_______________"}
 `.trim();
 
     return {
@@ -777,11 +784,12 @@ Sincerely,
         procedure_codes: procedureCodes.map((c) => ({ code: c.code, description: c.description })),
         requirements: requirements.requirements,
         instructions: [
-          "Fill in the bracketed fields with patient information",
+          `Write in your ${patientName ? "last name, " : ""}Medicare number, claim number, and date of service on the blank lines`,
+          "Sign and date the letter",
+          "Add your phone number and mailing address below your signature",
           "Attach a copy of the denial notice",
-          "Include relevant medical records",
-          "Have the patient or authorized representative sign",
-          `Mail to the address on the denial notice by ${deadlineStr}`,
+          "Include relevant medical records and physician's notes",
+          `Mail to the address on your denial notice by ${deadlineStr}`,
         ],
       },
     };

@@ -10,8 +10,8 @@ import type { AppealLetterData } from "@/hooks/useChat";
 
 /**
  * Extract the formal letter from Claude's full response.
- * The letter runs from "MEDICARE APPEAL REQUEST" through the line containing "[ADDRESS]".
- * Strips markdown formatting for plain-text use in copy/PDF.
+ * The letter runs from "MEDICARE APPEAL REQUEST" through the signature block
+ * (two lines after "Sincerely,"). Strips markdown formatting for plain-text copy/PDF.
  */
 function getCleanLetter(content: string): string {
   const lines = content.split("\n");
@@ -22,8 +22,20 @@ function getCleanLetter(content: string): string {
     if (startIdx === -1 && lines[i].includes("MEDICARE APPEAL REQUEST")) {
       startIdx = i;
     }
-    if (startIdx !== -1 && lines[i].includes("[ADDRESS]")) {
+    // Find "Sincerely," then include the next few non-empty lines (signature block)
+    if (startIdx !== -1 && /sincerely,?/i.test(lines[i])) {
       endIdx = i;
+      // Include up to 3 lines after Sincerely for signature block
+      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+        if (lines[j].trim() === "") {
+          // Skip blank lines between Sincerely and signature
+          continue;
+        }
+        if (lines[j].startsWith("---") || lines[j].startsWith("##") || lines[j].startsWith("**")) {
+          break; // Hit Claude's commentary section
+        }
+        endIdx = j;
+      }
       break;
     }
   }
@@ -169,29 +181,35 @@ export function AppealLetterModal({
             <ul className="text-sm text-gray-600 space-y-1.5">
               <li className="flex gap-2">
                 <span className="text-gray-400">1.</span>
-                Fill in the bracketed fields with your information
+                <span>
+                  Write in your <strong>last name</strong>,{" "}
+                  <strong>Medicare number</strong>,{" "}
+                  <strong>claim number</strong>, and{" "}
+                  <strong>date of service</strong> on the blank lines
+                </span>
               </li>
               <li className="flex gap-2">
                 <span className="text-gray-400">2.</span>
-                Attach a copy of the denial notice
+                Sign and date the letter, add your phone number and address
               </li>
               <li className="flex gap-2">
                 <span className="text-gray-400">3.</span>
-                Include relevant medical records
+                Attach a copy of the denial notice
               </li>
               <li className="flex gap-2">
                 <span className="text-gray-400">4.</span>
-                Sign the letter (or have your authorized representative sign)
+                Include relevant medical records and physician&apos;s notes
               </li>
               <li className="flex gap-2">
                 <span className="text-gray-400">5.</span>
-                Mail to the address on your denial notice
-                {deadlineDisplay && (
-                  <span className="font-medium text-red-700">
-                    {" "}
-                    by {deadlineDisplay}
-                  </span>
-                )}
+                <span>
+                  Mail to the address on your denial notice
+                  {deadlineDisplay && (
+                    <span className="font-medium text-red-700">
+                      {" "}by {deadlineDisplay}
+                    </span>
+                  )}
+                </span>
               </li>
             </ul>
           </div>
