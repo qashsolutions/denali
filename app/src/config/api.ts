@@ -14,7 +14,7 @@ export const API_CONFIG = {
     /** Appeal model: Opus 4.5 (slower, better quality for complex letter generation) */
     appealModel: process.env.ANTHROPIC_APPEAL_MODEL || "claude-opus-4-5-20251101",
     maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS || "4096", 10),
-    maxToolIterations: parseInt(process.env.CLAUDE_MAX_TOOL_ITERATIONS || "5", 10),
+    maxToolIterations: parseInt(process.env.CLAUDE_MAX_TOOL_ITERATIONS || "10", 10),
     /** Per-iteration timeout in ms (prevents single API call from hanging) */
     iterationTimeoutMs: parseInt(process.env.CLAUDE_ITERATION_TIMEOUT || "60000", 10),
   },

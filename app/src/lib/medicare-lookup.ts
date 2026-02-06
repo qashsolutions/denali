@@ -171,9 +171,20 @@ export function getCPTsForCondition(condition: string): CPTCode[] {
   // Check for exact condition matches
   for (const [, config] of Object.entries(CONDITION_KEYWORDS)) {
     if (config.keywords.some((kw) => lower.includes(kw))) {
-      return ALL_CPT.filter(
+      const categoryResults = ALL_CPT.filter(
         (cpt) => cpt.category === config.category
       );
+
+      // Category can be very broad (e.g., all Orthopedics).
+      // Narrow by filtering to codes whose description matches query words.
+      const queryWords = lower.split(/\s+/).filter((w) => w.length > 2);
+      const narrowed = categoryResults.filter((cpt) => {
+        const desc = cpt.description.toLowerCase();
+        return queryWords.some((w) => desc.includes(w));
+      });
+
+      // Use narrowed results if we got any, otherwise fall back to category
+      return narrowed.length > 0 ? narrowed : categoryResults;
     }
   }
 
