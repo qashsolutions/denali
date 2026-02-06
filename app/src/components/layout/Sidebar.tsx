@@ -25,8 +25,15 @@ export function Sidebar({
   onNewChat,
 }: SidebarProps) {
   const router = useRouter();
-  const { conversations, isLoading, isVerifiedUser } = useConversationHistory();
+  const { conversations, isLoading, isVerifiedUser, refresh } = useConversationHistory();
   const groupedConversations = groupConversationsByDate(conversations);
+
+  // Refresh conversation list when a new conversation is created
+  useEffect(() => {
+    if (currentConversationId) {
+      refresh();
+    }
+  }, [currentConversationId, refresh]);
 
   // Close sidebar on escape key
   useEffect(() => {
