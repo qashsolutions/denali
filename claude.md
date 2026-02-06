@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-01
+     Last updated: 2026-02-05
      Maintainer: @cvr
 -->
 
@@ -256,12 +256,14 @@ The system uses gates that return early and prevent later skills from loading pr
 |----------|---------|-------------|---------------|
 | 1 | Emergency symptoms detected | RED_FLAG_SKILL | Highest priority, overrides all |
 | 2 | Missing name OR ZIP | ONBOARDING | + TOOL_RESTRAINT (no tools allowed) |
-| 3 | Has procedure but missing symptoms/duration | SYMPTOM_GATHERING | + TOOL_RESTRAINT |
+| 3 | Has procedure but missing symptoms/duration | SYMPTOM_GATHERING | + TOOL_RESTRAINT (+ PROCEDURE_SKILL for clarification) |
 | 4 | Has symptom info but no provider confirmed | PROVIDER_VERIFICATION | NPI tools only |
-| 5 | Has procedure | CODE_VALIDATION | ICD-10 <-> CPT mapping |
-| 6 | Has coverage but not all requirements verified | REQUIREMENT_VERIFICATION | Ask 1 requirement at a time |
-| 7 | Has coverage and all requirements verified | GUIDANCE_DELIVERY | Proactive checklist |
-| 8 | Appeal detected | APPEAL_SKILL | Denial code lookup + strategy |
+| 5 | Has procedure or needs clarification | PROCEDURE_SKILL | Disambiguate procedure type/region |
+| 6 | Has procedure or coverage or appeal | CODE_VALIDATION | ICD-10 <-> CPT mapping |
+| 7 | Has coverage but not all requirements verified | REQUIREMENT_VERIFICATION | Ask 1 requirement at a time |
+| 8 | Provider confirmed + specialty mismatch | SPECIALTY_VALIDATION | Warn about ordering specialty risk |
+| 9 | Has coverage and all requirements verified | GUIDANCE_DELIVERY | Proactive checklist + denial warnings |
+| 10 | Appeal detected | APPEAL_SKILL | Denial code lookup + strategy |
 
 **TOOL_RESTRAINT**: During onboarding and symptom gathering, the prompt explicitly forbids all tool calls. This prevents Claude from jumping ahead to code lookups before gathering enough context.
 

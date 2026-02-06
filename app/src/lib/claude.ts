@@ -220,35 +220,7 @@ function extractSuggestionsAndClean(content: string, sessionState: SessionState)
     }
   }
 
-  // Also try old format for backwards compatibility
-  const oldPatterns = [
-    /---\s*\nwhat would you like to do\??\s*\n((?:[•\-\*]\s*.+\n?)+)/i,
-    /what would you like to do\??\s*\n((?:[•\-\*]\s*.+\n?)+)/i,
-  ];
-
-  for (const pattern of oldPatterns) {
-    const match = content.match(pattern);
-    if (match) {
-      const bulletSection = match[1];
-      const suggestions = bulletSection
-        .split(/\n/)
-        .map((line) => line.replace(/^[•\-\*]\s*/, "").trim())
-        .filter((line) => line.length > 0 && line.length < 50);
-
-      // Remove the old format from content
-      const cleanContent = content
-        .replace(/---\s*\nwhat would you like to do\?[\s\S]*$/i, "")
-        .replace(/what would you like to do\?[\s\S]*$/i, "")
-        .trim();
-
-      if (suggestions.length >= 1) {
-        console.log("[extractSuggestions] Found old-format suggestions:", suggestions);
-        return { cleanContent, suggestions };
-      }
-    }
-  }
-
-  console.log("[extractSuggestions] No suggestions block found, using question-aware defaults");
+  console.log("[extractSuggestions] No [SUGGESTIONS] block found, using question-aware defaults");
 
   // Question-aware fallback: match suggestions to what Claude ASKED the user
   // This must align with gate-appropriate suggestions from PROMPTING_SKILL
@@ -533,15 +505,20 @@ function updateSessionState(
   // "denial" in denial-prevention context, which would false-positive here.
 
   // Track tool usage for coverage criteria
-  if (toolsUsed.includes("get_coverage_requirements") || toolsUsed.includes("search_ncd") || toolsUsed.includes("search_lcd")) {
-    // Coverage was checked - mark it
+  // MCP tool names come from the server: search_local_coverage, search_national_coverage, get_coverage_document
+  if (
+    toolsUsed.includes("search_local_coverage") ||
+    toolsUsed.includes("search_national_coverage") ||
+    toolsUsed.includes("get_coverage_document")
+  ) {
     if (state.coverageCriteria.length === 0) {
       state.coverageCriteria.push("coverage_checked");
     }
   }
 
   // Track NPI searches - increment attempt counter
-  if (toolsUsed.includes("search_npi")) {
+  // MCP tool names: npi_search, npi_lookup
+  if (toolsUsed.includes("npi_search") || toolsUsed.includes("npi_lookup")) {
     state.providerSearchAttempts = (state.providerSearchAttempts || 0) + 1;
   }
 }
@@ -558,9 +535,19 @@ export function extractUserInfo(
     if (msg.role !== "user") continue;
     const content = msg.content;
 
-    // Extract name (if assistant asked and user responded with just a name)
-    if (!updatedState.userName && content.length < 30 && /^[a-zA-Z]+$/i.test(content.trim())) {
-      // Could be a name - will be confirmed by context
+    // Extract name (if user responded with just a name or "I'm X" / "call me X")
+    if (!updatedState.userName) {
+      // Match "I'm John", "call me John", "my name is John", "it's John"
+      const namePatterns = content.match(
+        /(?:i'm|i am|call me|my name is|it's|this is|name's)\s+([a-zA-Z]{2,20})/i
+      );
+      if (namePatterns) {
+        updatedState.userName = namePatterns[1].charAt(0).toUpperCase() + namePatterns[1].slice(1).toLowerCase();
+      } else if (content.trim().length < 25 && /^[a-zA-Z]{2,20}$/i.test(content.trim())) {
+        // Short message that's just a name (e.g., "John")
+        const name = content.trim();
+        updatedState.userName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+      }
     }
 
     // Extract ZIP code (5 digits)

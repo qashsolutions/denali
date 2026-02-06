@@ -301,8 +301,9 @@ async function persistLearning(
   }
 
   // If coverage was checked, record the coverage path
+  // MCP tool names: search_national_coverage, search_local_coverage
   if (
-    (toolsUsed.includes("search_ncd") || toolsUsed.includes("search_lcd")) &&
+    (toolsUsed.includes("search_national_coverage") || toolsUsed.includes("search_local_coverage")) &&
     sessionState.diagnosisCodes.length > 0 &&
     sessionState.procedureCodes.length > 0
   ) {

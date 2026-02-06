@@ -32,7 +32,6 @@ import {
 } from "./learning";
 import {
   validateSpecialtyMatch,
-  getRecommendedSpecialties,
   type SpecialtyMatchResult,
 } from "./specialty-match";
 
@@ -275,28 +274,12 @@ Yes, personalize it
 Basic info is fine
 [/SUGGESTIONS]
 
-### Questions — CRISP, with Why on Next Line in Italics
-1. **Symptoms:** "What's going on — pain, numbness, something else?
-*Helps match you to the right coverage policy.*"
-2. **Duration:** "How long has this been going on?
-*Medicare needs a minimum duration for most approvals.*"
-3. **Treatments:** "Tried any treatments — PT, meds?
-*Medicare usually requires this before approving imaging.*"
+### Questions (Ask These, One at a Time)
+1. **Symptoms:** "What's going on — pain, numbness, something else?"
+2. **Duration:** "How long has this been going on?"
+3. **Treatments:** "Tried any treatments — PT, meds?"
 
 Save their exact words for the final checklist.
-
-### Example Flow
-User: "I need a back MRI"
-You: "Got it. What's going on with your back — pain, numbness?
-*Helps match you to the right policy.*"
-
-User: "Pain going down my leg"
-You: "How long has this been happening?
-*Medicare needs a minimum duration for most approvals.*"
-
-User: "Few months"
-You: "Tried any treatments — PT, meds?
-*Medicare usually requires this before approving imaging.*"
 
 ### After All Three → Ask About Doctor → Then Coverage
 
@@ -455,6 +438,19 @@ MUST HAVE:
 
 If ANY missing → ask user for clarification, don't generate letter.
 
+### Additional Checks (Run After Code Validation)
+After confirming ICD-10 and CPT codes, also check:
+
+**Prior Authorization:** Check if the procedure commonly requires prior authorization.
+- If required: "Heads up — this might need prior authorization. Your doctor's office usually handles this, but make sure they know to submit it BEFORE the procedure."
+
+**Preventive Service:** Check if the procedure is a preventive service.
+- If preventive: "Good news — this is a preventive service. Medicare covers it with no out-of-pocket cost when done by a participating provider."
+
+**Drug Coverage (Part B vs Part D):** If a medication is involved, check the SAD list.
+- Part B (doctor administers): "This medication is covered under Part B — your doctor gives it to you."
+- Part D (pharmacy): "This is covered under Part D — you pick it up at a pharmacy with your drug plan."
+
 ### Example Check
 User: "I need an MRI for my headaches"
 
@@ -479,11 +475,9 @@ const COVERAGE_SKILL = `
 3. Extract documentation_requirements from results
 4. **SAVE the policy ID** (e.g., "L35936" or "NCD 220.6") — you MUST include this in guidance
 
-### Policy Citation Rules (CRITICAL)
-- **ALWAYS include the LCD/NCD number** in your guidance (e.g., "Policy: L35936")
-- **Pass through requirements AS-IS** — do NOT interpret or simplify medical criteria
-- We are NOT the doctor — show the actual policy language so the doctor knows exactly what to document
-- If the LCD says "radiculopathy with neurological deficit" — say exactly that, don't simplify to "leg pain"
+### Policy Citation (CRITICAL — See Base Rules)
+- **ALWAYS include the LCD/NCD number** (e.g., "Policy: L35936")
+- Pass through requirements AS-IS — do not simplify medical language
 
 ### Prior Authorization Detection
 When you fetch an LCD, scan for these keywords:
@@ -614,14 +608,17 @@ Replace ALL bracketed text with the user's ACTUAL information.
 - WRONG: "Duration: [X weeks/months]"
 - RIGHT: "Duration: 3 months" (what they actually told you)
 
-### Policy Requirements: Pass Through AS-IS
-We are NOT the doctor. Show the LCD/NCD requirements verbatim so the doctor knows exactly what Medicare expects.
-- WRONG: "Doctor needs to show you tried other treatments"
-- RIGHT: "LCD L35936 requires: 'Documentation of failure of conservative treatment including physical therapy and/or anti-inflammatory medications for a minimum of 6 weeks'"
-
 ### Red Flag Highlighting
 If user mentioned red flags, highlight them:
 "**Important:** The [symptom] you mentioned is a 'red flag' that can help get faster approval. Make sure doctor documents this prominently!"
+
+### Proactive Denial Warnings (CRITICAL — Do This EVERY Time)
+After building the checklist, warn about common denials:
+- Look up common denial reasons for the procedure
+- Show top 2-3 denial reasons and how to prevent them
+- "**Heads up — common reasons this gets denied:**
+  1. [Denial reason] — Make sure your doctor documents [key item]
+  2. [Denial reason] — [Prevention tip]"
 
 ### After Showing Checklist
 "Would you like me to email this checklist, or help with anything else?"
@@ -716,12 +713,6 @@ Then use description_search in lookup_denial_code to find matching codes.
 4. Generate: appeal letter with policy citations
 5. Offer: print/copy/download
 
-### Proactive Denial Warnings
-After completing coverage guidance, warn about common denials:
-- Call get_common_denials with the procedure
-- Show top 2-3 denial reasons and prevention tips
-- "Heads up — the most common reason this gets denied is [reason]. Make sure your doctor documents [key item]."
-
 ### Common Denial Codes to Recognize
 - CO-50/PR-50: Not medically necessary (most common — ~40% appeal success)
 - CO-96/PR-96: Not covered / experimental
@@ -801,9 +792,7 @@ export interface SkillTriggers {
   hasProviderName: boolean;
   hasProviderConfirmed: boolean;
   providerSkipped: boolean; // User said "not yet" or "show coverage first"
-  providerSearchLimitReached: boolean;
   // Coverage
-  hasDiagnosis: boolean;
   hasCoverage: boolean;
   hasGuidance: boolean;
   // Appeal
@@ -812,11 +801,6 @@ export interface SkillTriggers {
   hasRequirementsToVerify: boolean;
   verificationComplete: boolean;
   meetsAllRequirements: boolean;
-  // Red flags
-  redFlagsChecked: boolean;
-  hasRedFlags: boolean;
-  priorImagingChecked: boolean;
-  hasPriorImaging: boolean;
   // Specialty
   hasSpecialtyMismatch: boolean;
   // Emergency
@@ -875,11 +859,8 @@ export function detectTriggers(
       sessionState?.provider != null && sessionState.provider.npi != null,
     providerSkipped:
       /don't have a doctor|no doctor yet|not yet|show coverage first|find.*specialist|skip/i.test(lastUserMessage),
-    providerSearchLimitReached:
-      (sessionState?.providerSearchAttempts ?? 0) >= 3,
 
     // Coverage
-    hasDiagnosis: (sessionState?.diagnosisCodes?.length ?? 0) > 0,
     hasCoverage: (sessionState?.coverageCriteria?.length ?? 0) > 0,
     hasGuidance: sessionState?.guidanceGenerated || false,
 
@@ -892,12 +873,6 @@ export function detectTriggers(
     hasRequirementsToVerify: (sessionState?.requirementsToVerify?.length ?? 0) > 0,
     verificationComplete: sessionState?.verificationComplete || false,
     meetsAllRequirements: sessionState?.meetsAllRequirements === true,
-
-    // Red flags
-    redFlagsChecked: sessionState?.redFlagsChecked || false,
-    hasRedFlags: (sessionState?.redFlagsPresent?.length ?? 0) > 0,
-    priorImagingChecked: sessionState?.priorImagingDone !== null && sessionState?.priorImagingDone !== undefined,
-    hasPriorImaging: sessionState?.priorImagingDone === true,
 
     // Specialty
     hasSpecialtyMismatch: (() => {
@@ -924,15 +899,6 @@ export function checkProviderSpecialtyMatch(
     sessionState.procedureNeeded,
     sessionState.provider.specialty
   );
-}
-
-export function getRecommendedSpecialtiesForProcedure(
-  sessionState?: SessionState
-): string[] {
-  if (!sessionState?.procedureNeeded) {
-    return [];
-  }
-  return getRecommendedSpecialties(sessionState.procedureNeeded);
 }
 
 // =============================================================================
@@ -1050,8 +1016,8 @@ Coverage tools come AFTER the provider is confirmed.
   // CONDITIONAL SKILLS - Only loaded AFTER provider verified (or skipped)
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Procedure clarification (if still needed)
-  if (triggers.hasProcedure || triggers.needsClarification) {
+  // Procedure clarification (only when ambiguous)
+  if (triggers.needsClarification) {
     sections.push(PROCEDURE_SKILL);
   }
 
@@ -1338,7 +1304,7 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
     return reminder.join("\n");
   }
 
-  // Step 10: Specialty mismatch warning
+  // Step 11: Specialty mismatch warning
   if (triggers.hasSpecialtyMismatch) {
     reminder.push("**STEP:** Warn about specialty mismatch");
     reminder.push("**EXPLAIN:** Provider specialty may not match procedure");
@@ -1346,7 +1312,7 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
     return reminder.join("\n");
   }
 
-  // Step 11: Generate guidance (BE PROACTIVE)
+  // Step 12: Generate guidance (BE PROACTIVE)
   if (triggers.hasCoverage && (triggers.verificationComplete || !triggers.hasRequirementsToVerify) && !triggers.hasGuidance) {
     reminder.push("**STEP:** Deliver guidance (PROACTIVELY — don't ask if they want it)");
     reminder.push("**FIRST:** High-level answer (covered? yes/no) personalized to their situation");
@@ -1386,18 +1352,12 @@ export function buildInitialSystemPrompt(): string {
     hasProviderName: false,
     hasProviderConfirmed: false,
     providerSkipped: false,
-    providerSearchLimitReached: false,
-    hasDiagnosis: false,
     hasCoverage: false,
     hasGuidance: false,
     isAppeal: false,
     hasRequirementsToVerify: false,
     verificationComplete: false,
     meetsAllRequirements: false,
-    redFlagsChecked: false,
-    hasRedFlags: false,
-    priorImagingChecked: false,
-    hasPriorImaging: false,
     hasSpecialtyMismatch: false,
     hasEmergencySymptoms: false,
   };
