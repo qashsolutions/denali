@@ -6,11 +6,10 @@ import type { ChecklistData } from "@/components/chat/PrintableChecklist";
 import type { SessionState } from "@/lib/claude";
 import { MEDICARE_CONSTANTS } from "@/config";
 import {
-  createConversation,
   saveMessage,
   loadConversation,
   loadAppealsForConversation,
-  updateConversationUserId,
+  claimConversation,
   submitMessageFeedback,
   trackEvent,
 } from "@/lib/conversation-service";
@@ -210,11 +209,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     }
   }, [options.conversationId]);
 
-  // Link anonymous conversation to user after auth
+  // Claim anonymous conversation for authenticated user
   useEffect(() => {
     if (userId && conversationId) {
-      updateConversationUserId(conversationId, userId).catch((err) =>
-        console.warn("Failed to link conversation to user:", err)
+      claimConversation(conversationId).catch((err) =>
+        console.warn("Failed to claim conversation:", err)
       );
     }
   }, [userId, conversationId]);
@@ -243,29 +242,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     setCurrentAction({ type: "none" });
 
     try {
-      // Create conversation if this is the first message
+      // Track conversation ID locally (server creates the conversation)
       let currentConversationId = conversationId;
-      if (!currentConversationId) {
-        const newConvId = await createConversation({
-          userId: userId || undefined,
-          isAppeal: content.toLowerCase().includes("denied") || content.toLowerCase().includes("appeal"),
-        });
-        if (newConvId) {
-          currentConversationId = newConvId;
-          setConversationId(newConvId);
-        }
-      }
-
-      // Save user message to database
-      if (currentConversationId) {
-        const savedMsgId = await saveMessage(currentConversationId, {
-          role: "user",
-          content: userMessage.content,
-        });
-        if (savedMsgId) {
-          userMessage.id = savedMsgId;
-        }
-      }
 
       // Prepare messages for API
       const apiMessages = [...messages, userMessage].map((msg) => ({
@@ -294,15 +272,31 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       const data = await response.json();
 
-      // Update conversation ID (server may have created one if client didn't)
+      // Update conversation ID from server response
       if (data.conversationId && !currentConversationId) {
         currentConversationId = data.conversationId;
         setConversationId(data.conversationId);
+
+        // Claim the conversation immediately so message saves work
+        // (messages RLS requires conversation to be owned by auth.uid())
+        if (userId) {
+          await claimConversation(data.conversationId).catch((err) =>
+            console.warn("Failed to claim conversation:", err)
+          );
+        }
       }
 
       // Update session state
       if (data.sessionState) {
         setSessionState(data.sessionState);
+      }
+
+      // Save user message to database (after claim so RLS passes)
+      if (currentConversationId) {
+        saveMessage(currentConversationId, {
+          role: "user",
+          content: userMessage.content,
+        }).catch((err) => console.warn("Failed to save user message:", err));
       }
 
       // Create assistant message

@@ -465,26 +465,27 @@ export async function loadAppealsForConversation(
 }
 
 /**
- * Link an anonymous conversation to a user after authentication
+ * Claim an anonymous conversation for the authenticated user.
+ * Uses a SECURITY DEFINER function to bypass RLS (SELECT policy
+ * blocks authenticated users from seeing unclaimed rows).
+ * Also creates the public.users record if needed and claims associated appeals.
  */
-export async function updateConversationUserId(
-  conversationId: string,
-  userId: string
+export async function claimConversation(
+  conversationId: string
 ): Promise<boolean> {
   const supabase = createClient();
 
-  const { error } = await supabase
-    .from("conversations")
-    .update({ user_id: userId })
-    .eq("id", conversationId)
-    .is("user_id", null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("claim_conversation", {
+    p_conversation_id: conversationId,
+  });
 
   if (error) {
-    console.error("Failed to update conversation user_id:", error);
+    console.error("Failed to claim conversation:", error);
     return false;
   }
 
-  return true;
+  return !!data;
 }
 
 /**
