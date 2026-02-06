@@ -145,14 +145,23 @@ export function AppealLetterModal({
     onReportOutcome?.();
   }, [onClose, onReportOutcome]);
 
-  // Format deadline for display
-  const deadlineDisplay = data.appealDeadline
-    ? new Date(data.appealDeadline).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
-    : null;
+  // Format deadline for display with days remaining
+  const deadlineInfo = useMemo(() => {
+    if (!data.appealDeadline) return null;
+    const deadline = new Date(data.appealDeadline);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    deadline.setHours(0, 0, 0, 0);
+    const daysRemaining = Math.ceil(
+      (deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    const display = new Date(data.appealDeadline).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    return { display, daysRemaining, expired: daysRemaining < 0 };
+  }, [data.appealDeadline]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -180,10 +189,29 @@ export function AppealLetterModal({
           </div>
         </div>
 
-        {/* Deadline banner */}
-        {deadlineDisplay && (
-          <div className="bg-red-50 border-b border-red-200 px-4 py-3 text-red-800 text-sm font-medium">
-            Appeal deadline: {deadlineDisplay} (120 days from denial date)
+        {/* Deadline banner with days remaining */}
+        {deadlineInfo && (
+          <div
+            className={`border-b px-4 py-3 text-sm font-medium ${
+              deadlineInfo.expired
+                ? "bg-gray-100 border-gray-300 text-gray-700"
+                : deadlineInfo.daysRemaining <= 14
+                  ? "bg-red-100 border-red-300 text-red-900"
+                  : "bg-amber-50 border-amber-200 text-amber-900"
+            }`}
+          >
+            {deadlineInfo.expired ? (
+              <>
+                Deadline passed {Math.abs(deadlineInfo.daysRemaining)} days ago
+                ({deadlineInfo.display}). Late filing may still be possible
+                with good cause.
+              </>
+            ) : (
+              <>
+                {deadlineInfo.daysRemaining} days left to file — deadline{" "}
+                {deadlineInfo.display}
+              </>
+            )}
           </div>
         )}
 

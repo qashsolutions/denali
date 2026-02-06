@@ -840,11 +840,20 @@ Then use description_search in lookup_denial_code to find matching codes.
 
 ### Appeal Flow
 1. Gather: What was denied? When? Why? (code or description)
-2. Look up: denial code → plain English + appeal strategy
-3. Verify: diagnosis supports procedure (CODE_VALIDATION_SKILL)
-4. Search PubMed for clinical evidence supporting medical necessity
-5. Generate: appeal letter with policy citations + PubMed evidence
-6. Offer: print/copy/download
+2. **Ask for the denial date** — "When did you receive the denial letter?" This is CRITICAL because the appeal must be filed within 120 days of that date. Calculate days remaining = 120 - (today - denial_date). Tell the user: "You have X days left to file your appeal" or warn them if the deadline has passed.
+3. Look up: denial code → plain English + appeal strategy
+4. Verify: diagnosis supports procedure (CODE_VALIDATION_SKILL)
+5. Search PubMed for clinical evidence supporting medical necessity
+6. Generate: appeal letter with policy citations + PubMed evidence
+7. Offer: print/copy/download
+
+### Deadline Check (CRITICAL)
+Before generating the appeal letter, you MUST:
+- Know the denial date (when the user received the denial notice/EOB)
+- Calculate days remaining: 120 days from denial date minus today
+- If deadline has passed: Warn the user clearly. They can still try (late filing with good cause) but success is less likely. Ask if they want to proceed.
+- If < 14 days remaining: Urgently warn the user to act fast
+- Always tell the user how many days they have left
 
 ### Tool Efficiency (CRITICAL — Prevents Timeout)
 You have a MAXIMUM of 10 tool-calling rounds. Be strategic:

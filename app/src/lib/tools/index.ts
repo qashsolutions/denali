@@ -670,7 +670,7 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
     const policyReferences = (input.policy_references as string[]) || [];
     const pubmedCitations = (input.pubmed_citations as string[]) || [];
 
-    // Calculate appeal deadline
+    // Calculate appeal deadline and days remaining
     const denialDateObj = new Date(denialDate);
     const deadlineDate = new Date(denialDateObj);
     deadlineDate.setDate(deadlineDate.getDate() + MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS);
@@ -679,6 +679,11 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
       month: "long",
       day: "numeric",
     });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    deadlineDate.setHours(0, 0, 0, 0);
+    const daysRemaining = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const deadlineExpired = daysRemaining < 0;
 
     // Search for supporting codes
     const diagnosisCodes = searchICD10(diagnosisDescription, 3);
@@ -780,6 +785,13 @@ ${patientName || "_______________"}
         letter,
         denial_date: denialDate,
         appeal_deadline: deadlineStr,
+        days_remaining: daysRemaining,
+        deadline_expired: deadlineExpired,
+        deadline_warning: deadlineExpired
+          ? `WARNING: The 120-day appeal deadline passed ${Math.abs(daysRemaining)} days ago. The beneficiary may still file with "good cause" for late filing, but success is less likely. Inform the user clearly.`
+          : daysRemaining <= 14
+            ? `URGENT: Only ${daysRemaining} days remaining to file this appeal. The user must act immediately.`
+            : null,
         diagnosis_codes: diagnosisCodes.map((c) => ({ code: c.code, description: c.description })),
         procedure_codes: procedureCodes.map((c) => ({ code: c.code, description: c.description })),
         requirements: requirements.requirements,
