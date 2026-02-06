@@ -275,15 +275,16 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       // Update conversation ID from server response
       if (data.conversationId && !currentConversationId) {
         currentConversationId = data.conversationId;
-        setConversationId(data.conversationId);
 
-        // Claim the conversation immediately so message saves work
-        // (messages RLS requires conversation to be owned by auth.uid())
+        // Claim BEFORE setting state — setConversationId triggers sidebar refresh,
+        // which queries WHERE user_id = auth.uid(). Claim must complete first.
         if (userId) {
           await claimConversation(data.conversationId).catch((err) =>
             console.warn("Failed to claim conversation:", err)
           );
         }
+
+        setConversationId(data.conversationId);
       }
 
       // Update session state
