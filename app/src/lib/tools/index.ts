@@ -515,10 +515,18 @@ const searchPubMedExecutor: ToolExecutor = async (input) => {
       return cached as ToolResult;
     }
 
-    // Search PubMed using E-utilities
+    // Search PubMed using E-utilities (15s timeout per fetch to prevent long hangs)
+    const fetchWithTimeout = (url: string) =>
+      Promise.race([
+        pubmedFetch(url),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("PubMed request timed out after 15s")), 15000)
+        ),
+      ]);
+
     const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(searchTerm)}&retmax=${limit}&retmode=json&sort=relevance`;
 
-    const searchResponse = await pubmedFetch(searchUrl);
+    const searchResponse = await fetchWithTimeout(searchUrl);
     if (!searchResponse.ok) {
       throw new Error(`PubMed search error: ${searchResponse.status}`);
     }
@@ -542,7 +550,7 @@ const searchPubMedExecutor: ToolExecutor = async (input) => {
     // Fetch article details (also rate-limited)
     const fetchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${ids.join(",")}&retmode=json`;
 
-    const fetchResponse = await pubmedFetch(fetchUrl);
+    const fetchResponse = await fetchWithTimeout(fetchUrl);
     if (!fetchResponse.ok) {
       throw new Error(`PubMed fetch error: ${fetchResponse.status}`);
     }

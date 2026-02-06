@@ -34,7 +34,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const userId = user.id;
-    const phone = user.phone;
+    const email = user.email;
 
     // Start deletion process
     // Order matters due to foreign key constraints
@@ -72,11 +72,11 @@ export async function DELETE(request: NextRequest) {
       .eq("user_id", userId);
 
     // 5. Delete usage record
-    if (phone) {
+    if (email) {
       await supabase
         .from("usage")
         .delete()
-        .eq("phone", phone);
+        .eq("email", email);
     }
 
     // 6. Cancel any active subscriptions via Stripe

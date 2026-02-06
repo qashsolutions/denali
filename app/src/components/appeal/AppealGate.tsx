@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useAuth, type AppealAccessStatus } from "@/hooks/useAuth";
-import { PhoneOTPModal } from "@/components/auth/PhoneOTPModal";
+import { EmailOTPModal } from "@/components/auth/EmailOTPModal";
+import { TOTPChallengeModal } from "@/components/auth/TOTPChallengeModal";
+import { TOTPEnrollModal } from "@/components/auth/TOTPEnrollModal";
 import { PaywallModal } from "@/components/payment/PaywallModal";
 
 interface AppealGateProps {
@@ -16,22 +18,29 @@ interface AppealGateProps {
  * Controls access to appeal letter generation based on user's auth and payment status.
  *
  * Flow:
- * 1. If not authenticated → Show PhoneOTPModal
- * 2. If authenticated but first appeal → Allow access (free)
- * 3. If authenticated and used free appeal → Show PaywallModal
- * 4. If has unlimited subscription → Allow access
+ * 1. If MFA enrolled → Show TOTPChallengeModal (with email fallback)
+ * 2. If not authenticated → Show EmailOTPModal
+ * 3. If authenticated, first appeal → Allow access (free) + offer TOTP enrollment
+ * 4. If authenticated and used free appeal → Show PaywallModal
+ * 5. If has unlimited subscription → Allow access
  */
 export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
   const {
     authState,
-    sendOTP,
-    verifyOTP,
+    sendEmailOTP,
+    verifyEmailOTP,
+    enrollTOTP,
+    challengeAndVerifyTOTP,
     checkAppealAccess,
     clearError,
   } = useAuth();
 
-  const [accessStatus, setAccessStatus] = useState<AppealAccessStatus | null>(null);
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [accessStatus, setAccessStatus] = useState<AppealAccessStatus | null>(
+    null
+  );
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showTOTPChallenge, setShowTOTPChallenge] = useState(false);
+  const [showTOTPEnroll, setShowTOTPEnroll] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
@@ -40,8 +49,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
     const check = async () => {
       setIsChecking(true);
 
-      // If not verified, need to authenticate first
-      if (!authState.isPhoneVerified) {
+      if (!authState.isEmailVerified) {
         setAccessStatus("paywall"); // Will show auth modal
         setIsChecking(false);
         return;
@@ -51,18 +59,34 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
       setAccessStatus(status);
       setIsChecking(false);
 
-      // If access is granted, call the callback
       if (status === "free" || status === "allowed") {
         onAccessGranted?.();
       }
     };
 
     check();
-  }, [authState.isPhoneVerified, checkAppealAccess, onAccessGranted]);
+  }, [authState.isEmailVerified, checkAppealAccess, onAccessGranted]);
 
-  // Handle successful authentication
-  const handleAuthVerified = async () => {
-    setShowAuthModal(false);
+  // Handle successful email verification
+  const handleEmailVerified = async () => {
+    setShowEmailModal(false);
+    const status = await checkAppealAccess();
+    setAccessStatus(status);
+
+    if (status === "free" || status === "allowed") {
+      onAccessGranted?.();
+      // Offer TOTP enrollment after first free appeal (skippable)
+      if (status === "free" && !authState.isMfaEnrolled) {
+        setShowTOTPEnroll(true);
+      }
+    } else if (status === "paywall") {
+      setShowPaywallModal(true);
+    }
+  };
+
+  // Handle successful TOTP challenge
+  const handleTOTPVerified = async () => {
+    setShowTOTPChallenge(false);
     const status = await checkAppealAccess();
     setAccessStatus(status);
 
@@ -71,6 +95,21 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
     } else if (status === "paywall") {
       setShowPaywallModal(true);
     }
+  };
+
+  // Handle TOTP enrollment completed or skipped
+  const handleTOTPEnrolled = () => {
+    setShowTOTPEnroll(false);
+  };
+
+  const handleTOTPSkip = () => {
+    setShowTOTPEnroll(false);
+  };
+
+  // Handle TOTP fallback to email
+  const handleFallbackToEmail = () => {
+    setShowTOTPChallenge(false);
+    setShowEmailModal(true);
   };
 
   // Handle successful payment
@@ -82,8 +121,12 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
 
   // Request access (triggered by user action)
   const requestAccess = () => {
-    if (!authState.isPhoneVerified) {
-      setShowAuthModal(true);
+    if (!authState.isEmailVerified) {
+      if (authState.isMfaEnrolled) {
+        setShowTOTPChallenge(true);
+      } else {
+        setShowEmailModal(true);
+      }
     } else if (accessStatus === "paywall") {
       setShowPaywallModal(true);
     }
@@ -122,7 +165,24 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
 
   // If access granted (free first appeal or subscription), show children
   if (accessStatus === "free" || accessStatus === "allowed") {
-    return <>{children}</>;
+    return (
+      <>
+        {children}
+
+        {/* TOTP enrollment modal (shown after first free appeal) */}
+        <TOTPEnrollModal
+          isOpen={showTOTPEnroll}
+          onClose={() => setShowTOTPEnroll(false)}
+          onEnrolled={handleTOTPEnrolled}
+          onSkip={handleTOTPSkip}
+          enrollTOTP={enrollTOTP}
+          challengeAndVerifyTOTP={challengeAndVerifyTOTP}
+          isLoading={authState.isLoading}
+          error={authState.error}
+          clearError={clearError}
+        />
+      </>
+    );
   }
 
   // Show gated content with unlock prompt
@@ -130,9 +190,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
     <>
       <div className="relative">
         {/* Blurred preview of content */}
-        <div className="blur-sm opacity-50 pointer-events-none">
-          {children}
-        </div>
+        <div className="blur-sm opacity-50 pointer-events-none">{children}</div>
 
         {/* Overlay with unlock prompt */}
         <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm rounded-xl">
@@ -155,14 +213,14 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
             </div>
 
             <h3 className="text-xl font-semibold text-slate-100 mb-2">
-              {!authState.isPhoneVerified
-                ? "Verify Your Phone"
+              {!authState.isEmailVerified
+                ? "Verify Your Email"
                 : "Unlock Your Appeal Letter"}
             </h3>
 
             <p className="text-slate-400 mb-6">
-              {!authState.isPhoneVerified
-                ? "Quick phone verification keeps your appeal letters secure."
+              {!authState.isEmailVerified
+                ? "Quick email verification keeps your appeal letters secure."
                 : "Get access to this appeal letter and help fight your denial."}
             </p>
 
@@ -170,10 +228,10 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
               onClick={requestAccess}
               className="w-full py-3 px-6 rounded-xl font-medium transition-all bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white"
             >
-              {!authState.isPhoneVerified ? "Verify Phone" : "View Pricing"}
+              {!authState.isEmailVerified ? "Verify Email" : "View Pricing"}
             </button>
 
-            {!authState.isPhoneVerified && (
+            {!authState.isEmailVerified && (
               <p className="mt-3 text-sm text-slate-500">
                 Your first appeal letter is free!
               </p>
@@ -182,13 +240,25 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
         </div>
       </div>
 
-      {/* Auth Modal */}
-      <PhoneOTPModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        onVerified={handleAuthVerified}
-        sendOTP={sendOTP}
-        verifyOTP={verifyOTP}
+      {/* Email OTP Modal */}
+      <EmailOTPModal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        onVerified={handleEmailVerified}
+        sendEmailOTP={sendEmailOTP}
+        verifyEmailOTP={verifyEmailOTP}
+        isLoading={authState.isLoading}
+        error={authState.error}
+        clearError={clearError}
+      />
+
+      {/* TOTP Challenge Modal (returning users with MFA) */}
+      <TOTPChallengeModal
+        isOpen={showTOTPChallenge}
+        onClose={() => setShowTOTPChallenge(false)}
+        onVerified={handleTOTPVerified}
+        onFallbackToEmail={handleFallbackToEmail}
+        challengeAndVerifyTOTP={challengeAndVerifyTOTP}
         isLoading={authState.isLoading}
         error={authState.error}
         clearError={clearError}

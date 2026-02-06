@@ -281,7 +281,7 @@ export async function submitMessageFeedback(
  */
 export async function saveAppeal(
   conversationId: string,
-  phone: string,
+  email: string,
   appealData: {
     appealLetter: string;
     denialDate?: string;
@@ -310,7 +310,7 @@ export async function saveAppeal(
     .from("appeals")
     .insert({
       conversation_id: conversationId,
-      phone,
+      email,
       user_id: appealData.userId || null,
       appeal_letter: appealData.appealLetter,
       denial_date: appealData.denialDate || null,
@@ -335,7 +335,7 @@ export async function saveAppeal(
 
   // Increment appeal count
   await supabase.rpc("increment_appeal_count", {
-    p_phone: phone,
+    p_email: email,
     p_user_id: appealData.userId,
   });
 
@@ -347,7 +347,7 @@ export async function saveAppeal(
  * Returns: 'free' (first appeal), 'paywall' (needs payment), 'allowed' (has subscription)
  */
 export async function checkAppealAccess(
-  phone: string,
+  email: string,
   userId?: string
 ): Promise<{
   access: "free" | "paywall" | "allowed";
@@ -360,7 +360,7 @@ export async function checkAppealAccess(
     // First try the RPC function if available
     const { data: rpcResult, error: rpcError } = await supabase.rpc(
       "check_appeal_access",
-      { p_phone: phone }
+      { p_email: email }
     );
 
     if (!rpcError && rpcResult) {
@@ -377,7 +377,7 @@ export async function checkAppealAccess(
     const { data: usageData } = await supabase
       .from("usage")
       .select("appeal_count")
-      .eq("phone", phone)
+      .eq("email", email)
       .single();
 
     const appealCount = usageData?.appeal_count ?? 0;
@@ -416,13 +416,13 @@ export async function checkAppealAccess(
 /**
  * Get appeal count for a phone number
  */
-export async function getAppealCount(phone: string): Promise<number> {
+export async function getAppealCount(email: string): Promise<number> {
   const supabase = createClient();
 
   const { data, error } = await supabase
     .from("usage")
     .select("appeal_count")
-    .eq("phone", phone)
+    .eq("email", email)
     .single();
 
   if (error || !data) {

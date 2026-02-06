@@ -58,13 +58,14 @@ export type Database = {
           days_to_resolution: number | null
           denial_reason: string | null
           documentation_gaps: string[] | null
+          email: string | null
           icd10_codes: string[] | null
           id: string
           lcd_refs: string[] | null
           ncd_refs: string[] | null
           outcome: string | null
           outcome_reported_at: string | null
-          phone: string
+          phone: string | null
           successful_arguments: string[] | null
         }
         Insert: {
@@ -74,13 +75,14 @@ export type Database = {
           days_to_resolution?: number | null
           denial_reason?: string | null
           documentation_gaps?: string[] | null
+          email?: string | null
           icd10_codes?: string[] | null
           id?: string
           lcd_refs?: string[] | null
           ncd_refs?: string[] | null
           outcome?: string | null
           outcome_reported_at?: string | null
-          phone: string
+          phone?: string | null
           successful_arguments?: string[] | null
         }
         Update: {
@@ -90,13 +92,14 @@ export type Database = {
           days_to_resolution?: number | null
           denial_reason?: string | null
           documentation_gaps?: string[] | null
+          email?: string | null
           icd10_codes?: string[] | null
           id?: string
           lcd_refs?: string[] | null
           ncd_refs?: string[] | null
           outcome?: string | null
           outcome_reported_at?: string | null
-          phone?: string
+          phone?: string | null
           successful_arguments?: string[] | null
         }
         Relationships: [
@@ -119,12 +122,13 @@ export type Database = {
           deadline: string | null
           denial_date: string | null
           denial_reason: string | null
+          email: string | null
           icd10_codes: string[] | null
           id: string
           lcd_refs: string[] | null
           ncd_refs: string[] | null
           paid: boolean | null
-          phone: string
+          phone: string | null
           pubmed_refs: string[] | null
           rarc_codes: string[] | null
           service_description: string | null
@@ -142,12 +146,13 @@ export type Database = {
           deadline?: string | null
           denial_date?: string | null
           denial_reason?: string | null
+          email?: string | null
           icd10_codes?: string[] | null
           id?: string
           lcd_refs?: string[] | null
           ncd_refs?: string[] | null
           paid?: boolean | null
-          phone: string
+          phone?: string | null
           pubmed_refs?: string[] | null
           rarc_codes?: string[] | null
           service_description?: string | null
@@ -165,12 +170,13 @@ export type Database = {
           deadline?: string | null
           denial_date?: string | null
           denial_reason?: string | null
+          email?: string | null
           icd10_codes?: string[] | null
           id?: string
           lcd_refs?: string[] | null
           ncd_refs?: string[] | null
           paid?: boolean | null
-          phone?: string
+          phone?: string | null
           pubmed_refs?: string[] | null
           rarc_codes?: string[] | null
           service_description?: string | null
@@ -887,9 +893,10 @@ export type Database = {
           appeal_count: number
           created_at: string
           device_fingerprint: string | null
+          email: string | null
           id: string
           last_appeal_at: string | null
-          phone: string
+          phone: string | null
           updated_at: string
           user_id: string | null
         }
@@ -897,9 +904,10 @@ export type Database = {
           appeal_count?: number
           created_at?: string
           device_fingerprint?: string | null
+          email?: string | null
           id?: string
           last_appeal_at?: string | null
-          phone: string
+          phone?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -907,9 +915,10 @@ export type Database = {
           appeal_count?: number
           created_at?: string
           device_fingerprint?: string | null
+          email?: string | null
           id?: string
           last_appeal_at?: string | null
-          phone?: string
+          phone?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -1058,11 +1067,11 @@ export type Database = {
         Row: {
           autoplay_media: boolean | null
           created_at: string
-          email: string | null
+          email: string
           high_contrast: boolean | null
           id: string
           notifications_enabled: boolean | null
-          phone: string
+          phone: string | null
           plan: string
           reduce_motion: boolean | null
           text_size: number | null
@@ -1073,11 +1082,11 @@ export type Database = {
         Insert: {
           autoplay_media?: boolean | null
           created_at?: string
-          email?: string | null
+          email: string
           high_contrast?: boolean | null
           id: string
           notifications_enabled?: boolean | null
-          phone: string
+          phone?: string | null
           plan?: string
           reduce_motion?: boolean | null
           text_size?: number | null
@@ -1088,11 +1097,11 @@ export type Database = {
         Update: {
           autoplay_media?: boolean | null
           created_at?: string
-          email?: string | null
+          email?: string
           high_contrast?: boolean | null
           id?: string
           notifications_enabled?: boolean | null
-          phone?: string
+          phone?: string | null
           plan?: string
           reduce_motion?: boolean | null
           text_size?: number | null
@@ -1312,7 +1321,7 @@ export type Database = {
       }
     }
     Functions: {
-      check_appeal_access: { Args: { p_phone: string }; Returns: string }
+      check_appeal_access: { Args: { p_email: string }; Returns: string }
       claim_learning_job: {
         Args: never
         Returns: {
@@ -1334,7 +1343,7 @@ export type Database = {
         Args: { p_cpt_codes: string[]; p_icd10_codes: string[] }
         Returns: Json
       }
-      get_appeal_count: { Args: { p_phone: string }; Returns: number }
+      get_appeal_count: { Args: { p_email: string }; Returns: number }
       get_current_practice_id: { Args: never; Returns: string }
       get_denial_pattern_for_carc: {
         Args: { carc_code_input: string }
@@ -1377,7 +1386,7 @@ export type Database = {
       increment_appeal_count: {
         Args: {
           p_device_fingerprint?: string
-          p_phone: string
+          p_email: string
           p_user_id?: string
         }
         Returns: number
@@ -1415,8 +1424,8 @@ export type Database = {
           p_days_to_resolution?: number
           p_denial_reason?: string
           p_documentation_gaps?: string[]
+          p_email: string
           p_outcome: string
-          p_phone: string
           p_successful_arguments?: string[]
         }
         Returns: string

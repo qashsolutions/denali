@@ -553,7 +553,11 @@ export async function chat(
   const sessionState = request.sessionState ?? createDefaultSessionState();
   const toolsUsed: string[] = [];
   const model = request.modelOverride || API_CONFIG.claude.model;
-  const timeoutMs = API_CONFIG.claude.iterationTimeoutMs;
+  // Opus (appeal mode) needs longer timeout — heavy reasoning with tool results
+  const isAppealModel = model.includes("opus");
+  const timeoutMs = isAppealModel
+    ? API_CONFIG.claude.iterationTimeoutMs * 2
+    : API_CONFIG.claude.iterationTimeoutMs;
 
   // Convert our tool definitions to Anthropic format
   const anthropicTools = request.tools.map((tool) => ({
@@ -568,7 +572,13 @@ export async function chat(
   while (iterations < maxIterations) {
     iterations++;
 
-    // Soft cap: warn Claude to wrap up 2 iterations before the hard limit
+    // Appeal mode soft cap: by iteration 4, Claude has denial codes, ICD-10, CPT, coverage, PubMed
+    // Force letter generation instead of continuing to search
+    if (isAppealModel && iterations === 4) {
+      request.systemPrompt += `\n\n## URGENT: Generate Appeal Letter NOW\nYou have completed ${iterations - 1} tool rounds and should have denial codes, diagnosis/procedure codes, coverage policy, and clinical evidence. STOP calling tools. Use generate_appeal_letter NOW with the data you have. Do NOT search for more information.`;
+    }
+
+    // General soft cap: warn Claude to wrap up 2 iterations before the hard limit
     if (iterations === maxIterations - 1) {
       request.systemPrompt += `\n\n## URGENT: Approaching Tool Limit\nYou have used ${iterations - 1} of ${maxIterations} tool rounds. STOP calling tools after this round.\nUse the data you already have to respond to the user. Generate your response NOW.`;
     }

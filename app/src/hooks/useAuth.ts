@@ -5,10 +5,10 @@ import { createClient } from "@/lib/supabase";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 export interface AuthState {
-  phone: string | null;
-  isPhoneVerified: boolean;
   email: string | null;
   isEmailVerified: boolean;
+  isMfaEnrolled: boolean;
+  isMfaVerified: boolean;
   plan: "free" | "per_appeal" | "unlimited";
   appealCount: number;
   isLoading: boolean;
@@ -19,18 +19,20 @@ export type AppealAccessStatus = "free" | "paywall" | "allowed";
 
 interface UseAuthReturn {
   authState: AuthState;
-  sendOTP: (phone: string) => Promise<boolean>;
-  verifyOTP: (phone: string, code: string) => Promise<boolean>;
+  sendEmailOTP: (email: string) => Promise<boolean>;
+  verifyEmailOTP: (email: string, code: string) => Promise<boolean>;
+  enrollTOTP: () => Promise<{ qrCode: string; secret: string } | null>;
+  challengeAndVerifyTOTP: (code: string) => Promise<boolean>;
   checkAppealAccess: () => Promise<AppealAccessStatus>;
   signOut: () => Promise<void>;
   clearError: () => void;
 }
 
 const DEFAULT_AUTH_STATE: AuthState = {
-  phone: null,
-  isPhoneVerified: false,
   email: null,
   isEmailVerified: false,
+  isMfaEnrolled: false,
+  isMfaVerified: false,
   plan: "free",
   appealCount: 0,
   isLoading: false,
@@ -45,41 +47,61 @@ export function useAuth(): UseAuthReturn {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
         if (session?.user) {
-          const phone = session.user.phone || null;
           const email = session.user.email || null;
+
+          // Check MFA status
+          const { data: aalData } =
+            await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+          const { data: factorsData } =
+            await supabase.auth.mfa.listFactors();
+
+          const totpFactors =
+            factorsData?.totp?.filter((f) => f.status === "verified") ?? [];
+          const isMfaEnrolled = totpFactors.length > 0;
+          const isMfaVerified =
+            aalData?.currentLevel === "aal2" ||
+            aalData?.currentAuthenticationMethods?.some(
+              (m) => typeof m === "object" && "method" in m && m.method === "totp"
+            ) ||
+            false;
 
           // Fetch user profile from database
           const { data: profile } = await supabase
             .from("users")
-            .select("plan, phone")
+            .select("plan")
             .eq("id", session.user.id)
             .single();
 
-          // Fetch appeal count (only if phone exists)
+          // Fetch appeal count by email
           let appealCount = 0;
-          if (phone) {
+          if (email) {
             const { data: usage } = await supabase
               .from("usage")
               .select("appeal_count")
-              .eq("phone", phone)
+              .eq("email", email)
               .single();
             appealCount = usage?.appeal_count || 0;
           }
 
           // Validate plan type
           const validPlans = ["free", "per_appeal", "unlimited"] as const;
-          const userPlan = validPlans.includes(profile?.plan as typeof validPlans[number])
+          const userPlan = validPlans.includes(
+            profile?.plan as (typeof validPlans)[number]
+          )
             ? (profile?.plan as "free" | "per_appeal" | "unlimited")
             : "free";
 
           setAuthState({
-            phone,
-            isPhoneVerified: !!phone,
             email,
-            isEmailVerified: !!email && session.user.email_confirmed_at !== null,
+            isEmailVerified:
+              !!email && session.user.email_confirmed_at !== null,
+            isMfaEnrolled,
+            isMfaVerified,
             plan: userPlan,
             appealCount,
             isLoading: false,
@@ -94,16 +116,17 @@ export function useAuth(): UseAuthReturn {
     checkSession();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
         if (event === "SIGNED_IN" && session?.user) {
-          const phone = session.user.phone || null;
+          const email = session.user.email || null;
           setAuthState((prev) => ({
             ...prev,
-            phone,
-            isPhoneVerified: !!phone,
-            email: session.user.email || null,
-            isEmailVerified: !!session.user.email && session.user.email_confirmed_at !== null,
+            email,
+            isEmailVerified:
+              !!email && session.user.email_confirmed_at !== null,
           }));
         } else if (event === "SIGNED_OUT") {
           setAuthState(DEFAULT_AUTH_STATE);
@@ -116,150 +139,305 @@ export function useAuth(): UseAuthReturn {
     };
   }, [supabase]);
 
-  // Send OTP to phone number
-  const sendOTP = useCallback(async (phone: string): Promise<boolean> => {
-    setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
+  // Send OTP to email
+  const sendEmailOTP = useCallback(
+    async (email: string): Promise<boolean> => {
+      setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-    try {
-      // Format phone number (ensure it starts with +1 for US)
-      const formattedPhone = phone.startsWith("+") ? phone : `+1${phone.replace(/\D/g, "")}`;
+      try {
+        const { error } = await supabase.auth.signInWithOtp({ email });
 
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: formattedPhone,
-      });
-
-      if (error) {
-        setAuthState((prev) => ({
-          ...prev,
-          isLoading: false,
-          error: error.message,
-        }));
-        return false;
-      }
-
-      setAuthState((prev) => ({
-        ...prev,
-        phone: formattedPhone,
-        isLoading: false,
-      }));
-      return true;
-    } catch (error) {
-      setAuthState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to send verification code",
-      }));
-      return false;
-    }
-  }, [supabase]);
-
-  // Verify OTP code
-  const verifyOTP = useCallback(async (phone: string, code: string): Promise<boolean> => {
-    setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
-
-    try {
-      const formattedPhone = phone.startsWith("+") ? phone : `+1${phone.replace(/\D/g, "")}`;
-
-      const { error, data } = await supabase.auth.verifyOtp({
-        phone: formattedPhone,
-        token: code,
-        type: "sms",
-      });
-
-      if (error) {
-        setAuthState((prev) => ({
-          ...prev,
-          isLoading: false,
-          error: error.message,
-        }));
-        return false;
-      }
-
-      if (data.user) {
-        // Create or update user in database
-        const { error: upsertError } = await supabase
-          .from("users")
-          .upsert({
-            id: data.user.id,
-            phone: formattedPhone,
-            plan: "free",
-          }, {
-            onConflict: "id",
-          });
-
-        if (upsertError) {
-          console.error("Error upserting user:", upsertError);
-        }
-
-        // Initialize usage record if not exists
-        const { error: usageError } = await supabase
-          .from("usage")
-          .upsert({
-            phone: formattedPhone,
-            appeal_count: 0,
-          }, {
-            onConflict: "phone",
-            ignoreDuplicates: true,
-          });
-
-        if (usageError) {
-          console.error("Error initializing usage:", usageError);
+        if (error) {
+          setAuthState((prev) => ({
+            ...prev,
+            isLoading: false,
+            error: error.message,
+          }));
+          return false;
         }
 
         setAuthState((prev) => ({
           ...prev,
-          phone: formattedPhone,
-          isPhoneVerified: true,
+          email,
           isLoading: false,
         }));
         return true;
+      } catch (error) {
+        setAuthState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to send verification code",
+        }));
+        return false;
+      }
+    },
+    [supabase]
+  );
+
+  // Verify email OTP code
+  const verifyEmailOTP = useCallback(
+    async (email: string, code: string): Promise<boolean> => {
+      setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+      try {
+        const { error, data } = await supabase.auth.verifyOtp({
+          email,
+          token: code,
+          type: "email",
+        });
+
+        if (error) {
+          setAuthState((prev) => ({
+            ...prev,
+            isLoading: false,
+            error: error.message,
+          }));
+          return false;
+        }
+
+        if (data.user) {
+          // Create or update user in database
+          const { error: upsertError } = await supabase.from("users").upsert(
+            {
+              id: data.user.id,
+              email,
+              plan: "free",
+            },
+            { onConflict: "id" }
+          );
+
+          if (upsertError) {
+            console.error("Error upserting user:", upsertError);
+          }
+
+          // Initialize usage record if not exists
+          const { error: usageError } = await supabase.from("usage").upsert(
+            {
+              email,
+              appeal_count: 0,
+            },
+            { onConflict: "email", ignoreDuplicates: true }
+          );
+
+          if (usageError) {
+            console.error("Error initializing usage:", usageError);
+          }
+
+          // Check MFA factors
+          const { data: factorsData } =
+            await supabase.auth.mfa.listFactors();
+          const totpFactors =
+            factorsData?.totp?.filter((f) => f.status === "verified") ?? [];
+
+          setAuthState((prev) => ({
+            ...prev,
+            email,
+            isEmailVerified: true,
+            isMfaEnrolled: totpFactors.length > 0,
+            isLoading: false,
+          }));
+          return true;
+        }
+
+        return false;
+      } catch (error) {
+        setAuthState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to verify code",
+        }));
+        return false;
+      }
+    },
+    [supabase]
+  );
+
+  // Enroll TOTP factor
+  const enrollTOTP = useCallback(async (): Promise<{
+    qrCode: string;
+    secret: string;
+  } | null> => {
+    setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+    try {
+      const { data, error } = await supabase.auth.mfa.enroll({
+        factorType: "totp",
+      });
+
+      if (error) {
+        setAuthState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error: error.message,
+        }));
+        return null;
       }
 
-      return false;
+      setAuthState((prev) => ({ ...prev, isLoading: false }));
+      return {
+        qrCode: data.totp.qr_code,
+        secret: data.totp.secret,
+      };
     } catch (error) {
       setAuthState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to verify code",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to set up authenticator",
       }));
-      return false;
+      return null;
     }
   }, [supabase]);
 
-  // Check appeal access based on phone and plan
-  const checkAppealAccess = useCallback(async (): Promise<AppealAccessStatus> => {
-    if (!authState.isPhoneVerified || !authState.phone) {
-      // Need to sign up first
-      return "paywall";
-    }
+  // Challenge and verify TOTP
+  const challengeAndVerifyTOTP = useCallback(
+    async (code: string): Promise<boolean> => {
+      setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-    try {
-      // Check if user has unlimited plan
-      if (authState.plan === "unlimited") {
-        return "allowed";
+      try {
+        const { data: factorsData } =
+          await supabase.auth.mfa.listFactors();
+        const totpFactor = factorsData?.totp?.find(
+          (f) => f.status === "verified"
+        );
+
+        if (!totpFactor) {
+          // If no verified factor, this is enrollment verification
+          const unverified = factorsData?.totp?.find(
+            (f) => (f.status as string) === "unverified"
+          );
+          if (!unverified) {
+            setAuthState((prev) => ({
+              ...prev,
+              isLoading: false,
+              error: "No authenticator found. Please set up again.",
+            }));
+            return false;
+          }
+
+          const { data: challengeData, error: challengeError } =
+            await supabase.auth.mfa.challenge({ factorId: unverified.id });
+
+          if (challengeError) {
+            setAuthState((prev) => ({
+              ...prev,
+              isLoading: false,
+              error: challengeError.message,
+            }));
+            return false;
+          }
+
+          const { error: verifyError } = await supabase.auth.mfa.verify({
+            factorId: unverified.id,
+            challengeId: challengeData.id,
+            code,
+          });
+
+          if (verifyError) {
+            setAuthState((prev) => ({
+              ...prev,
+              isLoading: false,
+              error: verifyError.message,
+            }));
+            return false;
+          }
+
+          setAuthState((prev) => ({
+            ...prev,
+            isMfaEnrolled: true,
+            isMfaVerified: true,
+            isLoading: false,
+          }));
+          return true;
+        }
+
+        // Challenge existing verified factor
+        const { data: challengeData, error: challengeError } =
+          await supabase.auth.mfa.challenge({ factorId: totpFactor.id });
+
+        if (challengeError) {
+          setAuthState((prev) => ({
+            ...prev,
+            isLoading: false,
+            error: challengeError.message,
+          }));
+          return false;
+        }
+
+        const { error: verifyError } = await supabase.auth.mfa.verify({
+          factorId: totpFactor.id,
+          challengeId: challengeData.id,
+          code,
+        });
+
+        if (verifyError) {
+          setAuthState((prev) => ({
+            ...prev,
+            isLoading: false,
+            error: verifyError.message,
+          }));
+          return false;
+        }
+
+        setAuthState((prev) => ({
+          ...prev,
+          isMfaVerified: true,
+          isLoading: false,
+        }));
+        return true;
+      } catch (error) {
+        setAuthState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to verify authenticator code",
+        }));
+        return false;
+      }
+    },
+    [supabase]
+  );
+
+  // Check appeal access based on email and plan
+  const checkAppealAccess =
+    useCallback(async (): Promise<AppealAccessStatus> => {
+      if (!authState.isEmailVerified || !authState.email) {
+        return "paywall";
       }
 
-      // Check appeal count
-      const { data: usage } = await supabase
-        .from("usage")
-        .select("appeal_count")
-        .eq("phone", authState.phone)
-        .single();
+      try {
+        if (authState.plan === "unlimited") {
+          return "allowed";
+        }
 
-      const appealCount = usage?.appeal_count || 0;
+        const { data: usage } = await supabase
+          .from("usage")
+          .select("appeal_count")
+          .eq("email", authState.email)
+          .single();
 
-      // First appeal is free
-      if (appealCount === 0) {
-        return "free";
+        const appealCount = usage?.appeal_count || 0;
+
+        if (appealCount === 0) {
+          return "free";
+        }
+
+        return "paywall";
+      } catch (error) {
+        console.error("Error checking appeal access:", error);
+        return "paywall";
       }
-
-      // Additional appeals require payment
-      return "paywall";
-    } catch (error) {
-      console.error("Error checking appeal access:", error);
-      return "paywall";
-    }
-  }, [authState, supabase]);
+    }, [authState, supabase]);
 
   // Sign out
   const signOut = useCallback(async () => {
@@ -274,8 +452,10 @@ export function useAuth(): UseAuthReturn {
 
   return {
     authState,
-    sendOTP,
-    verifyOTP,
+    sendEmailOTP,
+    verifyEmailOTP,
+    enrollTOTP,
+    challengeAndVerifyTOTP,
     checkAppealAccess,
     signOut,
     clearError,
