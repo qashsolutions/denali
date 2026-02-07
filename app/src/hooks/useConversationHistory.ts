@@ -60,7 +60,7 @@ export function useConversationHistory(): UseConversationHistoryReturn {
       // Load recent conversations
       const recentConversations = await loadRecentConversations({
         userId: session.user.id,
-        limit: 20,
+        limit: 50,
       });
 
       // Transform to history items with preview

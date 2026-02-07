@@ -4,6 +4,8 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRICING, formatPrice } from "@/config";
 
+const FREE_LIMIT = PRICING.FREE_APPEAL_LIMIT;
+
 interface PaywallModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -111,7 +113,7 @@ export function PaywallModal({
         {/* Content */}
         <div className="p-6 space-y-4">
           {/* Free tier info */}
-          {appealCount === 0 && (
+          {appealCount < FREE_LIMIT && (
             <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
@@ -131,9 +133,9 @@ export function PaywallModal({
                   </svg>
                 </div>
                 <div>
-                  <p className="font-medium text-green-400">First One Free!</p>
+                  <p className="font-medium text-green-400">{FREE_LIMIT - appealCount} Free Appeal{FREE_LIMIT - appealCount !== 1 ? "s" : ""} Left</p>
                   <p className="text-sm text-slate-400">
-                    Your first appeal letter is on us
+                    Your first {FREE_LIMIT} appeal letters are on us
                   </p>
                 </div>
               </div>

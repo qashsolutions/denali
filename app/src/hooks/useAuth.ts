@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
+import { PRICING } from "@/config";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 export interface AuthState {
@@ -437,7 +438,7 @@ export function useAuth(): UseAuthReturn {
 
         const appealCount = usage.appeal_count || 0;
 
-        if (appealCount < 3) {
+        if (appealCount < PRICING.FREE_APPEAL_LIMIT) {
           return "free";
         }
 

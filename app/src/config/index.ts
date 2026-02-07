@@ -11,8 +11,7 @@ export { BRAND, getSiteUrl, getBrandName } from "./brand";
 export {
   PRICING,
   formatPrice,
-  getSingleAppealPrice,
-  getUnlimitedPrice,
+  // DEAD CODE — getSingleAppealPrice, getUnlimitedPrice: no consumers (commented out in pricing.ts)
 } from "./pricing";
 
 // API

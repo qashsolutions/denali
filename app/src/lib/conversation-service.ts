@@ -207,38 +207,30 @@ export async function loadRecentConversations(
   }));
 }
 
-/**
- * Update conversation status
- */
-export async function updateConversationStatus(
-  conversationId: string,
-  status: "active" | "completed" | "archived",
-  title?: string
-): Promise<boolean> {
-  const supabase = createClient();
-
-  const updates: Record<string, unknown> = { status };
-
-  if (status === "completed") {
-    updates.completed_at = new Date().toISOString();
-  }
-
-  if (title) {
-    updates.title = title;
-  }
-
-  const { error } = await supabase
-    .from("conversations")
-    .update(updates)
-    .eq("id", conversationId);
-
-  if (error) {
-    console.error("Failed to update conversation:", error);
-    return false;
-  }
-
-  return true;
-}
+// DEAD CODE — No consumers. Commented out 2026-02-06.
+// export async function updateConversationStatus(
+//   conversationId: string,
+//   status: "active" | "completed" | "archived",
+//   title?: string
+// ): Promise<boolean> {
+//   const supabase = createClient();
+//   const updates: Record<string, unknown> = { status };
+//   if (status === "completed") {
+//     updates.completed_at = new Date().toISOString();
+//   }
+//   if (title) {
+//     updates.title = title;
+//   }
+//   const { error } = await supabase
+//     .from("conversations")
+//     .update(updates)
+//     .eq("id", conversationId);
+//   if (error) {
+//     console.error("Failed to update conversation:", error);
+//     return false;
+//   }
+//   return true;
+// }
 
 /**
  * Submit feedback for a message
@@ -297,6 +289,25 @@ export async function saveAppeal(
 ): Promise<string | null> {
   const supabase = createClient();
 
+  // Resolve email: if empty, look up from conversation's user_id
+  let resolvedEmail = email;
+  if (!resolvedEmail) {
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("user_id")
+      .eq("id", conversationId)
+      .single();
+
+    if (conv?.user_id) {
+      const { data: user } = await supabase
+        .from("users")
+        .select("email")
+        .eq("id", conv.user_id)
+        .single();
+      resolvedEmail = user?.email || "";
+    }
+  }
+
   // Calculate deadline
   let deadline: string | null = null;
   if (appealData.denialDate) {
@@ -310,7 +321,7 @@ export async function saveAppeal(
     .from("appeals")
     .insert({
       conversation_id: conversationId,
-      email,
+      email: resolvedEmail,
       user_id: appealData.userId || null,
       appeal_letter: appealData.appealLetter,
       denial_date: appealData.denialDate || null,
@@ -333,85 +344,70 @@ export async function saveAppeal(
     return null;
   }
 
-  // Increment appeal count
-  await supabase.rpc("increment_appeal_count", {
-    p_email: email,
-    p_user_id: appealData.userId,
-  });
+  // Increment appeal count (only if we have an email)
+  if (resolvedEmail) {
+    await supabase.rpc("increment_appeal_count", {
+      p_email: resolvedEmail,
+      p_user_id: appealData.userId,
+    });
+  }
 
   return data.id;
 }
 
-/**
- * Check appeal access for a user
- * Returns: 'free' (first appeal), 'paywall' (needs payment), 'allowed' (has subscription)
- */
-export async function checkAppealAccess(
-  email: string,
-  userId?: string
-): Promise<{
-  access: "free" | "paywall" | "allowed";
-  appealCount: number;
-  hasSubscription: boolean;
-}> {
-  const supabase = createClient();
-
-  try {
-    // First try the RPC function if available
-    const { data: rpcResult, error: rpcError } = await supabase.rpc(
-      "check_appeal_access",
-      { p_email: email }
-    );
-
-    if (!rpcError && rpcResult) {
-      // RPC returns 'free', 'paywall', or 'allowed'
-      return {
-        access: rpcResult as "free" | "paywall" | "allowed",
-        appealCount: 0, // RPC doesn't return count
-        hasSubscription: rpcResult === "allowed",
-      };
-    }
-
-    // Fallback: Check manually
-    // 1. Get appeal count from usage table
-    const { data: usageData } = await supabase
-      .from("usage")
-      .select("appeal_count")
-      .eq("email", email)
-      .single();
-
-    const appealCount = usageData?.appeal_count ?? 0;
-
-    // 2. Check for active subscription
-    let hasSubscription = false;
-    if (userId) {
-      const { data: subData } = await supabase
-        .from("subscriptions")
-        .select("status, plan_type")
-        .eq("user_id", userId)
-        .eq("status", "active")
-        .single();
-
-      hasSubscription = !!subData;
-    }
-
-    // Determine access
-    let access: "free" | "paywall" | "allowed";
-    if (hasSubscription) {
-      access = "allowed";
-    } else if (appealCount === 0) {
-      access = "free"; // First appeal is free
-    } else {
-      access = "paywall"; // Needs to pay for additional appeals
-    }
-
-    return { access, appealCount, hasSubscription };
-  } catch (error) {
-    console.error("Failed to check appeal access:", error);
-    // Default to free on error (graceful degradation)
-    return { access: "free", appealCount: 0, hasSubscription: false };
-  }
-}
+// DEAD CODE — No external consumers. Client-side version lives in useAuth.ts.
+// Commented out 2026-02-06.
+// export async function checkAppealAccess(
+//   email: string,
+//   userId?: string
+// ): Promise<{
+//   access: "free" | "paywall" | "allowed";
+//   appealCount: number;
+//   hasSubscription: boolean;
+// }> {
+//   const supabase = createClient();
+//   try {
+//     const { data: rpcResult, error: rpcError } = await supabase.rpc(
+//       "check_appeal_access",
+//       { p_email: email }
+//     );
+//     if (!rpcError && rpcResult) {
+//       return {
+//         access: rpcResult as "free" | "paywall" | "allowed",
+//         appealCount: 0,
+//         hasSubscription: rpcResult === "allowed",
+//       };
+//     }
+//     const { data: usageData } = await supabase
+//       .from("usage")
+//       .select("appeal_count")
+//       .eq("email", email)
+//       .single();
+//     const appealCount = usageData?.appeal_count ?? 0;
+//     let hasSubscription = false;
+//     if (userId) {
+//       const { data: subData } = await supabase
+//         .from("subscriptions")
+//         .select("status, plan_type")
+//         .eq("user_id", userId)
+//         .eq("status", "active")
+//         .single();
+//       hasSubscription = !!subData;
+//     }
+//     let access: "free" | "paywall" | "allowed";
+//     if (hasSubscription) {
+//       access = "allowed";
+//     } else if (appealCount < PRICING.FREE_APPEAL_LIMIT) {
+//       access = "free";
+//     } else {
+//       access = "paywall";
+//     }
+//     return { access, appealCount, hasSubscription };
+//   } catch (error) {
+//     console.error("Failed to check appeal access:", error);
+//     return { access: "free", appealCount: 0, hasSubscription: false };
+//   }
+// }
 
 /**
  * Summary of an appeal record for inline display
@@ -488,40 +484,33 @@ export async function claimConversation(
   return !!data;
 }
 
-/**
- * Get appeal count for a phone number
- */
-export async function getAppealCount(email: string): Promise<number> {
-  const supabase = createClient();
+// DEAD CODE — No consumers. Appeal count is checked via useAuth hook or RPC.
+// Commented out 2026-02-06.
+// export async function getAppealCount(email: string): Promise<number> {
+//   const supabase = createClient();
+//   const { data, error } = await supabase
+//     .from("usage")
+//     .select("appeal_count")
+//     .eq("email", email)
+//     .single();
+//   if (error || !data) {
+//     return 0;
+//   }
+//   return data.appeal_count;
+// }
 
-  const { data, error } = await supabase
-    .from("usage")
-    .select("appeal_count")
-    .eq("email", email)
-    .single();
-
-  if (error || !data) {
-    return 0;
-  }
-
-  return data.appeal_count;
-}
-
-/**
- * Check if user has active subscription
- */
-export async function hasActiveSubscription(userId: string): Promise<boolean> {
-  const supabase = createClient();
-
-  const { data, error } = await supabase
-    .from("subscriptions")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .single();
-
-  return !error && !!data;
-}
+// DEAD CODE — No consumers. Subscription checked via useAuth hook.
+// Commented out 2026-02-06.
+// export async function hasActiveSubscription(userId: string): Promise<boolean> {
+//   const supabase = createClient();
+//   const { data, error } = await supabase
+//     .from("subscriptions")
+//     .select("id")
+//     .eq("user_id", userId)
+//     .eq("status", "active")
+//     .single();
+//   return !error && !!data;
+// }
 
 // Valid event types per database constraint
 const VALID_EVENT_TYPES = [

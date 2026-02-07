@@ -6,6 +6,9 @@
  */
 
 export const PRICING = {
+  /** Number of free appeals before paywall */
+  FREE_APPEAL_LIMIT: 3,
+
   /** Single appeal one-time payment */
   SINGLE_APPEAL: {
     amount: parseInt(process.env.NEXT_PUBLIC_PRICE_SINGLE_APPEAL || "10", 10),
@@ -35,16 +38,14 @@ export function formatPrice(amount: number, currency: string = "USD"): string {
   }).format(amount);
 }
 
-/**
- * Get formatted single appeal price
- */
-export function getSingleAppealPrice(): string {
-  return formatPrice(PRICING.SINGLE_APPEAL.amount);
-}
+// DEAD CODE — No consumers. Callers use formatPrice(PRICING.SINGLE_APPEAL.amount) directly.
+// Commented out 2026-02-06.
+// export function getSingleAppealPrice(): string {
+//   return formatPrice(PRICING.SINGLE_APPEAL.amount);
+// }
 
-/**
- * Get formatted unlimited price
- */
-export function getUnlimitedPrice(): string {
-  return formatPrice(PRICING.UNLIMITED_MONTHLY.amount);
-}
+// DEAD CODE — No consumers. Callers use formatPrice(PRICING.UNLIMITED_MONTHLY.amount) directly.
+// Commented out 2026-02-06.
+// export function getUnlimitedPrice(): string {
+//   return formatPrice(PRICING.UNLIMITED_MONTHLY.amount);
+// }

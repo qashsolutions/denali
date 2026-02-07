@@ -26,7 +26,7 @@
 | **NOT for** | Commercial payers, Medicaid, billers, coders |
 | **Tone** | Warm, simple, no jargon, empathetic, 8th grade reading level |
 | **Coverage guidance** | Always free, unlimited, no signup |
-| **First appeal** | Free (phone OTP required) |
+| **First 3 appeals** | Free (email OTP required) |
 | **More appeals** | $10 each OR $25/month unlimited |
 | **Tech Stack** | Next.js PWA, Supabase (auth + DB), Claude API (agentic), Stripe |
 | **AI Model** | Claude via Beta API with MCP servers |
@@ -243,8 +243,8 @@ User-facing (plain English):        Internal (codes, never shown):
 
 | Function | Purpose |
 |----------|---------|
-| `check_appeal_access(phone)` | Returns 'free', 'paywall', or 'allowed' |
-| `increment_appeal_count(phone)` | Increments usage counter |
+| `check_appeal_access(email)` | Returns 'free', 'paywall', or 'allowed' |
+| `increment_appeal_count(email)` | Increments usage counter |
 | `process_feedback(message_id, rating, correction)` | Handle thumbs up/down, update mappings |
 | `update_symptom_mapping(phrase, code, boost)` | Upsert symptom -> ICD-10 |
 | `update_procedure_mapping(phrase, code, boost)` | Upsert procedure -> CPT |
@@ -350,9 +350,9 @@ User: "Medicare denied my MRI, code CO-50"
   |
   v
 [PAYWALL GATE]
-  New user -> Signup wall -> Mobile OTP
-  appeal_count=0 -> Show letter (FREE)
-  appeal_count>=1 -> Check subscription -> Paywall ($10 or $25/mo)
+  New user -> Signup wall -> Email OTP
+  appeal_count<3 -> Show letter (FREE)
+  appeal_count>=3 -> Check subscription -> Paywall ($10 or $25/mo)
   |
   v
 [Letter revealed] Full letter with citations, Print/Copy/Download
@@ -505,7 +505,7 @@ Print this checklist and bring it to your appointment.
 | 5 | Local | `search_cpt` | User's procedure description | CPT codes | `.procedureCodes` |
 | 6 | MCP | `search_local_coverage` (cms-coverage) | CPT + ICD-10 + state | LCD/NCD policy text (for citations in letter) | `.policyReferences` |
 | 7 | Local | `generate_appeal_letter` | denial_reason, procedure, diagnosis, history, provider, policy refs | Formatted Level 1 appeal with inline codes + citations + deadline | Appeal letter |
-| 8 | — | PAYWALL GATE | `check_appeal_access(phone)` | free / paywall / allowed | Letter revealed or paywall shown |
+| 8 | — | PAYWALL GATE | `check_appeal_access(email)` | free / paywall / allowed | Letter revealed or paywall shown |
 
 **Data handoff chain**: Denial code -> CARC/RARC lookup -> Appeal strategy -> User details -> ICD-10 + CPT -> LCD policy -> Appeal letter
 
@@ -596,7 +596,7 @@ How each data source connects to the others:
 
 | Plan | Price | Limits | Auth Required |
 |------|-------|--------|---------------|
-| Free | $0 | 1 appeal (lifetime) | Mobile OTP |
+| Free | $0 | 3 appeals (lifetime) | Email OTP |
 | Pay Per Appeal | $10/appeal | Unlimited | Mobile + Email OTP |
 | Unlimited | $25/month | Unlimited appeals | Mobile + Email OTP |
 
@@ -607,7 +607,7 @@ Coverage guidance is **always free** (unlimited, no signup). Paywall only appear
 | Feature | Auth Required |
 |---------|---------------|
 | Coverage guidance | None |
-| First appeal | Mobile OTP only |
+| First 3 appeals | Email OTP only |
 | Additional appeals | Mobile OTP + Payment |
 | $25/month subscription | Mobile OTP + Email OTP |
 
@@ -615,10 +615,10 @@ Coverage guidance is **always free** (unlimited, no signup). Paywall only appear
 
 ```
 1. User requests appeal letter
-2. Check phone number:
-   - Not found -> Signup wall (mobile OTP)
-   - Found, appeal_count=0 -> Generate letter (FREE), increment count
-   - Found, appeal_count>=1 -> Check subscription:
+2. Check email:
+   - Not found -> Signup wall (email OTP)
+   - Found, appeal_count<3 -> Generate letter (FREE), increment count
+   - Found, appeal_count>=3 -> Check subscription:
      - Active -> Allow
      - None -> Show paywall ($10 or $25/month)
 3. After payment -> Reveal letter, increment count

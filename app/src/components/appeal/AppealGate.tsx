@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth, type AppealAccessStatus } from "@/hooks/useAuth";
+import { PRICING } from "@/config";
 import { EmailOTPModal } from "@/components/auth/EmailOTPModal";
 import { TOTPChallengeModal } from "@/components/auth/TOTPChallengeModal";
 import { TOTPEnrollModal } from "@/components/auth/TOTPEnrollModal";
@@ -203,7 +204,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
 
             {!authState.isEmailVerified && (
               <p className="mt-3 text-sm text-slate-500">
-                Your first appeal letter is free!
+                Your first {PRICING.FREE_APPEAL_LIMIT} appeal letters are free!
               </p>
             )}
           </div>

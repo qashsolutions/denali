@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/Button";
-import { getCleanLetter, buildPDF, calculateDeadlineInfo } from "@/lib/appeal-pdf";
+import { calculateDeadlineInfo } from "@/lib/appeal-pdf";
 import type { AppealLetterData } from "@/hooks/useChat";
 
 interface AppealCardProps {
@@ -15,12 +15,6 @@ export function AppealCard({ data, onView }: AppealCardProps) {
     if (!data.appealDeadline) return null;
     return calculateDeadlineInfo(data.appealDeadline);
   }, [data.appealDeadline]);
-
-  const handleDownload = useCallback(() => {
-    const cleanText = getCleanLetter(data.letterContent);
-    const doc = buildPDF(cleanText, deadlineInfo);
-    doc.save(`appeal-letter-${new Date().toISOString().slice(0, 10)}.pdf`);
-  }, [data.letterContent, deadlineInfo]);
 
   // Build subtitle: denial code + deadline
   const subtitle = useMemo(() => {
@@ -58,13 +52,10 @@ export function AppealCard({ data, onView }: AppealCardProps) {
           )}
         </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-2 flex-shrink-0">
-          <Button variant="secondary" size="sm" onClick={onView}>
+        {/* Action button — download available inside the gated modal */}
+        <div className="flex-shrink-0">
+          <Button variant="primary" size="sm" onClick={onView}>
             View
-          </Button>
-          <Button variant="primary" size="sm" onClick={handleDownload}>
-            Download
           </Button>
         </div>
       </div>
