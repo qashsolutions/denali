@@ -776,6 +776,125 @@ export async function pruneLowConfidenceMappings(
   };
 }
 
+// =============================================================================
+// FLYWHEEL INTELLIGENCE
+// =============================================================================
+
+export interface FlywheelContext {
+  carc_code: string;
+  total_cases: number;
+  success_rate: number;
+  avg_days: number | null;
+  approved: number;
+  denied: number;
+}
+
+/**
+ * Get flywheel outcome data for specific CPT + CARC combinations.
+ * Returns aggregated success rates and resolution times.
+ */
+export async function getFlywheelContext(
+  cptCodes: string[],
+  carcCodes: string[]
+): Promise<FlywheelContext[]> {
+  if (!cptCodes.length) return [];
+
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc("get_flywheel_context", {
+    p_cpt_codes: cptCodes,
+    p_carc_codes: carcCodes.length > 0 ? carcCodes : [],
+  });
+
+  if (error) {
+    console.warn("Failed to get flywheel context:", error);
+    return [];
+  }
+
+  return (data || []).map((row: Record<string, unknown>) => ({
+    carc_code: String(row.carc_code || ""),
+    total_cases: Number(row.total_cases) || 0,
+    success_rate: Number(row.success_rate) || 0,
+    avg_days: row.avg_days !== null ? Number(row.avg_days) : null,
+    approved: Number(row.approved) || 0,
+    denied: Number(row.denied) || 0,
+  }));
+}
+
+/**
+ * Build system prompt injection from flywheel data.
+ * Only includes data when we have enough cases (>=3) for reliability.
+ */
+export function buildFlywheelPromptInjection(
+  context: FlywheelContext[]
+): string {
+  if (!context.length) return "";
+
+  const totalCases = context.reduce((s, c) => s + c.total_cases, 0);
+
+  const lines = context.map((c) => {
+    let line = `- CARC ${c.carc_code}: ${c.total_cases} cases, ${c.success_rate}% success rate`;
+    if (c.avg_days !== null) {
+      line += `, avg ${c.avg_days} days to resolution`;
+    }
+    return line;
+  });
+
+  return `
+
+---
+
+## Real Outcome Data (from ${totalCases} cases)
+
+${lines.join("\n")}
+
+Use this data to:
+- Tell the user their likely success rate for this type of appeal
+- Set realistic timeline expectations
+- Recommend arguments that have worked in similar cases
+- Warn about common documentation gaps that lead to denial
+`;
+}
+
+// =============================================================================
+// OUTCOME INCENTIVE
+// =============================================================================
+
+/**
+ * Check if user has an unredeemed outcome incentive (reported outcome but no credit yet)
+ */
+export async function checkOutcomeIncentive(email: string): Promise<boolean> {
+  const supabase = createClient();
+
+  const { data } = await supabase
+    .from("outcome_followups")
+    .select("id")
+    .eq("email", email)
+    .not("responded_at", "is", null)
+    .eq("incentive_applied", false)
+    .limit(1);
+
+  return (data?.length ?? 0) > 0;
+}
+
+/**
+ * Apply outcome incentive: decrement appeal_count by 1 (gives a free appeal)
+ */
+export async function applyOutcomeIncentive(email: string): Promise<boolean> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc("apply_outcome_incentive", {
+    p_email: email,
+  });
+
+  if (error) {
+    console.error("Failed to apply outcome incentive:", error);
+    return false;
+  }
+
+  return !!data;
+}
+
 /**
  * Record appeal outcome for learning
  * This data helps improve coverage path recommendations

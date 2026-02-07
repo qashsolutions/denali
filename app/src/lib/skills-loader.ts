@@ -26,6 +26,8 @@ import type { SessionState } from "./claude";
 import {
   getLearningContext,
   buildLearningPromptInjection,
+  getFlywheelContext,
+  buildFlywheelPromptInjection,
   extractEntities,
   type ExtractedEntities,
 } from "./learning";
@@ -53,6 +55,9 @@ import {
   RED_FLAG_SKILL,
   SPECIALTY_VALIDATION_SKILL,
   APPEAL_SKILL,
+  OUTCOME_PROMPTING_SKILL,
+  COUNSELOR_SKILL,
+  PROVIDER_PILOT_SKILL,
 } from "@/skills";
 
 // =============================================================================
@@ -104,6 +109,13 @@ export interface SkillTriggers {
   isMedicareAdvantage: boolean;
   // Prior auth query
   isPriorAuthQuery: boolean;
+  // Outcome capture
+  hasUnreportedOutcome: boolean;
+  unreportedAppealId?: string;
+  unreportedProcedure?: string;
+  // Role-based
+  isCounselor: boolean;
+  isProvider: boolean;
 }
 
 // Emergency symptom patterns
@@ -188,6 +200,13 @@ export function detectTriggers(
 
     // Prior auth query
     isPriorAuthQuery: /prior auth|pre-?approv|pre-?authoriz|need approval first/i.test(userContent),
+
+    // Outcome capture (set externally by route.ts before calling buildSystemPrompt)
+    hasUnreportedOutcome: false,
+
+    // Role-based (set externally by route.ts based on user profile)
+    isCounselor: false,
+    isProvider: false,
   };
 }
 
@@ -217,6 +236,26 @@ export function buildSystemPrompt(
 ): string {
   // BASE_PROMPT is ALWAYS loaded (conversation style, error handling, etc.)
   const sections: string[] = [BASE_PROMPT];
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ROLE-BASED SKILLS - Loaded early to shape entire conversation behavior
+  // ─────────────────────────────────────────────────────────────────────────
+  if (triggers.isCounselor) {
+    sections.push(COUNSELOR_SKILL);
+  }
+  if (triggers.isProvider) {
+    sections.push(PROVIDER_PILOT_SKILL);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // OUTCOME PROMPTING - Ask returning users about past appeal outcomes
+  // ─────────────────────────────────────────────────────────────────────────
+  if (triggers.hasUnreportedOutcome) {
+    const procedure = triggers.unreportedProcedure || "your recent procedure";
+    sections.push(
+      OUTCOME_PROMPTING_SKILL.replace("{procedure}", procedure)
+    );
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // EMERGENCY CHECK - Highest priority, even before onboarding
@@ -795,6 +834,22 @@ export async function buildSystemPromptWithLearning(
       } catch (error) {
         console.warn("Failed to get learning context:", error);
       }
+    }
+  }
+
+  // Inject flywheel data if we have procedure and denial codes
+  if (sessionState?.procedureCodes?.length && sessionState?.denialCodes?.length) {
+    try {
+      const flywheelContext = await getFlywheelContext(
+        sessionState.procedureCodes,
+        sessionState.denialCodes
+      );
+      const flywheelInjection = buildFlywheelPromptInjection(flywheelContext);
+      if (flywheelInjection) {
+        systemPrompt += flywheelInjection;
+      }
+    } catch (error) {
+      console.warn("Failed to get flywheel context:", error);
     }
   }
 

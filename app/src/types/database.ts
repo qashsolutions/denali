@@ -127,6 +127,8 @@ export type Database = {
           id: string
           lcd_refs: string[] | null
           ncd_refs: string[] | null
+          outcome_details: Json | null
+          outcome_reported_at: string | null
           paid: boolean | null
           phone: string | null
           pubmed_refs: string[] | null
@@ -151,6 +153,8 @@ export type Database = {
           id?: string
           lcd_refs?: string[] | null
           ncd_refs?: string[] | null
+          outcome_details?: Json | null
+          outcome_reported_at?: string | null
           paid?: boolean | null
           phone?: string | null
           pubmed_refs?: string[] | null
@@ -175,6 +179,8 @@ export type Database = {
           id?: string
           lcd_refs?: string[] | null
           ncd_refs?: string[] | null
+          outcome_details?: Json | null
+          outcome_reported_at?: string | null
           paid?: boolean | null
           phone?: string | null
           pubmed_refs?: string[] | null
@@ -366,6 +372,88 @@ export type Database = {
           {
             foreignKeyName: "conversations_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      counselor_cases: {
+        Row: {
+          appeal_id: string | null
+          case_ref: string
+          client_initials: string | null
+          client_medicare_type: string | null
+          client_state: string | null
+          conversation_id: string | null
+          counselor_id: string
+          created_at: string | null
+          denial_code: string | null
+          denial_date: string | null
+          id: string
+          outcome: string | null
+          outcome_date: string | null
+          outcome_notes: string | null
+          procedure_description: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          appeal_id?: string | null
+          case_ref: string
+          client_initials?: string | null
+          client_medicare_type?: string | null
+          client_state?: string | null
+          conversation_id?: string | null
+          counselor_id: string
+          created_at?: string | null
+          denial_code?: string | null
+          denial_date?: string | null
+          id?: string
+          outcome?: string | null
+          outcome_date?: string | null
+          outcome_notes?: string | null
+          procedure_description?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          appeal_id?: string | null
+          case_ref?: string
+          client_initials?: string | null
+          client_medicare_type?: string | null
+          client_state?: string | null
+          conversation_id?: string | null
+          counselor_id?: string
+          created_at?: string | null
+          denial_code?: string | null
+          denial_date?: string | null
+          id?: string
+          outcome?: string | null
+          outcome_date?: string | null
+          outcome_notes?: string | null
+          procedure_description?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "counselor_cases_appeal_id_fkey"
+            columns: ["appeal_id"]
+            isOneToOne: false
+            referencedRelation: "appeals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "counselor_cases_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "counselor_cases_counselor_id_fkey"
+            columns: ["counselor_id"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -643,6 +731,59 @@ export type Database = {
           },
         ]
       }
+      outcome_followups: {
+        Row: {
+          appeal_id: string
+          created_at: string | null
+          email: string
+          followup_type: string
+          id: string
+          incentive_applied: boolean | null
+          opened_at: string | null
+          outcome: string | null
+          responded_at: string | null
+          scheduled_at: string
+          sent_at: string | null
+          token: string
+        }
+        Insert: {
+          appeal_id: string
+          created_at?: string | null
+          email: string
+          followup_type: string
+          id?: string
+          incentive_applied?: boolean | null
+          opened_at?: string | null
+          outcome?: string | null
+          responded_at?: string | null
+          scheduled_at: string
+          sent_at?: string | null
+          token?: string
+        }
+        Update: {
+          appeal_id?: string
+          created_at?: string | null
+          email?: string
+          followup_type?: string
+          id?: string
+          incentive_applied?: boolean | null
+          opened_at?: string | null
+          outcome?: string | null
+          responded_at?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outcome_followups_appeal_id_fkey"
+            columns: ["appeal_id"]
+            isOneToOne: false
+            referencedRelation: "appeals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       policy_cache: {
         Row: {
           change_summary: string | null
@@ -765,6 +906,62 @@ export type Database = {
           use_count?: number
         }
         Relationships: []
+      }
+      provider_practices: {
+        Row: {
+          claims_per_month: number | null
+          created_at: string | null
+          id: string
+          mac_jurisdiction: string | null
+          mac_name: string | null
+          npi: string | null
+          practice_name: string
+          specialty: string | null
+          state: string
+          top_denial_codes: string[] | null
+          top_procedures: string[] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          claims_per_month?: number | null
+          created_at?: string | null
+          id?: string
+          mac_jurisdiction?: string | null
+          mac_name?: string | null
+          npi?: string | null
+          practice_name: string
+          specialty?: string | null
+          state: string
+          top_denial_codes?: string[] | null
+          top_procedures?: string[] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          claims_per_month?: number | null
+          created_at?: string | null
+          id?: string
+          mac_jurisdiction?: string | null
+          mac_name?: string | null
+          npi?: string | null
+          practice_name?: string
+          specialty?: string | null
+          state?: string
+          top_denial_codes?: string[] | null
+          top_procedures?: string[] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_practices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rarc_codes: {
         Row: {
@@ -1123,14 +1320,18 @@ export type Database = {
       users: {
         Row: {
           autoplay_media: boolean | null
+          counselor_id: string | null
+          counselor_state: string | null
           created_at: string
           email: string
           high_contrast: boolean | null
           id: string
           notifications_enabled: boolean | null
+          organization: string | null
           phone: string | null
           plan: string
           reduce_motion: boolean | null
+          role: string
           text_size: number | null
           theme: string | null
           updated_at: string
@@ -1138,14 +1339,18 @@ export type Database = {
         }
         Insert: {
           autoplay_media?: boolean | null
+          counselor_id?: string | null
+          counselor_state?: string | null
           created_at?: string
           email: string
           high_contrast?: boolean | null
           id: string
           notifications_enabled?: boolean | null
+          organization?: string | null
           phone?: string | null
           plan?: string
           reduce_motion?: boolean | null
+          role?: string
           text_size?: number | null
           theme?: string | null
           updated_at?: string
@@ -1153,14 +1358,18 @@ export type Database = {
         }
         Update: {
           autoplay_media?: boolean | null
+          counselor_id?: string | null
+          counselor_state?: string | null
           created_at?: string
           email?: string
           high_contrast?: boolean | null
           id?: string
           notifications_enabled?: boolean | null
+          organization?: string | null
           phone?: string | null
           plan?: string
           reduce_motion?: boolean | null
+          role?: string
           text_size?: number | null
           theme?: string | null
           updated_at?: string
@@ -1346,6 +1555,21 @@ export type Database = {
           },
         ]
       }
+      flywheel_metrics: {
+        Row: {
+          approved_count: number | null
+          carc_code: string | null
+          case_count: number | null
+          cpt_codes: string[] | null
+          days_to_resolution: number | null
+          denied_count: number | null
+          icd10_codes: string[] | null
+          lcd_refs: string[] | null
+          mac_state: string | null
+          outcome: string | null
+        }
+        Relationships: []
+      }
       rarc_codes_latest: {
         Row: {
           category: string | null
@@ -1378,6 +1602,7 @@ export type Database = {
       }
     }
     Functions: {
+      apply_outcome_incentive: { Args: { p_email: string }; Returns: boolean }
       check_appeal_access: { Args: { p_email?: string }; Returns: string }
       claim_conversation: {
         Args: { p_conversation_id: string }
@@ -1412,11 +1637,27 @@ export type Database = {
         }
         Returns: undefined
       }
+      generate_case_ref: {
+        Args: { p_counselor_id: string; p_initials: string }
+        Returns: string
+      }
       get_appeal_context: {
         Args: { p_cpt_codes: string[]; p_icd10_codes: string[] }
         Returns: Json
       }
       get_appeal_count: { Args: { p_email: string }; Returns: number }
+      get_counselor_stats: {
+        Args: { p_counselor_id: string }
+        Returns: {
+          approved_count: number
+          avg_resolution_days: number
+          denied_count: number
+          filed_this_month: number
+          open_cases: number
+          outcomes_reported: number
+          partial_count: number
+        }[]
+      }
       get_current_practice_id: { Args: never; Returns: string }
       get_denial_pattern_for_carc: {
         Args: { carc_code_input: string }
@@ -1447,6 +1688,17 @@ export type Database = {
           reason_codes: string[]
         }[]
       }
+      get_flywheel_context: {
+        Args: { p_carc_codes: string[]; p_cpt_codes: string[] }
+        Returns: {
+          approved: number
+          avg_days: number
+          carc_code: string
+          denied: number
+          success_rate: number
+          total_cases: number
+        }[]
+      }
       get_learning_context: {
         Args: {
           p_cpt_codes?: string[]
@@ -1455,6 +1707,18 @@ export type Database = {
           p_symptom_phrases?: string[]
         }
         Returns: Json
+      }
+      get_unreported_outcome: {
+        Args: { p_email: string }
+        Returns: {
+          appeal_id: string
+          created_at: string
+          denial_date: string
+          followup_id: string
+          followup_type: string
+          scheduled_at: string
+          service_description: string
+        }[]
       }
       handle_subscription_change: {
         Args: {
@@ -1512,6 +1776,7 @@ export type Database = {
         }
         Returns: string
       }
+      refresh_flywheel_metrics: { Args: never; Returns: undefined }
       search_denial_codes: {
         Args: { search_text: string }
         Returns: {

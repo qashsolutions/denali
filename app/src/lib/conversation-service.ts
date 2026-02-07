@@ -350,6 +350,11 @@ export async function saveAppeal(
       p_email: resolvedEmail,
       p_user_id: appealData.userId,
     });
+
+    // Schedule outcome followups (non-blocking)
+    scheduleOutcomeFollowups(data.id, resolvedEmail).catch((err) =>
+      console.warn("[saveAppeal] Failed to schedule outcome followups:", err)
+    );
   }
 
   return data.id;
@@ -603,4 +608,72 @@ export async function trackEvent(
     // Non-blocking - just log
     console.error("[TrackEvent] Exception:", error);
   }
+}
+
+/**
+ * Schedule outcome followup emails for an appeal.
+ * Creates day_30 and day_60 followups that will be sent by the cron edge function.
+ */
+async function scheduleOutcomeFollowups(
+  appealId: string,
+  email: string
+): Promise<void> {
+  const supabase = createClient();
+  const now = new Date();
+  const day30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const day60 = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+
+  const { error } = await supabase.from("outcome_followups").insert([
+    {
+      appeal_id: appealId,
+      email,
+      followup_type: "day_30",
+      scheduled_at: day30.toISOString(),
+    },
+    {
+      appeal_id: appealId,
+      email,
+      followup_type: "day_60",
+      scheduled_at: day60.toISOString(),
+    },
+  ]);
+
+  if (error) {
+    console.error("[scheduleOutcomeFollowups] Failed:", error);
+  } else {
+    console.log("[scheduleOutcomeFollowups] Scheduled day_30 and day_60 for appeal:", appealId);
+  }
+}
+
+/**
+ * Get unreported outcome for a returning user.
+ * Used by chat route to prompt users about past appeal outcomes.
+ */
+export async function getUnreportedOutcome(
+  email: string | null
+): Promise<{
+  appealId: string;
+  followupId: string;
+  serviceDescription: string | null;
+  denialDate: string | null;
+} | null> {
+  if (!email) return null;
+
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc("get_unreported_outcome", {
+    p_email: email,
+  });
+
+  if (error || !data || data.length === 0) {
+    return null;
+  }
+
+  const row = data[0];
+  return {
+    appealId: row.appeal_id,
+    followupId: row.followup_id,
+    serviceDescription: row.service_description,
+    denialDate: row.denial_date,
+  };
 }

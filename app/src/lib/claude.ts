@@ -112,6 +112,10 @@ export interface SessionState {
 
   // Denial codes (CARC/RARC from denial letters)
   denialCodes: string[];                       // CARC/RARC codes mentioned in conversation
+
+  // User identity (set by client from auth context)
+  email?: string | null;                       // For outcome followup checks
+  userRole?: "patient" | "counselor" | "provider";  // Role from users table
 }
 
 export interface ChatRequest {

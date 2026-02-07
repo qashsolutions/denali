@@ -18,3 +18,8 @@ export { GUIDANCE_SKILL } from "./domain/guidance-generation";
 export { RED_FLAG_SKILL } from "./domain/red-flag";
 export { SPECIALTY_VALIDATION_SKILL } from "./domain/specialty-validation";
 export { APPEAL_SKILL } from "./domain/appeal";
+export { OUTCOME_PROMPTING_SKILL } from "./domain/outcome-prompting";
+
+// Channel skills
+export { COUNSELOR_SKILL } from "./channel/counselor";
+export { PROVIDER_PILOT_SKILL } from "./channel/provider";

@@ -12,6 +12,7 @@ export interface AuthState {
   isMfaEnrolled: boolean;
   isMfaVerified: boolean;
   plan: "free" | "per_appeal" | "monthly";
+  role: "patient" | "counselor" | "provider";
   appealCount: number;
   isLoading: boolean;
   error: string | null;
@@ -37,6 +38,7 @@ const DEFAULT_AUTH_STATE: AuthState = {
   isMfaEnrolled: false,
   isMfaVerified: false,
   plan: "free",
+  role: "patient",
   appealCount: 0,
   isLoading: false,
   error: null,
@@ -76,7 +78,7 @@ export function useAuth(): UseAuthReturn {
           // Fetch user profile from database
           const { data: profile } = await supabase
             .from("users")
-            .select("plan")
+            .select("plan, role")
             .eq("id", session.user.id)
             .single();
 
@@ -99,6 +101,14 @@ export function useAuth(): UseAuthReturn {
             ? (profile?.plan as "free" | "per_appeal" | "monthly")
             : "free";
 
+          // Validate role
+          const validRoles = ["patient", "counselor", "provider"] as const;
+          const userRole = validRoles.includes(
+            profile?.role as (typeof validRoles)[number]
+          )
+            ? (profile?.role as "patient" | "counselor" | "provider")
+            : "patient";
+
           setAuthState({
             userId: session.user.id,
             email,
@@ -107,6 +117,7 @@ export function useAuth(): UseAuthReturn {
             isMfaEnrolled,
             isMfaVerified,
             plan: userPlan,
+            role: userRole,
             appealCount,
             isLoading: false,
             error: null,
@@ -416,6 +427,11 @@ export function useAuth(): UseAuthReturn {
   // Check appeal access based on email and plan
   const checkAppealAccess =
     useCallback(async (): Promise<AppealAccessStatus> => {
+      // Counselors and providers always get free access
+      if (authState.role === "counselor" || authState.role === "provider") {
+        return "allowed";
+      }
+
       if (!authState.isEmailVerified || !authState.email) {
         return "paywall";
       }

@@ -35,7 +35,7 @@ import {
   recordCoveragePath,
   type ExtractedEntities,
 } from "@/lib/learning";
-import { createConversation, saveAppeal } from "@/lib/conversation-service";
+import { createConversation, saveAppeal, getUnreportedOutcome } from "@/lib/conversation-service";
 import { FEEDBACK_CONFIG, API_CONFIG } from "@/config";
 
 // Request body type
@@ -95,6 +95,30 @@ export async function POST(request: NextRequest) {
 
     // Detect triggers based on conversation content
     const triggers = detectTriggers(body.messages, sessionState);
+
+    // Check for unreported outcomes (only on first message of session)
+    if (body.messages.length <= 2 && sessionState.userName) {
+      try {
+        const unreported = await getUnreportedOutcome(
+          body.sessionState?.email ?? null
+        );
+        if (unreported) {
+          triggers.hasUnreportedOutcome = true;
+          triggers.unreportedAppealId = unreported.appealId;
+          triggers.unreportedProcedure = unreported.serviceDescription || undefined;
+        }
+      } catch (err) {
+        console.warn("[Chat API] Failed to check unreported outcomes:", err);
+      }
+    }
+
+    // Role detection (from session state, set by client from user profile)
+    if (body.sessionState?.userRole === "counselor") {
+      triggers.isCounselor = true;
+    } else if (body.sessionState?.userRole === "provider") {
+      triggers.isProvider = true;
+    }
+
     console.log("[Chat API] Detected triggers:", triggers);
 
     // Build dynamic system prompt with learning context (async)
