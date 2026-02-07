@@ -17,11 +17,12 @@ export const PRICING = {
     stripePriceId: process.env.STRIPE_PRICE_SINGLE || "price_single_appeal",
   },
 
-  /** Unlimited monthly subscription */
-  UNLIMITED_MONTHLY: {
+  /** Monthly subscription (6 appeals/month) */
+  MONTHLY: {
     amount: parseInt(process.env.NEXT_PUBLIC_PRICE_UNLIMITED_MONTHLY || "25", 10),
     currency: "USD",
     label: "per month",
+    appealLimit: 6,
     stripePriceId: process.env.STRIPE_PRICE_UNLIMITED || "price_unlimited_monthly",
   },
 } as const;
@@ -44,8 +45,8 @@ export function formatPrice(amount: number, currency: string = "USD"): string {
 //   return formatPrice(PRICING.SINGLE_APPEAL.amount);
 // }
 
-// DEAD CODE — No consumers. Callers use formatPrice(PRICING.UNLIMITED_MONTHLY.amount) directly.
+// DEAD CODE — No consumers. Callers use formatPrice(PRICING.MONTHLY.amount) directly.
 // Commented out 2026-02-06.
-// export function getUnlimitedPrice(): string {
-//   return formatPrice(PRICING.UNLIMITED_MONTHLY.amount);
+// export function getMonthlyPrice(): string {
+//   return formatPrice(PRICING.MONTHLY.amount);
 // }

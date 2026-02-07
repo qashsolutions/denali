@@ -11,7 +11,7 @@ export interface AuthState {
   isEmailVerified: boolean;
   isMfaEnrolled: boolean;
   isMfaVerified: boolean;
-  plan: "free" | "per_appeal" | "unlimited";
+  plan: "free" | "per_appeal" | "monthly";
   appealCount: number;
   isLoading: boolean;
   error: string | null;
@@ -92,11 +92,11 @@ export function useAuth(): UseAuthReturn {
           }
 
           // Validate plan type
-          const validPlans = ["free", "per_appeal", "unlimited"] as const;
+          const validPlans = ["free", "per_appeal", "monthly"] as const;
           const userPlan = validPlans.includes(
             profile?.plan as (typeof validPlans)[number]
           )
-            ? (profile?.plan as "free" | "per_appeal" | "unlimited")
+            ? (profile?.plan as "free" | "per_appeal" | "monthly")
             : "free";
 
           setAuthState({
@@ -421,10 +421,6 @@ export function useAuth(): UseAuthReturn {
       }
 
       try {
-        if (authState.plan === "unlimited") {
-          return "allowed";
-        }
-
         const { data: usage, error: usageError } = await supabase
           .from("usage")
           .select("appeal_count")
@@ -440,6 +436,10 @@ export function useAuth(): UseAuthReturn {
 
         if (appealCount < PRICING.FREE_APPEAL_LIMIT) {
           return "free";
+        }
+
+        if (authState.plan === "monthly") {
+          return "allowed";
         }
 
         return "paywall";

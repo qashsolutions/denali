@@ -14,13 +14,13 @@ import { PRICING, getBaseUrl } from "@/config";
 type Stripe = typeof import("stripe").default;
 
 interface CheckoutRequestBody {
-  plan: "single" | "unlimited";
+  plan: "single" | "monthly";
 }
 
 // Price IDs from config (with Stripe Dashboard fallback)
 const STRIPE_PRICES = {
   single: PRICING.SINGLE_APPEAL.stripePriceId,
-  unlimited: PRICING.UNLIMITED_MONTHLY.stripePriceId,
+  monthly: PRICING.MONTHLY.stripePriceId,
 };
 
 export async function POST(request: NextRequest) {
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const body: CheckoutRequestBody = await request.json();
 
     // Validate request
-    if (!body.plan || !["single", "unlimited"].includes(body.plan)) {
+    if (!body.plan || !["single", "monthly"].includes(body.plan)) {
       return NextResponse.json(
         { error: "Invalid plan type" },
         { status: 400 }
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      mode: body.plan === "unlimited" ? "subscription" : "payment",
+      mode: body.plan === "monthly" ? "subscription" : "payment",
       success_url: `${origin}/chat?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/chat?payment=cancelled`,
       metadata: {

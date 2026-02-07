@@ -26,7 +26,7 @@ export interface User {
   id: string;
   phone: string;
   email?: string;
-  plan: "free" | "per_appeal" | "unlimited";
+  plan: "free" | "per_appeal" | "monthly";
   theme: "auto" | "light" | "dark";
   textSize: number;
   highContrast: boolean;

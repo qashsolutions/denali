@@ -13,7 +13,7 @@ interface PaywallModalProps {
   appealCount: number;
 }
 
-type PlanType = "single" | "unlimited";
+type PlanType = "single" | "monthly";
 
 /**
  * PaywallModal Component
@@ -179,37 +179,30 @@ export function PaywallModal({
               </div>
             </button>
 
-            {/* Unlimited option */}
+            {/* Monthly option */}
             <button
-              onClick={() => setSelectedPlan("unlimited")}
+              onClick={() => setSelectedPlan("monthly")}
               className={cn(
                 "w-full p-4 rounded-xl border-2 text-left transition-all relative",
-                selectedPlan === "unlimited"
+                selectedPlan === "monthly"
                   ? "border-violet-500 bg-violet-500/10"
                   : "border-slate-700 bg-slate-800/50 hover:border-slate-600"
               )}
             >
-              {/* Best value badge */}
-              <div className="absolute -top-3 right-4">
-                <span className="px-3 py-1 text-xs font-semibold bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-full">
-                  Best Value
-                </span>
-              </div>
-
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-slate-100">
-                      Unlimited
+                      Monthly
                     </span>
-                    {selectedPlan === "unlimited" && (
+                    {selectedPlan === "monthly" && (
                       <span className="px-2 py-0.5 text-xs font-medium bg-violet-500/20 text-violet-400 rounded-full">
                         Selected
                       </span>
                     )}
                   </div>
                   <p className="mt-1 text-sm text-slate-400">
-                    Unlimited appeals, cancel anytime
+                    {PRICING.MONTHLY.appealLimit} appeals per month, cancel anytime
                   </p>
                   <ul className="mt-2 space-y-1">
                     <li className="flex items-center gap-2 text-xs text-slate-400">
@@ -224,7 +217,7 @@ export function PaywallModal({
                           clipRule="evenodd"
                         />
                       </svg>
-                      Unlimited appeal letters
+                      {PRICING.MONTHLY.appealLimit} appeal letters per month
                     </li>
                     <li className="flex items-center gap-2 text-xs text-slate-400">
                       <svg
@@ -258,9 +251,9 @@ export function PaywallModal({
                 </div>
                 <div className="text-right">
                   <div className="text-2xl font-bold text-slate-100">
-                    {formatPrice(PRICING.UNLIMITED_MONTHLY.amount)}
+                    {formatPrice(PRICING.MONTHLY.amount)}
                   </div>
-                  <div className="text-xs text-slate-500">/{PRICING.UNLIMITED_MONTHLY.label}</div>
+                  <div className="text-xs text-slate-500">/{PRICING.MONTHLY.label}</div>
                 </div>
               </div>
             </button>
@@ -313,7 +306,7 @@ export function PaywallModal({
               <>
                 {selectedPlan === "single"
                   ? `Pay ${formatPrice(PRICING.SINGLE_APPEAL.amount)} & Get Letter`
-                  : `Subscribe for ${formatPrice(PRICING.UNLIMITED_MONTHLY.amount)}/month`}
+                  : `Subscribe for ${formatPrice(PRICING.MONTHLY.amount)}/month`}
               </>
             )}
           </button>
