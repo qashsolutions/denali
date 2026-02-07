@@ -1,4 +1,6 @@
+import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "./supabase-server";
+import type { Database } from "@/types/database";
 import type {
   BlogPost,
   LandingPageData,
@@ -7,6 +9,18 @@ import type {
   SiteSetting,
   Testimonial,
 } from "@/types/cms";
+
+/**
+ * Anon Supabase client for build-time use (no cookies needed).
+ * Used by generateStaticParams and other build-time functions
+ * that run outside a request scope.
+ */
+function createBuildClient() {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 /**
  * Fetch all landing page data in one call (for SSR)
@@ -162,16 +176,17 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
 }
 
 /**
- * Get all published blog post slugs (for generateStaticParams)
+ * Get all published blog post slugs (for generateStaticParams).
+ * Uses a plain client since this runs at build time outside request scope.
  */
 export async function getBlogSlugs(): Promise<string[]> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = createBuildClient();
   const { data } = await supabase
     .from("blog_posts")
     .select("slug")
     .eq("published", true);
 
-  return (data || []).map((row: { slug: string }) => row.slug);
+  return (data || []).map((row) => row.slug);
 }
 
 /**
