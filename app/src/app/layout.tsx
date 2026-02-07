@@ -1,7 +1,15 @@
 import type { Metadata, Viewport } from "next";
+import { Playfair_Display } from "next/font/google";
 import { BRAND } from "@/config";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  display: "swap",
+  variable: "--font-serif",
+});
 
 export const metadata: Metadata = {
   title: `${BRAND.NAME} - Medicare Coverage Guidance`,
@@ -62,7 +70,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={playfair.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />

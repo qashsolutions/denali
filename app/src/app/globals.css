@@ -8,6 +8,7 @@
 :root {
   /* Font Stack */
   --font-sans: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
 
   /* Text Scale (user preference: 0.8 - 1.5) */
   --text-scale: 1;
@@ -66,6 +67,17 @@
   --border: #334155;
   --input-bg: #1e293b;
   --input-border: #475569;
+
+  /* Feature Colors */
+  --auth-blue: #3B6DE0;
+  --auth-blue-light: #5B8AF0;
+  --auth-blue-bg: #1a2744;
+  --check-teal: #0EA574;
+  --check-teal-light: #2FC495;
+  --check-teal-bg: #132e24;
+  --appeal-coral: #E05C3B;
+  --appeal-coral-light: #F0785B;
+  --appeal-coral-bg: #2e1a16;
 }
 
 /* =============================================================================
@@ -99,6 +111,17 @@
   --border: #334155;
   --input-bg: #1e293b;
   --input-border: #475569;
+
+  /* Feature Colors */
+  --auth-blue: #3B6DE0;
+  --auth-blue-light: #5B8AF0;
+  --auth-blue-bg: #1a2744;
+  --check-teal: #0EA574;
+  --check-teal-light: #2FC495;
+  --check-teal-bg: #132e24;
+  --appeal-coral: #E05C3B;
+  --appeal-coral-light: #F0785B;
+  --appeal-coral-bg: #2e1a16;
 }
 
 /* =============================================================================
@@ -132,6 +155,17 @@
   --border: #e2e8f0;
   --input-bg: #ffffff;
   --input-border: #cbd5e1;
+
+  /* Feature Colors */
+  --auth-blue: #3B6DE0;
+  --auth-blue-light: #5B8AF0;
+  --auth-blue-bg: #EEF3FD;
+  --check-teal: #0EA574;
+  --check-teal-light: #2FC495;
+  --check-teal-bg: #EAFAF3;
+  --appeal-coral: #E05C3B;
+  --appeal-coral-light: #F0785B;
+  --appeal-coral-bg: #FDF0ED;
 }
 
 /* High contrast mode removed - use system accessibility settings instead */
@@ -192,6 +226,37 @@ body {
 :focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
+}
+
+/* =============================================================================
+   FEATURE CARD ANIMATIONS
+   ============================================================================= */
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes pulse-gentle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes draw-in {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-pulse-gentle {
+  animation: pulse-gentle 3s ease-in-out infinite;
+}
+
+.animate-draw-in {
+  animation: draw-in 1.5s ease-out forwards;
 }
 
 /* =============================================================================
