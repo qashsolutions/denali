@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { PRICING, getBaseUrl } from "@/config";
+import { createClient } from "@/lib/supabase";
 
 // Stripe is imported dynamically to avoid build errors when key is not set
 type Stripe = typeof import("stripe").default;
@@ -49,6 +50,12 @@ export async function POST(request: NextRequest) {
     const StripeModule = await import("stripe");
     const stripe = new StripeModule.default(stripeKey);
 
+    // Get authenticated user (paywall requires email OTP, so user should exist)
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id || "";
+    const email = user?.email || "";
+
     // Get the origin for redirect URLs (uses safe fallback from config)
     const origin = getBaseUrl(request.headers.get("origin"));
 
@@ -64,8 +71,11 @@ export async function POST(request: NextRequest) {
       mode: body.plan === "monthly" ? "subscription" : "payment",
       success_url: `${origin}/chat?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/chat?payment=cancelled`,
+      customer_email: email || undefined,
       metadata: {
         plan: body.plan,
+        user_id: userId,
+        email: email,
       },
     });
 

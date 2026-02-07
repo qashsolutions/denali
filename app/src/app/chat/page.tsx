@@ -24,6 +24,25 @@ function ChatContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [pendingInput, setPendingInput] = useState<string | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [paymentToast, setPaymentToast] = useState<string | null>(null);
+
+  // Handle payment success/cancel redirect from Stripe
+  useEffect(() => {
+    const payment = searchParams.get("payment");
+    if (payment === "success") {
+      setPaymentToast("Payment successful! Your plan has been upgraded.");
+      // Clean query params and force reload to refresh auth state
+      const timer = setTimeout(() => {
+        window.location.replace("/chat");
+      }, 2000);
+      return () => clearTimeout(timer);
+    } else if (payment === "cancelled") {
+      setPaymentToast("Payment was cancelled.");
+      router.replace("/chat");
+      const timer = setTimeout(() => setPaymentToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, router]);
 
   // Read conversation ID from URL params for loading past conversations
   const urlConversationId = searchParams.get("id") || undefined;
@@ -155,6 +174,13 @@ function ChatContent() {
         </header>
 
         <main className="flex-1 flex flex-col overflow-hidden">
+          {/* Payment toast */}
+          {paymentToast && (
+            <div className="mx-4 mt-2 px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-700 dark:text-green-300 text-sm text-center">
+              {paymentToast}
+            </div>
+          )}
+
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto">
             <Container className="py-4">

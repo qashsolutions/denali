@@ -1321,7 +1321,11 @@ export type Database = {
       }
     }
     Functions: {
-      check_appeal_access: { Args: { p_email: string }; Returns: string }
+      check_appeal_access: { Args: { p_email?: string }; Returns: string }
+      claim_conversation: {
+        Args: { p_conversation_id: string }
+        Returns: boolean
+      }
       claim_learning_job: {
         Args: never
         Returns: {
@@ -1337,6 +1341,18 @@ export type Database = {
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       delete_user_cascade: {
         Args: { target_user_id: string }
+        Returns: undefined
+      }
+      fulfill_checkout: {
+        Args: {
+          p_email: string
+          p_period_end?: string
+          p_period_start?: string
+          p_plan: string
+          p_stripe_customer_id?: string
+          p_stripe_subscription_id?: string
+          p_user_id: string
+        }
         Returns: undefined
       }
       get_appeal_context: {
@@ -1382,6 +1398,15 @@ export type Database = {
           p_symptom_phrases?: string[]
         }
         Returns: Json
+      }
+      handle_subscription_change: {
+        Args: {
+          p_period_end?: string
+          p_period_start?: string
+          p_status: string
+          p_stripe_subscription_id: string
+        }
+        Returns: undefined
       }
       increment_appeal_count: {
         Args: {
@@ -1474,18 +1499,18 @@ export type Database = {
       }
       update_procedure_mapping: {
         Args: {
-          p_confidence_boost?: number
+          p_boost: number
           p_cpt_code: string
-          p_cpt_description?: string
+          p_cpt_description: string
           p_phrase: string
         }
         Returns: undefined
       }
       update_symptom_mapping: {
         Args: {
-          p_confidence_boost?: number
+          p_boost: number
           p_icd10_code: string
-          p_icd10_description?: string
+          p_icd10_description: string
           p_phrase: string
         }
         Returns: undefined
