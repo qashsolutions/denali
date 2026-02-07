@@ -23,7 +23,7 @@ interface AppealGateProps {
  * 2. If not authenticated → Show EmailOTPModal
  * 3. If authenticated, first appeal → Allow access (free) + offer TOTP enrollment
  * 4. If authenticated and used free appeal → Show PaywallModal
- * 5. If has unlimited subscription → Allow access
+ * 5. If has monthly subscription → Allow access
  */
 export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
   const {
