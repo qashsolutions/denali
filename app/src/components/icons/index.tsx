@@ -267,6 +267,108 @@ export function MoonIcon({ className, strokeWidth = 2 }: IconProps) {
 }
 
 /**
+ * Heart Pulse - My Health / Health Records
+ */
+export function HeartPulseIcon({ className, strokeWidth = 1.5 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn("w-6 h-6", className)}
+    >
+      <path d="M19.5 12.572l-7.5 7.428-7.5-7.428A5 5 0 1112 6.006a5 5 0 017.5 6.572" />
+      <path d="M5 12h2l2 4 4-8 2 4h2" />
+    </svg>
+  );
+}
+
+/**
+ * Diabetes / Blood Drop - Diabetes Care
+ */
+export function DiabetesIcon({ className, strokeWidth = 1.5 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn("w-6 h-6", className)}
+    >
+      <path d="M12 2C12 2 5 10 5 14a7 7 0 0014 0c0-4-7-12-7-12z" />
+      <path d="M10 15l1.5-3 1 2 1.5-3" />
+    </svg>
+  );
+}
+
+/**
+ * Claims / File Stack - Claims & Appeals
+ */
+export function ClaimsIcon({ className, strokeWidth = 1.5 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn("w-6 h-6", className)}
+    >
+      <path d="M15 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7z" />
+      <polyline points="14,2 14,8 20,8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <path d="M10 9l-2 2 2 2" />
+    </svg>
+  );
+}
+
+/**
+ * Sparkle - AI indicator
+ */
+export function SparkleIcon({ className, strokeWidth = 1.5 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn("w-6 h-6", className)}
+    >
+      <path d="M12 3l1.912 5.813a2 2 0 001.272 1.278L21 12l-5.816 1.91a2 2 0 00-1.272 1.278L12 21l-1.912-5.813a2 2 0 00-1.272-1.278L3 12l5.816-1.91a2 2 0 001.272-1.278L12 3z" />
+    </svg>
+  );
+}
+
+/**
+ * Home - Home hub
+ */
+export function HomeIcon({ className, strokeWidth = 1.5 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn("w-6 h-6", className)}
+    >
+      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+      <polyline points="9,22 9,12 15,12 15,22" />
+    </svg>
+  );
+}
+
+/**
  * Get icon component by name
  */
 export function getIconByName(
@@ -285,6 +387,11 @@ export function getIconByName(
     sun: SunIcon,
     moon: MoonIcon,
     mountain: MountainIcon,
+    heart: HeartPulseIcon,
+    diabetes: DiabetesIcon,
+    claims: ClaimsIcon,
+    sparkle: SparkleIcon,
+    home: HomeIcon,
   };
 
   return icons[name] || null;

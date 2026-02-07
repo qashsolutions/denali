@@ -72,7 +72,7 @@ export function LandingPricing({ plans }: LandingPricingProps) {
 
               {/* CTA Button */}
               <Link
-                href="/chat"
+                href="/app"
                 className={`group w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition-all ${
                   plan.is_popular
                     ? "bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white hover:shadow-lg hover:shadow-[var(--accent-primary)]/25"

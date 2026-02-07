@@ -36,7 +36,7 @@ export function LandingHero({ section }: LandingHeroProps) {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             {/* Primary CTA */}
             <Link
-              href={content?.cta_primary_link || "/chat"}
+              href={content?.cta_primary_link || "/app"}
               className="group flex items-center gap-2 px-8 py-4 rounded-full bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white font-semibold text-lg transition-all hover:shadow-lg hover:shadow-[var(--accent-primary)]/25 hover:scale-[1.02]"
             >
               {content?.cta_primary || "Ask About Coverage"}

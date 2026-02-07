@@ -99,10 +99,10 @@ export default function NotFound() {
             {destination === "back" ? "Go Back Now" : "Go Home Now"}
           </button>
           <Link
-            href="/chat"
+            href="/app"
             className="px-6 py-2.5 rounded-full border border-[var(--border)] text-[var(--text-primary)] font-medium transition-colors hover:bg-[var(--bg-secondary)]"
           >
-            Ask a Question
+            Go to App
           </Link>
         </div>
       </div>

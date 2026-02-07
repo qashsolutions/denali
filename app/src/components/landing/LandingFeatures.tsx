@@ -2,8 +2,9 @@
 
 import type { LandingSection } from "@/types/cms";
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver";
-import { PriorAuthIllustration } from "./illustrations/PriorAuthIllustration";
+import { HealthRecordsIllustration } from "./illustrations/HealthRecordsIllustration";
 import { CoverageCheckIllustration } from "./illustrations/CoverageCheckIllustration";
+import { DiabetesCareIllustration } from "./illustrations/DiabetesCareIllustration";
 import { AppealIllustration } from "./illustrations/AppealIllustration";
 
 interface LandingFeaturesProps {
@@ -13,28 +14,38 @@ interface LandingFeaturesProps {
 const FEATURES = [
   {
     step: "01",
-    audience: "FOR PROVIDERS",
-    title: "File Prior Authorization",
+    audience: "FOR EVERYONE",
+    title: "Health Records in Plain English",
     description:
-      "Know before you go. We check if your procedure needs pre-approval and walk your doctor through every requirement so nothing gets rejected.",
-    tags: ["CPT/ICD-10", "CMS-1500", "Live Tracking"],
-    color: "auth-blue" as const,
-    Illustration: PriorAuthIllustration,
+      "Connect your clinic or Medicare.gov and see your conditions, medications, and lab results explained in words you understand.",
+    tags: ["EHR Connect", "Blue Button 2.0", "Plain Language"],
+    color: "health-red" as const,
+    Illustration: HealthRecordsIllustration,
   },
   {
     step: "02",
     audience: "FOR EVERYONE",
-    title: "Check Coverage Requirements",
+    title: "AI Health Assistant",
     description:
-      "Plain-English guidance on what Medicare covers and what your doctor needs to document. No codes, no jargon — just a clear checklist.",
-    tags: ["NCD/LCD", "Part A & B", "Plain Language"],
+      "Ask anything about Medicare coverage. Get a clear checklist of what your doctor needs to document so your claim gets approved.",
+    tags: ["NCD/LCD", "Part A & B", "Coverage Check"],
     color: "check-teal" as const,
     Illustration: CoverageCheckIllustration,
   },
   {
     step: "03",
+    audience: "PREVENTION",
+    title: "Diabetes & Prevention Coaching",
+    description:
+      "Personalized coaching from your own A1C and glucose results. Track trends, get reminders, and stay ahead of diabetes.",
+    tags: ["A1C Tracking", "Med Reminders", "MDPP"],
+    color: "diabetes-violet" as const,
+    Illustration: DiabetesCareIllustration,
+  },
+  {
+    step: "04",
     audience: "WHEN DENIED",
-    title: "Appeal a Denial",
+    title: "Claims & Appeals That Work",
     description:
       "Denied? We look up exactly why, build your appeal letter with the right codes and citations, and track your deadline so you never miss it.",
     tags: ["5 Appeal Levels", "Auto-Templates", "Deadline Alerts"],
@@ -44,14 +55,14 @@ const FEATURES = [
 ] as const;
 
 const COLOR_CLASSES = {
-  "auth-blue": {
-    accent: "var(--auth-blue)",
-    accentLight: "var(--auth-blue-light)",
-    bg: "bg-[var(--auth-blue-bg)]",
-    text: "text-[var(--auth-blue)]",
-    tagBg: "bg-[var(--auth-blue)]/10",
-    barFrom: "from-[var(--auth-blue)]",
-    barTo: "to-[var(--auth-blue-light)]",
+  "health-red": {
+    accent: "var(--health-red)",
+    accentLight: "var(--health-red-light)",
+    bg: "bg-[var(--health-red-bg)]",
+    text: "text-[var(--health-red)]",
+    tagBg: "bg-[var(--health-red)]/10",
+    barFrom: "from-[var(--health-red)]",
+    barTo: "to-[var(--health-red-light)]",
   },
   "check-teal": {
     accent: "var(--check-teal)",
@@ -61,6 +72,15 @@ const COLOR_CLASSES = {
     tagBg: "bg-[var(--check-teal)]/10",
     barFrom: "from-[var(--check-teal)]",
     barTo: "to-[var(--check-teal-light)]",
+  },
+  "diabetes-violet": {
+    accent: "var(--diabetes-violet)",
+    accentLight: "var(--diabetes-violet-light)",
+    bg: "bg-[var(--diabetes-violet-bg)]",
+    text: "text-[var(--diabetes-violet)]",
+    tagBg: "bg-[var(--diabetes-violet)]/10",
+    barFrom: "from-[var(--diabetes-violet)]",
+    barTo: "to-[var(--diabetes-violet-light)]",
   },
   "appeal-coral": {
     accent: "var(--appeal-coral)",
@@ -74,8 +94,9 @@ const COLOR_CLASSES = {
 };
 
 const SECTION_WORDS = [
-  { text: "Authorize.", color: "var(--auth-blue)" },
-  { text: "Verify.", color: "var(--check-teal)" },
+  { text: "Connect.", color: "var(--health-red)" },
+  { text: "Understand.", color: "var(--check-teal)" },
+  { text: "Prevent.", color: "var(--diabetes-violet)" },
   { text: "Appeal.", color: "var(--appeal-coral)" },
 ];
 
@@ -162,12 +183,13 @@ export function LandingFeatures({ section: _section }: LandingFeaturesProps) {
             ))}
           </h2>
           <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-            From pre-approval to appeal, we make sure Medicare works for you.
+            Your complete Medicare health companion — from records to prevention
+            to appeals.
           </p>
         </div>
 
         {/* Features Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {FEATURES.map((feature, index) => (
             <FeatureCard key={feature.step} feature={feature} index={index} />
           ))}

@@ -39,6 +39,15 @@ export const viewport: Viewport = {
   ],
 };
 
+// Service worker registration script
+const swScript = `
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('/sw.js');
+    });
+  }
+`;
+
 // Inline script to prevent flash of incorrect theme
 const themeScript = `
   (function() {
@@ -73,6 +82,7 @@ export default function RootLayout({
     <html lang="en" className={playfair.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: swScript }} />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="icon" href="/favicon.ico" sizes="32x32" />
         <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />

@@ -89,6 +89,13 @@ export function Message({
         )}
 
         {!isUser && (
+          <div className="flex items-center gap-1.5 mt-2 text-[10px] text-[var(--text-muted)]">
+            <SparkleIcon className="w-3 h-3" />
+            <span>AI-generated · Not medical advice</span>
+          </div>
+        )}
+
+        {!isUser && (
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[var(--border)]">
             <button
               onClick={handleCopy}
@@ -203,6 +210,24 @@ function CheckIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M5 13l4 4L19 7"
+      />
+    </svg>
+  );
+}
+
+function SparkleIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 3l1.912 5.813a2 2 0 001.272 1.278L21 12l-5.816 1.91a2 2 0 00-1.272 1.278L12 21l-1.912-5.813a2 2 0 00-1.272-1.278L3 12l5.816-1.91a2 2 0 001.272-1.278L12 3z"
       />
     </svg>
   );

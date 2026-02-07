@@ -47,7 +47,7 @@ export function Sidebar({
   }, [isOpen, onClose]);
 
   const handleConversationClick = (id: string) => {
-    router.push(`/chat?id=${id}`);
+    router.push(`/app/chat?id=${id}`);
     onClose();
   };
 
@@ -57,7 +57,7 @@ export function Sidebar({
   };
 
   const handleSettingsClick = () => {
-    router.push("/settings");
+    router.push("/app/settings");
     onClose();
   };
 

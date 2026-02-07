@@ -78,6 +78,12 @@
   --appeal-coral: #E05C3B;
   --appeal-coral-light: #F0785B;
   --appeal-coral-bg: #2e1a16;
+  --health-red: #E04B5A;
+  --health-red-light: #F06B7A;
+  --health-red-bg: #2e1619;
+  --diabetes-violet: #8B5CF6;
+  --diabetes-violet-light: #A78BFA;
+  --diabetes-violet-bg: #1e1636;
 }
 
 /* =============================================================================
@@ -122,6 +128,12 @@
   --appeal-coral: #E05C3B;
   --appeal-coral-light: #F0785B;
   --appeal-coral-bg: #2e1a16;
+  --health-red: #E04B5A;
+  --health-red-light: #F06B7A;
+  --health-red-bg: #2e1619;
+  --diabetes-violet: #8B5CF6;
+  --diabetes-violet-light: #A78BFA;
+  --diabetes-violet-bg: #1e1636;
 }
 
 /* =============================================================================
@@ -166,6 +178,12 @@
   --appeal-coral: #E05C3B;
   --appeal-coral-light: #F0785B;
   --appeal-coral-bg: #FDF0ED;
+  --health-red: #E04B5A;
+  --health-red-light: #F06B7A;
+  --health-red-bg: #FDF0F1;
+  --diabetes-violet: #8B5CF6;
+  --diabetes-violet-light: #A78BFA;
+  --diabetes-violet-bg: #F3EFFE;
 }
 
 /* High contrast mode removed - use system accessibility settings instead */

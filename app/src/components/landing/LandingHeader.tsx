@@ -11,7 +11,7 @@ interface LandingHeaderProps {
 export function LandingHeader({ settings }: LandingHeaderProps) {
   const { isDark, toggleTheme } = useTheme();
   const brandName = settings.brand_name || "DenaliHealth";
-  const tagline = settings.tagline || "Medicare denials—addressed proactively";
+  const tagline = settings.tagline || "Your Medicare health companion";
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md bg-[var(--bg-primary)]/90 border-b border-[var(--border)]/50">
@@ -55,11 +55,11 @@ export function LandingHeader({ settings }: LandingHeaderProps) {
 
             {/* Chat Quick Access */}
             <Link
-              href="/chat"
+              href="/app"
               className="flex items-center gap-2 px-4 h-10 rounded-full bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white font-medium text-sm transition-opacity hover:opacity-90"
             >
               <ChatBubbleIcon className="w-4 h-4" strokeWidth={2} />
-              <span className="hidden sm:inline">Ask a Question</span>
+              <span className="hidden sm:inline">Get Started</span>
             </Link>
           </div>
         </div>
