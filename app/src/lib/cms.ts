@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "./supabase-server";
 import type {
+  BlogPost,
   LandingPageData,
   LandingSection,
   PricingPlan,
@@ -124,6 +125,53 @@ export async function getTestimonials(limit = 6): Promise<Testimonial[]> {
     .limit(limit);
 
   return (data as Testimonial[]) || [];
+}
+
+/**
+ * Get all published blog posts, optionally filtered by category
+ */
+export async function getBlogPosts(category?: string): Promise<BlogPost[]> {
+  const supabase = await createServerSupabaseClient();
+  let query = supabase
+    .from("blog_posts")
+    .select("*")
+    .eq("published", true)
+    .order("published_at", { ascending: false });
+
+  if (category) {
+    query = query.eq("category", category);
+  }
+
+  const { data } = await query;
+  return (data as BlogPost[]) || [];
+}
+
+/**
+ * Get a single blog post by slug
+ */
+export async function getBlogPost(slug: string): Promise<BlogPost | null> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("blog_posts")
+    .select("*")
+    .eq("slug", slug)
+    .eq("published", true)
+    .single();
+
+  return data as BlogPost | null;
+}
+
+/**
+ * Get all published blog post slugs (for generateStaticParams)
+ */
+export async function getBlogSlugs(): Promise<string[]> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("blog_posts")
+    .select("slug")
+    .eq("published", true);
+
+  return (data || []).map((row: { slug: string }) => row.slug);
 }
 
 /**

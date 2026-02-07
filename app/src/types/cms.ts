@@ -79,3 +79,22 @@ export interface CTAContent {
   cta_text: string;
   cta_link: string;
 }
+
+export interface BlogPost {
+  id: string;
+  slug: string;
+  title: string;
+  kicker: string;
+  key_message: string;
+  body: string;
+  category: "denial-codes" | "coverage" | "appeals" | "prior-auth";
+  cta_text: string;
+  cta_url: string;
+  sources: string[] | null;
+  meta_title: string | null;
+  meta_description: string | null;
+  published: boolean;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

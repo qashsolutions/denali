@@ -202,6 +202,63 @@ export type Database = {
           },
         ]
       }
+      blog_posts: {
+        Row: {
+          body: string
+          category: string
+          created_at: string | null
+          cta_text: string
+          cta_url: string
+          id: string
+          key_message: string
+          kicker: string
+          meta_description: string | null
+          meta_title: string | null
+          published: boolean | null
+          published_at: string | null
+          slug: string
+          sources: string[] | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          body: string
+          category: string
+          created_at?: string | null
+          cta_text?: string
+          cta_url?: string
+          id?: string
+          key_message: string
+          kicker: string
+          meta_description?: string | null
+          meta_title?: string | null
+          published?: boolean | null
+          published_at?: string | null
+          slug: string
+          sources?: string[] | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          body?: string
+          category?: string
+          created_at?: string | null
+          cta_text?: string
+          cta_url?: string
+          id?: string
+          key_message?: string
+          kicker?: string
+          meta_description?: string | null
+          meta_title?: string | null
+          published?: boolean | null
+          published_at?: string | null
+          slug?: string
+          sources?: string[] | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       carc_codes: {
         Row: {
           category: string | null

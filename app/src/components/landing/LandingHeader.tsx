@@ -32,6 +32,14 @@ export function LandingHeader({ settings }: LandingHeaderProps) {
 
           {/* Actions */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Blog Link */}
+            <Link
+              href="/blog"
+              className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors hidden sm:inline"
+            >
+              Blog
+            </Link>
+
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
