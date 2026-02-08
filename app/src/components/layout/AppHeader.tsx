@@ -3,15 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useTheme } from "@/components/ThemeProvider";
 import {
   MountainIcon,
   HeartPulseIcon,
   ChatBubbleIcon,
   DiabetesIcon,
   ClaimsIcon,
-  SunIcon,
-  MoonIcon,
 } from "@/components/icons";
 import { BRAND } from "@/config";
 
@@ -25,7 +22,12 @@ const NAV_ITEMS = [
 export function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const { isDark, toggleTheme } = useTheme();
+
+  // Split brand name to color "Health" separately
+  const brandName = BRAND.NAME;
+  const healthIndex = brandName.indexOf("Health");
+  const prefix = healthIndex >= 0 ? brandName.slice(0, healthIndex) : brandName;
+  const suffix = healthIndex >= 0 ? "Health" : "";
 
   return (
     <header className="hidden md:block sticky top-0 z-40 backdrop-blur-md bg-[var(--bg-primary)]/90 border-b border-[var(--border)]/50">
@@ -35,7 +37,10 @@ export function AppHeader() {
           <Link href="/app" className="flex items-center gap-2 group">
             <MountainIcon className="w-8 h-6 transition-transform group-hover:scale-105" />
             <span className="text-lg font-bold text-[var(--text-primary)]">
-              {BRAND.NAME}
+              {prefix}
+              {suffix && (
+                <span className="text-[var(--accent-secondary)]">{suffix}</span>
+              )}
             </span>
           </Link>
 
@@ -64,27 +69,14 @@ export function AppHeader() {
             })}
           </nav>
 
-          {/* Right: Settings + Theme Toggle */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push("/app/settings")}
-              className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
-              aria-label="Settings"
-            >
-              <SettingsIcon className="w-5 h-5" />
-            </button>
-            <button
-              onClick={toggleTheme}
-              className="w-10 h-10 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors hover:bg-[var(--border)]"
-              aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
-            >
-              {isDark ? (
-                <SunIcon className="w-5 h-5 text-yellow-400" />
-              ) : (
-                <MoonIcon className="w-5 h-5 text-[var(--text-secondary)]" />
-              )}
-            </button>
-          </div>
+          {/* Settings */}
+          <button
+            onClick={() => router.push("/app/settings")}
+            className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            aria-label="Settings"
+          >
+            <SettingsIcon className="w-5 h-5" />
+          </button>
         </div>
       </div>
     </header>

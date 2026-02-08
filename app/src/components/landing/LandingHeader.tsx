@@ -4,15 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   MountainIcon,
-  SunIcon,
-  MoonIcon,
   ChatBubbleIcon,
   HeartPulseIcon,
   DiabetesIcon,
   ClaimsIcon,
   DocumentTextIcon,
 } from "../icons";
-import { useTheme } from "@/components/ThemeProvider";
 
 interface LandingHeaderProps {
   settings: Record<string, string>;
@@ -27,7 +24,6 @@ const NAV_ITEMS = [
 ] as const;
 
 export function LandingHeader({ settings }: LandingHeaderProps) {
-  const { isDark, toggleTheme } = useTheme();
   const brandName = settings.brand_name || "DenaliHealth";
   const tagline = settings.tagline || "Your Medicare companion for rural America";
   const [menuOpen, setMenuOpen] = useState(false);
@@ -88,62 +84,37 @@ export function LandingHeader({ settings }: LandingHeaderProps) {
             ))}
           </nav>
 
-          {/* Right actions */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Hamburger — mobile/tablet only */}
-            <div className="relative md:hidden" ref={menuRef}>
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
-                aria-label="Menu"
-                aria-expanded={menuOpen}
-              >
-                {menuOpen ? (
-                  <XIcon className="w-5 h-5" />
-                ) : (
-                  <HamburgerIcon className="w-5 h-5" />
-                )}
-              </button>
-
-              {/* Dropdown menu */}
-              {menuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-[var(--bg-primary)] border border-[var(--border)] shadow-lg overflow-hidden">
-                  {NAV_ITEMS.map(({ label, href, Icon }) => (
-                    <Link
-                      key={href}
-                      href={href}
-                      onClick={() => setMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
-                    >
-                      <Icon className="w-4 h-4" />
-                      {label}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Theme Toggle */}
+          {/* Hamburger — mobile/tablet only */}
+          <div className="relative md:hidden" ref={menuRef}>
             <button
-              onClick={toggleTheme}
-              className="w-10 h-10 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors hover:bg-[var(--border)]"
-              aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+              aria-label="Menu"
+              aria-expanded={menuOpen}
             >
-              {isDark ? (
-                <SunIcon className="w-5 h-5 text-yellow-400" />
+              {menuOpen ? (
+                <XIcon className="w-5 h-5" />
               ) : (
-                <MoonIcon className="w-5 h-5 text-[var(--text-secondary)]" />
+                <HamburgerIcon className="w-5 h-5" />
               )}
             </button>
 
-            {/* Get Started CTA */}
-            <Link
-              href="/app"
-              className="flex items-center gap-2 px-4 h-10 rounded-full bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white font-medium text-sm transition-opacity hover:opacity-90"
-            >
-              <ChatBubbleIcon className="w-4 h-4" strokeWidth={2} />
-              <span className="hidden sm:inline">Get Started</span>
-            </Link>
+            {/* Dropdown menu */}
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-[var(--bg-primary)] border border-[var(--border)] shadow-lg overflow-hidden">
+                {NAV_ITEMS.map(({ label, href, Icon }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                  >
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
