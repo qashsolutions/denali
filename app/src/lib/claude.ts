@@ -116,6 +116,16 @@ export interface SessionState {
   // User identity (set by client from auth context)
   email?: string | null;                       // For outcome followup checks
   userRole?: "patient" | "counselor" | "provider";  // Role from users table
+
+  // Health data (populated from fhir_cache, never from live CMS API)
+  healthDataAvailable?: boolean;
+  activeCoverage?: string[];                   // e.g., ["Medicare Part A", "Medicare Part B"]
+  recentDenials?: Array<{
+    serviceDate: string;
+    procedure: string;
+    denialCode: string;
+    denialReason: string;
+  }>;
 }
 
 export interface ChatRequest {

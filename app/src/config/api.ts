@@ -27,6 +27,14 @@ export const API_CONFIG = {
     icd10: process.env.ICD10_MCP_URL || "https://mcp.deepsense.ai/icd10/mcp",
   },
 
+  /** Blue Button 2.0 (Medicare FHIR API) */
+  blueButton: {
+    baseUrl: process.env.BLUEBUTTON_BASE_URL || "https://sandbox.bluebutton.cms.gov",
+    version: "v2",
+    scopes: "patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read profile",
+    callbackPath: "/api/fhir/callback",
+  },
+
   /** Default pagination limits */
   defaults: {
     pageLimit: parseInt(process.env.DEFAULT_PAGE_LIMIT || "10", 10),

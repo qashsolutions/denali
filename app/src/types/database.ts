@@ -550,6 +550,59 @@ export type Database = {
         }
         Relationships: []
       }
+      ehr_connections: {
+        Row: {
+          access_token_encrypted: string
+          created_at: string | null
+          fhir_patient_id: string | null
+          id: string
+          last_synced_at: string | null
+          provider: string
+          refresh_token_encrypted: string
+          scopes: string | null
+          status: string
+          token_expires_at: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted: string
+          created_at?: string | null
+          fhir_patient_id?: string | null
+          id?: string
+          last_synced_at?: string | null
+          provider?: string
+          refresh_token_encrypted: string
+          scopes?: string | null
+          status?: string
+          token_expires_at: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string
+          created_at?: string | null
+          fhir_patient_id?: string | null
+          id?: string
+          last_synced_at?: string | null
+          provider?: string
+          refresh_token_encrypted?: string
+          scopes?: string | null
+          status?: string
+          token_expires_at?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ehr_connections_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       eob_denial_mappings: {
         Row: {
           carc_code: string
@@ -606,6 +659,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "rarc_codes_latest"
             referencedColumns: ["code", "effective_date"]
+          },
+        ]
+      }
+      fhir_cache: {
+        Row: {
+          cached_at: string | null
+          data: Json
+          expires_at: string | null
+          id: string
+          resource_type: string
+          user_id: string
+        }
+        Insert: {
+          cached_at?: string | null
+          data: Json
+          expires_at?: string | null
+          id?: string
+          resource_type: string
+          user_id: string
+        }
+        Update: {
+          cached_at?: string | null
+          data?: Json
+          expires_at?: string | null
+          id?: string
+          resource_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fhir_cache_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
           },
         ]
       }

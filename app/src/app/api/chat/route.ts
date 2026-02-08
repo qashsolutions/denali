@@ -119,6 +119,15 @@ export async function POST(request: NextRequest) {
       triggers.isProvider = true;
     }
 
+    // Populate health context from fhir_cache (cache read only — never calls CMS API)
+    // healthDataAvailable, activeCoverage, and recentDenials are set by the client
+    // from useHealthData hook data. If the client passes a userId, we can also
+    // verify/refresh from cache server-side.
+    if (sessionState.healthDataAvailable) {
+      triggers.hasHealthData = true;
+      triggers.hasRecentDenials = (sessionState.recentDenials?.length ?? 0) > 0;
+    }
+
     console.log("[Chat API] Detected triggers:", triggers);
 
     // Build dynamic system prompt with learning context (async)

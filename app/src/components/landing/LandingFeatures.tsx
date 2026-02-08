@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { LandingSection } from "@/types/cms";
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver";
 import { HealthRecordsIllustration } from "./illustrations/HealthRecordsIllustration";
@@ -20,6 +21,7 @@ const FEATURES = [
       "Connect your clinic or Medicare.gov and see your conditions, medications, and lab results explained in words you understand.",
     tags: ["EHR Connect", "Blue Button 2.0", "Plain Language"],
     color: "health-red" as const,
+    href: "/app/health",
     Illustration: HealthRecordsIllustration,
   },
   {
@@ -30,6 +32,7 @@ const FEATURES = [
       "Ask anything about Medicare coverage. Get a clear checklist of what your doctor needs to document so your claim gets approved.",
     tags: ["NCD/LCD", "Part A & B", "Coverage Check"],
     color: "check-teal" as const,
+    href: "/app/chat",
     Illustration: CoverageCheckIllustration,
   },
   {
@@ -40,6 +43,7 @@ const FEATURES = [
       "Personalized coaching from your own A1C and glucose results. Track trends, get reminders, and stay ahead of diabetes.",
     tags: ["A1C Tracking", "Med Reminders", "MDPP"],
     color: "diabetes-violet" as const,
+    href: "/app/diabetes",
     Illustration: DiabetesCareIllustration,
   },
   {
@@ -50,6 +54,7 @@ const FEATURES = [
       "Denied? We look up exactly why, build your appeal letter with the right codes and citations, and track your deadline so you never miss it.",
     tags: ["5 Appeal Levels", "Auto-Templates", "Deadline Alerts"],
     color: "appeal-coral" as const,
+    href: "/app/claims",
     Illustration: AppealIllustration,
   },
 ] as const;
@@ -112,13 +117,17 @@ function FeatureCard({
   const { Illustration } = feature;
 
   return (
-    <article
+    <div
       ref={ref}
-      className={`group relative bg-[var(--bg-primary)] rounded-2xl border border-[var(--border)] overflow-hidden
-        transition-all duration-600 ease-out
-        hover:-translate-y-1 hover:shadow-xl
+      className={`transition-all duration-600 ease-out
         ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}
       style={{ transitionDelay: `${index * 100}ms` }}
+    >
+    <Link
+      href={feature.href}
+      className="group relative block bg-[var(--bg-primary)] rounded-2xl border border-[var(--border)] overflow-hidden
+        transition-all duration-300 ease-out
+        hover:-translate-y-1 hover:shadow-xl"
     >
       {/* Accent bar */}
       <div
@@ -159,7 +168,8 @@ function FeatureCard({
           ))}
         </div>
       </div>
-    </article>
+    </Link>
+    </div>
   );
 }
 

@@ -58,7 +58,9 @@ import {
   OUTCOME_PROMPTING_SKILL,
   COUNSELOR_SKILL,
   PROVIDER_PILOT_SKILL,
+  HEALTH_RECORDS_SKILL,
 } from "@/skills";
+import { buildHealthContextForPrompt } from "@/lib/fhir/context";
 
 // =============================================================================
 // SKILL CONSTANTS - Now imported from modular files
@@ -116,6 +118,9 @@ export interface SkillTriggers {
   // Role-based
   isCounselor: boolean;
   isProvider: boolean;
+  // Health data (Blue Button)
+  hasHealthData: boolean;
+  hasRecentDenials: boolean;
 }
 
 // Emergency symptom patterns
@@ -207,6 +212,10 @@ export function detectTriggers(
     // Role-based (set externally by route.ts based on user profile)
     isCounselor: false,
     isProvider: false,
+
+    // Health data (set externally by route.ts from fhir_cache)
+    hasHealthData: sessionState?.healthDataAvailable ?? false,
+    hasRecentDenials: (sessionState?.recentDenials?.length ?? 0) > 0,
   };
 }
 
@@ -245,6 +254,17 @@ export function buildSystemPrompt(
   }
   if (triggers.isProvider) {
     sections.push(PROVIDER_PILOT_SKILL);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // HEALTH RECORDS - Personalize with Blue Button data
+  // ─────────────────────────────────────────────────────────────────────────
+  if (triggers.hasHealthData) {
+    sections.push(HEALTH_RECORDS_SKILL);
+    const healthContext = buildHealthContextForPrompt(sessionState ?? ({} as SessionState));
+    if (healthContext) {
+      sections.push(healthContext);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────

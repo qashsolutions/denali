@@ -39,6 +39,16 @@ export async function DELETE(request: NextRequest) {
     // Start deletion process
     // Order matters due to foreign key constraints
 
+    // 0. Delete EHR connections and FHIR cache (Blue Button data)
+    await supabase
+      .from("fhir_cache")
+      .delete()
+      .eq("user_id", userId);
+    await supabase
+      .from("ehr_connections")
+      .delete()
+      .eq("user_id", userId);
+
     // 1. Delete user feedback
     await supabase
       .from("user_feedback")

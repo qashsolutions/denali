@@ -1,53 +1,155 @@
 "use client";
 
+import { Suspense, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { HeartPulseIcon } from "@/components/icons";
+import { useHealthData } from "@/hooks/useHealthData";
+import {
+  ConnectMedicare,
+  PatientCard,
+  CoverageCards,
+  ClaimsList,
+  ConnectionStatus,
+} from "@/components/health";
 
 export default function HealthPage() {
   return (
-    <div className="max-w-2xl mx-auto px-4 py-12 text-center">
-      <div className="w-20 h-20 rounded-2xl bg-red-500/15 flex items-center justify-center mx-auto mb-6">
-        <HeartPulseIcon className="w-10 h-10 text-red-500" />
+    <Suspense>
+      <HealthPageInner />
+    </Suspense>
+  );
+}
+
+function HealthPageInner() {
+  const searchParams = useSearchParams();
+  const {
+    patient,
+    coverage,
+    claims,
+    isConnected,
+    isLoading,
+    lastSynced,
+    error,
+    connect,
+    disconnect,
+    refresh,
+  } = useHealthData();
+
+  // Handle OAuth callback params
+  const oauthError = searchParams.get("error");
+  useEffect(() => {
+    if (searchParams.get("connected") === "true") {
+      refresh();
+    }
+  }, [searchParams, refresh]);
+
+  // OAuth error messages
+  const oauthErrorMessage = oauthError ? ({
+    denied: "You chose not to connect. You can try again anytime.",
+    missing_params: "Something went wrong with the connection. Please try again.",
+    invalid_state: "The connection request expired. Please try again.",
+    not_authenticated: "Please sign in first, then connect Medicare.",
+    token_exchange: "Medicare connection failed. Please try again.",
+    save_failed: "Could not save the connection. Please try again.",
+    config: "Medicare connection is not configured. Please contact support.",
+  } as Record<string, string>)[oauthError] ?? "Something went wrong. Please try again." : null;
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-10 h-10 rounded-xl bg-[var(--health-red)]/15 flex items-center justify-center">
+            <HeartPulseIcon className="w-5 h-5 text-[var(--health-red)]" />
+          </div>
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">My Health</h1>
+        </div>
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border)] p-6 animate-pulse"
+            >
+              <div className="h-4 bg-[var(--bg-tertiary)] rounded w-1/3 mb-3" />
+              <div className="h-3 bg-[var(--bg-tertiary)] rounded w-2/3" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error && !isConnected) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-10 h-10 rounded-xl bg-[var(--health-red)]/15 flex items-center justify-center">
+            <HeartPulseIcon className="w-5 h-5 text-[var(--health-red)]" />
+          </div>
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">My Health</h1>
+        </div>
+        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-6 text-center">
+          <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
+          <button
+            onClick={() => refresh()}
+            className="text-sm font-medium text-[var(--accent-primary)] hover:underline"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Not connected
+  if (!isConnected) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12">
+        <div className="flex items-center gap-3 mb-8 justify-center">
+          <div className="w-10 h-10 rounded-xl bg-[var(--health-red)]/15 flex items-center justify-center">
+            <HeartPulseIcon className="w-5 h-5 text-[var(--health-red)]" />
+          </div>
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">My Health</h1>
+        </div>
+        {oauthErrorMessage && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6 text-center">
+            <p className="text-sm text-amber-600 dark:text-amber-400">{oauthErrorMessage}</p>
+          </div>
+        )}
+        <ConnectMedicare onConnect={connect} />
+      </div>
+    );
+  }
+
+  // Connected — show health data
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-8">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-xl bg-[var(--health-red)]/15 flex items-center justify-center">
+          <HeartPulseIcon className="w-5 h-5 text-[var(--health-red)]" />
+        </div>
+        <h1 className="text-xl font-bold text-[var(--text-primary)]">My Health</h1>
       </div>
 
-      <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-3">
-        My Health
-      </h1>
-      <p className="text-[var(--text-secondary)] mb-8 max-w-md mx-auto">
-        Connect your clinic to see your health records, medications, and lab
-        results in plain English.
-      </p>
+      <div className="space-y-6">
+        <ConnectionStatus
+          lastSynced={lastSynced}
+          onRefresh={refresh}
+          onDisconnect={disconnect}
+        />
 
-      <div className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border)] p-8">
-        <p className="text-sm text-[var(--text-muted)] mb-4">
-          Coming soon — we&apos;re building secure connections to OpenEMR and
-          Medicare Blue Button 2.0.
-        </p>
-        <div className="flex flex-col gap-3 max-w-xs mx-auto">
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-left">
-            <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
-              <span className="text-red-500 text-sm">1</span>
-            </div>
-            <span className="text-sm text-[var(--text-secondary)]">
-              Connect your clinic or Medicare.gov
-            </span>
+        {patient && <PatientCard patient={patient} />}
+
+        <CoverageCards coverage={coverage} />
+
+        <ClaimsList claims={claims} />
+
+        {error && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
+            <p className="text-xs text-amber-600 dark:text-amber-400">{error}</p>
           </div>
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-left">
-            <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
-              <span className="text-red-500 text-sm">2</span>
-            </div>
-            <span className="text-sm text-[var(--text-secondary)]">
-              See your conditions, meds, and labs
-            </span>
-          </div>
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-left">
-            <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
-              <span className="text-red-500 text-sm">3</span>
-            </div>
-            <span className="text-sm text-[var(--text-secondary)]">
-              AI explains everything in plain English
-            </span>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

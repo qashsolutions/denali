@@ -20,6 +20,9 @@ export { SPECIALTY_VALIDATION_SKILL } from "./domain/specialty-validation";
 export { APPEAL_SKILL } from "./domain/appeal";
 export { OUTCOME_PROMPTING_SKILL } from "./domain/outcome-prompting";
 
+// Health records skill
+export { HEALTH_RECORDS_SKILL } from "@/lib/skills/health-records";
+
 // Channel skills
 export { COUNSELOR_SKILL } from "./channel/counselor";
 export { PROVIDER_PILOT_SKILL } from "./channel/provider";
