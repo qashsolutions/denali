@@ -185,6 +185,7 @@ export function useAuth(): UseAuthReturn {
             email,
             isEmailVerified:
               !!email && session.user.email_confirmed_at !== null,
+            isLoading: false,
           }));
         } else if (event === "SIGNED_OUT") {
           setAuthState({ ...DEFAULT_AUTH_STATE, isLoading: false });
