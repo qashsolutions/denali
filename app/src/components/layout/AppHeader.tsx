@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -8,19 +9,51 @@ import {
   HeartPulseIcon,
   ChatBubbleIcon,
   DiabetesIcon,
+  DocumentTextIcon,
+  GearIcon,
 } from "@/components/icons";
 import { BRAND } from "@/config";
+import { createClient } from "@/lib/supabase";
 
 const NAV_ITEMS = [
-  { label: "Health", href: "/app/health", Icon: HeartPulseIcon },
-  { label: "Ask Denali", href: "/app/chat", Icon: ChatBubbleIcon },
-  { label: "Diabetes", href: "/app/diabetes", Icon: DiabetesIcon },
-  { label: "Blog", href: "/blog", Icon: DocumentIcon },
+  { label: "Health", href: "/app/health", Icon: HeartPulseIcon, color: "text-rose-500" },
+  { label: "Ask Denali", href: "/app/chat", Icon: ChatBubbleIcon, color: "text-blue-500" },
+  { label: "Diabetes", href: "/app/diabetes", Icon: DiabetesIcon, color: "text-emerald-500" },
+  { label: "Blog", href: "/blog", Icon: DocumentTextIcon, color: "text-violet-500" },
 ] as const;
 
 export function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Check auth state
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsSignedIn(!!session?.user);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_, session) => {
+      setIsSignedIn(!!session?.user);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpen]);
 
   // Split brand name to color "Health" separately
   const brandName = BRAND.NAME;
@@ -29,11 +62,11 @@ export function AppHeader() {
   const suffix = healthIndex >= 0 ? "Health" : "";
 
   return (
-    <header className="hidden md:block sticky top-0 z-40 backdrop-blur-md bg-[var(--bg-primary)]/90 border-b border-[var(--border)]/50">
-      <div className="max-w-6xl mx-auto px-6">
-        <div className="flex items-center justify-between h-16">
+    <header className="sticky top-0 z-40 backdrop-blur-md bg-[var(--bg-primary)]/90 border-b border-[var(--border)]/50">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="flex items-center justify-between h-14 sm:h-16">
           {/* Logo */}
-          <Link href="/app" className="flex items-center gap-2 group">
+          <Link href="/" className="flex items-center gap-2 group">
             <MountainIcon className="w-8 h-6 transition-transform group-hover:scale-105" />
             <span className="text-lg font-bold text-[var(--text-primary)]">
               {prefix}
@@ -43,9 +76,9 @@ export function AppHeader() {
             </span>
           </Link>
 
-          {/* Feature Nav */}
-          <nav className="flex items-center gap-1" aria-label="Main navigation">
-            {NAV_ITEMS.map(({ label, href, Icon }) => {
+          {/* Desktop Nav */}
+          <nav className="hidden md:flex items-center gap-1" aria-label="Main navigation">
+            {NAV_ITEMS.map(({ label, href, Icon, color }) => {
               const isActive =
                 pathname === href || pathname?.startsWith(href + "/");
 
@@ -61,64 +94,82 @@ export function AppHeader() {
                   )}
                   aria-current={isActive ? "page" : undefined}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className={cn("w-4 h-4", !isActive && color)} />
                   {label}
                 </Link>
               );
             })}
           </nav>
 
-          {/* Settings */}
-          <button
-            onClick={() => router.push("/app/settings")}
-            className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
-            aria-label="Settings"
-          >
-            <SettingsIcon className="w-5 h-5" />
-          </button>
+          {/* Right side: Login or Settings + Mobile hamburger */}
+          <div className="flex items-center gap-1">
+            {isSignedIn ? (
+              <button
+                onClick={() => router.push("/app/settings")}
+                className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                aria-label="Settings"
+              >
+                <GearIcon className="w-5 h-5" />
+              </button>
+            ) : (
+              <Link
+                href="/app/settings"
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
+              >
+                Sign In
+              </Link>
+            )}
+
+            {/* Hamburger — mobile only */}
+            <div className="relative md:hidden" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                aria-label="Menu"
+                aria-expanded={menuOpen}
+              >
+                {menuOpen ? (
+                  <XIcon className="w-5 h-5" />
+                ) : (
+                  <HamburgerIcon className="w-5 h-5" />
+                )}
+              </button>
+
+              {menuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-[var(--bg-primary)] border border-[var(--border)] shadow-lg overflow-hidden">
+                  {NAV_ITEMS.map(({ label, href, Icon, color }) => (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                    >
+                      <Icon className={cn("w-4 h-4", color)} />
+                      {label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </header>
   );
 }
 
-function DocumentIcon({ className }: { className?: string }) {
+function HamburgerIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
-      />
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
     </svg>
   );
 }
 
-function SettingsIcon({ className }: { className?: string }) {
+function XIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-      />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-      />
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
   );
 }

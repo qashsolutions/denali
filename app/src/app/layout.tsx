@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Playfair_Display } from "next/font/google";
 import { BRAND } from "@/config";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { AppHeader } from "@/components/layout/AppHeader";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -90,7 +91,10 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body className="antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <AppHeader />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

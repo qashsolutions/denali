@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import { BottomTabs } from "@/components/layout/BottomTabs";
-import { AppHeader } from "@/components/layout/AppHeader";
 import { MountainIcon } from "@/components/icons";
 import { BRAND } from "@/config";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-primary)]">
-      <AppHeader />
       <main className="flex-1 pb-16 md:pb-0">{children}</main>
       <footer className="hidden md:block py-6 px-4 bg-[var(--bg-secondary)] border-t border-[var(--border)]">
         <div className="max-w-4xl mx-auto flex flex-col items-center text-center gap-3">

@@ -1,6 +1,5 @@
 import { getLandingPageData } from "@/lib/cms";
 import {
-  LandingHeader,
   LandingHero,
   LandingFeatures,
   LandingHowItWorks,
@@ -24,8 +23,6 @@ export default async function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <LandingHeader settings={data.settings} />
-
       <main className="flex-1">
         <LandingHero section={heroSection} />
         <LandingFeatures section={featuresSection} />

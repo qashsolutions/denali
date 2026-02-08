@@ -287,7 +287,8 @@ export function HeartPulseIcon({ className, strokeWidth = 1.5 }: IconProps) {
 }
 
 /**
- * Diabetes / Blood Drop - Diabetes Care
+ * Diabetes / Glucose Chart - Diabetes Care
+ * Line chart with trend line and current reading dot
  */
 export function DiabetesIcon({ className, strokeWidth = 1.5 }: IconProps) {
   return (
@@ -300,8 +301,9 @@ export function DiabetesIcon({ className, strokeWidth = 1.5 }: IconProps) {
       strokeLinejoin="round"
       className={cn("w-6 h-6", className)}
     >
-      <path d="M12 2C12 2 5 10 5 14a7 7 0 0014 0c0-4-7-12-7-12z" />
-      <path d="M10 15l1.5-3 1 2 1.5-3" />
+      <path d="M3 20h18" />
+      <polyline points="4,16 8,11 11,14 15,7 19,12" />
+      <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" />
     </svg>
   );
 }
