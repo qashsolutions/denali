@@ -11,6 +11,10 @@ export function LandingFooter({ settings }: LandingFooterProps) {
   const companyName = settings.company_name || "Qash Solutions Inc";
   const copyrightYear = settings.copyright_year || new Date().getFullYear();
 
+  const healthIndex = brandName.indexOf("Health");
+  const prefix = healthIndex >= 0 ? brandName.slice(0, healthIndex) : brandName;
+  const suffix = healthIndex >= 0 ? "Health" : "";
+
   return (
     <footer className="py-12 bg-[var(--bg-secondary)] border-t border-[var(--border)]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -19,7 +23,10 @@ export function LandingFooter({ settings }: LandingFooterProps) {
           <Link href="/" className="flex items-center gap-3 mb-4">
             <MountainIcon className="w-10 h-8" />
             <span className="text-xl font-bold text-[var(--text-primary)]">
-              {brandName}
+              {prefix}
+              {suffix && (
+                <span className="text-[var(--accent-secondary)]">{suffix}</span>
+              )}
             </span>
           </Link>
 
