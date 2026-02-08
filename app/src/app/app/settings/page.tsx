@@ -309,12 +309,6 @@ export default function AppSettingsPage() {
             onChange={(v) => updateConsent("analytics", v)}
           />
         </div>
-        <a
-          href="/faq"
-          className="inline-block mt-3 text-sm text-[var(--accent-primary)] hover:underline"
-        >
-          Privacy FAQ &amp; data practices
-        </a>
       </section>
 
       {/* Delete Account */}
