@@ -38,138 +38,6 @@ export default function AppSettingsPage() {
         Settings
       </h1>
 
-      {/* Appearance */}
-      <section className="mb-8">
-        <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
-          Appearance
-        </h2>
-        <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
-          <label className="block text-[var(--text-primary)] font-medium mb-3">
-            Theme
-          </label>
-          <div className="flex gap-3">
-            <ThemeButton
-              label="Light"
-              icon={<SunIcon className="w-6 h-6" />}
-              active={!isDark}
-              onClick={() => setTheme("light")}
-            />
-            <ThemeButton
-              label="Dark"
-              icon={<MoonIcon className="w-6 h-6" />}
-              active={isDark}
-              onClick={() => setTheme("dark")}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Text Size */}
-      <section className="mb-8">
-        <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
-          Accessibility
-        </h2>
-        <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
-          <label className="block text-[var(--text-primary)] font-medium mb-3">
-            Text Size
-          </label>
-          <div className="flex gap-2 flex-wrap">
-            {textScaleOptions.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setTextScale(option.value)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  settings.textScale === option.value
-                    ? "bg-[var(--accent-primary)] text-white"
-                    : "bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]/80"
-                }`}
-                aria-pressed={settings.textScale === option.value}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          <p
-            className="text-[var(--text-muted)] mt-3"
-            style={{ fontSize: `${settings.textScale}rem` }}
-          >
-            Preview: The quick brown fox jumps over the lazy dog.
-          </p>
-        </div>
-      </section>
-
-      {/* Security */}
-      <section className="mb-8">
-        <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
-          Security
-        </h2>
-        <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-[var(--text-primary)]">Passkey</p>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                {passkeyEnrolled
-                  ? "Passkey enrolled — used for sensitive operations"
-                  : "Add a passkey for stronger identity verification"}
-              </p>
-            </div>
-            <button
-              onClick={() => setShowPasskeyEnroll(true)}
-              disabled={passkeyEnrolled}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                passkeyEnrolled
-                  ? "bg-green-500/10 text-green-600 cursor-default"
-                  : "bg-[var(--accent-primary)] text-white hover:opacity-90"
-              }`}
-            >
-              {passkeyEnrolled ? "Enrolled" : "Set Up"}
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <PasskeyEnrollModal
-        open={showPasskeyEnroll}
-        onClose={() => setShowPasskeyEnroll(false)}
-        onSuccess={() => setPasskeyEnrolled(true)}
-      />
-
-      {/* Privacy & Data */}
-      <section className="mb-8">
-        <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
-          Privacy &amp; Data
-        </h2>
-        <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)] space-y-4">
-          <ConsentToggle
-            label="Use health data in AI conversations"
-            description="Allow Ask Denali to reference your Medicare claims and coverage when giving guidance."
-            checked={consent.health_data_ai}
-            loading={consentLoading}
-            onChange={(v) => updateConsent("health_data_ai", v)}
-          />
-          <ConsentToggle
-            label="Store health data locally"
-            description="Cache your Blue Button data for faster access. Cached data refreshes every 24 hours."
-            checked={consent.health_data_storage}
-            loading={consentLoading}
-            onChange={(v) => updateConsent("health_data_storage", v)}
-          />
-          <ConsentToggle
-            label="Usage analytics"
-            description="Help us improve Denali by sharing anonymous usage patterns."
-            checked={consent.analytics}
-            loading={consentLoading}
-            onChange={(v) => updateConsent("analytics", v)}
-          />
-        </div>
-        <a
-          href="/faq"
-          className="inline-block mt-3 text-sm text-[var(--accent-primary)] hover:underline"
-        >
-          Privacy FAQ &amp; data practices
-        </a>
-      </section>
-
       {/* Account */}
       <section className="mb-8">
         <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
@@ -316,6 +184,138 @@ export default function AppSettingsPage() {
           </div>
         </section>
       )}
+
+      {/* Appearance */}
+      <section className="mb-8">
+        <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
+          Appearance
+        </h2>
+        <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
+          <label className="block text-[var(--text-primary)] font-medium mb-3">
+            Theme
+          </label>
+          <div className="flex gap-3">
+            <ThemeButton
+              label="Light"
+              icon={<SunIcon className="w-6 h-6" />}
+              active={!isDark}
+              onClick={() => setTheme("light")}
+            />
+            <ThemeButton
+              label="Dark"
+              icon={<MoonIcon className="w-6 h-6" />}
+              active={isDark}
+              onClick={() => setTheme("dark")}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Text Size */}
+      <section className="mb-8">
+        <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
+          Accessibility
+        </h2>
+        <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
+          <label className="block text-[var(--text-primary)] font-medium mb-3">
+            Text Size
+          </label>
+          <div className="flex gap-2 flex-wrap">
+            {textScaleOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setTextScale(option.value)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  settings.textScale === option.value
+                    ? "bg-[var(--accent-primary)] text-white"
+                    : "bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]/80"
+                }`}
+                aria-pressed={settings.textScale === option.value}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <p
+            className="text-[var(--text-muted)] mt-3"
+            style={{ fontSize: `${settings.textScale}rem` }}
+          >
+            Preview: The quick brown fox jumps over the lazy dog.
+          </p>
+        </div>
+      </section>
+
+      {/* Security */}
+      <section className="mb-8">
+        <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
+          Security
+        </h2>
+        <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-[var(--text-primary)]">Passkey</p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                {passkeyEnrolled
+                  ? "Passkey enrolled — used for sensitive operations"
+                  : "Add a passkey for stronger identity verification"}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowPasskeyEnroll(true)}
+              disabled={passkeyEnrolled}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                passkeyEnrolled
+                  ? "bg-green-500/10 text-green-600 cursor-default"
+                  : "bg-[var(--accent-primary)] text-white hover:opacity-90"
+              }`}
+            >
+              {passkeyEnrolled ? "Enrolled" : "Set Up"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <PasskeyEnrollModal
+        open={showPasskeyEnroll}
+        onClose={() => setShowPasskeyEnroll(false)}
+        onSuccess={() => setPasskeyEnrolled(true)}
+      />
+
+      {/* Privacy & Data */}
+      <section className="mb-8">
+        <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
+          Privacy &amp; Data
+        </h2>
+        <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)] space-y-4">
+          <ConsentToggle
+            label="Use health data in AI conversations"
+            description="Allow Ask Denali to reference your Medicare claims and coverage when giving guidance."
+            checked={consent.health_data_ai}
+            loading={consentLoading}
+            onChange={(v) => updateConsent("health_data_ai", v)}
+          />
+          <ConsentToggle
+            label="Store health data locally"
+            description="Cache your Blue Button data for faster access. Cached data refreshes every 24 hours."
+            checked={consent.health_data_storage}
+            loading={consentLoading}
+            onChange={(v) => updateConsent("health_data_storage", v)}
+          />
+          <ConsentToggle
+            label="Usage analytics"
+            description="Help us improve Denali by sharing anonymous usage patterns."
+            checked={consent.analytics}
+            loading={consentLoading}
+            onChange={(v) => updateConsent("analytics", v)}
+          />
+        </div>
+        <a
+          href="/faq"
+          className="inline-block mt-3 text-sm text-[var(--accent-primary)] hover:underline"
+        >
+          Privacy FAQ &amp; data practices
+        </a>
+      </section>
 
       {/* Delete Account */}
       {authState.email && (
