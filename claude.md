@@ -647,6 +647,29 @@ Coverage guidance is **always free** (unlimited, no signup). Paywall only appear
 | $25/month subscription | Mobile OTP + Email OTP |
 | Medicare health data | Email OTP + Blue Button OAuth |
 
+### AAL2 Compliance Strategy (CMS A1 / NIST 800-63B)
+
+**CMS A1 requirement**: "Support data exchange with patient identity verification **either** via an intermediary personal health record application **or** using a CMS-approved service for IAL2/AAL2, in order to generate digital credentials that can be used to access health records."
+
+**Two-layer approach** — Blue Button satisfies CMS A1 minimum; app-level AAL2 protects cached health data:
+
+| Layer | What It Protects | Method | Status |
+|-------|-----------------|--------|--------|
+| **FHIR connection** (CMS A1) | Initial identity proofing — verifies this is the right Medicare beneficiary | Blue Button OAuth via Medicare.gov (IAL2/AAL2 handled by CMS) | **DONE** |
+| **App authentication** (P1) | Ongoing access to cached health data, appeal letters, settings | Email+password (memorized secret) + TOTP MFA = AAL2 per NIST 800-63B | **Partial** — TOTP components built, need email+password migration |
+
+**Why both layers**: After Blue Button connects, FHIR data is cached (encrypted, 24h TTL). Users access cached health data via email OTP (AAL1). If email is compromised, attacker gets access to health records. App-level AAL2 closes this gap.
+
+**Supabase limitation**: WebAuthn/passkeys NOT supported on any plan. TOTP and Phone are the only MFA factor types.
+
+**NIST 800-63B AAL2** requires: memorized secret (password) + single-factor authenticator (TOTP). Email OTP + TOTP does NOT satisfy AAL2 (no memorized secret).
+
+**Migration plan** (P1 — before CMS showcase):
+1. Add `signInWithPassword()` alongside existing email OTP
+2. Wire TOTP enrollment in Settings Security section (components ready: `TOTPEnrollModal`, `TOTPChallengeModal`)
+3. Gate cached health data access behind AAL2 when TOTP enrolled
+4. Keep email OTP as password-reset/recovery path
+
 ### Gating Logic
 
 ```
@@ -774,7 +797,7 @@ src/
     ui/             # Primitives (Button, Input, Card, Modal, CmsPledge)
     chat/           # Chat-specific (Message, ChatInput, Suggestions)
     appeal/         # Appeal-specific (AppealLetter, StatusBadge)
-    auth/           # Auth components (EmailOTPModal, PasskeyEnrollModal, PasskeyChallengeModal, TOTPModals)
+    auth/           # Auth components (EmailOTPModal, TOTPEnrollModal, TOTPChallengeModal). Passkey modals exist but non-functional (Supabase has no WebAuthn)
     layout/         # Layout (AppHeader, BottomTabs, Container)
     health/         # Health page (ConnectMedicare, PatientCard, CoverageCards, ClaimsList)
   hooks/            # Custom hooks (useAuth, useChat, useConsent, useHealthData, useSettings, etc.)
@@ -916,8 +939,8 @@ These apply to Denali regardless of category. Source: categories page.
 
 | # | Requirement | Denali Status |
 |---|-------------|---------------|
-| **A1** | **IAL2/AAL2 identity verification** — via intermediary PHR app or CMS-approved service (passkeys, mDLs) | **DONE (code).** Passkey (WebAuthn) enrollment + challenge via `PasskeyEnrollModal`/`PasskeyChallengeModal`. AAL2 gating on FHIR access. Still need: CMS credential service integration |
-| **A2** | **Medicare.gov connectivity** — notify Medicare beneficiaries of communications (notices, EOBs, fraud alerts) | **PARTIAL.** `MEDICARE_NOTIFICATIONS_SKILL` alerts for changes detected in FHIR data. Still need: Medicare.gov notification bridge API |
+| **A1** | **IAL2/AAL2 identity verification** — via intermediary PHR app or CMS-approved service (passkeys, mDLs) | **DONE (Layer 1).** Blue Button OAuth through Medicare.gov = IAL2/AAL2 via intermediary PHR path. PKCE + encrypted token storage. **P1**: App-level AAL2 (email+password+TOTP) to protect cached health data — TOTP components built, need password sign-in migration. WebAuthn NOT available in Supabase |
+| **A2** | **Medicare.gov connectivity** — notify Medicare beneficiaries of communications (notices, EOBs, fraud alerts) | **PARTIAL.** `MEDICARE_NOTIFICATIONS_SKILL` exists but `hasRecentChanges` trigger was not wired — now fixed. Skill detects EOB/coverage changes from FHIR data. Still need: direct Medicare.gov notification bridge API |
 | **A3** | **CMS review participation** — disclose data sources, terms/agreements, complete basic security checklist | **PARTIAL.** `/api/cms-metadata` exposes app metadata for CMS directory. Still need: terms doc, security self-assessment |
 | **A4** | **Trial access for Medicare patients** if app charges a fee | **DONE.** 30-day free trial via `/api/trial`. Trial status tracked in `subscriptions` table. Settings shows trial days remaining |
 | **A5** | **CMS discovery experience** — allow app to be listed as recommended option on Medicare.gov | **PARTIAL.** `/api/cms-metadata` returns app listing metadata. Still need: CMS submission |
@@ -928,7 +951,7 @@ These apply to Denali regardless of category. Source: categories page.
 | Requirement | Denali Status |
 |-------------|---------------|
 | Personalized AI support across clinical record — symptom checking, care planning, coordination, chronic disease | **DONE.** Core product functionality |
-| Must connect to CMS Aligned Network directly OR via personal health record app | **PARTIAL.** Blue Button 2.0 (PHR path). Future: direct CMS Aligned Network |
+| Must connect to CMS Aligned Network directly OR via personal health record app | **DONE.** Blue Button 2.0 (PHR path) with PKCE OAuth, encrypted tokens, audit logging. Future: direct CMS Aligned Network |
 | Responses must clearly indicate AI-generated + disclaimers when not replacing clinical judgment | **DONE.** SparkleIcon + "AI-generated · Not medical advice" on all assistant messages |
 | Clearly distinguish educational content from clinical guidance; guide to health professional when needed | **DONE.** Coverage guidance framing + "talk to your doctor" patterns in skills |
 
@@ -936,9 +959,9 @@ These apply to Denali regardless of category. Source: categories page.
 
 | Requirement | Denali Status |
 |-------------|---------------|
-| Must connect to CMS Aligned Network directly or via PHR app | **PARTIAL.** Blue Button path exists. Feature not yet live |
-| Use clinical record for personalized coaching, reminders, risk alerts | **NOT YET.** Diabetes page is placeholder. Need: lab trend analysis, coaching AI |
-| Support both prevention AND active management (meds, lab trends, nutrition/activity) | **NOT YET.** Need: full diabetes feature implementation |
+| Must connect to CMS Aligned Network directly or via PHR app | **DONE.** Blue Button 2.0 (PHR path). Health data flows to chat via `DIABETES_PREVENTION_SKILL` |
+| Use clinical record for personalized coaching, reminders, risk alerts | **PARTIAL.** `DIABETES_PREVENTION_SKILL` interprets A1C + coaching prompts in chat. Diabetes page has quick actions + A1C guide. Need: FHIR lab data display on diabetes page, personalized risk alerts |
+| Support both prevention AND active management (meds, lab trends, nutrition/activity) | **PARTIAL.** A1C guide (3 ranges), coverage reference table (6 items), MDPP references. Need: lab trend charts from FHIR, nutrition/activity tracking |
 | Must specifically provide resources for pre-Diabetic patients | **NOT YET.** Need: MDPP resources, pre-diabetes screening/guidance |
 | HIPAA compliance | Same as A6 above |
 
@@ -950,7 +973,7 @@ These are network-level criteria but affect how Denali interacts with CMS Aligne
 |-----------|-------------|---------------|
 | **1 — Universal Data Access** | Patients access electronic medical info via apps of their choice | **DONE.** Blue Button 2.0 with PKCE OAuth. Future: CMS Aligned Network connectivity |
 | **2 — Claims & Benefits** | Access claims, EOBs, prior auths, clinical data from payers | **DONE.** Health page shows patient info, coverage, claims list + detail |
-| **3 — Simplified Identity** | IAL2/AAL2 credentials, no extra logins | **DONE (code).** Passkey enrollment + AAL2 gating. See A1 |
+| **3 — Simplified Identity** | IAL2/AAL2 credentials, no extra logins | **PARTIAL.** TOTP MFA components built (`TOTPEnrollModal`/`TOTPChallengeModal`). Need: switch sign-in to email+password for AAL2-compliant memorized secret + TOTP. Blue Button OAuth = IAL2/AAL2 via Medicare.gov. See A1 |
 | **4 — Audit Log Transparency** | Accounting of all data access — who, when, why | **DONE.** `audit_logs` table + `logAudit()` calls on all sensitive operations (FHIR, appeals, consent, account deletion, checkout) |
 | **5 — Consent Preferences** | Patient consent preferences shared with all parties; honor restrictions | **DONE.** `consent_preferences` table + Settings UI toggles + enforcement in FHIR context pipeline |
 
@@ -959,8 +982,8 @@ These are network-level criteria but affect how Denali interacts with CMS Aligne
 | Criterion | Requirement | Denali Impact |
 |-----------|-------------|---------------|
 | **22 — Request Purpose** | All queries include purpose code | **DONE.** `X-Request-Purpose` header on FHIR calls, derived from skill triggers (appeal/coverage-determination/patient-request) |
-| **23 — Digital Credentials** | Accept IAL2/AAL2 via CMS-approved service | **DONE (code).** Passkey enrollment + AAL2 challenge. See A1 |
-| **24 — Access Control** | Enforce access control + consent policy per context | **DONE.** Consent preferences gate health data injection. AAL2 gates FHIR access when passkey enrolled |
+| **23 — Digital Credentials** | Accept IAL2/AAL2 via CMS-approved service | **PARTIAL.** TOTP MFA (AAL2 factor) implemented. Need: email+password sign-in (memorized secret) to complete AAL2 chain. See A1 |
+| **24 — Access Control** | Enforce access control + consent policy per context | **DONE.** Consent preferences gate health data injection. AAL2 will gate FHIR access when TOTP enrolled + email+password auth implemented |
 | **25 — Audit Records** | Verifiable logs for all auth requests/responses | **DONE.** `audit_logs` table with action, resource, IP, user agent, metadata. See Criterion 4 |
 | **26 — Security Validation** | HITRUST certification or CMS-approved equivalent | **REQUIRED.** Org-level process |
 
@@ -984,16 +1007,20 @@ Pledge text displayed via `CmsPledge` component (`src/components/ui/CmsPledge.ts
 
 | Item | CMS Ref | What's Implemented |
 |------|---------|-------------------|
-| **Audit logging** | Criteria 4, 25 | `audit_logs` table + `logAudit()` on 7+ API routes (FHIR, appeals, consent, account, checkout) |
+| **Blue Button IAL2/AAL2** | A1 (Layer 1) | Blue Button OAuth via Medicare.gov = IAL2/AAL2 via intermediary PHR path. PKCE (S256) + encrypted token storage + audit logging |
+| **Audit logging** | Criteria 4, 25 | `audit_logs` table + `logAudit()` on 7+ API routes (FHIR, appeals, consent, account, checkout, trial) |
 | **Consent preferences** | Criterion 5 | `consent_preferences` table + Settings toggles + enforcement in FHIR context pipeline |
-| **Passkey/IAL2 auth** | A1, Criteria 3, 23 | WebAuthn enrollment/challenge modals, AAL2 gating on FHIR access |
+| **TOTP MFA components** | A1 (Layer 2) | `TOTPEnrollModal`/`TOTPChallengeModal` built + Settings Security section wired. Need email+password for full AAL2 |
 | **30-day free trial** | A4 | `/api/trial` (start/check), `subscriptions` trial fields, paywall bypass for active trials |
 | **CMS metadata API** | A3, A5 | `/api/cms-metadata` returns app listing data for CMS directory |
-| **Request purpose tagging** | Criterion 22 | `X-Request-Purpose` header on FHIR calls, derived from skill context |
+| **Request purpose tagging** | Criterion 22 | `X-Request-Purpose` header on FHIR calls (`patient-request`, `appeal`, `coverage-determination`) |
 | **Consent enforcement** | Criterion 24 | Consent state gates health data injection into AI prompts |
-| **Medicare notifications skill** | A2 (partial) | `MEDICARE_NOTIFICATIONS_SKILL` detects coverage changes from FHIR data |
-| **Diabetes prevention skill** | Diabetes criteria | `DIABETES_PREVENTION_SKILL` with A1C coaching, CPT refs, prevention resources |
-| **Blue Button PKCE** | FHIR security | OAuth with PKCE (S256), `openid` scope, encrypted token storage |
+| **AI-generated disclaimers** | Conv. AI criteria | SparkleIcon + "AI-generated . Not medical advice" on every assistant message |
+| **CMS pledges** | Conv. AI + Diabetes | `CmsPledge` component with AI Assistant and Diabetes & Obesity pledge text |
+| **Medicare notifications skill** | A2 (partial) | `MEDICARE_NOTIFICATIONS_SKILL` detects EOB/coverage changes from FHIR data. `hasRecentChanges` trigger wired |
+| **Diabetes prevention skill** | Diabetes criteria | `DIABETES_PREVENTION_SKILL` with A1C coaching, MDPP, CPT refs, pre-diabetic resources |
+| **Guide to health professional** | Conv. AI criteria | Skills consistently pattern: "ask your doctor to document...", "consult specialist" |
+| **Diabetes page** | Diabetes criteria | Quick actions, A1C guide (3 ranges), Medicare coverage reference table (6 items), MDPP button |
 
 #### Remaining Gaps
 
@@ -1001,11 +1028,16 @@ Pledge text displayed via `CmsPledge` component (`src/components/ui/CmsPledge.ts
 |-----|---------|----------|------|
 | **HIPAA compliance** | A6 | **P0** | Process — BAAs with Supabase/Vercel, compliance docs, breach notification plan |
 | **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
-| **CMS credential service integration** | A1 | **P1** | Code — connect passkey flow to CMS-approved identity service |
-| **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct integration with Medicare.gov communication system |
-| **CMS review submission** | A3 | **P1** | Docs — terms of service, security self-assessment, data source inventory |
+| **Terms of service + security checklist** | A3 | **P0** | Docs — required for CMS review participation |
+| **AAL2 app auth** (Layer 2) | A1, Criteria 3, 23 | **P1** | Code — email+password sign-in + TOTP to protect cached health data. TOTP components ready, need password migration |
+| **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct integration with Medicare.gov communication system (beyond FHIR change detection) |
+| **CMS credential service integration** | A1 | **P1** | Code — connect to CMS-approved identity service when available |
+| **CMS review submission** | A3 | **P1** | Docs — data source inventory, security self-assessment for CMS |
 | **CMS app directory submission** | A5 | **P1** | Docs — screenshots, descriptions for Medicare.gov listing |
-| **Diabetes page build-out** | Diabetes criteria | **P2** | Code — lab trend charts, personalized coaching UI, MDPP resources |
+| **Patient-facing audit log viewer** | Criterion 4 | **P1** | Code — let users see who accessed their data (Settings Activity Log) |
+| **Diabetes FHIR data display** | Diabetes criteria | **P2** | Code — show A1C values from FHIR on diabetes page, lab trend charts |
+| **MDPP eligibility + enrollment** | Diabetes (pre-diabetic) | **P2** | Code — eligibility checker, enrollment flow, MDPP provider finder |
+| **Nutrition/activity tracking** | Diabetes criteria | **P2** | Code — prevention + management tracking features |
 | **EOB detail enrichment** | Criterion 2 | **P2** | Code — CARC/RARC extraction from FHIR EOB adjudication items |
 | **FHIR USCDI v3 compliance** | Criterion 13 | **P2** | Code — verify Blue Button data maps to USCDI v3 by July 2026 |
 

@@ -1,2 +1,2 @@
-export { PasskeyEnrollModal } from "./PasskeyEnrollModal";
-export { PasskeyChallengeModal } from "./PasskeyChallengeModal";
+export { TOTPEnrollModal } from "./TOTPEnrollModal";
+export { TOTPChallengeModal } from "./TOTPChallengeModal";

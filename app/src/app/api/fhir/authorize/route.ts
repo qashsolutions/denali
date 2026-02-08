@@ -28,16 +28,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // If user has passkey enrolled, check for AAL2
+    // If user has TOTP enrolled, require AAL2 before connecting FHIR
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     const { data: factors } = await supabase.auth.mfa.listFactors();
-    const hasWebauthn = factors?.all?.some(
-      (f) => f.factor_type === "webauthn" && f.status === "verified"
+    const hasTOTP = factors?.totp?.some(
+      (f) => f.status === "verified"
     );
 
-    if (hasWebauthn && aalData?.currentLevel !== "aal2") {
+    if (hasTOTP && aalData?.currentLevel !== "aal2") {
       return NextResponse.json(
-        { error: "Passkey verification required", requiresAAL2: true },
+        { error: "Authenticator verification required", requiresAAL2: true },
         { status: 403 }
       );
     }

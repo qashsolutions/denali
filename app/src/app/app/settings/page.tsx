@@ -6,7 +6,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useSettings } from "@/hooks/useSettings";
 import { useConsent, type ConsentState } from "@/hooks/useConsent";
 import { useAuth } from "@/hooks/useAuth";
-import { PasskeyEnrollModal } from "@/components/auth";
+import { TOTPEnrollModal } from "@/components/auth";
 import { PRICING, formatPrice } from "@/config/pricing";
 
 export default function AppSettingsPage() {
@@ -14,9 +14,9 @@ export default function AppSettingsPage() {
   const { isDark, setTheme } = useTheme();
   const { settings, setTextScale, resetSettings } = useSettings();
   const { consent, isLoading: consentLoading, updateConsent } = useConsent();
-  const { authState, sendEmailOTP, verifyEmailOTP, signOut } = useAuth();
-  const [showPasskeyEnroll, setShowPasskeyEnroll] = useState(false);
-  const [passkeyEnrolled, setPasskeyEnrolled] = useState(false);
+  const { authState, sendEmailOTP, verifyEmailOTP, enrollTOTP, challengeAndVerifyTOTP, signOut, clearError } = useAuth();
+  const [showTOTPEnroll, setShowTOTPEnroll] = useState(false);
+  const [totpEnrolled, setTotpEnrolled] = useState(authState.isMfaEnrolled);
   const [emailInput, setEmailInput] = useState("");
   const [otpInput, setOtpInput] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -44,7 +44,12 @@ export default function AppSettingsPage() {
           Account
         </h2>
         <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)] space-y-4">
-          {authState.email ? (
+          {authState.isLoading ? (
+            <div className="flex items-center gap-3 py-2">
+              <div className="w-5 h-5 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-[var(--text-muted)]">Checking account...</p>
+            </div>
+          ) : authState.email ? (
             <>
               <div className="flex items-center justify-between">
                 <div>
@@ -253,32 +258,38 @@ export default function AppSettingsPage() {
         <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-[var(--text-primary)]">Passkey</p>
+              <p className="text-sm font-medium text-[var(--text-primary)]">Authenticator App</p>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                {passkeyEnrolled
-                  ? "Passkey enrolled — used for sensitive operations"
-                  : "Add a passkey for stronger identity verification"}
+                {totpEnrolled || authState.isMfaEnrolled
+                  ? "Authenticator enrolled — required for sensitive operations"
+                  : "Add two-factor authentication for stronger security (NIST AAL2)"}
               </p>
             </div>
             <button
-              onClick={() => setShowPasskeyEnroll(true)}
-              disabled={passkeyEnrolled}
+              onClick={() => setShowTOTPEnroll(true)}
+              disabled={totpEnrolled || authState.isMfaEnrolled}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                passkeyEnrolled
+                totpEnrolled || authState.isMfaEnrolled
                   ? "bg-green-500/10 text-green-600 cursor-default"
                   : "bg-[var(--accent-primary)] text-white hover:opacity-90"
               }`}
             >
-              {passkeyEnrolled ? "Enrolled" : "Set Up"}
+              {totpEnrolled || authState.isMfaEnrolled ? "Enrolled" : "Set Up"}
             </button>
           </div>
         </div>
       </section>
 
-      <PasskeyEnrollModal
-        open={showPasskeyEnroll}
-        onClose={() => setShowPasskeyEnroll(false)}
-        onSuccess={() => setPasskeyEnrolled(true)}
+      <TOTPEnrollModal
+        isOpen={showTOTPEnroll}
+        onClose={() => setShowTOTPEnroll(false)}
+        onEnrolled={() => setTotpEnrolled(true)}
+        onSkip={() => setShowTOTPEnroll(false)}
+        enrollTOTP={enrollTOTP}
+        challengeAndVerifyTOTP={challengeAndVerifyTOTP}
+        isLoading={authState.isLoading}
+        error={authState.error}
+        clearError={clearError}
       />
 
       {/* Privacy & Data */}

@@ -48,7 +48,7 @@ const DEFAULT_AUTH_STATE: AuthState = {
   appealCount: 0,
   trialStatus: "none",
   trialDaysRemaining: 0,
-  isLoading: false,
+  isLoading: true,
   error: null,
 };
 
@@ -64,7 +64,12 @@ export function useAuth(): UseAuthReturn {
           data: { session },
         } = await supabase.auth.getSession();
 
-        if (session?.user) {
+        if (!session?.user) {
+          setAuthState((prev) => ({ ...prev, isLoading: false }));
+          return;
+        }
+
+        {
           const email = session.user.email || null;
 
           // Check MFA status
@@ -171,6 +176,7 @@ export function useAuth(): UseAuthReturn {
         }
       } catch (error) {
         console.error("Error checking session:", error);
+        setAuthState((prev) => ({ ...prev, isLoading: false }));
       }
     };
 
@@ -191,7 +197,7 @@ export function useAuth(): UseAuthReturn {
               !!email && session.user.email_confirmed_at !== null,
           }));
         } else if (event === "SIGNED_OUT") {
-          setAuthState(DEFAULT_AUTH_STATE);
+          setAuthState({ ...DEFAULT_AUTH_STATE, isLoading: false });
         }
       }
     );

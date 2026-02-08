@@ -127,6 +127,7 @@ export async function POST(request: NextRequest) {
     if (sessionState.healthDataAvailable) {
       triggers.hasHealthData = true;
       triggers.hasRecentDenials = (sessionState.recentDenials?.length ?? 0) > 0;
+      triggers.hasRecentChanges = true; // MEDICARE_NOTIFICATIONS_SKILL uses FHIR context to determine what's new
     }
 
     // Diabetes context detection (from user keywords or FHIR data)
