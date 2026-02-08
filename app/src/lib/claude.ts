@@ -567,14 +567,23 @@ async function processToolCalls(
   return results;
 }
 
-// Timeout wrapper for API calls
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs / 1000}s`)), timeoutMs)
-    ),
-  ]);
+// Timeout wrapper for API calls — uses AbortController to actually cancel the request
+function withTimeout<T>(
+  promiseFactory: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  return promiseFactory(controller.signal).finally(() => clearTimeout(timer)).catch((err) => {
+    if (controller.signal.aborted) {
+      throw new Error(`${label} timed out after ${timeoutMs / 1000}s`);
+    }
+    throw err;
+  });
 }
 
 // Main chat function with tool calling loop
@@ -629,9 +638,9 @@ export async function chat(
     console.log("========================================");
 
     // Call Claude Beta API with MCP servers for direct LCD/NCD access
-    // Wrapped in timeout to prevent Vercel 504s
+    // Wrapped in timeout with AbortController to actually cancel hung requests
     const response: BetaMessage = await withTimeout(
-      claude.beta.messages.create({
+      (signal) => claude.beta.messages.create({
         model,
         max_tokens: API_CONFIG.claude.maxTokens,
         system: request.systemPrompt,
@@ -639,7 +648,7 @@ export async function chat(
         tools: anthropicTools.length > 0 ? anthropicTools : undefined,
         mcp_servers: MCP_SERVERS,
         betas: ["mcp-client-2025-04-04"],
-      }),
+      }, { signal }),
       timeoutMs,
       `Claude API iteration ${iterations}`
     );

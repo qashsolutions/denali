@@ -311,15 +311,17 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       if (data.conversationId && !currentConversationId) {
         currentConversationId = data.conversationId;
 
-        // Claim BEFORE setting state — setConversationId triggers sidebar refresh,
-        // which queries WHERE user_id = auth.uid(). Claim must complete first.
+        // Claim conversation in background — don't block message rendering
         if (userId) {
-          await claimConversation(data.conversationId).catch((err) =>
-            console.warn("Failed to claim conversation:", err)
-          );
+          claimConversation(data.conversationId)
+            .then(() => setConversationId(data.conversationId))
+            .catch((err) => {
+              console.warn("Failed to claim conversation:", err);
+              setConversationId(data.conversationId); // Set ID anyway so sidebar works
+            });
+        } else {
+          setConversationId(data.conversationId);
         }
-
-        setConversationId(data.conversationId);
       }
 
       // Update session state
@@ -335,7 +337,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         }).catch((err) => console.warn("Failed to save user message:", err));
       }
 
-      // Create assistant message
+      // Create assistant message and render IMMEDIATELY (don't block on DB save)
       const assistantMessage: Message = {
         id: generateId(),
         role: "assistant",
@@ -343,18 +345,21 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         timestamp: new Date(),
       };
 
-      // Save assistant message to database
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      // Save assistant message to database (non-blocking — UI already updated)
       if (currentConversationId) {
-        const savedMsgId = await saveMessage(currentConversationId, {
+        saveMessage(currentConversationId, {
           role: "assistant",
           content: assistantMessage.content,
-        });
-        if (savedMsgId) {
-          assistantMessage.id = savedMsgId;
-        }
+        }).then((savedMsgId) => {
+          if (savedMsgId) {
+            setMessages((prev) =>
+              prev.map((m) => m.id === assistantMessage.id ? { ...m, id: savedMsgId } : m)
+            );
+          }
+        }).catch((err) => console.warn("Failed to save assistant message:", err));
       }
-
-      setMessages((prev) => [...prev, assistantMessage]);
       setSuggestions(data.suggestions || []);
 
       // Capture appealId from API response
