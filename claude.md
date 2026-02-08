@@ -862,7 +862,7 @@ Server-side logs (Vercel Functions, not browser console):
 
 ```
 ANTHROPIC_API_KEY=sk-ant-api03-...
-ANTHROPIC_MODEL=claude-opus-4-5-20251101
+ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
 BLUEBUTTON_CLIENT_ID=...          # CMS Blue Button OAuth client ID
 BLUEBUTTON_CLIENT_SECRET=...      # CMS Blue Button OAuth client secret
 BLUEBUTTON_BASE_URL=https://sandbox.bluebutton.cms.gov  # or production URL
