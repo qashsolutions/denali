@@ -32,6 +32,7 @@ export function AppHeader() {
     email: string;
     initial: string;
     lastSignIn: string | null;
+    planLabel: string;
   } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
@@ -40,18 +41,34 @@ export function AppHeader() {
   useEffect(() => {
     const supabase = createClient();
 
-    function updateUser(session: { user: { email?: string; user_metadata?: Record<string, string>; last_sign_in_at?: string } } | null) {
+    async function updateUser(session: { user: { id: string; email?: string; user_metadata?: Record<string, string>; last_sign_in_at?: string } } | null) {
       if (!session?.user) {
         setUserInfo(null);
         return;
       }
       const u = session.user;
       const name = u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "User";
+
+      // Fetch plan from users table (lightweight query)
+      const { data: profile } = await supabase
+        .from("users")
+        .select("plan")
+        .eq("id", u.id)
+        .single();
+
+      const planLabels: Record<string, string> = {
+        monthly: "Unlimited",
+        per_appeal: "Pay Per Appeal",
+        trial: "Trial",
+        free: "Free Plan",
+      };
+
       setUserInfo({
         displayName: name,
         email: u.email || "",
         initial: name.charAt(0).toUpperCase(),
         lastSignIn: u.last_sign_in_at || null,
+        planLabel: planLabels[profile?.plan || "free"] || "Free Plan",
       });
     }
 
@@ -146,7 +163,7 @@ export function AppHeader() {
 
                 {/* Account popover */}
                 {accountOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-72 rounded-xl bg-[var(--bg-primary)] border border-[var(--border)] shadow-xl overflow-hidden z-50">
+                  <div className="absolute right-0 top-full mt-2 w-72 rounded-xl bg-[var(--bg-primary)] border border-[var(--border)] shadow-xl overflow-hidden z-50 animate-popover-in">
                     {/* Header */}
                     <div className="px-5 pt-5 pb-4 text-center">
                       <p className="text-xs text-[var(--text-muted)] mb-3">
@@ -158,8 +175,11 @@ export function AppHeader() {
                       <p className="text-lg font-semibold text-[var(--text-primary)]">
                         Hi, {userInfo.displayName}!
                       </p>
+                      <span className="inline-block mt-2 px-3 py-0.5 rounded-full text-xs font-medium bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]">
+                        {userInfo.planLabel}
+                      </span>
                       {userInfo.lastSignIn && (
-                        <p className="text-xs italic text-[var(--text-muted)] mt-1">
+                        <p className="text-xs italic text-[var(--text-muted)] mt-2">
                           Last signed in {formatRelativeTime(userInfo.lastSignIn)}
                         </p>
                       )}
@@ -222,7 +242,7 @@ export function AppHeader() {
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-[var(--bg-primary)] border border-[var(--border)] shadow-lg overflow-hidden">
+                <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-[var(--bg-primary)] border border-[var(--border)] shadow-lg overflow-hidden animate-popover-in">
                   {NAV_ITEMS.map(({ label, href, Icon, color }) => (
                     <Link
                       key={href}
