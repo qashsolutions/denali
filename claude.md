@@ -50,6 +50,7 @@
 12. [Learning System](#learning-system)
 13. [Coding Standards](#coding-standards)
 14. [MCP Integration](#mcp-integration)
+15. [CMS Interoperability Framework](#cms-interoperability-framework)
 
 ---
 
@@ -778,3 +779,113 @@ Server-side logs (Vercel Functions, not browser console):
 ANTHROPIC_API_KEY=sk-ant-api03-...
 ANTHROPIC_MODEL=claude-opus-4-5-20251101
 ```
+
+---
+
+## CMS Interoperability Framework
+
+**Sources**:
+- Framework (26 network criteria): https://www.cms.gov/health-technology-ecosystem/interoperability-framework
+- Categories (app-specific pledges): https://www.cms.gov/health-technology-ecosystem/categories
+- Early adopters: https://www.cms.gov/health-tech-ecosystem/early-adopters
+- Pledge form: https://surveys.cms.gov/jfe/form/SV_6SbVcS5IOqXXOnk
+
+Denali participates as a **Patient-Facing App** under two CMS early adopter categories:
+1. **Conversational AI Assistants** — Ask Denali (chat)
+2. **Diabetes & Obesity Prevention** — Diabetes Care feature
+
+**Key rule**: "You must meet the FULL list of criteria to be considered in this category." This means ALL 6 overall app criteria + ALL category-specific criteria.
+
+### Patient-Facing App Criteria (ALL Apps — 6 Requirements)
+
+These apply to Denali regardless of category. Source: categories page.
+
+| # | Requirement | Denali Status |
+|---|-------------|---------------|
+| **A1** | **IAL2/AAL2 identity verification** — via intermediary PHR app or CMS-approved service (passkeys, mDLs) | **GAP.** Currently email/phone OTP only. Need: passkey (WebAuthn) support |
+| **A2** | **Medicare.gov connectivity** — notify Medicare beneficiaries of communications (notices, EOBs, fraud alerts) | **GAP.** Not implemented. Need: Medicare.gov notification bridge |
+| **A3** | **CMS review participation** — disclose data sources, terms/agreements, complete basic security checklist | **GAP.** Need: prepare data source inventory, terms doc, security checklist |
+| **A4** | **Trial access for Medicare patients** if app charges a fee | **PARTIAL.** First 3 appeals free. CMS may expect broader trial (30 days?). Formalize as "30-day free trial" |
+| **A5** | **CMS discovery experience** — allow app to be listed as recommended option on Medicare.gov | **GAP.** Need: prepare app listing, metadata, description for CMS app directory |
+| **A6** | **HIPAA compliance** when provided by a covered entity or business associate | **IN PROGRESS.** Need: BAA with Supabase/Vercel, HIPAA compliance documentation |
+
+### Conversational AI — Additional Criteria
+
+| Requirement | Denali Status |
+|-------------|---------------|
+| Personalized AI support across clinical record — symptom checking, care planning, coordination, chronic disease | **DONE.** Core product functionality |
+| Must connect to CMS Aligned Network directly OR via personal health record app | **PARTIAL.** Blue Button 2.0 (PHR path). Future: direct CMS Aligned Network |
+| Responses must clearly indicate AI-generated + disclaimers when not replacing clinical judgment | **DONE.** SparkleIcon + "AI-generated · Not medical advice" on all assistant messages |
+| Clearly distinguish educational content from clinical guidance; guide to health professional when needed | **DONE.** Coverage guidance framing + "talk to your doctor" patterns in skills |
+
+### Diabetes & Obesity — Additional Criteria
+
+| Requirement | Denali Status |
+|-------------|---------------|
+| Must connect to CMS Aligned Network directly or via PHR app | **PARTIAL.** Blue Button path exists. Feature not yet live |
+| Use clinical record for personalized coaching, reminders, risk alerts | **NOT YET.** Diabetes page is placeholder. Need: lab trend analysis, coaching AI |
+| Support both prevention AND active management (meds, lab trends, nutrition/activity) | **NOT YET.** Need: full diabetes feature implementation |
+| Must specifically provide resources for pre-Diabetic patients | **NOT YET.** Need: MDPP resources, pre-diabetes screening/guidance |
+| HIPAA compliance | Same as A6 above |
+
+### Framework Section I: Patient Access & Empowerment
+
+These are network-level criteria but affect how Denali interacts with CMS Aligned Networks.
+
+| Criterion | Requirement | Denali Impact |
+|-----------|-------------|---------------|
+| **1 — Universal Data Access** | Patients access electronic medical info via apps of their choice | Blue Button 2.0 (done). Future: CMS Aligned Network connectivity |
+| **2 — Claims & Benefits** | Access claims, EOBs, prior auths, clinical data from payers | Health page shows claims. Need: EOB detail, prior auth history |
+| **3 — Simplified Identity** | IAL2/AAL2 credentials, no extra logins | See A1 above |
+| **4 — Audit Log Transparency** | Accounting of all data access — who, when, why | **NOT IMPLEMENTED.** Need: `audit_logs` table + patient-facing viewer |
+| **5 — Consent Preferences** | Patient consent preferences shared with all parties; honor restrictions | **NOT IMPLEMENTED.** Need: consent preferences UI + enforcement layer |
+
+### Framework Section V: Identity, Security & Trust
+
+| Criterion | Requirement | Denali Impact |
+|-----------|-------------|---------------|
+| **22 — Request Purpose** | All queries include purpose code | Need: tag FHIR/data requests with purpose |
+| **23 — Digital Credentials** | Accept IAL2/AAL2 via CMS-approved service | See A1 above |
+| **24 — Access Control** | Enforce access control + consent policy per context | Need: context-aware consent enforcement |
+| **25 — Audit Records** | Verifiable logs for all auth requests/responses | See Criterion 4 above |
+| **26 — Security Validation** | HITRUST certification or CMS-approved equivalent | **REQUIRED.** Org-level process |
+
+### Framework Sections II–IV (Reference)
+
+| Section | Focus | Key Deadlines |
+|---------|-------|--------------|
+| **II — Provider Access** | Provider delegation, quality gap queries, 60-day claims encounter access | — |
+| **III — Data Standards** | USCDI v3, FHIR APIs (US Core IG), LOINC/RxNorm/SNOMED, FHIR subscriptions | **July 4, 2026**: FHIR API mandate |
+| **IV — Network Connectivity** | CMS National Provider Directory, inter-network queries, metrics reporting | — |
+
+### CMS Pledges (Implemented)
+
+Pledge text displayed via `CmsPledge` component (`src/components/ui/CmsPledge.tsx`):
+- **AI Assistant pledge**: shown on Ask Denali (chat) page, above input
+- **Diabetes & Obesity pledge**: shown on Diabetes Care page, below feature preview
+
+### Compliance Gap Summary — Full Picture
+
+| Gap | CMS Ref | Priority | Scope | Type |
+|-----|---------|----------|-------|------|
+| **Audit logging** | Criteria 4, 25 | **P0** | DB table + API middleware + patient "Activity Log" in Settings | Code + DB |
+| **Consent preferences** | Criterion 5 | **P0** | Settings UI + `consent_preferences` table + enforcement in FHIR pipeline | Code + DB |
+| **Passkey/IAL2 auth** | A1, Criteria 3, 23 | **P0** | WebAuthn registration/login + CMS credential service integration | Code |
+| **HIPAA compliance** | A6 | **P0** | BAAs with Supabase/Vercel, compliance documentation, breach notification plan | Process |
+| **HITRUST certification** | Criterion 26 | **P0** | Org-level security certification process | Process |
+| **30-day free trial** | A4 | **P1** | Formalize trial period, update paywall logic, surface in onboarding | Code |
+| **CMS review prep** | A3 | **P1** | Data source inventory doc, terms of service, security self-assessment checklist | Docs |
+| **Medicare.gov notifications** | A2 | **P1** | Integration with Medicare.gov communication system | Code + API |
+| **CMS app directory listing** | A5 | **P1** | App metadata, screenshots, description for Medicare.gov discovery | Docs |
+| **Request purpose tagging** | Criterion 22 | **P1** | Tag all FHIR/data requests with purpose code | Code |
+| **Pre-diabetic resources** | Diabetes criteria | **P2** | MDPP content, pre-diabetes screening, A1C risk thresholds | Content + Code |
+| **Diabetes feature build-out** | Diabetes criteria | **P2** | Lab trends, coaching AI, med reminders, nutrition/activity tracking | Code |
+| **EOB detail & prior auth history** | Criterion 2 | **P2** | Extend Blue Button data transforms | Code |
+| **FHIR USCDI v3 compliance** | Criterion 13 | **P2** | Verify Blue Button data maps to USCDI v3 by July 2026 | Code |
+
+### Key Dates
+
+| Date | Milestone |
+|------|-----------|
+| **Q1 2026** | CMS early adopter showcase target |
+| **July 4, 2026** | FHIR API mandate (Criteria 13–16) |
