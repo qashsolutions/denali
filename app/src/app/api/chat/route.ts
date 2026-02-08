@@ -14,6 +14,19 @@
 // Pro plan max is 300s. Our per-iteration timeout (60s) handles graceful failure.
 export const maxDuration = 300;
 
+/** Race a promise against a timeout. Returns fallback on timeout instead of throwing. */
+function withFallback<T>(promise: Promise<T>, timeoutMs: number, fallback: T, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) =>
+      setTimeout(() => {
+        console.warn(`[Chat API] ${label} timed out after ${timeoutMs / 1000}s, using fallback`);
+        resolve(fallback);
+      }, timeoutMs)
+    ),
+  ]);
+}
+
 import { NextRequest, NextResponse } from "next/server";
 import {
   chat,
@@ -23,6 +36,7 @@ import {
   type SessionState,
 } from "@/lib/claude";
 import {
+  buildSystemPrompt,
   buildSystemPromptWithLearning,
   detectTriggers,
   extractEntitiesFromMessages,
@@ -98,10 +112,12 @@ export async function POST(request: NextRequest) {
     const triggers = detectTriggers(body.messages, sessionState);
 
     // Check for unreported outcomes (only on first message of session)
+    // 5s timeout: non-critical data, don't let it block the response
     if (body.messages.length <= 2 && sessionState.userName) {
       try {
-        const unreported = await getUnreportedOutcome(
-          body.sessionState?.email ?? null
+        const unreported = await withFallback(
+          getUnreportedOutcome(body.sessionState?.email ?? null),
+          5000, null, "getUnreportedOutcome"
         );
         if (unreported) {
           triggers.hasUnreportedOutcome = true;
@@ -149,10 +165,11 @@ export async function POST(request: NextRequest) {
 
     // Build dynamic system prompt with learning context (async)
     // This injects learned symptom/procedure mappings and successful coverage paths
-    const systemPrompt = await buildSystemPromptWithLearning(
-      triggers,
-      sessionState,
-      body.messages
+    // 10s timeout: learning context is additive — base prompt works without it
+    const basePrompt = buildSystemPrompt(triggers, sessionState);
+    const systemPrompt = await withFallback(
+      buildSystemPromptWithLearning(triggers, sessionState, body.messages),
+      10_000, basePrompt, "buildSystemPromptWithLearning"
     );
     console.log("[Chat API] System prompt length:", systemPrompt.length);
 
