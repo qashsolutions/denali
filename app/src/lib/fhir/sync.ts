@@ -15,10 +15,14 @@ import {
   transformCoverage,
   transformEOB,
   extractDiabetesLabs,
+  extractDiabetesConditions,
+  extractDiabetesMedications,
   type PatientSummary,
   type CoverageSummary,
   type ClaimSummary,
   type LabResult,
+  type DiagnosisSummary,
+  type MedicationSummary,
 } from "./transforms";
 
 export interface HealthData {
@@ -26,6 +30,8 @@ export interface HealthData {
   coverage: CoverageSummary[];
   claims: ClaimSummary[];
   labs: LabResult[];
+  conditions: DiagnosisSummary[];
+  medications: MedicationSummary[];
   lastSynced: string | null;
 }
 
@@ -42,8 +48,8 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
-  // Fetch Patient, Coverage, EOBs, and Observations in parallel
-  const [patientRaw, coverageRaw, eobsRaw, observationsRaw] = await Promise.all([
+  // Fetch Patient, Coverage, EOBs, Observations, Conditions, Medications in parallel
+  const [patientRaw, coverageRaw, eobsRaw, observationsRaw, conditionsRaw, medsRaw] = await Promise.all([
     fhirPatientId
       ? fhirGet<Record<string, unknown>>(`Patient/${fhirPatientId}`, accessToken)
       : fhirGet<Record<string, unknown>>("Patient", accessToken),
@@ -58,6 +64,16 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
       accessToken,
       1 // 1 page — lab results are typically small
     ).catch(() => [] as Record<string, unknown>[]), // Graceful: labs are optional
+    fhirGetBundle<Record<string, unknown>>(
+      "Condition?category=encounter-diagnosis",
+      accessToken,
+      1
+    ).catch(() => [] as Record<string, unknown>[]), // Graceful: conditions are optional
+    fhirGetBundle<Record<string, unknown>>(
+      "MedicationRequest?_sort=-date&_count=50",
+      accessToken,
+      1
+    ).catch(() => [] as Record<string, unknown>[]), // Graceful: medications are optional
   ]);
 
   // Transform
@@ -69,6 +85,10 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
   const claims = eobsRaw.map((e) => transformEOB(e as any));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const labs = extractDiabetesLabs(observationsRaw as any[]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const conditions = extractDiabetesConditions(conditionsRaw as any[]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const medications = extractDiabetesMedications(medsRaw as any[]);
 
   // Cache transformed data (upsert per resource type)
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -90,6 +110,14 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
       { user_id: userId, resource_type: "labs", data: labs as unknown as Json, cached_at: now, expires_at: expires },
       { onConflict: "user_id,resource_type" }
     ),
+    admin.from("fhir_cache").upsert(
+      { user_id: userId, resource_type: "conditions", data: conditions as unknown as Json, cached_at: now, expires_at: expires },
+      { onConflict: "user_id,resource_type" }
+    ),
+    admin.from("fhir_cache").upsert(
+      { user_id: userId, resource_type: "medications", data: medications as unknown as Json, cached_at: now, expires_at: expires },
+      { onConflict: "user_id,resource_type" }
+    ),
   ]);
 
   // Update last_synced_at on the connection
@@ -99,7 +127,7 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
     .eq("user_id", userId)
     .eq("provider", "bluebutton");
 
-  return { patient, coverage, claims, labs, lastSynced: now };
+  return { patient, coverage, claims, labs, conditions, medications, lastSynced: now };
 }
 
 /**
@@ -119,6 +147,8 @@ export async function getCachedHealthData(userId: string): Promise<HealthData | 
   let coverage: CoverageSummary[] = [];
   let claims: ClaimSummary[] = [];
   let labs: LabResult[] = [];
+  let conditions: DiagnosisSummary[] = [];
+  let medications: MedicationSummary[] = [];
   let lastSynced: string | null = null;
 
   for (const row of rows) {
@@ -133,6 +163,10 @@ export async function getCachedHealthData(userId: string): Promise<HealthData | 
       claims = row.data as unknown as ClaimSummary[];
     } else if (row.resource_type === "labs") {
       labs = row.data as unknown as LabResult[];
+    } else if (row.resource_type === "conditions") {
+      conditions = row.data as unknown as DiagnosisSummary[];
+    } else if (row.resource_type === "medications") {
+      medications = row.data as unknown as MedicationSummary[];
     }
 
     if (row.cached_at && (!lastSynced || row.cached_at > lastSynced)) {
@@ -142,6 +176,6 @@ export async function getCachedHealthData(userId: string): Promise<HealthData | 
 
   if (!patient && coverage.length === 0 && claims.length === 0) return null;
 
-  return { patient, coverage, claims, labs, lastSynced };
+  return { patient, coverage, claims, labs, conditions, medications, lastSynced };
 }
 

@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { Message } from "@/types";
 import type { ChecklistData } from "@/components/chat/PrintableChecklist";
-import type { SessionState } from "@/lib/claude";
+import { type SessionState, createDefaultSessionState } from "@/lib/claude";
 import { MEDICARE_CONSTANTS } from "@/config";
 import {
   saveMessage,
@@ -27,6 +27,7 @@ export interface UseChatOptions {
   conversationId?: string;
   userId?: string;
   initialMessages?: Message[];
+  initialSessionState?: Partial<SessionState>;
   onError?: (error: Error) => void;
 }
 
@@ -162,12 +163,28 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const [currentAction, setCurrentAction] = useState<ChatAction>({ type: "none" });
   const [checklistData, setChecklistData] = useState<ChecklistData | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [sessionState, setSessionState] = useState<SessionState | null>(null);
+  const [sessionState, setSessionState] = useState<SessionState | null>(
+    options.initialSessionState
+      ? { ...createDefaultSessionState(), ...options.initialSessionState }
+      : null
+  );
   const [appealData, setAppealData] = useState<AppealLetterData | null>(null);
   const [appealId, setAppealId] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const loadedConversationRef = useRef<string | null>(null);
+
+  // Sync initialSessionState when health data loads asynchronously.
+  // Only merge if no messages sent yet (to avoid overwriting server-returned state).
+  useEffect(() => {
+    if (options.initialSessionState && messages.length === 0) {
+      setSessionState(prev => {
+        // Don't overwrite if server already returned a richer state
+        if (prev && prev.userName) return prev;
+        return { ...createDefaultSessionState(), ...prev, ...options.initialSessionState };
+      });
+    }
+  }, [options.initialSessionState, messages.length]);
 
   // Load existing conversation if ID provided (or changed via sidebar click)
   useEffect(() => {

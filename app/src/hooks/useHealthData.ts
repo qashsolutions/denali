@@ -8,13 +8,22 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import type { PatientSummary, CoverageSummary, ClaimSummary, LabResult } from "@/lib/fhir/transforms";
+import type {
+  PatientSummary,
+  CoverageSummary,
+  ClaimSummary,
+  LabResult,
+  DiagnosisSummary,
+  MedicationSummary,
+} from "@/lib/fhir/transforms";
 
 interface UseHealthDataReturn {
   patient: PatientSummary | null;
   coverage: CoverageSummary[];
   claims: ClaimSummary[];
   labs: LabResult[];
+  conditions: DiagnosisSummary[];
+  medications: MedicationSummary[];
   isConnected: boolean;
   isLoading: boolean;
   lastSynced: Date | null;
@@ -29,6 +38,8 @@ export function useHealthData(): UseHealthDataReturn {
   const [coverage, setCoverage] = useState<CoverageSummary[]>([]);
   const [claims, setClaims] = useState<ClaimSummary[]>([]);
   const [labs, setLabs] = useState<LabResult[]>([]);
+  const [conditions, setConditions] = useState<DiagnosisSummary[]>([]);
+  const [medications, setMedications] = useState<MedicationSummary[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
@@ -52,6 +63,8 @@ export function useHealthData(): UseHealthDataReturn {
       setCoverage(data.coverage ?? []);
       setClaims(data.claims ?? []);
       setLabs(data.labs ?? []);
+      setConditions(data.conditions ?? []);
+      setMedications(data.medications ?? []);
       setLastSynced(data.lastSynced ? new Date(data.lastSynced) : null);
     } catch {
       setError("Unable to connect. Please try again.");
@@ -78,6 +91,8 @@ export function useHealthData(): UseHealthDataReturn {
         setCoverage([]);
         setClaims([]);
         setLabs([]);
+        setConditions([]);
+        setMedications([]);
         setLastSynced(null);
       }
     } catch {
@@ -94,6 +109,8 @@ export function useHealthData(): UseHealthDataReturn {
     coverage,
     claims,
     labs,
+    conditions,
+    medications,
     isConnected,
     isLoading,
     lastSynced,

@@ -4,3 +4,7 @@ export { CoverageCards } from "./CoverageCards";
 export { ClaimsList } from "./ClaimsList";
 export { ClaimDetail } from "./ClaimDetail";
 export { ConnectionStatus } from "./ConnectionStatus";
+export { LabResultsCard } from "./LabResultsCard";
+export { ConditionsCard } from "./ConditionsCard";
+export { MedicationsCard } from "./MedicationsCard";
+export { PreDiabetesRiskCard } from "./PreDiabetesRiskCard";

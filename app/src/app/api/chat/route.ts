@@ -130,8 +130,10 @@ export async function POST(request: NextRequest) {
       triggers.hasRecentChanges = true; // MEDICARE_NOTIFICATIONS_SKILL uses FHIR context to determine what's new
     }
 
-    // Diabetes context detection (from FHIR labs or user keywords)
-    if (sessionState.labs && sessionState.labs.length > 0) {
+    // Diabetes context detection (from FHIR conditions, labs, or user keywords)
+    if (sessionState.conditions?.some(c => ["type1", "type2", "pre-diabetic", "other-diabetes", "obesity"].includes(c.category))) {
+      triggers.hasDiabetesContext = true;
+    } else if (sessionState.labs && sessionState.labs.length > 0) {
       triggers.hasDiabetesContext = true;
     } else {
       const userContent = body.messages

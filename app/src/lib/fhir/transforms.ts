@@ -233,7 +233,48 @@ const DIABETES_LOINC: Record<string, string> = {
   "2339-0": "Glucose (Random)",
   "14771-0": "Fasting Glucose",
   "59261-8": "Hemoglobin A1C (IFCC)",
+  "39156-5": "BMI",
+  "55284-4": "Blood Pressure (Systolic)",
+  "8462-4": "Blood Pressure (Diastolic)",
+  "1558-6": "Fasting Glucose (Alt)",
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Condition & Medication Types (CMS Diabetes & Obesity)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface DiagnosisSummary {
+  code: string;        // ICD-10 (e.g., "E11.9")
+  name: string;        // "Type 2 diabetes mellitus"
+  category: "type1" | "type2" | "pre-diabetic" | "other-diabetes" | "obesity" | "other";
+  recordedDate: string;
+}
+
+export interface MedicationSummary {
+  name: string;         // "Metformin 500mg"
+  status: string;       // "Active", "Completed", "Stopped"
+  dosage: string;       // "500mg twice daily"
+  startDate: string;
+  isDiabetesMed: boolean;
+}
+
+interface FhirCondition {
+  resourceType: "Condition";
+  code?: { coding?: Array<{ system?: string; code?: string; display?: string }> };
+  clinicalStatus?: { coding?: Array<{ code?: string }> };
+  onsetDateTime?: string;
+  recordedDate?: string;
+}
+
+interface FhirMedicationRequest {
+  resourceType: "MedicationRequest";
+  medicationCodeableConcept?: { coding?: Array<{ system?: string; code?: string; display?: string }>; text?: string };
+  status?: string;
+  dosageInstruction?: Array<{ text?: string }>;
+  authoredOn?: string;
+}
+
+export type DiabetesClassification = "diabetic" | "pre-diabetic" | "at-risk" | "none";
 
 export function extractDiabetesLabs(observations: FhirObservation[]): LabResult[] {
   const results: LabResult[] = [];
@@ -258,6 +299,164 @@ export function extractDiabetesLabs(observations: FhirObservation[]): LabResult[
 
   // Sort by date descending (most recent first)
   return results.sort((a, b) => (b.date > a.date ? 1 : -1));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Condition Extraction (Diabetes / Obesity diagnoses)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** ICD-10 prefix → category mapping for diabetes-related conditions */
+const DIABETES_ICD10_PREFIXES: Array<[string, DiagnosisSummary["category"]]> = [
+  ["E10", "type1"],
+  ["E11", "type2"],
+  ["E13", "other-diabetes"],
+  ["R73.03", "pre-diabetic"],
+  ["R73.09", "pre-diabetic"],
+  ["E66", "obesity"],
+];
+
+export function extractDiabetesConditions(conditions: FhirCondition[]): DiagnosisSummary[] {
+  const results: DiagnosisSummary[] = [];
+
+  for (const cond of conditions) {
+    // Skip resolved/inactive
+    const clinicalStatus = cond.clinicalStatus?.coding?.[0]?.code;
+    if (clinicalStatus === "resolved" || clinicalStatus === "inactive") continue;
+
+    for (const coding of cond.code?.coding ?? []) {
+      const code = coding.code ?? "";
+      const display = coding.display ?? code;
+
+      // Match diabetes-related ICD-10 codes
+      const match = DIABETES_ICD10_PREFIXES.find(([prefix]) => code.startsWith(prefix));
+      if (match) {
+        results.push({
+          code,
+          name: display,
+          category: match[1],
+          recordedDate: cond.recordedDate
+            ? formatDate(cond.recordedDate)
+            : cond.onsetDateTime
+            ? formatDate(cond.onsetDateTime)
+            : "Unknown",
+        });
+        break; // One match per condition
+      }
+    }
+  }
+
+  return results;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Medication Extraction (Diabetes drugs)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Drug class keywords for diabetes medications */
+const DIABETES_DRUG_PATTERNS = /metformin|insulin|glipizide|glyburide|glimepiride|pioglitazone|rosiglitazone|sitagliptin|saxagliptin|linagliptin|alogliptin|canagliflozin|dapagliflozin|empagliflozin|ertugliflozin|liraglutide|semaglutide|dulaglutide|exenatide|tirzepatide|acarbose|miglitol|nateglinide|repaglinide|colesevelam|bromocriptine|pramlintide/i;
+
+export function extractDiabetesMedications(medRequests: FhirMedicationRequest[]): MedicationSummary[] {
+  const results: MedicationSummary[] = [];
+
+  for (const med of medRequests) {
+    const display = med.medicationCodeableConcept?.text
+      ?? med.medicationCodeableConcept?.coding?.[0]?.display
+      ?? med.medicationCodeableConcept?.coding?.[0]?.code
+      ?? "";
+
+    if (!display) continue;
+
+    const isDiabetesMed = DIABETES_DRUG_PATTERNS.test(display);
+    const status = med.status === "active" ? "Active"
+      : med.status === "completed" ? "Completed"
+      : capitalize(med.status ?? "Unknown");
+
+    results.push({
+      name: display,
+      status,
+      dosage: med.dosageInstruction?.[0]?.text ?? "",
+      startDate: med.authoredOn ? formatDate(med.authoredOn) : "Unknown",
+      isDiabetesMed,
+    });
+  }
+
+  // Diabetes meds first, then alphabetical
+  return results.sort((a, b) => {
+    if (a.isDiabetesMed !== b.isDiabetesMed) return a.isDiabetesMed ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Diabetes Classification
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function classifyDiabetesStatus(
+  conditions: DiagnosisSummary[],
+  labs: LabResult[],
+  medications: MedicationSummary[]
+): { classification: DiabetesClassification; evidence: string[] } {
+  const evidence: string[] = [];
+
+  // 1. Explicit diabetes diagnosis
+  const diabetesDx = conditions.find(c => c.category === "type1" || c.category === "type2" || c.category === "other-diabetes");
+  if (diabetesDx) {
+    evidence.push(`Diagnosis: ${diabetesDx.name} (${diabetesDx.code})`);
+    return { classification: "diabetic", evidence };
+  }
+
+  // 2. Lab values indicating diabetes
+  const latestA1C = labs.find(l => l.name.toLowerCase().includes("a1c"));
+  const latestFastingGlucose = labs.find(l =>
+    l.name.toLowerCase().includes("fasting") && l.name.toLowerCase().includes("glucose")
+  );
+
+  if (latestA1C && latestA1C.value >= 6.5) {
+    evidence.push(`A1C: ${latestA1C.value}% (diabetic range)`);
+    return { classification: "diabetic", evidence };
+  }
+  if (latestFastingGlucose && latestFastingGlucose.value >= 126) {
+    evidence.push(`Fasting glucose: ${latestFastingGlucose.value} mg/dL (diabetic range)`);
+    return { classification: "diabetic", evidence };
+  }
+
+  // 3. Explicit pre-diabetes diagnosis
+  const preDiabetesDx = conditions.find(c => c.category === "pre-diabetic");
+  if (preDiabetesDx) {
+    evidence.push(`Diagnosis: ${preDiabetesDx.name} (${preDiabetesDx.code})`);
+    return { classification: "pre-diabetic", evidence };
+  }
+
+  // 4. Lab values indicating pre-diabetes
+  if (latestA1C && latestA1C.value >= 5.7) {
+    evidence.push(`A1C: ${latestA1C.value}% (pre-diabetic range)`);
+    return { classification: "pre-diabetic", evidence };
+  }
+  if (latestFastingGlucose && latestFastingGlucose.value >= 100) {
+    evidence.push(`Fasting glucose: ${latestFastingGlucose.value} mg/dL (pre-diabetic range)`);
+    return { classification: "pre-diabetic", evidence };
+  }
+
+  // 5. Active diabetes medication but no diagnosis → infer diabetic
+  const activeDiabetesMed = medications.find(m => m.isDiabetesMed && m.status === "Active");
+  if (activeDiabetesMed) {
+    evidence.push(`Active diabetes medication: ${activeDiabetesMed.name}`);
+    return { classification: "diabetic", evidence };
+  }
+
+  // 6. At-risk indicators (BMI >= 25, obesity diagnosis)
+  const bmi = labs.find(l => l.name === "BMI");
+  const obesityDx = conditions.find(c => c.category === "obesity");
+  if (bmi && bmi.value >= 25) {
+    evidence.push(`BMI: ${bmi.value} (overweight/obese)`);
+    return { classification: "at-risk", evidence };
+  }
+  if (obesityDx) {
+    evidence.push(`Diagnosis: ${obesityDx.name}`);
+    return { classification: "at-risk", evidence };
+  }
+
+  return { classification: "none", evidence: ["No diabetes indicators found"] };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

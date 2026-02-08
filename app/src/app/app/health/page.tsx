@@ -10,6 +10,9 @@ import {
   CoverageCards,
   ClaimsList,
   ConnectionStatus,
+  LabResultsCard,
+  ConditionsCard,
+  MedicationsCard,
 } from "@/components/health";
 
 export default function HealthPage() {
@@ -26,6 +29,9 @@ function HealthPageInner() {
     patient,
     coverage,
     claims,
+    labs,
+    conditions,
+    medications,
     isConnected,
     isLoading,
     lastSynced,
@@ -142,6 +148,12 @@ function HealthPageInner() {
         {patient && <PatientCard patient={patient} />}
 
         <CoverageCards coverage={coverage} />
+
+        <LabResultsCard labs={labs} />
+
+        <ConditionsCard conditions={conditions} />
+
+        <MedicationsCard medications={medications} />
 
         <ClaimsList claims={claims} />
 

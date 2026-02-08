@@ -48,6 +48,52 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
     lines.push("");
   }
 
+  // Diabetes conditions
+  if (sessionState.conditions && sessionState.conditions.length > 0) {
+    lines.push("**Diabetes Diagnoses:**");
+    for (const cond of sessionState.conditions) {
+      lines.push(`- ${cond.name} (${cond.code}) — ${cond.category}`);
+    }
+    lines.push("");
+  }
+
+  // Active medications
+  if (sessionState.medications && sessionState.medications.length > 0) {
+    const diabetesMeds = sessionState.medications.filter(m => m.isDiabetesMed);
+    const otherActiveMeds = sessionState.medications.filter(m => !m.isDiabetesMed && m.status === "Active");
+
+    if (diabetesMeds.length > 0) {
+      lines.push("**Active Diabetes Medications:**");
+      for (const med of diabetesMeds) {
+        lines.push(`- ${med.name} (${med.status})`);
+      }
+      lines.push("");
+    }
+    if (otherActiveMeds.length > 0) {
+      lines.push(`**Other Active Medications:** ${otherActiveMeds.length} non-diabetes medications`);
+      lines.push("");
+    }
+  }
+
+  // Diabetes classification
+  if (sessionState.diabetesClassification) {
+    const classLabel = {
+      "diabetic": "Diabetic",
+      "pre-diabetic": "Pre-Diabetic",
+      "at-risk": "At Risk for Diabetes",
+      "none": "No diabetes indicators",
+    }[sessionState.diabetesClassification];
+    lines.push(`**Diabetes Classification:** ${classLabel}`);
+    if (sessionState.diabetesClassification === "diabetic") {
+      lines.push("**ACTION:** Focus on management optimization. Check if using all Medicare-covered benefits (DSMT, supplies, MNT).");
+    } else if (sessionState.diabetesClassification === "pre-diabetic") {
+      lines.push("**ACTION:** Focus on prevention. Recommend MDPP enrollment. Lifestyle coaching.");
+    } else if (sessionState.diabetesClassification === "at-risk") {
+      lines.push("**ACTION:** Recommend screening. Suggest diabetes risk assessment.");
+    }
+    lines.push("");
+  }
+
   // Recent denials
   if (sessionState.recentDenials && sessionState.recentDenials.length > 0) {
     lines.push("**Recent Denied Claims (proactively offer appeal help):**");

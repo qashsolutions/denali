@@ -34,7 +34,7 @@ export async function GET() {
     const connected = await hasActiveConnection(user.id);
     if (!connected) {
       return NextResponse.json(
-        { connected: false, patient: null, coverage: [], claims: [] }
+        { connected: false, patient: null, coverage: [], claims: [], labs: [], conditions: [], medications: [] }
       );
     }
 

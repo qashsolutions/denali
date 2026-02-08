@@ -132,6 +132,17 @@ export interface SessionState {
     unit: string;
     date: string;
   }>;
+  conditions?: Array<{                          // Diabetes-related diagnoses from FHIR Conditions
+    code: string;
+    name: string;
+    category: string;
+  }>;
+  medications?: Array<{                         // Medications from FHIR MedicationRequests
+    name: string;
+    status: string;
+    isDiabetesMed: boolean;
+  }>;
+  diabetesClassification?: "diabetic" | "pre-diabetic" | "at-risk" | "none";
 
   // Consent (set by client from useConsent hook)
   consentHealthDataAi?: boolean;               // Whether user consents to health data in AI

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useCallback, useState } from "react";
+import { Suspense, useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Container } from "@/components/layout/Container";
 import { Sidebar, SidebarToggle } from "@/components/layout/Sidebar";
@@ -16,6 +16,9 @@ import {
 import { CmsPledge } from "@/components/ui";
 import { useChat } from "@/hooks/useChat";
 import { useAuth } from "@/hooks/useAuth";
+import { useHealthData } from "@/hooks/useHealthData";
+import { classifyDiabetesStatus } from "@/lib/fhir/transforms";
+import type { SessionState } from "@/lib/claude";
 
 
 function ChatContent() {
@@ -28,6 +31,33 @@ function ChatContent() {
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paymentToast, setPaymentToast] = useState<string | null>(null);
+
+  // Health data → sessionState bridge
+  const { coverage, claims, labs, conditions, medications, isConnected } = useHealthData();
+
+  const initialSessionState = useMemo(() => {
+    if (!isConnected) return undefined;
+
+    const conditionsForState = conditions.map(c => ({ code: c.code, name: c.name, category: c.category }));
+    const medsForState = medications.map(m => ({ name: m.name, status: m.status, isDiabetesMed: m.isDiabetesMed }));
+
+    const { classification: diabetesClassification } = classifyDiabetesStatus(conditions, labs, medications);
+
+    return {
+      healthDataAvailable: true,
+      activeCoverage: coverage.filter(c => c.status === "Active").map(c => c.type),
+      recentDenials: claims.filter(c => c.status === "Denied").slice(0, 5).map(c => ({
+        serviceDate: c.serviceDate,
+        procedure: c.procedures[0] || c.type,
+        denialCode: c.carcCodes?.[0] || "",
+        denialReason: c.denialReasons?.[0] || "Claim denied",
+      })),
+      labs: labs.map(l => ({ name: l.name, value: l.value, unit: l.unit, date: l.date })),
+      conditions: conditionsForState,
+      medications: medsForState,
+      diabetesClassification,
+    } satisfies Partial<SessionState>;
+  }, [isConnected, coverage, claims, labs, conditions, medications]);
 
   useEffect(() => {
     const payment = searchParams.get("payment");
@@ -46,6 +76,7 @@ function ChatContent() {
   }, [searchParams, router]);
 
   const urlConversationId = searchParams.get("id") || undefined;
+  const topic = searchParams.get("topic");
 
   const {
     messages,
@@ -66,10 +97,12 @@ function ChatContent() {
   } = useChat({
     conversationId: urlConversationId,
     userId: authState.userId || undefined,
+    initialSessionState,
   });
 
   useEffect(() => {
-    const initialMessage = searchParams.get("message");
+    // Support both ?message= and ?q= (backward compat from diabetes page)
+    const initialMessage = searchParams.get("message") || searchParams.get("q");
     if (initialMessage && messages.length === 0) {
       sendMessage(initialMessage);
     }
@@ -135,7 +168,7 @@ function ChatContent() {
         <div className="flex-1 overflow-y-auto">
           <Container className="py-4">
             {messages.length === 0 && !isLoading ? (
-              <EmptyState onSuggestionSelect={handleInitialCardSelect} />
+              <EmptyState onSuggestionSelect={handleInitialCardSelect} topic={topic} />
             ) : (
               <div className="space-y-1">
                 {messages
@@ -245,14 +278,25 @@ export default function AppChatPage() {
 
 function EmptyState({
   onSuggestionSelect,
+  topic,
 }: {
   onSuggestionSelect: (suggestion: string) => void;
+  topic?: string | null;
 }) {
-  const commonQuestions = [
-    "Check my symptoms",
-    "Check coverage for a procedure",
-    "Help me file an appeal",
+  const diabetesQuestions = [
+    "What does my A1C level mean?",
+    "Does Medicare cover diabetes screening?",
+    "What diabetes supplies does Medicare cover?",
+    "Am I eligible for the Medicare Diabetes Prevention Program?",
   ];
+
+  const commonQuestions = topic === "diabetes"
+    ? diabetesQuestions
+    : [
+        "Check my symptoms",
+        "Check coverage for a procedure",
+        "Help me file an appeal",
+      ];
 
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
