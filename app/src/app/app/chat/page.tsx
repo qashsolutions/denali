@@ -15,7 +15,7 @@ import {
 } from "@/components/appeal";
 import { useChat } from "@/hooks/useChat";
 import { useAuth } from "@/hooks/useAuth";
-import { BRAND } from "@/config";
+
 
 function ChatContent() {
   const searchParams = useSearchParams();
@@ -200,14 +200,6 @@ function ChatContent() {
           </Container>
         </div>
 
-        {/* Footer */}
-        <footer className="py-2 px-4 bg-[var(--bg-secondary)] border-t border-[var(--border)]">
-          <div className="max-w-4xl mx-auto text-center">
-            <p className="text-xs text-[var(--text-muted)]">
-              {BRAND.NAME} · Coverage guidance only, not medical advice
-            </p>
-          </div>
-        </footer>
       </div>
 
       {/* Modals */}
