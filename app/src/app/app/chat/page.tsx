@@ -13,6 +13,7 @@ import {
   AppealLetterModal,
   AppealOutcomePrompt,
 } from "@/components/appeal";
+import { CmsPledge } from "@/components/ui";
 import { useChat } from "@/hooks/useChat";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -186,6 +187,9 @@ function ChatContent() {
         {/* Chat Input */}
         <div className="p-4 bg-[var(--bg-primary)] border-t border-[var(--border)]">
           <Container>
+            <div className="flex justify-center mb-2">
+              <CmsPledge type="ai" />
+            </div>
             <ChatInput
               onSend={sendMessage}
               disabled={isLoading}

@@ -1,6 +1,7 @@
 "use client";
 
 import { DiabetesIcon } from "@/components/icons";
+import { CmsPledge } from "@/components/ui";
 
 export default function DiabetesPage() {
   return (
@@ -40,6 +41,10 @@ export default function DiabetesPage() {
             label="Nutrition Log"
           />
         </div>
+      </div>
+
+      <div className="mt-6">
+        <CmsPledge type="diabetes" />
       </div>
     </div>
   );

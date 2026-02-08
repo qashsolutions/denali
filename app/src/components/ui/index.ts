@@ -9,3 +9,4 @@ export {
   type CardProps,
 } from "./Card";
 export { PrintButton } from "./PrintButton";
+export { CmsPledge } from "./CmsPledge";
