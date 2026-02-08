@@ -26,20 +26,33 @@ export function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [userInfo, setUserInfo] = useState<{
+    displayName: string;
+    lastSignIn: string | null;
+  } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Check auth state
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsSignedIn(!!session?.user);
-    });
+
+    function updateUser(session: { user: { email?: string; user_metadata?: Record<string, string>; last_sign_in_at?: string } } | null) {
+      if (!session?.user) {
+        setUserInfo(null);
+        return;
+      }
+      const u = session.user;
+      const name = u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "User";
+      setUserInfo({
+        displayName: name,
+        lastSignIn: u.last_sign_in_at || null,
+      });
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => updateUser(session));
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_, session) => {
-      setIsSignedIn(!!session?.user);
-    });
+    } = supabase.auth.onAuthStateChange((_, session) => updateUser(session));
     return () => subscription.unsubscribe();
   }, []);
 
@@ -101,15 +114,25 @@ export function AppHeader() {
             })}
           </nav>
 
-          {/* Right side: Login or Settings + Mobile hamburger */}
+          {/* Right side: User info or Sign In + Mobile hamburger */}
           <div className="flex items-center gap-1">
-            {isSignedIn ? (
+            {userInfo ? (
               <button
                 onClick={() => router.push("/app/settings")}
-                className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors"
                 aria-label="Settings"
               >
-                <GearIcon className="w-5 h-5" />
+                <div className="text-right hidden sm:block">
+                  <p className="text-sm font-medium text-[var(--text-primary)] leading-tight">
+                    {userInfo.displayName}
+                  </p>
+                  {userInfo.lastSignIn && (
+                    <p className="text-[10px] italic text-[var(--text-muted)] leading-tight">
+                      Last signed in {formatRelativeTime(userInfo.lastSignIn)}
+                    </p>
+                  )}
+                </div>
+                <GearIcon className="w-5 h-5 text-[var(--text-muted)]" />
               </button>
             ) : (
               <Link
@@ -156,6 +179,22 @@ export function AppHeader() {
       </div>
     </header>
   );
+}
+
+function formatRelativeTime(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60000);
+
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay === 1) return "yesterday";
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function HamburgerIcon({ className }: { className?: string }) {
