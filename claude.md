@@ -96,13 +96,13 @@ Where to find specific logic in the codebase.
 | `src/lib/skills-loader.ts` | Conditional prompt builder. Loads skill sections based on SkillTriggers (onboarding, symptom gathering, coverage, appeal, etc.) |
 | `src/lib/denial-patterns.ts` | Async Supabase queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
 | `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via admin client (bypasses RLS). Non-blocking fire-and-forget |
-| `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI + `extractDiabetesLabs()`), `context.ts` (AI prompt injection: coverage + labs + denials), `sync.ts` (cache sync: Patient + Coverage + EOB + Observation) |
+| `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI + `extractDiabetesLabs()` + `extractDiabetesConditions()` + `extractDiabetesMedications()` + `classifyDiabetesStatus()`), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + classification + denials), `sync.ts` (cache sync: Patient + Coverage + EOB + Observation + Condition + MedicationRequest) |
 | `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
 | `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
 | `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
 | `src/hooks/useAuth.ts` | Auth state: email OTP, TOTP MFA enroll/challenge, AAL tracking, plan/role/trial detection, appeal access gating |
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table, gates health data injection |
-| `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs |
+| `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
 | `src/config/pricing.ts` | Pricing constants: free appeal limit, trial duration, Stripe price IDs |
 | `src/types/database.ts` | Supabase-generated TypeScript types. Regenerate with `npx supabase gen types` |
@@ -234,7 +234,7 @@ User-facing (plain English):        Internal (codes, never shown):
 | `audit_logs` | CMS compliance audit trail — who, what, when, why (IP, user agent). RLS: users read own logs, service role writes |
 | `consent_preferences` | Per-user consent toggles: `health_data_ai`, `health_data_storage`, `analytics`. Versioned, audit-logged on change |
 | `ehr_connections` | Blue Button OAuth tokens (AES-256-GCM encrypted), FHIR patient ID, connection status |
-| `fhir_cache` | Transformed FHIR data (patient, coverage, claims), 24h TTL. RLS-protected reads |
+| `fhir_cache` | Transformed FHIR data (patient, coverage, claims, labs, conditions, medications), 24h TTL. RLS-protected reads |
 
 ### Denial Code Tables
 
@@ -793,7 +793,7 @@ src/
     appeal/         # Appeal-specific (AppealLetter, StatusBadge)
     auth/           # Auth components (EmailOTPModal, TOTPEnrollModal, TOTPChallengeModal). Passkey modals exist but non-functional (Supabase has no WebAuthn)
     layout/         # Layout (AppHeader, BottomTabs, Container)
-    health/         # Health page (ConnectMedicare, PatientCard, CoverageCards, ClaimsList)
+    health/         # Health page (ConnectMedicare, PatientCard, CoverageCards, LabResultsCard, ConditionsCard, MedicationsCard, ClaimsList, PreDiabetesRiskCard)
   hooks/            # Custom hooks (useAuth, useChat, useConsent, useHealthData, useSettings, etc.)
   lib/              # Core libraries (claude.ts, supabase.ts, audit.ts, tools/, skills-loader.ts, denial-patterns.ts)
   lib/fhir/         # Blue Button 2.0 (crypto, tokens, client, transforms, context, sync)
@@ -907,9 +907,11 @@ Blue Button connects patients to their Medicare claims data via FHIR APIs.
 
 ### Health Data in AI
 
-- Client-side `useHealthData()` fetches from `/api/fhir/data` → populates sessionState fields (`healthDataAvailable`, `activeCoverage`, `recentDenials`, `labs`)
-- Server-side `buildHealthContextForPrompt()` injects health context into Claude system prompt: active coverage, lab results (with clinical interpretations), recent denials (gated by `health_data_ai` consent)
+- Client-side `useHealthData()` fetches from `/api/fhir/data` → populates sessionState fields (`healthDataAvailable`, `activeCoverage`, `recentDenials`, `labs`, `conditions`, `medications`, `diabetesClassification`)
+- Chat page bridges health data into `useChat` via `initialSessionState` (built with `useMemo`, synced via `useEffect` for async loading)
+- Server-side `buildHealthContextForPrompt()` injects health context into Claude system prompt: active coverage, lab results (with clinical interpretations), diabetes diagnoses, active medications, diabetes classification with action directives, recent denials (gated by `health_data_ai` consent)
 - `HEALTH_RECORDS_SKILL` loaded when `hasHealthData` or `hasRecentDenials` triggers fire
+- `DIABETES_PREVENTION_SKILL` loaded when `hasDiabetesContext` triggers (from conditions, labs, or user keywords)
 
 ---
 
@@ -944,7 +946,7 @@ These apply to Denali regardless of category. Source: categories page.
 
 | Requirement | Denali Status |
 |-------------|---------------|
-| Personalized AI support across clinical record — symptom checking, care planning, coordination, chronic disease | **DONE.** Core product functionality. Coverage + denials + lab results (A1C/glucose) flow to AI context |
+| Personalized AI support across clinical record — symptom checking, care planning, coordination, chronic disease | **DONE.** Core product functionality. Coverage + denials + lab results (A1C/glucose/BMI) + diabetes diagnoses + medications + classification flow to AI context |
 | Must connect to CMS Aligned Network directly OR via personal health record app | **DONE.** Blue Button 2.0 (PHR path) with PKCE OAuth, encrypted tokens, audit logging. Future: direct CMS Aligned Network |
 | Responses must clearly indicate AI-generated + disclaimers when not replacing clinical judgment | **DONE.** SparkleIcon + "AI-generated · Not medical advice" on all assistant messages |
 | Clearly distinguish educational content from clinical guidance; guide to health professional when needed | **DONE.** Coverage guidance framing + "talk to your doctor" patterns in skills |
@@ -954,9 +956,9 @@ These apply to Denali regardless of category. Source: categories page.
 | Requirement | Denali Status |
 |-------------|---------------|
 | Must connect to CMS Aligned Network directly or via PHR app | **DONE.** Blue Button 2.0 (PHR path). Health data flows to chat via `DIABETES_PREVENTION_SKILL` |
-| Use clinical record for personalized coaching, reminders, risk alerts | **PARTIAL.** `DIABETES_PREVENTION_SKILL` interprets A1C + coaching prompts in chat. FHIR Observation fetch wired — A1C/glucose labs flow to AI context with clinical interpretations. Diabetes page has quick actions + A1C guide. Need: lab trend charts on diabetes page, personalized risk alerts |
-| Support both prevention AND active management (meds, lab trends, nutrition/activity) | **PARTIAL.** A1C guide (3 ranges), coverage reference table (6 items), MDPP references. Need: lab trend charts from FHIR, nutrition/activity tracking |
-| Must specifically provide resources for pre-Diabetic patients | **NOT YET.** Need: MDPP resources, pre-diabetes screening/guidance |
+| Use clinical record for personalized coaching, reminders, risk alerts | **DONE.** `DIABETES_PREVENTION_SKILL` with classification-based coaching (diabetic/pre-diabetic/at-risk), lab trend awareness, screening reminders (>6mo/>12mo since last A1C), risk alerts (A1C >= 9.0, diagnosis without meds). FHIR pipeline: Observation + Condition + MedicationRequest → `classifyDiabetesStatus()` → AI context. Diabetes page: personalized status (A1C range bar, diagnoses, medications), context-aware quick actions |
+| Support both prevention AND active management (meds, lab trends, nutrition/activity) | **DONE.** Prevention: MDPP eligibility guidance, CDC pre-diabetes risk test, lifestyle coaching prompts. Management: medication coaching (insulin $35/month cap, Part D coverage), lab trend tracking (A1C up/down/stable), MNT referral suggestions, DSMT coverage. Health page shows labs + conditions + medications. AI skill covers nutrition/activity coaching with actual A1C references |
+| Must specifically provide resources for pre-Diabetic patients | **DONE.** `PreDiabetesRiskCard` (CDC 7-question risk test on diabetes page when not connected), MDPP section (eligibility criteria, enrollment CTA) shown for pre-diabetic/at-risk users, `DIABETES_PREVENTION_SKILL` has dedicated pre-diabetic coaching section |
 | HIPAA compliance | Same as A6 above |
 
 ### Framework Section I: Patient Access & Empowerment
@@ -1012,10 +1014,16 @@ Pledge text displayed via `CmsPledge` component (`src/components/ui/CmsPledge.ts
 | **AI-generated disclaimers** | Conv. AI criteria | SparkleIcon + "AI-generated . Not medical advice" on every assistant message |
 | **CMS pledges** | Conv. AI + Diabetes | `CmsPledge` component with AI Assistant and Diabetes & Obesity pledge text |
 | **Medicare notifications skill** | A2 (partial) | `MEDICARE_NOTIFICATIONS_SKILL` detects EOB/coverage changes from FHIR data. `hasRecentChanges` trigger wired |
-| **Diabetes prevention skill** | Diabetes criteria | `DIABETES_PREVENTION_SKILL` with A1C coaching, MDPP, CPT refs, pre-diabetic resources |
+| **Diabetes prevention skill** | Diabetes criteria | `DIABETES_PREVENTION_SKILL` with classification-based coaching, lab trends, screening reminders, risk alerts, medication coaching, MDPP guidance, nutrition/activity coaching |
 | **Guide to health professional** | Conv. AI criteria | Skills consistently pattern: "ask your doctor to document...", "consult specialist" |
-| **Diabetes page** | Diabetes criteria | Quick actions, A1C guide (3 ranges), Medicare coverage reference table (6 items), MDPP button |
-| **FHIR Observation pipeline** | Diabetes criteria | `syncHealthData()` fetches Observations (laboratory), `extractDiabetesLabs()` extracts A1C/glucose, labs cached in `fhir_cache`, AI context includes lab values with clinical interpretations |
+| **Diabetes page** | Diabetes criteria | Personalized dashboard: classification badge, A1C range bar, diagnoses, medications, context-aware quick actions, A1C guide (highlighted range), MDPP section, `PreDiabetesRiskCard` (CDC risk test) |
+| **FHIR Observation pipeline** | Diabetes criteria | `syncHealthData()` fetches Observations (laboratory), `extractDiabetesLabs()` extracts A1C/glucose/BMI, labs cached in `fhir_cache`, AI context includes lab values with clinical interpretations |
+| **FHIR Condition pipeline** | Diabetes criteria | `syncHealthData()` fetches Conditions, `extractDiabetesConditions()` extracts diabetes diagnoses (ICD-10 E10/E11/E13/R73/E66), cached as `resource_type: "conditions"` |
+| **FHIR Medication pipeline** | Diabetes criteria | `syncHealthData()` fetches MedicationRequests, `extractDiabetesMedications()` extracts meds with `isDiabetesMed` flag (~30 drug classes), cached as `resource_type: "medications"` |
+| **Diabetes classification** | Diabetes criteria | `classifyDiabetesStatus()` in transforms.ts: diabetic/pre-diabetic/at-risk/none from diagnoses + labs + medications with evidence tracking. Shared by chat page + diabetes page |
+| **Chat ↔ Health data bridge** | Diabetes + Conv. AI | `useChat` accepts `initialSessionState`, syncs async health data via `useEffect`. Chat page builds sessionState from `useHealthData()` including conditions, medications, classification |
+| **Health page labs/conditions/meds** | Diabetes criteria | `LabResultsCard` (with A1C trends), `ConditionsCard` (diabetes diagnoses), `MedicationsCard` (diabetes meds highlighted) on health page |
+| **Pre-diabetes resources** | Diabetes criteria | `PreDiabetesRiskCard` (CDC 7-question risk test), MDPP eligibility section, dedicated pre-diabetic coaching in AI skill |
 | **Unified navigation** | — | Diabetes integrated into Ask Denali chat; 3-item nav (Health, Ask Denali, Blog); diabetes page kept as reference |
 
 #### Remaining Gaps
@@ -1025,15 +1033,12 @@ Pledge text displayed via `CmsPledge` component (`src/components/ui/CmsPledge.ts
 | **HIPAA compliance** | A6 | **P0** | Process — BAAs with Supabase/Vercel, compliance docs, breach notification plan |
 | **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
 | **Terms of service + security checklist** | A3 | **P0** | Docs — required for CMS review participation |
-| **AAL2 app auth** (if CMS tightens) | A1, Criteria 3, 23 | **P2** | Code — email+password sign-in + TOTP for full AAL2 at app level. TOTP components ready; would need password migration. Only needed if CMS requires app-level AAL2 beyond Blue Button |
 | **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct integration with Medicare.gov communication system (beyond FHIR change detection) |
 | **CMS credential service integration** | A1 | **P1** | Code — connect to CMS-approved identity service when available |
 | **CMS review submission** | A3 | **P1** | Docs — data source inventory, security self-assessment for CMS |
 | **CMS app directory submission** | A5 | **P1** | Docs — screenshots, descriptions for Medicare.gov listing |
 | **Patient-facing audit log viewer** | Criterion 4 | **P1** | Code — let users see who accessed their data (Settings Activity Log) |
-| **Diabetes FHIR data display** | Diabetes criteria | **P2** | Code — lab trend charts on diabetes page (data pipeline done, UI display pending) |
-| **MDPP eligibility + enrollment** | Diabetes (pre-diabetic) | **P2** | Code — eligibility checker, enrollment flow, MDPP provider finder |
-| **Nutrition/activity tracking** | Diabetes criteria | **P2** | Code — prevention + management tracking features |
+| **AAL2 app auth** (if CMS tightens) | A1, Criteria 3, 23 | **P2** | Code — email+password sign-in + TOTP for full AAL2 at app level. TOTP components ready; would need password migration. Only needed if CMS requires app-level AAL2 beyond Blue Button |
 | **EOB detail enrichment** | Criterion 2 | **P2** | Code — CARC/RARC extraction from FHIR EOB adjudication items |
 | **FHIR USCDI v3 compliance** | Criterion 13 | **P2** | Code — verify Blue Button data maps to USCDI v3 by July 2026 |
 
