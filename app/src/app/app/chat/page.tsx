@@ -253,10 +253,9 @@ function EmptyState({
   onSuggestionSelect: (suggestion: string) => void;
 }) {
   const commonQuestions = [
-    "Will Medicare cover my MRI?",
-    "Help me appeal a denial",
-    "What does code CO-50 mean?",
-    "How do I know if a service is covered?",
+    "Check my symptoms",
+    "Check coverage for a procedure",
+    "Help me file an appeal",
   ];
 
   return (

@@ -64,20 +64,16 @@ export function LandingHeader({ settings }: LandingHeaderProps) {
             </div>
           </Link>
 
-          {/* Feature Nav — desktop icons with tooltips above */}
+          {/* Feature Nav — desktop */}
           <nav className="hidden md:flex items-center gap-1" aria-label="Features">
             {NAV_ITEMS.map(({ label, href, Icon }) => (
               <Link
                 key={href}
                 href={href}
-                className="relative group flex items-center justify-center w-10 h-10 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
-                aria-label={label}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
               >
-                <Icon className="w-5 h-5" />
-                {/* Tooltip above */}
-                <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 rounded-md bg-[var(--text-primary)] text-[var(--bg-primary)] text-xs font-medium whitespace-nowrap opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-150">
-                  {label}
-                </span>
+                <Icon className="w-4 h-4" />
+                {label}
               </Link>
             ))}
           </nav>
