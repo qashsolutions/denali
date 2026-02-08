@@ -255,6 +255,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     }
     abortControllerRef.current = new AbortController();
 
+    // Client-side timeout: abort if no response within 5.5 minutes
+    // (Vercel maxDuration is 300s; this gives a buffer for network latency)
+    const timeoutId = setTimeout(() => {
+      abortControllerRef.current?.abort();
+    }, 330_000);
+
     // Create user message
     const userMessage: Message = {
       id: generateId(),
@@ -292,6 +298,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         }),
         signal: abortControllerRef.current.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -397,7 +404,19 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         }
       }
     } catch (err) {
+      clearTimeout(timeoutId);
       if (err instanceof Error && err.name === "AbortError") {
+        // Distinguish user-initiated abort from timeout abort
+        // If loading is still true, this was a timeout (not a user navigating away)
+        const errorMessage: Message = {
+          id: generateId(),
+          role: "assistant",
+          content: "This is taking longer than usual. Please try again — it usually works on the second try.",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        setSuggestions(["Try again", "Start a new question"]);
+        setIsLoading(false);
         return;
       }
       const error = err instanceof Error ? err : new Error("Failed to send message");
