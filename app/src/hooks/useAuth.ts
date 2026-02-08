@@ -11,7 +11,6 @@ export interface AuthState {
   isEmailVerified: boolean;
   isMfaEnrolled: boolean;
   isMfaVerified: boolean;
-  isPasskeyEnrolled: boolean;
   currentAAL: string | null;
   plan: "free" | "per_appeal" | "monthly" | "trial";
   role: "patient" | "counselor" | "provider";
@@ -41,7 +40,6 @@ const DEFAULT_AUTH_STATE: AuthState = {
   isEmailVerified: false,
   isMfaEnrolled: false,
   isMfaVerified: false,
-  isPasskeyEnrolled: false,
   currentAAL: null,
   plan: "free",
   role: "patient",
@@ -87,13 +85,6 @@ export function useAuth(): UseAuthReturn {
               (m) => typeof m === "object" && "method" in m && m.method === "totp"
             ) ||
             false;
-
-          // Check for WebAuthn (passkey) factors
-          const webauthnFactors =
-            factorsData?.all?.filter(
-              (f) => f.factor_type === "webauthn" && f.status === "verified"
-            ) ?? [];
-          const isPasskeyEnrolled = webauthnFactors.length > 0;
 
           // Fetch user profile from database
           const { data: profile } = await supabase
@@ -163,7 +154,6 @@ export function useAuth(): UseAuthReturn {
               !!email && session.user.email_confirmed_at !== null,
             isMfaEnrolled,
             isMfaVerified,
-            isPasskeyEnrolled,
             currentAAL: aalData?.currentLevel ?? null,
             plan: userPlan,
             role: userRole,

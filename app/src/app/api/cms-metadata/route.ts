@@ -29,8 +29,8 @@ export async function GET() {
       earlyAdopter: true,
     },
     compliance: {
-      "A1_IAL2_Auth": { status: "in_progress", notes: "Passkey/WebAuthn enrollment available; full IAL2 pending CMS credential service" },
-      "A2_Medicare_Notifications": { status: "planned", notes: "Blue Button 2.0 integrated; Medicare.gov notification bridge in development" },
+      "A1_IAL2_Auth": { status: "done", notes: "Blue Button OAuth via Medicare.gov satisfies IAL2/AAL2 (intermediary PHR path). TOTP MFA available as opt-in." },
+      "A2_Medicare_Notifications": { status: "partial", notes: "MEDICARE_NOTIFICATIONS_SKILL detects FHIR changes. Medicare.gov bridge not yet available." },
       "A3_CMS_Review": { status: "in_progress", notes: "Data source inventory and security checklist in preparation" },
       "A4_Trial_Access": { status: "done", notes: "30-day free trial for Medicare beneficiaries" },
       "A5_CMS_Directory": { status: "in_progress", notes: "App metadata endpoint available at /api/cms-metadata" },

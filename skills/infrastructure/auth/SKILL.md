@@ -12,7 +12,7 @@ Supabase MFA supports only:
 - **TOTP** (authenticator app) — available on all plans
 - **Phone** (SMS) — requires Pro plan
 
-PasskeyEnrollModal and PasskeyChallengeModal exist in the codebase but are non-functional (dead code).
+PasskeyEnrollModal and PasskeyChallengeModal were deleted (dead code — Supabase does not support WebAuthn).
 
 ## NIST 800-63B: What Satisfies AAL2
 
@@ -81,9 +81,8 @@ Medicare beneficiaries authenticate through Medicare.gov when connecting Blue Bu
 - **Full AAL2 gating**: Gate appeal generation behind AAL2 when TOTP enrolled
 - **CMS credential service**: Connect to CMS-approved identity service for IAL2 (future)
 
-### Non-functional (Supabase limitation)
-- `PasskeyEnrollModal`: Calls `mfa.enroll({ factorType: 'webauthn' })` — always errors
-- `PasskeyChallengeModal`: Never reachable since enrollment fails
+### Removed (Supabase limitation)
+- `PasskeyEnrollModal` and `PasskeyChallengeModal` were deleted — Supabase does not support WebAuthn on any plan
 
 ## Migration Plan: Email OTP -> Email+Password (P1)
 

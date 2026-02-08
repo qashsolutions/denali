@@ -261,8 +261,8 @@ export default function AppSettingsPage() {
               <p className="text-sm font-medium text-[var(--text-primary)]">Authenticator App</p>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">
                 {totpEnrolled || authState.isMfaEnrolled
-                  ? "Authenticator enrolled — required for sensitive operations"
-                  : "Add two-factor authentication for stronger security (NIST AAL2)"}
+                  ? "Authenticator enrolled — adds extra protection to your account"
+                  : "Add two-factor authentication, recommended if you connect Medicare"}
               </p>
             </div>
             <button
