@@ -97,6 +97,9 @@ Where to find specific logic in the codebase.
 | `src/lib/denial-patterns.ts` | Async Supabase queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
 | `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via admin client (bypasses RLS). Non-blocking fire-and-forget |
 | `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI), `context.ts` (AI prompt injection), `sync.ts` (cache sync) |
+| `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
+| `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
+| `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
 | `src/hooks/useAuth.ts` | Auth state: email OTP, MFA (TOTP + WebAuthn), plan/role/trial detection, appeal access gating |
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table, gates health data injection |
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data` |
@@ -666,6 +669,35 @@ Coverage guidance is **always free** (unlimited, no signup). Paywall only appear
 - No forms, no dropdowns, no medical jargon
 - Greeting personalization ("Evening, Venkata")
 - Smart suggestions below input (tappable)
+
+### Layout Architecture
+
+**AppHeader** (`src/components/layout/AppHeader.tsx`) — universal, rendered in root layout (`src/app/layout.tsx`):
+
+| Viewport | Left | Center | Right |
+|----------|------|--------|-------|
+| **Desktop** | Logo → `/` | Nav: Health (rose), Ask Denali (blue), Diabetes (emerald), Blog (violet) | Sign In button (not auth) / Gear icon (auth) |
+| **Mobile** | Logo → `/` | — | Sign In / Gear + Hamburger menu |
+
+- Auth-aware via `createClient().auth.getSession()` + `onAuthStateChange`
+- Nav icons have per-item Tailwind colors (e.g. `text-rose-500`); active state uses `--accent-primary`
+- Sign In links to `/app/settings` (email OTP flow); Gear navigates to `/app/settings`
+- Hamburger dropdown shows nav items on mobile
+
+**App Footer** (`src/app/app/layout.tsx` inline) — desktop only, horizontal single-row:
+- Left: Logo + Disclaimer + Copyright (from `BRAND` config)
+- Right: FAQ · Privacy · HIPAA links
+
+**Landing Footer** (`src/components/landing/LandingFooter.tsx`) — landing + blog pages:
+- Top row: Logo + company (left), FAQ · Privacy Policy · HIPAA (right)
+- Bottom row: Disclaimer (left), Copyright (right), separated by border-t
+
+**BottomTabs** (`src/components/layout/BottomTabs.tsx`) — mobile only, `/app/*` pages:
+- Tabs: Home, Health, Ask Denali, Settings (4 tabs, fixed bottom)
+
+**Icons** (`src/components/icons/index.tsx`):
+- `DiabetesIcon`: chart/monitoring icon (trend line + dot) — NOT blood drop
+- `HeartPulseIcon`, `ChatBubbleIcon`, `DocumentTextIcon`, `GearIcon`, `HomeIcon`, `MountainIcon`
 
 ### Typography
 
