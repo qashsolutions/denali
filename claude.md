@@ -100,7 +100,7 @@ Where to find specific logic in the codebase.
 | `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
 | `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
 | `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
-| `src/hooks/useAuth.ts` | Auth state: email OTP, MFA (TOTP + WebAuthn), plan/role/trial detection, appeal access gating |
+| `src/hooks/useAuth.ts` | Auth state: email OTP, TOTP MFA enroll/challenge, AAL tracking, plan/role/trial detection, appeal access gating |
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table, gates health data injection |
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data` |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
