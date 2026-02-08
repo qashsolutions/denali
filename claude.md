@@ -50,7 +50,8 @@
 12. [Learning System](#learning-system)
 13. [Coding Standards](#coding-standards)
 14. [MCP Integration](#mcp-integration)
-15. [CMS Interoperability Framework](#cms-interoperability-framework)
+15. [Blue Button 2.0 (Medicare FHIR API)](#blue-button-20-medicare-fhir-api)
+16. [CMS Interoperability Framework](#cms-interoperability-framework)
 
 ---
 
@@ -81,6 +82,14 @@ These cause bugs or bad UX if violated. Read before every coding session.
 - Do NOT store: Full names, addresses, SSN, insurance IDs, medical records
 - OK to store: Email, phone (for auth), anonymized phrases, conversation content
 - Account deletion: Cascade delete all user-linked data, cancel Stripe, retain anonymized learning data
+
+### Performance & Reliability
+
+- **CRITICAL: Never block UI rendering on database operations.** In `useChat.ts`, `setMessages()` must run IMMEDIATELY after parsing the API response. Database saves (`saveMessage`, `claimConversation`) must be fire-and-forget (`.then()/.catch()`, not `await`). Blocking on Supabase causes the "Thinking..." spinner to hang indefinitely even when the API returns 200.
+- **Timeout guards on pre-Claude async calls**: `route.ts` uses `withFallback()` for non-critical Supabase queries before the Claude API call (e.g., `getUnreportedOutcome` at 5s, `buildSystemPromptWithLearning` at 10s). Falls back to defaults on timeout instead of blocking.
+- **AbortController for Claude API**: `withTimeout()` in `claude.ts` uses `AbortController` to truly cancel hung requests (not just `Promise.race`). 60s per iteration for Sonnet, 120s for Opus.
+- **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
+- **MCP servers are NOT testable via curl/HTTP.** MCP protocol is handled internally by the Anthropic API. Use Claude.ai to verify MCP server health.
 
 ---
 
@@ -863,6 +872,7 @@ Server-side logs (Vercel Functions, not browser console):
 ```
 ANTHROPIC_API_KEY=sk-ant-api03-...
 ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
+ANTHROPIC_APPEAL_MODEL=claude-opus-4-6    # No date suffix — Opus for appeals
 BLUEBUTTON_CLIENT_ID=...          # CMS Blue Button OAuth client ID
 BLUEBUTTON_CLIENT_SECRET=...      # CMS Blue Button OAuth client secret
 BLUEBUTTON_BASE_URL=https://sandbox.bluebutton.cms.gov  # or production URL
