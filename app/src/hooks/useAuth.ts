@@ -11,9 +11,13 @@ export interface AuthState {
   isEmailVerified: boolean;
   isMfaEnrolled: boolean;
   isMfaVerified: boolean;
-  plan: "free" | "per_appeal" | "monthly";
+  isPasskeyEnrolled: boolean;
+  currentAAL: string | null;
+  plan: "free" | "per_appeal" | "monthly" | "trial";
   role: "patient" | "counselor" | "provider";
   appealCount: number;
+  trialStatus: "none" | "active" | "expired" | "converted";
+  trialDaysRemaining: number;
   isLoading: boolean;
   error: string | null;
 }
@@ -37,9 +41,13 @@ const DEFAULT_AUTH_STATE: AuthState = {
   isEmailVerified: false,
   isMfaEnrolled: false,
   isMfaVerified: false,
+  isPasskeyEnrolled: false,
+  currentAAL: null,
   plan: "free",
   role: "patient",
   appealCount: 0,
+  trialStatus: "none",
+  trialDaysRemaining: 0,
   isLoading: false,
   error: null,
 };
@@ -75,6 +83,13 @@ export function useAuth(): UseAuthReturn {
             ) ||
             false;
 
+          // Check for WebAuthn (passkey) factors
+          const webauthnFactors =
+            factorsData?.all?.filter(
+              (f) => f.factor_type === "webauthn" && f.status === "verified"
+            ) ?? [];
+          const isPasskeyEnrolled = webauthnFactors.length > 0;
+
           // Fetch user profile from database
           const { data: profile } = await supabase
             .from("users")
@@ -94,11 +109,11 @@ export function useAuth(): UseAuthReturn {
           }
 
           // Validate plan type
-          const validPlans = ["free", "per_appeal", "monthly"] as const;
+          const validPlans = ["free", "per_appeal", "monthly", "trial"] as const;
           const userPlan = validPlans.includes(
             profile?.plan as (typeof validPlans)[number]
           )
-            ? (profile?.plan as "free" | "per_appeal" | "monthly")
+            ? (profile?.plan as "free" | "per_appeal" | "monthly" | "trial")
             : "free";
 
           // Validate role
@@ -109,6 +124,33 @@ export function useAuth(): UseAuthReturn {
             ? (profile?.role as "patient" | "counselor" | "provider")
             : "patient";
 
+          // Check trial status from subscriptions table
+          let trialStatus: "none" | "active" | "expired" | "converted" = "none";
+          let trialDaysRemaining = 0;
+
+          if (userPlan === "trial") {
+            const { data: sub } = await supabase
+              .from("subscriptions")
+              .select("trial_start, trial_end, trial_converted")
+              .eq("user_id", session.user.id)
+              .single();
+
+            if (sub?.trial_end) {
+              const now = new Date();
+              const end = new Date(sub.trial_end);
+              if (sub.trial_converted) {
+                trialStatus = "converted";
+              } else if (end > now) {
+                trialStatus = "active";
+                trialDaysRemaining = Math.ceil(
+                  (end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+                );
+              } else {
+                trialStatus = "expired";
+              }
+            }
+          }
+
           setAuthState({
             userId: session.user.id,
             email,
@@ -116,9 +158,13 @@ export function useAuth(): UseAuthReturn {
               !!email && session.user.email_confirmed_at !== null,
             isMfaEnrolled,
             isMfaVerified,
+            isPasskeyEnrolled,
+            currentAAL: aalData?.currentLevel ?? null,
             plan: userPlan,
             role: userRole,
             appealCount,
+            trialStatus,
+            trialDaysRemaining,
             isLoading: false,
             error: null,
           });
@@ -455,6 +501,11 @@ export function useAuth(): UseAuthReturn {
         }
 
         if (authState.plan === "monthly") {
+          return "allowed";
+        }
+
+        // Trial plan: allowed if trial is still active
+        if (authState.plan === "trial" && authState.trialStatus === "active") {
           return "allowed";
         }
 

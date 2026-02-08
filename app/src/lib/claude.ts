@@ -126,6 +126,9 @@ export interface SessionState {
     denialCode: string;
     denialReason: string;
   }>;
+
+  // Consent (set by client from useConsent hook)
+  consentHealthDataAi?: boolean;               // Whether user consents to health data in AI
 }
 
 export interface ChatRequest {

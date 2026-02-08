@@ -37,6 +37,8 @@ export interface ClaimSummary {
   youOwe: string;
   status: string; // "Paid", "Denied", "Partially Paid"
   denialReasons?: string[];
+  carcCodes?: string[];  // CARC codes from adjudication (for richer denial context)
+  rarcCodes?: string[];  // RARC codes from adjudication
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -80,6 +82,7 @@ interface FhirEOB {
     adjudication?: Array<{
       category?: { coding?: Array<{ code?: string }> };
       amount?: { value?: number; currency?: string };
+      reason?: { coding?: Array<{ system?: string; code?: string; display?: string }> };
     }>;
   }>;
   total?: Array<{
@@ -183,8 +186,8 @@ export function transformEOB(eob: FhirEOB): ClaimSummary {
   // Status/outcome
   const status = mapClaimStatus(eob.outcome, eob.status);
 
-  // Denial detection
-  const { denialReasons } = extractDenials(eob);
+  // Denial detection + CARC/RARC extraction
+  const { denialReasons, carcCodes, rarcCodes } = extractDenials(eob);
 
   return {
     id,
@@ -198,7 +201,63 @@ export function transformEOB(eob: FhirEOB): ClaimSummary {
     youOwe: formatCurrency(totals.patientOwes),
     status,
     denialReasons: denialReasons.length > 0 ? denialReasons : undefined,
+    carcCodes: carcCodes.length > 0 ? carcCodes : undefined,
+    rarcCodes: rarcCodes.length > 0 ? rarcCodes : undefined,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Diabetes Lab Extraction (CMS Diabetes & Obesity criteria)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LabResult {
+  name: string;
+  value: number;
+  unit: string;
+  date: string;
+  loincCode: string;
+}
+
+interface FhirObservation {
+  resourceType: "Observation";
+  code?: { coding?: Array<{ system?: string; code?: string; display?: string }> };
+  valueQuantity?: { value?: number; unit?: string };
+  effectiveDateTime?: string;
+  status?: string;
+}
+
+/** LOINC codes for diabetes-relevant labs */
+const DIABETES_LOINC: Record<string, string> = {
+  "4548-4": "Hemoglobin A1C",
+  "2345-7": "Glucose (Fasting)",
+  "2339-0": "Glucose (Random)",
+  "14771-0": "Fasting Glucose",
+  "59261-8": "Hemoglobin A1C (IFCC)",
+};
+
+export function extractDiabetesLabs(observations: FhirObservation[]): LabResult[] {
+  const results: LabResult[] = [];
+
+  for (const obs of observations) {
+    if (obs.status === "cancelled" || obs.status === "entered-in-error") continue;
+
+    for (const coding of obs.code?.coding ?? []) {
+      const code = coding.code ?? "";
+      if (code in DIABETES_LOINC && obs.valueQuantity?.value != null) {
+        results.push({
+          name: DIABETES_LOINC[code],
+          value: obs.valueQuantity.value,
+          unit: obs.valueQuantity.unit ?? "%",
+          date: obs.effectiveDateTime ? formatDate(obs.effectiveDateTime) : "Unknown",
+          loincCode: code,
+        });
+        break; // Only count each observation once
+      }
+    }
+  }
+
+  // Sort by date descending (most recent first)
+  return results.sort((a, b) => (b.date > a.date ? 1 : -1));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -289,15 +348,19 @@ function extractAmounts(eob: FhirEOB): {
 
 function extractDenials(eob: FhirEOB): {
   denialReasons: string[];
+  carcCodes: string[];
+  rarcCodes: string[];
 } {
   const reasons = new Set<string>();
+  const carcCodes = new Set<string>();
+  const rarcCodes = new Set<string>();
 
   // Check if outcome indicates denial
   if (eob.outcome === "denied" || eob.outcome === "error") {
     reasons.add("Claim was denied");
   }
 
-  // Check item-level adjudication for denial indicators
+  // Check item-level adjudication for denial indicators and CARC/RARC codes
   for (const item of eob.item ?? []) {
     for (const adj of item.adjudication ?? []) {
       const code = adj.category?.coding?.[0]?.code ?? "";
@@ -310,10 +373,28 @@ function extractDenials(eob: FhirEOB): {
           reasons.add("No benefit paid for this service");
         }
       }
+
+      // Extract CARC/RARC from adjudication reason codes
+      for (const coding of adj.reason?.coding ?? []) {
+        if (!coding.code) continue;
+        const system = coding.system ?? "";
+        if (system.includes("adjudication") || system.includes("CARC") || system.includes("claim-adjustment")) {
+          carcCodes.add(coding.code);
+        } else if (system.includes("remark") || system.includes("RARC")) {
+          rarcCodes.add(coding.code);
+        } else if (coding.code) {
+          // Unknown system — treat numeric codes as potential CARC
+          carcCodes.add(coding.code);
+        }
+      }
     }
   }
 
-  return { denialReasons: [...reasons] };
+  return {
+    denialReasons: [...reasons],
+    carcCodes: [...carcCodes],
+    rarcCodes: [...rarcCodes],
+  };
 }
 
 function formatDate(dateStr: string): string {

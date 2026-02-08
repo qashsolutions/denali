@@ -15,6 +15,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { encrypt } from "@/lib/fhir/crypto";
 import { API_CONFIG, getBaseUrl } from "@/config";
+import { logAudit } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
   try {
@@ -131,6 +132,13 @@ export async function GET(request: NextRequest) {
     }
 
     console.log("[FHIR callback] Connection saved for user:", user.id);
+
+    logAudit("FHIR_CONNECT", {
+      userId: user.id,
+      resourceType: "ehr_connection",
+      metadata: { provider: "bluebutton", fhirPatientId },
+      request,
+    }).catch(() => {});
 
     // Clear the state cookie and redirect to health page
     const response = NextResponse.redirect(

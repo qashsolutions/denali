@@ -35,6 +35,16 @@ export function LandingFooter({ settings }: LandingFooterProps) {
             {companyPrefix} {companyName}
           </p>
 
+          {/* Links */}
+          <div className="flex gap-4 mb-4">
+            <Link
+              href="/faq"
+              className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+            >
+              FAQ
+            </Link>
+          </div>
+
           {/* Copyright */}
           <p className="text-sm text-[var(--text-muted)]">
             &copy; {copyrightYear} {brandName}. All rights reserved.

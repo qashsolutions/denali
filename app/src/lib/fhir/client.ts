@@ -7,6 +7,13 @@
 
 import { API_CONFIG } from "@/config";
 
+/** CMS Section I.3: Purpose of data request */
+export type RequestPurpose =
+  | "treatment"
+  | "coverage-determination"
+  | "appeal"
+  | "patient-request";
+
 export class FhirError extends Error {
   constructor(
     message: string,
@@ -20,10 +27,12 @@ export class FhirError extends Error {
 
 /**
  * Make an authenticated GET request to the FHIR API.
+ * @param purpose CMS Section I.3 — purpose code for data request tagging
  */
 export async function fhirGet<T>(
   path: string,
-  accessToken: string
+  accessToken: string,
+  purpose: RequestPurpose = "patient-request"
 ): Promise<T> {
   const { blueButton } = API_CONFIG;
   const url = `${blueButton.baseUrl}/${blueButton.version}/fhir/${path}`;
@@ -32,6 +41,7 @@ export async function fhirGet<T>(
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/fhir+json",
+      "X-Request-Purpose": purpose,
     },
   });
 
@@ -58,7 +68,8 @@ export async function fhirGet<T>(
 export async function fhirGetBundle<T>(
   path: string,
   accessToken: string,
-  maxPages: number = 5
+  maxPages: number = 5,
+  purpose: RequestPurpose = "patient-request"
 ): Promise<T[]> {
   const entries: T[] = [];
   let startIndex = 0;
@@ -69,7 +80,7 @@ export async function fhirGetBundle<T>(
     const separator = path.includes("?") ? "&" : "?";
     const paginatedPath = `${path}${separator}_count=${pageSize}&startIndex=${startIndex}`;
 
-    const bundle = await fhirGet<FhirBundle<T>>(paginatedPath, accessToken);
+    const bundle = await fhirGet<FhirBundle<T>>(paginatedPath, accessToken, purpose);
 
     if (bundle.entry) {
       for (const entry of bundle.entry) {

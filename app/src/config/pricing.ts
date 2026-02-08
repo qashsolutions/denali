@@ -9,6 +9,9 @@ export const PRICING = {
   /** Number of free appeals before paywall */
   FREE_APPEAL_LIMIT: 3,
 
+  /** Trial duration in days (CMS criteria A4) */
+  TRIAL_DURATION_DAYS: 30,
+
   /** Single appeal one-time payment */
   SINGLE_APPEAL: {
     amount: parseInt(process.env.NEXT_PUBLIC_PRICE_SINGLE_APPEAL || "10", 10),

@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { getCachedHealthData, syncHealthData } from "@/lib/fhir/sync";
 import { hasActiveConnection } from "@/lib/fhir/tokens";
+import { logAudit } from "@/lib/audit";
 
 export async function GET() {
   try {
@@ -23,6 +24,11 @@ export async function GET() {
         { status: 401 }
       );
     }
+
+    logAudit("FHIR_DATA_ACCESS", {
+      userId: user.id,
+      resourceType: "ehr_connection",
+    }).catch(() => {});
 
     // Check if user has an active connection
     const connected = await hasActiveConnection(user.id);

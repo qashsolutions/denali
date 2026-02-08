@@ -37,6 +37,7 @@ import {
 } from "@/lib/learning";
 import { createConversation, saveAppeal, getUnreportedOutcome } from "@/lib/conversation-service";
 import { FEEDBACK_CONFIG, API_CONFIG } from "@/config";
+import { logAudit } from "@/lib/audit";
 
 // Request body type
 interface ChatRequestBody {
@@ -126,6 +127,15 @@ export async function POST(request: NextRequest) {
     if (sessionState.healthDataAvailable) {
       triggers.hasHealthData = true;
       triggers.hasRecentDenials = (sessionState.recentDenials?.length ?? 0) > 0;
+    }
+
+    // Diabetes context detection (from user keywords or FHIR data)
+    const userContent = body.messages
+      .filter((m) => m.role === "user")
+      .map((m) => m.content.toLowerCase())
+      .join(" ");
+    if (/diabetes|diabetic|a1c|hemoglobin a1c|blood sugar|glucose|insulin|pre-?diabetic|mdpp/i.test(userContent)) {
+      triggers.hasDiabetesContext = true;
     }
 
     console.log("[Chat API] Detected triggers:", triggers);
@@ -253,6 +263,13 @@ export async function POST(request: NextRequest) {
         if (savedAppealId) {
           appealId = savedAppealId;
           console.log("[Chat API] Appeal saved:", appealId);
+          logAudit("APPEAL_GENERATED", {
+            userId: body.sessionState?.email ? undefined : undefined,
+            resourceType: "appeal",
+            resourceId: savedAppealId,
+            metadata: { conversationId, denialCodes: ss.denialCodes },
+            request,
+          }).catch(() => {});
         }
       } catch (err) {
         console.warn("Failed to save appeal:", err);

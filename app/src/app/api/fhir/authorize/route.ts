@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { API_CONFIG, getBaseUrl } from "@/config";
 import { randomBytes } from "crypto";
+import { logAudit } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,6 +25,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: "You must be logged in to connect Medicare" },
         { status: 401 }
+      );
+    }
+
+    // If user has passkey enrolled, check for AAL2
+    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    const hasWebauthn = factors?.all?.some(
+      (f) => f.factor_type === "webauthn" && f.status === "verified"
+    );
+
+    if (hasWebauthn && aalData?.currentLevel !== "aal2") {
+      return NextResponse.json(
+        { error: "Passkey verification required", requiresAAL2: true },
+        { status: 403 }
       );
     }
 
@@ -55,6 +70,13 @@ export async function GET(request: NextRequest) {
     });
 
     const authorizeUrl = `${blueButton.baseUrl}/${blueButton.version}/o/authorize/?${params}`;
+
+    logAudit("FHIR_CONNECT", {
+      userId: user.id,
+      resourceType: "ehr_connection",
+      metadata: { step: "authorize_initiated" },
+      request,
+    }).catch(() => {});
 
     // Set state in httpOnly cookie (10 minute TTL)
     const response = NextResponse.redirect(authorizeUrl);

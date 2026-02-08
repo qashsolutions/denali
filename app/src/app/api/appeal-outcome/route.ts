@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { recordAppealOutcome } from "@/lib/learning";
+import { logAudit } from "@/lib/audit";
 
 interface AppealOutcomeRequest {
   appealId: string;
@@ -50,6 +51,13 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    logAudit("APPEAL_OUTCOME", {
+      resourceType: "appeal",
+      resourceId: body.appealId,
+      metadata: { outcome: body.outcome },
+      request,
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PRICING, getBaseUrl } from "@/config";
 import { createClient } from "@/lib/supabase";
+import { logAudit } from "@/lib/audit";
 
 // Stripe is imported dynamically to avoid build errors when key is not set
 type Stripe = typeof import("stripe").default;
@@ -78,6 +79,13 @@ export async function POST(request: NextRequest) {
         email: email,
       },
     });
+
+    logAudit("CHECKOUT_STARTED", {
+      userId: userId || undefined,
+      resourceType: "subscription",
+      metadata: { plan: body.plan },
+      request,
+    }).catch(() => {});
 
     return NextResponse.json({ url: session.url });
   } catch (error) {

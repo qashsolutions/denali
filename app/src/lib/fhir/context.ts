@@ -9,10 +9,13 @@ import type { SessionState } from "@/lib/claude";
 
 /**
  * Build a concise health context string for injection into Claude's system prompt.
- * Returns null if no health data is available.
+ * Returns null if no health data is available or if the user has revoked health_data_ai consent.
  */
 export function buildHealthContextForPrompt(sessionState: SessionState): string | null {
   if (!sessionState.healthDataAvailable) return null;
+
+  // Respect consent: if user has revoked health_data_ai, skip injection
+  if (sessionState.consentHealthDataAi === false) return null;
 
   const lines: string[] = [
     "## Medicare Health Data (from Blue Button 2.0)",

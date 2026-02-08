@@ -22,6 +22,8 @@ export { OUTCOME_PROMPTING_SKILL } from "./domain/outcome-prompting";
 
 // Health records skill
 export { HEALTH_RECORDS_SKILL } from "@/lib/skills/health-records";
+export { MEDICARE_NOTIFICATIONS_SKILL } from "@/lib/skills/medicare-notifications";
+export { DIABETES_PREVENTION_SKILL } from "@/lib/skills/diabetes-prevention";
 
 // Channel skills
 export { COUNSELOR_SKILL } from "./channel/counselor";

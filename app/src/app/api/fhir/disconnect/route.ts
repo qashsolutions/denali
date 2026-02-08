@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
+import { logAudit } from "@/lib/audit";
 
 export async function POST() {
   try {
@@ -36,6 +37,12 @@ export async function POST() {
         .delete()
         .eq("user_id", user.id),
     ]);
+
+    logAudit("FHIR_DISCONNECT", {
+      userId: user.id,
+      resourceType: "ehr_connection",
+      metadata: { provider: "bluebutton" },
+    }).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (error) {

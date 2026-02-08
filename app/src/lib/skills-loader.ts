@@ -59,6 +59,8 @@ import {
   COUNSELOR_SKILL,
   PROVIDER_PILOT_SKILL,
   HEALTH_RECORDS_SKILL,
+  MEDICARE_NOTIFICATIONS_SKILL,
+  DIABETES_PREVENTION_SKILL,
 } from "@/skills";
 import { buildHealthContextForPrompt } from "@/lib/fhir/context";
 
@@ -121,6 +123,9 @@ export interface SkillTriggers {
   // Health data (Blue Button)
   hasHealthData: boolean;
   hasRecentDenials: boolean;
+  hasRecentChanges: boolean;
+  // Diabetes context (P2)
+  hasDiabetesContext: boolean;
 }
 
 // Emergency symptom patterns
@@ -216,6 +221,9 @@ export function detectTriggers(
     // Health data (set externally by route.ts from fhir_cache)
     hasHealthData: sessionState?.healthDataAvailable ?? false,
     hasRecentDenials: (sessionState?.recentDenials?.length ?? 0) > 0,
+    hasRecentChanges: false, // Set externally by route.ts
+    // Diabetes context (set externally by route.ts)
+    hasDiabetesContext: false,
   };
 }
 
@@ -265,6 +273,20 @@ export function buildSystemPrompt(
     if (healthContext) {
       sections.push(healthContext);
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DIABETES PREVENTION - Personalized diabetes coaching
+  // ─────────────────────────────────────────────────────────────────────────
+  if (triggers.hasDiabetesContext) {
+    sections.push(DIABETES_PREVENTION_SKILL);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // MEDICARE NOTIFICATIONS - Alert users about recent changes
+  // ─────────────────────────────────────────────────────────────────────────
+  if (triggers.hasHealthData && triggers.hasRecentChanges) {
+    sections.push(MEDICARE_NOTIFICATIONS_SKILL);
   }
 
   // ─────────────────────────────────────────────────────────────────────────

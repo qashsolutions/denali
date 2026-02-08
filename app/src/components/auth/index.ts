@@ -1,3 +1,2 @@
-export { EmailOTPModal } from "./EmailOTPModal";
-export { TOTPEnrollModal } from "./TOTPEnrollModal";
-export { TOTPChallengeModal } from "./TOTPChallengeModal";
+export { PasskeyEnrollModal } from "./PasskeyEnrollModal";
+export { PasskeyChallengeModal } from "./PasskeyChallengeModal";

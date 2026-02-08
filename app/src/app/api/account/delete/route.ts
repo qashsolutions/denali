@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase";
+import { logAudit } from "@/lib/audit";
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -35,6 +36,14 @@ export async function DELETE(request: NextRequest) {
 
     const userId = user.id;
     const email = user.email;
+
+    // Log before deletion (userId will be SET NULL after delete via FK)
+    logAudit("ACCOUNT_DELETED", {
+      userId,
+      resourceType: "account",
+      metadata: { email: email ?? null },
+      request,
+    }).catch(() => {});
 
     // Start deletion process
     // Order matters due to foreign key constraints
