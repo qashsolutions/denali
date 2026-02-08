@@ -47,6 +47,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Retrieve PKCE code verifier from cookie
+    const codeVerifier = request.cookies.get("bb_code_verifier")?.value;
+    if (!codeVerifier) {
+      console.error("[FHIR callback] Missing PKCE code verifier");
+      return NextResponse.redirect(
+        new URL("/app/health?error=missing_pkce", request.url)
+      );
+    }
+
     // Verify user is authenticated
     const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -75,6 +84,7 @@ export async function GET(request: NextRequest) {
       grant_type: "authorization_code",
       code,
       redirect_uri: redirectUri,
+      code_verifier: codeVerifier,
     });
 
     const tokenRes = await fetch(tokenUrl, {
@@ -140,11 +150,12 @@ export async function GET(request: NextRequest) {
       request,
     }).catch(() => {});
 
-    // Clear the state cookie and redirect to health page
+    // Clear OAuth cookies and redirect to health page
     const response = NextResponse.redirect(
       new URL("/app/health?connected=true", request.url)
     );
     response.cookies.delete("bb_oauth_state");
+    response.cookies.delete("bb_code_verifier");
 
     return response;
   } catch (error) {

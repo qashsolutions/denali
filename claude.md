@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-05
+     Last updated: 2026-02-07
      Maintainer: @cvr
 -->
 
@@ -95,17 +95,31 @@ Where to find specific logic in the codebase.
 | `src/lib/tools/index.ts` | All 12 local tool definitions + executors (search_cpt, lookup_denial_code, generate_appeal_letter, etc.) |
 | `src/lib/skills-loader.ts` | Conditional prompt builder. Loads skill sections based on SkillTriggers (onboarding, symptom gathering, coverage, appeal, etc.) |
 | `src/lib/denial-patterns.ts` | Async Supabase queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
+| `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via admin client (bypasses RLS). Non-blocking fire-and-forget |
+| `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI), `context.ts` (AI prompt injection), `sync.ts` (cache sync) |
+| `src/hooks/useAuth.ts` | Auth state: email OTP, MFA (TOTP + WebAuthn), plan/role/trial detection, appeal access gating |
+| `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table, gates health data injection |
+| `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data` |
+| `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
+| `src/config/pricing.ts` | Pricing constants: free appeal limit, trial duration, Stripe price IDs |
 | `src/types/database.ts` | Supabase-generated TypeScript types. Regenerate with `npx supabase gen types` |
-| `src/app/api/chat/route.ts` | Request flow: parse messages, restore sessionState, detect triggers, build prompt, run chat loop, persist learning |
 
 ### API Routes
 
 ```
 src/app/api/
-  chat/route.ts           # Main chat with Claude + tools + MCP
-  appeal-outcome/route.ts # Record appeal results
-  account/delete/route.ts # GDPR/CCPA account deletion
-  checkout/route.ts       # Stripe payment
+  chat/route.ts               # Main chat with Claude + tools + MCP
+  appeal-outcome/route.ts     # Record appeal results
+  account/delete/route.ts     # GDPR/CCPA account deletion
+  checkout/route.ts           # Stripe payment
+  consent/route.ts            # Consent preferences (GET/PUT)
+  trial/route.ts              # 30-day trial (GET status / POST start)
+  cms-metadata/route.ts       # Public CMS app directory metadata
+  fhir/authorize/route.ts     # Blue Button OAuth initiation (PKCE + state)
+  fhir/callback/route.ts      # Blue Button OAuth callback (token exchange)
+  fhir/data/route.ts          # FHIR data retrieval + caching
+  fhir/disconnect/route.ts    # Revoke Blue Button connection
+  webhooks/stripe/route.ts    # Stripe webhook events
 ```
 
 ---
@@ -208,12 +222,16 @@ User-facing (plain English):        Internal (codes, never shown):
 |-------|---------|
 | `users` | Auth, phone (primary), email, plan, theme, accessibility settings |
 | `user_verification` | Email + mobile OTP status |
-| `subscriptions` | Plan type, Stripe customer ID, billing status |
+| `subscriptions` | Plan type, Stripe customer ID, billing status, `trial_start`/`trial_end`/`trial_converted` |
 | `usage` | Appeal count per phone number |
 | `conversations` | Chat history per user |
 | `messages` | Individual messages (role: user/assistant) |
 | `appeals` | Generated appeal letters with codes, policy refs, `carc_codes TEXT[]`, `rarc_codes TEXT[]` |
 | `user_feedback` | Thumbs up/down + corrections |
+| `audit_logs` | CMS compliance audit trail — who, what, when, why (IP, user agent). RLS: users read own logs, service role writes |
+| `consent_preferences` | Per-user consent toggles: `health_data_ai`, `health_data_storage`, `analytics`. Versioned, audit-logged on change |
+| `ehr_connections` | Blue Button OAuth tokens (AES-256-GCM encrypted), FHIR patient ID, connection status |
+| `fhir_cache` | Transformed FHIR data (patient, coverage, claims), 24h TTL. RLS-protected reads |
 
 ### Denial Code Tables
 
@@ -287,9 +305,20 @@ The system uses gates that return early and prevent later skills from loading pr
 - Conversation rules (one question, brief responses, explain "why")
 - Error handling (graceful failures, progressive disclosure)
 
+### Additional Skills (Loaded Contextually)
+
+| Skill | File | Trigger |
+|-------|------|---------|
+| `HEALTH_RECORDS_SKILL` | `src/lib/skills/health-records.ts` | `hasHealthData` or `hasRecentDenials` |
+| `MEDICARE_NOTIFICATIONS_SKILL` | `src/lib/skills/medicare-notifications.ts` | `hasHealthData && hasRecentChanges` |
+| `DIABETES_PREVENTION_SKILL` | `src/lib/skills/diabetes-prevention.ts` | `hasDiabetesContext` |
+| `OUTCOME_PROMPTING_SKILL` | `src/skills/domain/outcome-prompting.ts` | Returning user with pending appeal |
+| `COUNSELOR_SKILL` | `src/skills/channel/counselor.ts` | `role === "counselor"` |
+| `PROVIDER_PILOT_SKILL` | `src/skills/channel/provider.ts` | `role === "provider"` |
+
 ### Implementation
 
-Skills are NOT separate files or edge functions. They are string constants in `skills-loader.ts` that get concatenated into the system prompt based on trigger booleans. The function `buildSystemPromptWithLearning()` in `route.ts` calls the skills loader and also injects learned context (high-confidence mappings, successful coverage paths).
+Skills are string constants exported from `src/skills/` (core domain skills) and `src/lib/skills/` (data-dependent skills). They get concatenated into the system prompt by `skills-loader.ts` based on trigger booleans. The function `buildSystemPromptWithLearning()` in `route.ts` calls the skills loader and also injects learned context (high-confidence mappings, successful coverage paths).
 
 ---
 
@@ -598,6 +627,7 @@ How each data source connects to the others:
 | Plan | Price | Limits | Auth Required |
 |------|-------|--------|---------------|
 | Free | $0 | 3 appeals (lifetime) | Email OTP |
+| Trial | $0 | 30 days unlimited (CMS A4) | Email OTP |
 | Pay Per Appeal | $10/appeal | Unlimited | Mobile + Email OTP |
 | Unlimited | $25/month | Unlimited appeals | Mobile + Email OTP |
 
@@ -609,8 +639,10 @@ Coverage guidance is **always free** (unlimited, no signup). Paywall only appear
 |---------|---------------|
 | Coverage guidance | None |
 | First 3 appeals | Email OTP only |
+| 30-day trial | Email OTP only |
 | Additional appeals | Mobile OTP + Payment |
 | $25/month subscription | Mobile OTP + Email OTP |
+| Medicare health data | Email OTP + Blue Button OAuth |
 
 ### Gating Logic
 
@@ -620,7 +652,7 @@ Coverage guidance is **always free** (unlimited, no signup). Paywall only appear
    - Not found -> Signup wall (email OTP)
    - Found, appeal_count<3 -> Generate letter (FREE), increment count
    - Found, appeal_count>=3 -> Check subscription:
-     - Active -> Allow
+     - Active (monthly or active trial) -> Allow
      - None -> Show paywall ($10 or $25/month)
 3. After payment -> Reveal letter, increment count
 ```
@@ -704,17 +736,21 @@ After every chat response, `persistLearning()` runs non-blocking:
 
 ```
 src/
-  app/api/          # API routes (chat, appeal-outcome, account, checkout)
+  app/api/          # API routes (chat, fhir/*, consent, trial, cms-metadata, account, checkout, webhooks)
+  app/app/          # App shell routes (/app, /app/chat, /app/health, /app/diabetes, /app/settings)
   components/
-    ui/             # Primitives (Button, Input, Card, Modal)
+    ui/             # Primitives (Button, Input, Card, Modal, CmsPledge)
     chat/           # Chat-specific (Message, ChatInput, Suggestions)
     appeal/         # Appeal-specific (AppealLetter, StatusBadge)
-    layout/         # Layout (Header, Container)
-  features/         # Self-contained feature modules (coverage, appeal, auth)
-  hooks/            # Shared custom hooks (useSupabase, useClaude)
-  lib/              # Core libraries (claude.ts, supabase.ts, tools/, skills-loader.ts, denial-patterns.ts)
+    auth/           # Auth components (EmailOTPModal, PasskeyEnrollModal, PasskeyChallengeModal, TOTPModals)
+    layout/         # Layout (AppHeader, BottomTabs, Container)
+    health/         # Health page (ConnectMedicare, PatientCard, CoverageCards, ClaimsList)
+  hooks/            # Custom hooks (useAuth, useChat, useConsent, useHealthData, useSettings, etc.)
+  lib/              # Core libraries (claude.ts, supabase.ts, audit.ts, tools/, skills-loader.ts, denial-patterns.ts)
+  lib/fhir/         # Blue Button 2.0 (crypto, tokens, client, transforms, context, sync)
+  lib/skills/       # AI skills injected via skills-loader (health-records, medicare-notifications, diabetes-prevention)
+  config/           # Config (api.ts, brand.ts, pricing.ts, ui.ts)
   types/            # TypeScript types (database.ts from Supabase gen)
-  utils/            # Shared utilities (format, validate, constants)
   styles/           # Global styles + theme
 ```
 
@@ -778,7 +814,53 @@ Server-side logs (Vercel Functions, not browser console):
 ```
 ANTHROPIC_API_KEY=sk-ant-api03-...
 ANTHROPIC_MODEL=claude-opus-4-5-20251101
+BLUEBUTTON_CLIENT_ID=...          # CMS Blue Button OAuth client ID
+BLUEBUTTON_CLIENT_SECRET=...      # CMS Blue Button OAuth client secret
+BLUEBUTTON_BASE_URL=https://sandbox.bluebutton.cms.gov  # or production URL
+FHIR_TOKEN_ENCRYPTION_KEY=...     # 32-byte hex key for AES-256-GCM token encryption
+STRIPE_SECRET_KEY=sk_...          # Stripe API key
+STRIPE_WEBHOOK_SECRET=whsec_...   # Stripe webhook signing secret
 ```
+
+---
+
+## Blue Button 2.0 (Medicare FHIR API)
+
+Blue Button connects patients to their Medicare claims data via FHIR APIs.
+
+### OAuth Flow (PKCE)
+
+```
+1. User clicks "Connect Medicare" on /app/health
+2. GET /api/fhir/authorize:
+   - Generate state (CSRF) + code_verifier (PKCE)
+   - Compute code_challenge = SHA256(code_verifier) → base64url
+   - Store state + code_verifier in httpOnly cookies (10 min TTL)
+   - Redirect to CMS: /v2/o/authorize/?client_id=...&code_challenge=...&code_challenge_method=S256
+3. User authorizes on CMS site → redirected to /api/fhir/callback?code=...&state=...
+4. GET /api/fhir/callback:
+   - Validate state cookie
+   - Read code_verifier cookie
+   - POST /v2/o/token/ with {code, code_verifier, redirect_uri} + Basic Auth
+   - Encrypt tokens (AES-256-GCM) → upsert ehr_connections
+   - Clear cookies → redirect to /app/health?connected=true
+```
+
+### Scopes
+
+`patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read profile openid`
+
+### Token Security
+
+- Access & refresh tokens encrypted at rest via `FHIR_TOKEN_ENCRYPTION_KEY` (AES-256-GCM)
+- Token writes use admin client (bypasses RLS); reads via server client (respects RLS)
+- Auto-refresh on expired access tokens via `refreshAccessToken()` in `lib/fhir/tokens.ts`
+
+### Health Data in AI
+
+- Client-side `useHealthData()` fetches from `/api/fhir/data` → populates sessionState fields (`healthDataAvailable`, `activeCoverage`, `recentDenials`)
+- Server-side `buildHealthContextForPrompt()` injects health context into Claude system prompt (gated by `health_data_ai` consent)
+- `HEALTH_RECORDS_SKILL` loaded when `hasHealthData` or `hasRecentDenials` triggers fire
 
 ---
 
@@ -802,12 +884,12 @@ These apply to Denali regardless of category. Source: categories page.
 
 | # | Requirement | Denali Status |
 |---|-------------|---------------|
-| **A1** | **IAL2/AAL2 identity verification** — via intermediary PHR app or CMS-approved service (passkeys, mDLs) | **GAP.** Currently email/phone OTP only. Need: passkey (WebAuthn) support |
-| **A2** | **Medicare.gov connectivity** — notify Medicare beneficiaries of communications (notices, EOBs, fraud alerts) | **GAP.** Not implemented. Need: Medicare.gov notification bridge |
-| **A3** | **CMS review participation** — disclose data sources, terms/agreements, complete basic security checklist | **GAP.** Need: prepare data source inventory, terms doc, security checklist |
-| **A4** | **Trial access for Medicare patients** if app charges a fee | **PARTIAL.** First 3 appeals free. CMS may expect broader trial (30 days?). Formalize as "30-day free trial" |
-| **A5** | **CMS discovery experience** — allow app to be listed as recommended option on Medicare.gov | **GAP.** Need: prepare app listing, metadata, description for CMS app directory |
-| **A6** | **HIPAA compliance** when provided by a covered entity or business associate | **IN PROGRESS.** Need: BAA with Supabase/Vercel, HIPAA compliance documentation |
+| **A1** | **IAL2/AAL2 identity verification** — via intermediary PHR app or CMS-approved service (passkeys, mDLs) | **DONE (code).** Passkey (WebAuthn) enrollment + challenge via `PasskeyEnrollModal`/`PasskeyChallengeModal`. AAL2 gating on FHIR access. Still need: CMS credential service integration |
+| **A2** | **Medicare.gov connectivity** — notify Medicare beneficiaries of communications (notices, EOBs, fraud alerts) | **PARTIAL.** `MEDICARE_NOTIFICATIONS_SKILL` alerts for changes detected in FHIR data. Still need: Medicare.gov notification bridge API |
+| **A3** | **CMS review participation** — disclose data sources, terms/agreements, complete basic security checklist | **PARTIAL.** `/api/cms-metadata` exposes app metadata for CMS directory. Still need: terms doc, security self-assessment |
+| **A4** | **Trial access for Medicare patients** if app charges a fee | **DONE.** 30-day free trial via `/api/trial`. Trial status tracked in `subscriptions` table. Settings shows trial days remaining |
+| **A5** | **CMS discovery experience** — allow app to be listed as recommended option on Medicare.gov | **PARTIAL.** `/api/cms-metadata` returns app listing metadata. Still need: CMS submission |
+| **A6** | **HIPAA compliance** when provided by a covered entity or business associate | **IN PROGRESS.** Audit logging + consent management done. Need: BAA with Supabase/Vercel, HIPAA compliance documentation |
 
 ### Conversational AI — Additional Criteria
 
@@ -834,20 +916,20 @@ These are network-level criteria but affect how Denali interacts with CMS Aligne
 
 | Criterion | Requirement | Denali Impact |
 |-----------|-------------|---------------|
-| **1 — Universal Data Access** | Patients access electronic medical info via apps of their choice | Blue Button 2.0 (done). Future: CMS Aligned Network connectivity |
-| **2 — Claims & Benefits** | Access claims, EOBs, prior auths, clinical data from payers | Health page shows claims. Need: EOB detail, prior auth history |
-| **3 — Simplified Identity** | IAL2/AAL2 credentials, no extra logins | See A1 above |
-| **4 — Audit Log Transparency** | Accounting of all data access — who, when, why | **NOT IMPLEMENTED.** Need: `audit_logs` table + patient-facing viewer |
-| **5 — Consent Preferences** | Patient consent preferences shared with all parties; honor restrictions | **NOT IMPLEMENTED.** Need: consent preferences UI + enforcement layer |
+| **1 — Universal Data Access** | Patients access electronic medical info via apps of their choice | **DONE.** Blue Button 2.0 with PKCE OAuth. Future: CMS Aligned Network connectivity |
+| **2 — Claims & Benefits** | Access claims, EOBs, prior auths, clinical data from payers | **DONE.** Health page shows patient info, coverage, claims list + detail |
+| **3 — Simplified Identity** | IAL2/AAL2 credentials, no extra logins | **DONE (code).** Passkey enrollment + AAL2 gating. See A1 |
+| **4 — Audit Log Transparency** | Accounting of all data access — who, when, why | **DONE.** `audit_logs` table + `logAudit()` calls on all sensitive operations (FHIR, appeals, consent, account deletion, checkout) |
+| **5 — Consent Preferences** | Patient consent preferences shared with all parties; honor restrictions | **DONE.** `consent_preferences` table + Settings UI toggles + enforcement in FHIR context pipeline |
 
 ### Framework Section V: Identity, Security & Trust
 
 | Criterion | Requirement | Denali Impact |
 |-----------|-------------|---------------|
-| **22 — Request Purpose** | All queries include purpose code | Need: tag FHIR/data requests with purpose |
-| **23 — Digital Credentials** | Accept IAL2/AAL2 via CMS-approved service | See A1 above |
-| **24 — Access Control** | Enforce access control + consent policy per context | Need: context-aware consent enforcement |
-| **25 — Audit Records** | Verifiable logs for all auth requests/responses | See Criterion 4 above |
+| **22 — Request Purpose** | All queries include purpose code | **DONE.** `X-Request-Purpose` header on FHIR calls, derived from skill triggers (appeal/coverage-determination/patient-request) |
+| **23 — Digital Credentials** | Accept IAL2/AAL2 via CMS-approved service | **DONE (code).** Passkey enrollment + AAL2 challenge. See A1 |
+| **24 — Access Control** | Enforce access control + consent policy per context | **DONE.** Consent preferences gate health data injection. AAL2 gates FHIR access when passkey enrolled |
+| **25 — Audit Records** | Verifiable logs for all auth requests/responses | **DONE.** `audit_logs` table with action, resource, IP, user agent, metadata. See Criterion 4 |
 | **26 — Security Validation** | HITRUST certification or CMS-approved equivalent | **REQUIRED.** Org-level process |
 
 ### Framework Sections II–IV (Reference)
@@ -864,24 +946,36 @@ Pledge text displayed via `CmsPledge` component (`src/components/ui/CmsPledge.ts
 - **AI Assistant pledge**: shown on Ask Denali (chat) page, above input
 - **Diabetes & Obesity pledge**: shown on Diabetes Care page, below feature preview
 
-### Compliance Gap Summary — Full Picture
+### Compliance Status Summary
 
-| Gap | CMS Ref | Priority | Scope | Type |
-|-----|---------|----------|-------|------|
-| **Audit logging** | Criteria 4, 25 | **P0** | DB table + API middleware + patient "Activity Log" in Settings | Code + DB |
-| **Consent preferences** | Criterion 5 | **P0** | Settings UI + `consent_preferences` table + enforcement in FHIR pipeline | Code + DB |
-| **Passkey/IAL2 auth** | A1, Criteria 3, 23 | **P0** | WebAuthn registration/login + CMS credential service integration | Code |
-| **HIPAA compliance** | A6 | **P0** | BAAs with Supabase/Vercel, compliance documentation, breach notification plan | Process |
-| **HITRUST certification** | Criterion 26 | **P0** | Org-level security certification process | Process |
-| **30-day free trial** | A4 | **P1** | Formalize trial period, update paywall logic, surface in onboarding | Code |
-| **CMS review prep** | A3 | **P1** | Data source inventory doc, terms of service, security self-assessment checklist | Docs |
-| **Medicare.gov notifications** | A2 | **P1** | Integration with Medicare.gov communication system | Code + API |
-| **CMS app directory listing** | A5 | **P1** | App metadata, screenshots, description for Medicare.gov discovery | Docs |
-| **Request purpose tagging** | Criterion 22 | **P1** | Tag all FHIR/data requests with purpose code | Code |
-| **Pre-diabetic resources** | Diabetes criteria | **P2** | MDPP content, pre-diabetes screening, A1C risk thresholds | Content + Code |
-| **Diabetes feature build-out** | Diabetes criteria | **P2** | Lab trends, coaching AI, med reminders, nutrition/activity tracking | Code |
-| **EOB detail & prior auth history** | Criterion 2 | **P2** | Extend Blue Button data transforms | Code |
-| **FHIR USCDI v3 compliance** | Criterion 13 | **P2** | Verify Blue Button data maps to USCDI v3 by July 2026 | Code |
+#### Completed (Code Done)
+
+| Item | CMS Ref | What's Implemented |
+|------|---------|-------------------|
+| **Audit logging** | Criteria 4, 25 | `audit_logs` table + `logAudit()` on 7+ API routes (FHIR, appeals, consent, account, checkout) |
+| **Consent preferences** | Criterion 5 | `consent_preferences` table + Settings toggles + enforcement in FHIR context pipeline |
+| **Passkey/IAL2 auth** | A1, Criteria 3, 23 | WebAuthn enrollment/challenge modals, AAL2 gating on FHIR access |
+| **30-day free trial** | A4 | `/api/trial` (start/check), `subscriptions` trial fields, paywall bypass for active trials |
+| **CMS metadata API** | A3, A5 | `/api/cms-metadata` returns app listing data for CMS directory |
+| **Request purpose tagging** | Criterion 22 | `X-Request-Purpose` header on FHIR calls, derived from skill context |
+| **Consent enforcement** | Criterion 24 | Consent state gates health data injection into AI prompts |
+| **Medicare notifications skill** | A2 (partial) | `MEDICARE_NOTIFICATIONS_SKILL` detects coverage changes from FHIR data |
+| **Diabetes prevention skill** | Diabetes criteria | `DIABETES_PREVENTION_SKILL` with A1C coaching, CPT refs, prevention resources |
+| **Blue Button PKCE** | FHIR security | OAuth with PKCE (S256), `openid` scope, encrypted token storage |
+
+#### Remaining Gaps
+
+| Gap | CMS Ref | Priority | Type |
+|-----|---------|----------|------|
+| **HIPAA compliance** | A6 | **P0** | Process — BAAs with Supabase/Vercel, compliance docs, breach notification plan |
+| **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
+| **CMS credential service integration** | A1 | **P1** | Code — connect passkey flow to CMS-approved identity service |
+| **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct integration with Medicare.gov communication system |
+| **CMS review submission** | A3 | **P1** | Docs — terms of service, security self-assessment, data source inventory |
+| **CMS app directory submission** | A5 | **P1** | Docs — screenshots, descriptions for Medicare.gov listing |
+| **Diabetes page build-out** | Diabetes criteria | **P2** | Code — lab trend charts, personalized coaching UI, MDPP resources |
+| **EOB detail enrichment** | Criterion 2 | **P2** | Code — CARC/RARC extraction from FHIR EOB adjudication items |
+| **FHIR USCDI v3 compliance** | Criterion 13 | **P2** | Code — verify Blue Button data maps to USCDI v3 by July 2026 |
 
 ### Key Dates
 

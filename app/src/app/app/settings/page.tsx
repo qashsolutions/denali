@@ -1,17 +1,29 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
 import { useSettings } from "@/hooks/useSettings";
 import { useConsent, type ConsentState } from "@/hooks/useConsent";
+import { useAuth } from "@/hooks/useAuth";
 import { PasskeyEnrollModal } from "@/components/auth";
+import { PRICING, formatPrice } from "@/config/pricing";
 
 export default function AppSettingsPage() {
+  const router = useRouter();
   const { isDark, setTheme } = useTheme();
   const { settings, setTextScale, resetSettings } = useSettings();
   const { consent, isLoading: consentLoading, updateConsent } = useConsent();
+  const { authState, sendEmailOTP, verifyEmailOTP, signOut } = useAuth();
   const [showPasskeyEnroll, setShowPasskeyEnroll] = useState(false);
   const [passkeyEnrolled, setPasskeyEnrolled] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [otpInput, setOtpInput] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const textScaleOptions = [
     { value: 0.9, label: "Small" },
@@ -157,6 +169,229 @@ export default function AppSettingsPage() {
           Privacy FAQ &amp; data practices
         </a>
       </section>
+
+      {/* Account */}
+      <section className="mb-8">
+        <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
+          Account
+        </h2>
+        <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)] space-y-4">
+          {authState.email ? (
+            <>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">
+                    {authState.email}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    Signed in
+                    {authState.plan !== "free" && ` \u00b7 ${authState.plan} plan`}
+                  </p>
+                </div>
+                <button
+                  onClick={async () => {
+                    await signOut();
+                    router.push("/app");
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-tertiary)] hover:bg-[var(--bg-tertiary)]/80 transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </>
+          ) : (
+            <div>
+              <p className="text-sm font-medium text-[var(--text-primary)] mb-2">
+                Sign in with email
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mb-3">
+                Sign in to save conversations, generate appeal letters, and connect Medicare.
+              </p>
+              {!otpSent ? (
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="you@example.com"
+                    className="flex-1 px-3 py-2 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!emailInput) return;
+                      setAuthLoading(true);
+                      setAuthMessage("");
+                      const ok = await sendEmailOTP(emailInput);
+                      setAuthLoading(false);
+                      if (ok) {
+                        setOtpSent(true);
+                        setAuthMessage("Check your email for a verification code.");
+                      } else {
+                        setAuthMessage("Failed to send code. Try again.");
+                      }
+                    }}
+                    disabled={authLoading || !emailInput}
+                    className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors disabled:opacity-50"
+                  >
+                    {authLoading ? "Sending..." : "Send Code"}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={otpInput}
+                    onChange={(e) => setOtpInput(e.target.value)}
+                    placeholder="Enter 6-digit code"
+                    maxLength={6}
+                    className="flex-1 px-3 py-2 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!otpInput) return;
+                      setAuthLoading(true);
+                      setAuthMessage("");
+                      const ok = await verifyEmailOTP(emailInput, otpInput);
+                      setAuthLoading(false);
+                      if (ok) {
+                        setAuthMessage("Signed in successfully!");
+                        setOtpSent(false);
+                        setOtpInput("");
+                      } else {
+                        setAuthMessage("Invalid code. Try again.");
+                      }
+                    }}
+                    disabled={authLoading || !otpInput}
+                    className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors disabled:opacity-50"
+                  >
+                    {authLoading ? "Verifying..." : "Verify"}
+                  </button>
+                </div>
+              )}
+              {authMessage && (
+                <p className="text-xs text-[var(--text-muted)] mt-2">{authMessage}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Subscription */}
+      {authState.email && (
+        <section className="mb-8">
+          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
+            Subscription
+          </h2>
+          <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-[var(--text-primary)]">
+                  {authState.plan === "monthly"
+                    ? "Unlimited Plan"
+                    : authState.plan === "trial"
+                    ? "Free Trial"
+                    : authState.plan === "per_appeal"
+                    ? "Pay Per Appeal"
+                    : "Free Plan"}
+                </p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  {authState.plan === "monthly"
+                    ? `${formatPrice(PRICING.MONTHLY.amount)}/month \u00b7 Unlimited appeals`
+                    : authState.plan === "trial" && authState.trialStatus === "active"
+                    ? `${authState.trialDaysRemaining} days remaining`
+                    : authState.plan === "trial" && authState.trialStatus === "expired"
+                    ? "Trial expired"
+                    : `${authState.appealCount} of ${PRICING.FREE_APPEAL_LIMIT} free appeals used`}
+                </p>
+              </div>
+              {authState.plan !== "monthly" && (
+                <button
+                  onClick={() => router.push("/app/chat")}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
+                >
+                  Upgrade
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Delete Account */}
+      {authState.email && (
+        <section className="mb-8">
+          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
+            Danger Zone
+          </h2>
+          <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-red-500/20">
+            {!showDeleteConfirm ? (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">
+                    Delete Account
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    Permanently delete your account and all data. This cannot be undone.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-red-600 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm font-medium text-red-600 mb-2">
+                  Are you sure? This will permanently delete:
+                </p>
+                <ul className="text-xs text-[var(--text-muted)] mb-4 space-y-1 list-disc list-inside">
+                  <li>All conversations and messages</li>
+                  <li>Appeal letters and outcomes</li>
+                  <li>Medicare health data connections</li>
+                  <li>Subscription and payment history</li>
+                </ul>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-tertiary)] hover:bg-[var(--bg-tertiary)]/80 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setDeleteLoading(true);
+                      try {
+                        const res = await fetch("/api/account/delete", {
+                          method: "DELETE",
+                          headers: { Authorization: "Bearer session" },
+                        });
+                        if (res.ok) {
+                          await signOut();
+                          router.push("/");
+                        } else {
+                          const data = await res.json();
+                          alert(data.error || "Failed to delete account");
+                        }
+                      } catch {
+                        alert("Failed to delete account. Please try again.");
+                      } finally {
+                        setDeleteLoading(false);
+                        setShowDeleteConfirm(false);
+                      }
+                    }}
+                    disabled={deleteLoading}
+                    className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {deleteLoading ? "Deleting..." : "Yes, Delete Everything"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Reset */}
       <section>

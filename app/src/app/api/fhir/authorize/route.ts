@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { API_CONFIG, getBaseUrl } from "@/config";
-import { randomBytes } from "crypto";
+import { randomBytes, createHash } from "crypto";
 import { logAudit } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
@@ -56,6 +56,12 @@ export async function GET(request: NextRequest) {
     // Generate CSRF state token
     const state = randomBytes(32).toString("hex");
 
+    // Generate PKCE code verifier and challenge (RFC 7636, S256)
+    const codeVerifier = randomBytes(32).toString("base64url"); // 43 chars
+    const codeChallenge = createHash("sha256")
+      .update(codeVerifier)
+      .digest("base64url");
+
     // Build callback URL
     const origin = getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin);
     const redirectUri = `${origin}${blueButton.callbackPath}`;
@@ -67,6 +73,8 @@ export async function GET(request: NextRequest) {
       response_type: "code",
       state,
       scope: blueButton.scopes,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
     });
 
     const authorizeUrl = `${blueButton.baseUrl}/${blueButton.version}/o/authorize/?${params}`;
@@ -78,15 +86,17 @@ export async function GET(request: NextRequest) {
       request,
     }).catch(() => {});
 
-    // Set state in httpOnly cookie (10 minute TTL)
+    // Set state and PKCE verifier in httpOnly cookies (10 minute TTL)
     const response = NextResponse.redirect(authorizeUrl);
-    response.cookies.set("bb_oauth_state", state, {
+    const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "lax" as const,
       maxAge: 600, // 10 minutes
       path: "/",
-    });
+    };
+    response.cookies.set("bb_oauth_state", state, cookieOptions);
+    response.cookies.set("bb_code_verifier", codeVerifier, cookieOptions);
 
     return response;
   } catch (error) {
