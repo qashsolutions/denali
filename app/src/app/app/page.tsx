@@ -20,16 +20,15 @@ const FEATURES = [
     href: "/app/chat",
     icon: <ChatBubbleIcon className="w-6 h-6" />,
     title: "Ask Denali",
-    description: "Medicare coverage, denial codes, and appeal letters",
+    description: "Medicare coverage, diabetes care, denial codes, and appeal letters",
     accentColor: "#3b82f6",
   },
   {
-    href: "/app/diabetes",
+    href: "/app/chat?topic=diabetes",
     icon: <DiabetesIcon className="w-6 h-6" />,
     title: "Diabetes Care",
     description: "Personalized coaching from your own lab results",
     accentColor: "#8b5cf6",
-    badge: "Coming Soon",
   },
 ];
 
@@ -56,7 +55,6 @@ export default function AppHomePage() {
             title={feature.title}
             description={feature.description}
             accentColor={feature.accentColor}
-            badge={feature.badge}
           />
         ))}
       </div>

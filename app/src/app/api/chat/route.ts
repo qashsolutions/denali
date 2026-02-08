@@ -130,13 +130,17 @@ export async function POST(request: NextRequest) {
       triggers.hasRecentChanges = true; // MEDICARE_NOTIFICATIONS_SKILL uses FHIR context to determine what's new
     }
 
-    // Diabetes context detection (from user keywords or FHIR data)
-    const userContent = body.messages
-      .filter((m) => m.role === "user")
-      .map((m) => m.content.toLowerCase())
-      .join(" ");
-    if (/diabetes|diabetic|a1c|hemoglobin a1c|blood sugar|glucose|insulin|pre-?diabetic|mdpp/i.test(userContent)) {
+    // Diabetes context detection (from FHIR labs or user keywords)
+    if (sessionState.labs && sessionState.labs.length > 0) {
       triggers.hasDiabetesContext = true;
+    } else {
+      const userContent = body.messages
+        .filter((m) => m.role === "user")
+        .map((m) => m.content.toLowerCase())
+        .join(" ");
+      if (/diabetes|diabetic|a1c|hemoglobin a1c|blood sugar|glucose|insulin|pre-?diabetic|mdpp/i.test(userContent)) {
+        triggers.hasDiabetesContext = true;
+      }
     }
 
     console.log("[Chat API] Detected triggers:", triggers);

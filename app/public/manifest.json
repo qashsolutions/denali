@@ -27,14 +27,8 @@
     {
       "name": "Ask Denali",
       "short_name": "Chat",
-      "description": "Ask about Medicare, health, or coverage",
+      "description": "Medicare coverage, diabetes care, and appeal letters",
       "url": "/app/chat"
-    },
-    {
-      "name": "Claims & Appeals",
-      "short_name": "Claims",
-      "description": "Coverage guidance and appeal letters",
-      "url": "/app/claims"
     },
     {
       "name": "My Health",
@@ -45,8 +39,8 @@
     {
       "name": "Diabetes Care",
       "short_name": "Diabetes",
-      "description": "Diabetes coaching and tracking",
-      "url": "/app/diabetes"
+      "description": "Diabetes coaching from your lab results",
+      "url": "/app/chat?topic=diabetes"
     }
   ]
 }

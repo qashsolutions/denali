@@ -8,12 +8,13 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import type { PatientSummary, CoverageSummary, ClaimSummary } from "@/lib/fhir/transforms";
+import type { PatientSummary, CoverageSummary, ClaimSummary, LabResult } from "@/lib/fhir/transforms";
 
 interface UseHealthDataReturn {
   patient: PatientSummary | null;
   coverage: CoverageSummary[];
   claims: ClaimSummary[];
+  labs: LabResult[];
   isConnected: boolean;
   isLoading: boolean;
   lastSynced: Date | null;
@@ -27,6 +28,7 @@ export function useHealthData(): UseHealthDataReturn {
   const [patient, setPatient] = useState<PatientSummary | null>(null);
   const [coverage, setCoverage] = useState<CoverageSummary[]>([]);
   const [claims, setClaims] = useState<ClaimSummary[]>([]);
+  const [labs, setLabs] = useState<LabResult[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
@@ -49,6 +51,7 @@ export function useHealthData(): UseHealthDataReturn {
       setPatient(data.patient ?? null);
       setCoverage(data.coverage ?? []);
       setClaims(data.claims ?? []);
+      setLabs(data.labs ?? []);
       setLastSynced(data.lastSynced ? new Date(data.lastSynced) : null);
     } catch {
       setError("Unable to connect. Please try again.");
@@ -74,6 +77,7 @@ export function useHealthData(): UseHealthDataReturn {
         setPatient(null);
         setCoverage([]);
         setClaims([]);
+        setLabs([]);
         setLastSynced(null);
       }
     } catch {
@@ -89,6 +93,7 @@ export function useHealthData(): UseHealthDataReturn {
     patient,
     coverage,
     claims,
+    labs,
     isConnected,
     isLoading,
     lastSynced,

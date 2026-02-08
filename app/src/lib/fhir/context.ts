@@ -34,6 +34,20 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
     lines.push("");
   }
 
+  // Lab results (diabetes-relevant)
+  if (sessionState.labs && sessionState.labs.length > 0) {
+    lines.push("**Lab Results:**");
+    for (const lab of sessionState.labs) {
+      const range = interpretLabValue(lab.name, lab.value);
+      lines.push(`- ${lab.name}: ${lab.value}${lab.unit} (${lab.date})${range ? ` — ${range}` : ""}`);
+    }
+    lines.push("");
+    lines.push(
+      "**ACTION:** Use these lab values to personalize diabetes coaching. Reference actual numbers when discussing management."
+    );
+    lines.push("");
+  }
+
   // Recent denials
   if (sessionState.recentDenials && sessionState.recentDenials.length > 0) {
     lines.push("**Recent Denied Claims (proactively offer appeal help):**");
@@ -50,4 +64,32 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Interpret a lab value into a clinical range label.
+ * Used to give Claude context without the user needing to interpret numbers.
+ */
+function interpretLabValue(name: string, value: number): string | null {
+  const lower = name.toLowerCase();
+
+  if (lower.includes("a1c") || lower.includes("hemoglobin a1c")) {
+    if (value < 5.7) return "Normal range";
+    if (value < 6.5) return "Pre-diabetic range";
+    return "Diabetic range";
+  }
+
+  if (lower.includes("glucose") && lower.includes("fasting")) {
+    if (value < 100) return "Normal range";
+    if (value < 126) return "Pre-diabetic range";
+    return "Diabetic range";
+  }
+
+  if (lower.includes("glucose")) {
+    if (value < 140) return "Normal range";
+    if (value < 200) return "Pre-diabetic range";
+    return "Diabetic range";
+  }
+
+  return null;
 }

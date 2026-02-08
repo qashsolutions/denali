@@ -126,6 +126,12 @@ export interface SessionState {
     denialCode: string;
     denialReason: string;
   }>;
+  labs?: Array<{                               // Diabetes-relevant lab results from FHIR Observations
+    name: string;
+    value: number;
+    unit: string;
+    date: string;
+  }>;
 
   // Consent (set by client from useConsent hook)
   consentHealthDataAi?: boolean;               // Whether user consents to health data in AI

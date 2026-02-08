@@ -22,7 +22,7 @@ export const BRAND = {
   COMPANY_PREFIX: "a unit of",
 
   /** Brand tagline */
-  TAGLINE: "Your Medicare companion for rural America",
+  TAGLINE: "Your Medicare health companion — built for the communities that need it most.",
 
   /** Copyright year (auto-updates) */
   get COPYRIGHT_YEAR() {

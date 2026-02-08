@@ -8,7 +8,6 @@ import {
   MountainIcon,
   HeartPulseIcon,
   ChatBubbleIcon,
-  DiabetesIcon,
   DocumentTextIcon,
   GearIcon,
 } from "@/components/icons";
@@ -18,7 +17,6 @@ import { createClient } from "@/lib/supabase";
 const NAV_ITEMS = [
   { label: "Health", href: "/app/health", Icon: HeartPulseIcon, color: "text-rose-500" },
   { label: "Ask Denali", href: "/app/chat", Icon: ChatBubbleIcon, color: "text-blue-500" },
-  { label: "Diabetes", href: "/app/diabetes", Icon: DiabetesIcon, color: "text-emerald-500" },
   { label: "Blog", href: "/blog", Icon: DocumentTextIcon, color: "text-violet-500" },
 ] as const;
 
@@ -125,12 +123,17 @@ export function AppHeader() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group mr-auto">
             <MountainIcon className="w-8 h-6 transition-transform group-hover:scale-105" />
-            <span className="text-xl sm:text-2xl font-bold text-[var(--text-primary)]">
-              {prefix}
-              {suffix && (
-                <span className="text-[var(--accent-secondary)]">{suffix}</span>
-              )}
-            </span>
+            <div className="flex flex-col">
+              <span className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] leading-tight">
+                {prefix}
+                {suffix && (
+                  <span className="text-[var(--accent-secondary)]">{suffix}</span>
+                )}
+              </span>
+              <span className="hidden md:block text-[10px] text-[var(--text-muted)] leading-tight">
+                {BRAND.TAGLINE}
+              </span>
+            </div>
           </Link>
 
           {/* Desktop Nav */}

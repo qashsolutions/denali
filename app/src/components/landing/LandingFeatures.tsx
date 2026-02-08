@@ -29,7 +29,7 @@ const FEATURES = [
     audience: "FOR EVERYONE",
     title: "Ask Denali",
     description:
-      "Ask anything about Medicare coverage. Get a clear checklist of what your doctor needs to document so your claim gets approved.",
+      "Ask anything about Medicare coverage or diabetes care. Get a clear checklist of what your doctor needs to document so your claim gets approved.",
     tags: ["NCD/LCD", "Part A & B", "Coverage Check"],
     color: "check-teal" as const,
     href: "/app/chat",
@@ -43,7 +43,7 @@ const FEATURES = [
       "Personalized coaching from your own A1C and glucose results. Track trends, get reminders, and stay ahead of diabetes.",
     tags: ["A1C Tracking", "Med Reminders", "MDPP"],
     color: "diabetes-violet" as const,
-    href: "/app/diabetes",
+    href: "/app/chat?topic=diabetes",
     Illustration: DiabetesCareIllustration,
   },
   {
