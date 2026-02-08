@@ -77,11 +77,11 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-40 backdrop-blur-md bg-[var(--bg-primary)]/90 border-b border-[var(--border)]/50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-14 sm:h-16">
+        <div className="flex items-center h-14 sm:h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 group">
+          <Link href="/" className="flex items-center gap-2 group mr-auto">
             <MountainIcon className="w-8 h-6 transition-transform group-hover:scale-105" />
-            <span className="text-lg font-bold text-[var(--text-primary)]">
+            <span className="text-xl sm:text-2xl font-bold text-[var(--text-primary)]">
               {prefix}
               {suffix && (
                 <span className="text-[var(--accent-secondary)]">{suffix}</span>
@@ -89,8 +89,8 @@ export function AppHeader() {
             </span>
           </Link>
 
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-1" aria-label="Main navigation">
+          {/* Desktop Nav — positioned near user/sign-in on the right */}
+          <nav className="hidden md:flex items-center gap-1 mr-2" aria-label="Main navigation">
             {NAV_ITEMS.map(({ label, href, Icon, color }) => {
               const isActive =
                 pathname === href || pathname?.startsWith(href + "/");

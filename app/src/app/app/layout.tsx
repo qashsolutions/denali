@@ -17,7 +17,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
             <Link href="/" className="flex items-center gap-1.5 shrink-0">
               <MountainIcon className="w-5 h-4" />
-              <span className="font-bold text-[var(--text-primary)]">
+              <span className="text-sm font-bold text-[var(--text-primary)]">
                 Denali<span className="text-[var(--accent-secondary)]">Health</span>
               </span>
             </Link>

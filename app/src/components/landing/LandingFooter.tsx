@@ -23,8 +23,8 @@ export function LandingFooter({ settings }: LandingFooterProps) {
           {/* Left: Logo + Company */}
           <div>
             <Link href="/" className="flex items-center gap-2 mb-1">
-              <MountainIcon className="w-8 h-6" />
-              <span className="text-lg font-bold text-[var(--text-primary)]">
+              <MountainIcon className="w-9 h-7" />
+              <span className="text-xl font-bold text-[var(--text-primary)]">
                 {prefix}
                 {suffix && (
                   <span className="text-[var(--accent-secondary)]">{suffix}</span>
