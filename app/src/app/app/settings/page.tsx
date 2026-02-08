@@ -61,7 +61,7 @@ export default function AppSettingsPage() {
                     await signOut();
                     router.push("/app");
                   }}
-                  className="px-4 py-2 rounded-lg text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-tertiary)] hover:bg-[var(--bg-tertiary)]/80 transition-colors"
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-[var(--text-primary)] border border-[var(--border)] hover:bg-[var(--bg-tertiary)] transition-colors"
                 >
                   Sign Out
                 </button>

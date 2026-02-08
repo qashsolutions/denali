@@ -49,13 +49,6 @@ export function AppHeader() {
       const u = session.user;
       const name = u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "User";
 
-      // Fetch plan from users table (lightweight query)
-      const { data: profile } = await supabase
-        .from("users")
-        .select("plan")
-        .eq("id", u.id)
-        .single();
-
       const planLabels: Record<string, string> = {
         monthly: "Unlimited",
         per_appeal: "Pay Per Appeal",
@@ -63,13 +56,31 @@ export function AppHeader() {
         free: "Free Plan",
       };
 
+      // Set user info immediately so avatar appears without waiting for DB
       setUserInfo({
         displayName: name,
         email: u.email || "",
         initial: name.charAt(0).toUpperCase(),
         lastSignIn: u.last_sign_in_at || null,
-        planLabel: planLabels[profile?.plan || "free"] || "Free Plan",
+        planLabel: "Free Plan",
       });
+
+      // Then fetch plan from DB (non-blocking enhancement)
+      try {
+        const { data: profile } = await supabase
+          .from("users")
+          .select("plan")
+          .eq("id", u.id)
+          .single();
+
+        if (profile?.plan) {
+          setUserInfo((prev) =>
+            prev ? { ...prev, planLabel: planLabels[profile.plan] || "Free Plan" } : prev
+          );
+        }
+      } catch {
+        // Plan fetch failed — avatar already showing, just keep default
+      }
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => updateUser(session));
