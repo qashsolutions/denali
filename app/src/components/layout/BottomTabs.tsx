@@ -4,32 +4,33 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
+  HomeIcon,
   HeartPulseIcon,
   ChatBubbleIcon,
-  DiabetesIcon,
-  ClaimsIcon,
+  GearIcon,
 } from "@/components/icons";
 
 const TABS = [
+  {
+    label: "Home",
+    href: "/app",
+    Icon: HomeIcon,
+    exact: true,
+  },
   {
     label: "Health",
     href: "/app/health",
     Icon: HeartPulseIcon,
   },
   {
-    label: "Chat",
+    label: "Ask Denali",
     href: "/app/chat",
     Icon: ChatBubbleIcon,
   },
   {
-    label: "Diabetes",
-    href: "/app/diabetes",
-    Icon: DiabetesIcon,
-  },
-  {
-    label: "Claims",
-    href: "/app/claims",
-    Icon: ClaimsIcon,
+    label: "Settings",
+    href: "/app/settings",
+    Icon: GearIcon,
   },
 ] as const;
 
@@ -42,9 +43,11 @@ export function BottomTabs() {
       aria-label="Main navigation"
     >
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
-        {TABS.map(({ label, href, Icon }) => {
-          const isActive =
-            pathname === href || pathname?.startsWith(href + "/");
+        {TABS.map(({ label, href, Icon, ...rest }) => {
+          const exact = "exact" in rest && rest.exact;
+          const isActive = exact
+            ? pathname === href
+            : pathname === href || pathname?.startsWith(href + "/");
 
           return (
             <Link

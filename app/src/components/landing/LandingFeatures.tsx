@@ -27,7 +27,7 @@ const FEATURES = [
   {
     step: "02",
     audience: "FOR EVERYONE",
-    title: "AI Health Assistant",
+    title: "Ask Denali",
     description:
       "Ask anything about Medicare coverage. Get a clear checklist of what your doctor needs to document so your claim gets approved.",
     tags: ["NCD/LCD", "Part A & B", "Coverage Check"],
@@ -54,7 +54,7 @@ const FEATURES = [
       "Denied? We look up exactly why, build your appeal letter with the right codes and citations, and track your deadline so you never miss it.",
     tags: ["5 Appeal Levels", "Auto-Templates", "Deadline Alerts"],
     color: "appeal-coral" as const,
-    href: "/app/claims",
+    href: "/app/chat",
     Illustration: AppealIllustration,
   },
 ] as const;

@@ -254,8 +254,8 @@ function EmptyState({
 }) {
   const commonQuestions = [
     "Will Medicare cover my MRI?",
-    "What does my doctor need to document?",
-    "Help me understand my test results",
+    "Help me appeal a denial",
+    "What does code CO-50 mean?",
     "How do I know if a service is covered?",
   ];
 
@@ -268,8 +268,8 @@ function EmptyState({
         How can I help?
       </h2>
       <p className="text-[var(--text-secondary)] mb-6 max-w-sm">
-        Ask me about Medicare coverage, what your doctor needs to document, or
-        any health questions.
+        Ask about Medicare coverage, denial codes, appeal letters, or what your
+        doctor needs to document.
       </p>
 
       <div className="w-full max-w-sm space-y-2">

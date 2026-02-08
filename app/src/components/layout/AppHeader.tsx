@@ -8,15 +8,13 @@ import {
   HeartPulseIcon,
   ChatBubbleIcon,
   DiabetesIcon,
-  ClaimsIcon,
 } from "@/components/icons";
 import { BRAND } from "@/config";
 
 const NAV_ITEMS = [
   { label: "Health", href: "/app/health", Icon: HeartPulseIcon },
-  { label: "Chat", href: "/app/chat", Icon: ChatBubbleIcon },
+  { label: "Ask Denali", href: "/app/chat", Icon: ChatBubbleIcon },
   { label: "Diabetes", href: "/app/diabetes", Icon: DiabetesIcon },
-  { label: "Claims", href: "/app/claims", Icon: ClaimsIcon },
 ] as const;
 
 export function AppHeader() {

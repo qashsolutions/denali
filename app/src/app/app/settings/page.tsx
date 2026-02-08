@@ -1,12 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { Container } from "@/components/layout/Container";
 import { useTheme } from "@/components/ThemeProvider";
 import { useSettings } from "@/hooks/useSettings";
 
 export default function AppSettingsPage() {
-  const router = useRouter();
   const { isDark, setTheme } = useTheme();
   const { settings, setTextScale, resetSettings } = useSettings();
 
@@ -19,15 +16,6 @@ export default function AppSettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
-      {/* Mobile back button */}
-      <button
-        onClick={() => router.push("/app")}
-        className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors mb-6 md:hidden"
-      >
-        <ChevronLeftIcon className="w-5 h-5" />
-        <span>Back</span>
-      </button>
-
       <h1 className="text-2xl font-semibold text-[var(--text-primary)] mb-6">
         Settings
       </h1>
@@ -132,14 +120,6 @@ function ThemeButton({
       {icon}
       <span className="text-sm font-medium">{label}</span>
     </button>
-  );
-}
-
-function ChevronLeftIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-    </svg>
   );
 }
 

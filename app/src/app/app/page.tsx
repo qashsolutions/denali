@@ -6,7 +6,6 @@ import {
   HeartPulseIcon,
   ChatBubbleIcon,
   DiabetesIcon,
-  ClaimsIcon,
 } from "@/components/icons";
 
 const FEATURES = [
@@ -14,15 +13,14 @@ const FEATURES = [
     href: "/app/health",
     icon: <HeartPulseIcon className="w-6 h-6" />,
     title: "My Health",
-    description: "Connect your clinic, see your records in plain English",
+    description: "Connect Medicare, see your records in plain English",
     accentColor: "#ef4444",
-    badge: "Coming Soon",
   },
   {
     href: "/app/chat",
     icon: <ChatBubbleIcon className="w-6 h-6" />,
     title: "Ask Denali",
-    description: "Medicare coverage, symptoms, and health questions",
+    description: "Medicare coverage, denial codes, and appeal letters",
     accentColor: "#3b82f6",
   },
   {
@@ -32,13 +30,6 @@ const FEATURES = [
     description: "Personalized coaching from your own lab results",
     accentColor: "#8b5cf6",
     badge: "Coming Soon",
-  },
-  {
-    href: "/app/claims",
-    icon: <ClaimsIcon className="w-6 h-6" />,
-    title: "Claims & Appeals",
-    description: "Coverage guidance and appeal letters that work",
-    accentColor: "#f59e0b",
   },
 ];
 

@@ -82,7 +82,7 @@ export function ClaimsList({ claims }: ClaimsListProps) {
                   </p>
                 </div>
                 <a
-                  href="/app/claims"
+                  href="/app/chat"
                   onClick={(e) => e.stopPropagation()}
                   className="text-xs font-medium text-[var(--accent-primary)] hover:underline whitespace-nowrap"
                 >

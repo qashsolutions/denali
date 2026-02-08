@@ -7,7 +7,6 @@ import {
   ChatBubbleIcon,
   HeartPulseIcon,
   DiabetesIcon,
-  ClaimsIcon,
   DocumentTextIcon,
 } from "../icons";
 
@@ -17,9 +16,8 @@ interface LandingHeaderProps {
 
 const NAV_ITEMS = [
   { label: "Health Records", href: "/app/health", Icon: HeartPulseIcon },
-  { label: "AI Assistant", href: "/app/chat", Icon: ChatBubbleIcon },
+  { label: "Ask Denali", href: "/app/chat", Icon: ChatBubbleIcon },
   { label: "Diabetes", href: "/app/diabetes", Icon: DiabetesIcon },
-  { label: "Claims & Appeals", href: "/app/claims", Icon: ClaimsIcon },
   { label: "Blog", href: "/blog", Icon: DocumentTextIcon },
 ] as const;
 
