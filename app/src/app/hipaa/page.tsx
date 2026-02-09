@@ -295,9 +295,14 @@ export default function HIPAAPage() {
         <P>
           You may also file a complaint with the HHS Office for Civil Rights
           at{" "}
-          <span className="text-[var(--accent-primary)]">
+          <a
+            href="https://www.hhs.gov/ocr/complaints"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--accent-primary)] hover:underline"
+          >
             hhs.gov/ocr/complaints
-          </span>
+          </a>
           . We will not retaliate against you for filing a complaint.
         </P>
       </Section>

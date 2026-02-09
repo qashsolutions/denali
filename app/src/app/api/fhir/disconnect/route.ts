@@ -25,7 +25,7 @@ export async function POST() {
 
     const admin = createAdminClient();
 
-    // Delete connection and cache in parallel
+    // Delete connection, cache, and diabetes data in parallel
     await Promise.all([
       admin
         .from("ehr_connections")
@@ -34,6 +34,14 @@ export async function POST() {
         .eq("provider", "bluebutton"),
       admin
         .from("fhir_cache")
+        .delete()
+        .eq("user_id", user.id),
+      admin
+        .from("diabetes_snapshots")
+        .delete()
+        .eq("user_id", user.id),
+      admin
+        .from("diabetes_insights")
         .delete()
         .eq("user_id", user.id),
     ]);

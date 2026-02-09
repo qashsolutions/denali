@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { createClient } from "@/lib/supabase";
+import { getClient } from "@/lib/supabase";
 
 export interface SnapshotPoint {
   value: number;
@@ -24,7 +24,7 @@ export function useDiabetesSnapshots(): UseDiabetesSnapshotsReturn {
   useEffect(() => {
     const fetchSnapshots = async () => {
       try {
-        const supabase = createClient();
+        const supabase = getClient();
         const { data, error } = await supabase
           .from("diabetes_snapshots")
           .select("loinc_code, lab_name, value, unit, observed_date")

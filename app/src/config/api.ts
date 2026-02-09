@@ -31,7 +31,7 @@ export const API_CONFIG = {
   blueButton: {
     baseUrl: process.env.BLUEBUTTON_BASE_URL || "https://sandbox.bluebutton.cms.gov",
     version: "v2",
-    scopes: "patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read profile openid",
+    scopes: "patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read profile openid",
     callbackPath: "/api/fhir/callback",
   },
 

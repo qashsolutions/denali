@@ -298,7 +298,13 @@ export function extractDiabetesLabs(observations: FhirObservation[]): LabResult[
   }
 
   // Sort by date descending (most recent first)
-  return results.sort((a, b) => (b.date > a.date ? 1 : -1));
+  // Parse formatted dates back to Date objects for correct chronological ordering
+  return results.sort((a, b) => {
+    const da = new Date(a.date).getTime();
+    const db = new Date(b.date).getTime();
+    if (isNaN(da) || isNaN(db)) return 0;
+    return db - da;
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

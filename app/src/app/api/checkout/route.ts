@@ -70,8 +70,8 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: body.plan === "monthly" ? "subscription" : "payment",
-      success_url: `${origin}/chat?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/chat?payment=cancelled`,
+      success_url: `${origin}/app/chat?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/app/chat?payment=cancelled`,
       customer_email: email || undefined,
       metadata: {
         plan: body.plan,

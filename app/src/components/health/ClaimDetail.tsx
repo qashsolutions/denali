@@ -117,7 +117,7 @@ export function ClaimDetail({ claim, onClose }: ClaimDetailProps) {
                 </p>
               ))}
               <a
-                href="/app/claims"
+                href="/app/chat?message=Help me appeal a denied claim"
                 className="inline-block mt-3 text-sm font-medium text-[var(--accent-primary)] hover:underline"
               >
                 Get Help Appealing &rarr;

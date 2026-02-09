@@ -62,7 +62,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "Is there a free trial?",
-        a: "Yes. Medicare beneficiaries can start a 30-day free trial with full access to all features including unlimited appeals.",
+        a: "Yes. Medicare beneficiaries can start a 14-day free trial with full access to all features including unlimited appeals.",
       },
     ],
   },

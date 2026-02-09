@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { recordAppealOutcome } from "@/lib/learning";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { logAudit } from "@/lib/audit";
 
 interface AppealOutcomeRequest {
@@ -21,6 +22,16 @@ interface AppealOutcomeRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify authentication
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
     const body: AppealOutcomeRequest = await request.json();
 
     // Validate request
@@ -53,6 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     logAudit("APPEAL_OUTCOME", {
+      userId: user.id,
       resourceType: "appeal",
       resourceId: body.appealId,
       metadata: { outcome: body.outcome },

@@ -498,7 +498,7 @@ export function useAuth(): UseAuthReturn {
           return "free";
         }
 
-        if (authState.plan === "monthly") {
+        if (authState.plan === "monthly" || authState.plan === "per_appeal") {
           return "allowed";
         }
 

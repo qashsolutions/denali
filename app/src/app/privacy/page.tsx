@@ -184,7 +184,7 @@ const SECTIONS = [
       "Maintaining transparent audit logs of all data access",
       "Honoring patient consent preferences across all data operations",
       "Including request purpose codes on all health data queries",
-      "Providing a 30-day free trial for Medicare beneficiaries",
+      "Providing a 14-day free trial for Medicare beneficiaries",
       "Making our application available for CMS review and directory listing",
       "Clearly marking all AI-generated content and distinguishing it from clinical guidance",
     ],

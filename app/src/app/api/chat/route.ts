@@ -397,7 +397,7 @@ export async function POST(request: NextRequest) {
           appealId = savedAppealId;
           console.log("[Chat API] Appeal saved:", appealId);
           logAudit("APPEAL_GENERATED", {
-            userId: body.sessionState?.email ? undefined : undefined,
+            userId: authUser?.id,
             resourceType: "appeal",
             resourceId: savedAppealId,
             metadata: { conversationId, denialCodes: ss.denialCodes },

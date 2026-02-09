@@ -60,7 +60,7 @@ serve(async (req) => {
           // Mark job as completed
           await supabase
             .from("learning_queue")
-            .update({ status: "completed", processed_at: new Date().toISOString() })
+            .update({ status: "completed", completed_at: new Date().toISOString() })
             .eq("id", job.id);
 
           results.jobsProcessed++;
@@ -73,7 +73,7 @@ serve(async (req) => {
             .from("learning_queue")
             .update({
               status: "failed",
-              error: jobError instanceof Error ? jobError.message : String(jobError)
+              last_error: jobError instanceof Error ? jobError.message : String(jobError)
             })
             .eq("id", job.id);
         }
