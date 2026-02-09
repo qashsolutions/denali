@@ -86,6 +86,8 @@ These cause bugs or bad UX if violated. Read before every coding session.
 ### Performance & Reliability
 
 - **CRITICAL: Never block UI rendering on database operations.** In `useChat.ts`, `setMessages()` must run IMMEDIATELY after parsing the API response. Database saves (`saveMessage`, `claimConversation`) must be fire-and-forget (`.then()/.catch()`, not `await`). Blocking on Supabase causes the "Thinking..." spinner to hang indefinitely even when the API returns 200.
+- **CRITICAL: Chain message saves after claimConversation.** Server creates conversations with `user_id=NULL` (anon role). Client must call `claimConversation()` BEFORE `saveMessage()`. If `saveMessage()` races ahead while the conversation still has `user_id=NULL`, it fails RLS silently and chat history is lost. In `useChat.ts`, message saves are chained inside `.then()` of `claimConversation()` to guarantee ordering.
+- **CRITICAL: Hooks that depend on auth state must subscribe to `onAuthStateChange`.** Calling `getSession()` once on mount is NOT sufficient — the session may not be hydrated yet (cookies parse asynchronously). If `getSession()` returns `null` at mount and the hook never re-checks, auth-dependent UI stays in the "not signed in" state permanently. Always add `supabase.auth.onAuthStateChange()` listener and re-fetch on `SIGNED_IN`/`SIGNED_OUT`/`TOKEN_REFRESHED` events. Use `getClient()` (singleton) instead of `createClient()` to prevent unstable references in dependency arrays.
 - **Timeout guards on pre-Claude async calls**: `route.ts` uses `withFallback()` for non-critical Supabase queries before the Claude API call (e.g., `getUnreportedOutcome` at 5s, `buildSystemPromptWithLearning` at 10s). Falls back to defaults on timeout instead of blocking.
 - **AbortController for Claude API**: `withTimeout()` in `claude.ts` uses `AbortController` to truly cancel hung requests (not just `Promise.race`). 60s per iteration for Sonnet, 120s for Opus.
 - **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
@@ -99,7 +101,7 @@ Where to find specific logic in the codebase.
 
 | File | What It Does |
 |------|-------------|
-| `src/app/api/chat/route.ts` | Main chat endpoint. Orchestrates: extractUserInfo → detectTriggers → buildSystemPrompt → chat loop → persistLearning |
+| `src/app/api/chat/route.ts` | Main chat endpoint. Orchestrates: rate limiting → extractUserInfo → detectTriggers → buildSystemPrompt → chat loop → persistLearning |
 | `src/lib/claude.ts` | Claude API client. MCP server config, Beta API call, tool-use loop, SessionState type |
 | `src/lib/tools/index.ts` | All 12 local tool definitions + executors (search_cpt, lookup_denial_code, generate_appeal_letter, etc.) |
 | `src/lib/skills-loader.ts` | Conditional prompt builder. Loads skill sections based on SkillTriggers (onboarding, symptom gathering, coverage, appeal, etc.) |
@@ -118,7 +120,9 @@ Where to find specific logic in the codebase.
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table, gates health data injection |
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
-| `src/config/pricing.ts` | Pricing constants: free appeal limit, trial duration, Stripe price IDs |
+| `src/config/pricing.ts` | Pricing constants: free appeal limit, trial duration, daily chat limits, Stripe price IDs |
+| `src/hooks/useConversationHistory.ts` | Chat sidebar history. Subscribes to `onAuthStateChange` for reactive auth. Uses `getClient()` singleton. Groups conversations by date |
+| `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date, sign-in prompt for unauthenticated users |
 | `src/types/database.ts` | Supabase-generated TypeScript types. Regenerate with `npx supabase gen types` |
 
 ### API Routes
@@ -130,7 +134,7 @@ src/app/api/
   account/delete/route.ts     # GDPR/CCPA account deletion
   checkout/route.ts           # Stripe payment
   consent/route.ts            # Consent preferences (GET/PUT)
-  trial/route.ts              # 30-day trial (GET status / POST start)
+  trial/route.ts              # 14-day trial (GET status / POST start)
   cms-metadata/route.ts       # Public CMS app directory metadata
   fhir/authorize/route.ts     # Blue Button OAuth initiation (PKCE + state)
   fhir/callback/route.ts      # Blue Button OAuth callback (token exchange)
@@ -254,6 +258,7 @@ User-facing (plain English):        Internal (codes, never shown):
 | `diabetes_snapshots` | Append-only longitudinal lab history. Unique on `(user_id, loinc_code, observed_date)`. RLS: users read own, service_role inserts. Auto-populated on FHIR sync |
 | `diabetes_log` | User-entered daily entries (glucose/activity/meal/note). Any signed-in user. CHECK constraint on entry_type. RLS: users CRUD own |
 | `diabetes_insights` | Claude-generated diabetes analysis (summary, recommendations, risk_alerts, screening_reminders). Unique on user_id. Hash-based dedup avoids redundant Claude calls. RLS: users read own, service_role manages |
+| `chat_daily_usage` | Daily chat message rate limiting. Columns: `identifier` (user_id or IP), `usage_date`, `message_count`. Unique on `(identifier, usage_date)`. Managed by `check_and_increment_chat` RPC |
 
 ### Denial Code Tables
 
@@ -294,6 +299,7 @@ User-facing (plain English):        Internal (codes, never shown):
 | `search_denial_codes(search_text)` | Full-text search across CARC/RARC/EOB tables |
 | `get_denial_pattern_for_carc(carc_code)` | Match CARC code to denial pattern with appeal strategy |
 | `get_denial_patterns_for_cpt(cpt_code)` | Get denial patterns commonly associated with a CPT code |
+| `check_and_increment_chat(p_identifier, p_daily_limit)` | Atomic rate limit check: returns `{allowed, count}`. SECURITY DEFINER — upserts `chat_daily_usage` and increments count if under limit |
 | `delete_user_cascade(user_id)` | GDPR/CCPA compliant deletion |
 
 ---
@@ -646,24 +652,26 @@ How each data source connects to the others:
 
 ### Pricing
 
-| Plan | Price | Limits | Auth Required |
-|------|-------|--------|---------------|
-| Free | $0 | 3 appeals (lifetime) | Email OTP |
-| Trial | $0 | 30 days unlimited (CMS A4) | Email OTP |
-| Pay Per Appeal | $10/appeal | Unlimited | Mobile + Email OTP |
-| Unlimited | $25/month | Unlimited appeals | Mobile + Email OTP |
+| Plan | Price | Appeals | Chat Messages/Day | Auth Required |
+|------|-------|---------|-------------------|---------------|
+| Anonymous | $0 | — | 3 | None |
+| Free | $0 | 3 (lifetime) | 10 | Email OTP |
+| Trial | $0 (14 days, CMS A4) | Unlimited | 10 | Email OTP |
+| Pay Per Appeal | $10/appeal | Unlimited | Unlimited | Mobile + Email OTP |
+| Unlimited | $25/month | Unlimited | Unlimited | Mobile + Email OTP |
 
-Coverage guidance is **always free** (unlimited, no signup). Paywall only appears for appeal letters.
+Coverage guidance is **always free** (unlimited, no signup). Paywall only appears for appeal letters. Chat rate limiting enforced via `check_and_increment_chat` RPC (identifier = user_id for authenticated, IP for anonymous). Returns 429 when limit exceeded.
 
 ### Auth Gating
 
 | Feature | Auth Required |
 |---------|---------------|
-| Coverage guidance | None |
+| Coverage guidance (3 msgs/day) | None |
+| Coverage guidance (10 msgs/day) | Email OTP |
 | First 3 appeals | Email OTP only |
-| 30-day trial | Email OTP only |
+| 14-day trial | Email OTP only |
 | Additional appeals | Mobile OTP + Payment |
-| $25/month subscription | Mobile OTP + Email OTP |
+| $25/month subscription (unlimited chat + appeals) | Mobile OTP + Email OTP |
 | Medicare health data | Email OTP + Blue Button OAuth (+ TOTP challenge if user has opted in) |
 
 ### AAL2 Compliance Strategy (CMS A1 / NIST 800-63B)
@@ -959,7 +967,7 @@ These apply to Denali regardless of category. Source: categories page.
 | **A1** | **IAL2/AAL2 identity verification** — via intermediary PHR app or CMS-approved service (passkeys, mDLs) | **DONE.** Blue Button OAuth through Medicare.gov = IAL2/AAL2 via intermediary PHR path. PKCE + encrypted token storage. TOTP MFA available as opt-in extra security (Settings > Security) but not CMS-required |
 | **A2** | **Medicare.gov connectivity** — notify Medicare beneficiaries of communications (notices, EOBs, fraud alerts) | **PARTIAL.** `MEDICARE_NOTIFICATIONS_SKILL` exists but `hasRecentChanges` trigger was not wired — now fixed. Skill detects EOB/coverage changes from FHIR data. Still need: direct Medicare.gov notification bridge API |
 | **A3** | **CMS review participation** — disclose data sources, terms/agreements, complete basic security checklist | **PARTIAL.** `/api/cms-metadata` exposes app metadata for CMS directory. Still need: terms doc, security self-assessment |
-| **A4** | **Trial access for Medicare patients** if app charges a fee | **DONE.** 30-day free trial via `/api/trial`. Trial status tracked in `subscriptions` table. Settings shows trial days remaining |
+| **A4** | **Trial access for Medicare patients** if app charges a fee | **DONE.** 14-day free trial via `/api/trial`. Trial status tracked in `subscriptions` table. Settings shows trial days remaining |
 | **A5** | **CMS discovery experience** — allow app to be listed as recommended option on Medicare.gov | **PARTIAL.** `/api/cms-metadata` returns app listing metadata. Still need: CMS submission |
 | **A6** | **HIPAA compliance** when provided by a covered entity or business associate | **IN PROGRESS.** Audit logging + consent management done. Need: BAA with Supabase/Vercel, HIPAA compliance documentation |
 
@@ -1028,7 +1036,10 @@ Pledge text displayed via `CmsPledge` component (`src/components/ui/CmsPledge.ts
 | **Audit logging** | Criteria 4, 25 | `audit_logs` table + `logAudit()` on 7+ API routes (FHIR, appeals, consent, account, checkout, trial) |
 | **Consent preferences** | Criterion 5 | `consent_preferences` table + Settings toggles + enforcement in FHIR context pipeline |
 | **TOTP MFA (opt-in)** | Defense-in-depth | `TOTPEnrollModal`/`TOTPChallengeModal` in Settings > Security. Opt-in extra security — not CMS-required. FHIR authorize gates on AAL2 if enrolled |
-| **30-day free trial** | A4 | `/api/trial` (start/check), `subscriptions` trial fields, paywall bypass for active trials |
+| **14-day free trial** | A4 | `/api/trial` (start/check), `subscriptions` trial fields, paywall bypass for active trials |
+| **Daily chat rate limiting** | — | `check_and_increment_chat` RPC, `chat_daily_usage` table, 429 response in `route.ts`, `useChat.ts` handles limit-reached UI |
+| **Sidebar auth reactivity** | — | `useConversationHistory` subscribes to `onAuthStateChange`, uses `getClient()` singleton. Sidebar updates immediately on sign-in/sign-out |
+| **Chat history RLS fix** | — | `useChat.ts` chains `saveMessage()` after `claimConversation()` to prevent RLS race condition (server creates conversations with `user_id=NULL`) |
 | **CMS metadata API** | A3, A5 | `/api/cms-metadata` returns app listing data for CMS directory |
 | **Request purpose tagging** | Criterion 22 | `X-Request-Purpose` header on FHIR calls (`patient-request`, `appeal`, `coverage-determination`) |
 | **Consent enforcement** | Criterion 24 | Consent state gates health data injection into AI prompts |
