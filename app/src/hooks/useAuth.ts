@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { getClient } from "@/lib/supabase";
 import { PRICING } from "@/config";
-import type { AuthChangeEvent } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 export interface AuthState {
   userId: string | null;
@@ -54,131 +54,127 @@ export function useAuth(): UseAuthReturn {
   const [authState, setAuthState] = useState<AuthState>(DEFAULT_AUTH_STATE);
   const supabase = getClient();
 
-  // Check for existing session on mount
+  // Check for existing session on mount + auth state changes
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+    // Set basic auth state immediately from session (no DB wait)
+    function setBasicAuth(user: { id: string; email?: string; email_confirmed_at?: string | null }) {
+      const email = user.email || null;
+      setAuthState((prev) => ({
+        ...prev,
+        userId: user.id,
+        email,
+        isEmailVerified: !!email && user.email_confirmed_at !== null,
+        isLoading: false,
+        error: null,
+      }));
+    }
 
-        if (!session?.user) {
-          setAuthState((prev) => ({ ...prev, isLoading: false }));
-          return;
+    // Fetch profile, MFA, usage, trial — non-blocking enhancement
+    async function loadProfileData(userId: string, email: string | null) {
+      try {
+        // MFA status
+        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        const { data: factorsData } = await supabase.auth.mfa.listFactors();
+        const totpFactors = factorsData?.totp?.filter((f) => f.status === "verified") ?? [];
+        const isMfaEnrolled = totpFactors.length > 0;
+        const isMfaVerified =
+          aalData?.currentLevel === "aal2" ||
+          aalData?.currentAuthenticationMethods?.some(
+            (m) => typeof m === "object" && "method" in m && m.method === "totp"
+          ) || false;
+
+        // User profile from database
+        const { data: profile } = await supabase
+          .from("users")
+          .select("plan, role")
+          .eq("id", userId)
+          .single();
+
+        // Appeal count by email
+        let appealCount = 0;
+        if (email) {
+          const { data: usage } = await supabase
+            .from("usage")
+            .select("appeal_count")
+            .eq("email", email)
+            .single();
+          appealCount = usage?.appeal_count || 0;
         }
 
-        {
-          const email = session.user.email || null;
+        // Validate plan type
+        const validPlans = ["free", "per_appeal", "monthly", "trial"] as const;
+        const userPlan = validPlans.includes(profile?.plan as (typeof validPlans)[number])
+          ? (profile?.plan as "free" | "per_appeal" | "monthly" | "trial")
+          : "free";
 
-          // Check MFA status
-          const { data: aalData } =
-            await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-          const { data: factorsData } =
-            await supabase.auth.mfa.listFactors();
+        // Validate role
+        const validRoles = ["patient", "counselor", "provider"] as const;
+        const userRole = validRoles.includes(profile?.role as (typeof validRoles)[number])
+          ? (profile?.role as "patient" | "counselor" | "provider")
+          : "patient";
 
-          const totpFactors =
-            factorsData?.totp?.filter((f) => f.status === "verified") ?? [];
-          const isMfaEnrolled = totpFactors.length > 0;
-          const isMfaVerified =
-            aalData?.currentLevel === "aal2" ||
-            aalData?.currentAuthenticationMethods?.some(
-              (m) => typeof m === "object" && "method" in m && m.method === "totp"
-            ) ||
-            false;
-
-          // Fetch user profile from database
-          const { data: profile } = await supabase
-            .from("users")
-            .select("plan, role")
-            .eq("id", session.user.id)
+        // Trial status
+        let trialStatus: "none" | "active" | "expired" | "converted" = "none";
+        let trialDaysRemaining = 0;
+        if (userPlan === "trial") {
+          const { data: sub } = await supabase
+            .from("subscriptions")
+            .select("trial_start, trial_end, trial_converted")
+            .eq("user_id", userId)
             .single();
-
-          // Fetch appeal count by email
-          let appealCount = 0;
-          if (email) {
-            const { data: usage } = await supabase
-              .from("usage")
-              .select("appeal_count")
-              .eq("email", email)
-              .single();
-            appealCount = usage?.appeal_count || 0;
-          }
-
-          // Validate plan type
-          const validPlans = ["free", "per_appeal", "monthly", "trial"] as const;
-          const userPlan = validPlans.includes(
-            profile?.plan as (typeof validPlans)[number]
-          )
-            ? (profile?.plan as "free" | "per_appeal" | "monthly" | "trial")
-            : "free";
-
-          // Validate role
-          const validRoles = ["patient", "counselor", "provider"] as const;
-          const userRole = validRoles.includes(
-            profile?.role as (typeof validRoles)[number]
-          )
-            ? (profile?.role as "patient" | "counselor" | "provider")
-            : "patient";
-
-          // Check trial status from subscriptions table
-          let trialStatus: "none" | "active" | "expired" | "converted" = "none";
-          let trialDaysRemaining = 0;
-
-          if (userPlan === "trial") {
-            const { data: sub } = await supabase
-              .from("subscriptions")
-              .select("trial_start, trial_end, trial_converted")
-              .eq("user_id", session.user.id)
-              .single();
-
-            if (sub?.trial_end) {
-              const now = new Date();
-              const end = new Date(sub.trial_end);
-              if (sub.trial_converted) {
-                trialStatus = "converted";
-              } else if (end > now) {
-                trialStatus = "active";
-                trialDaysRemaining = Math.ceil(
-                  (end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-                );
-              } else {
-                trialStatus = "expired";
-              }
+          if (sub?.trial_end) {
+            const now = new Date();
+            const end = new Date(sub.trial_end);
+            if (sub.trial_converted) {
+              trialStatus = "converted";
+            } else if (end > now) {
+              trialStatus = "active";
+              trialDaysRemaining = Math.ceil(
+                (end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+              );
+            } else {
+              trialStatus = "expired";
             }
           }
-
-          setAuthState({
-            userId: session.user.id,
-            email,
-            isEmailVerified:
-              !!email && session.user.email_confirmed_at !== null,
-            isMfaEnrolled,
-            isMfaVerified,
-            currentAAL: aalData?.currentLevel ?? null,
-            plan: userPlan,
-            role: userRole,
-            appealCount,
-            trialStatus,
-            trialDaysRemaining,
-            isLoading: false,
-            error: null,
-          });
         }
+
+        setAuthState((prev) => ({
+          ...prev,
+          isMfaEnrolled,
+          isMfaVerified,
+          currentAAL: aalData?.currentLevel ?? null,
+          plan: userPlan,
+          role: userRole,
+          appealCount,
+          trialStatus,
+          trialDaysRemaining,
+        }));
       } catch (error) {
-        console.error("Error checking session:", error);
+        console.error("Error loading profile data:", error);
+        // Basic auth already set — profile fetch failure is non-fatal
+      }
+    }
+
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setBasicAuth(session.user);
+        loadProfileData(session.user.id, session.user.email || null);
+      } else {
         setAuthState((prev) => ({ ...prev, isLoading: false }));
       }
-    };
+    }).catch(() => {
+      setAuthState((prev) => ({ ...prev, isLoading: false }));
+    });
 
-    checkSession();
-
-    // Listen for auth changes — re-run full session check
+    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
-      (event: AuthChangeEvent) => {
-        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-          checkSession();
+      (event: AuthChangeEvent, session) => {
+        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session?.user) {
+          setBasicAuth(session.user);
+          loadProfileData(session.user.id, session.user.email || null);
         } else if (event === "SIGNED_OUT") {
           setAuthState({ ...DEFAULT_AUTH_STATE, isLoading: false });
         }
