@@ -255,7 +255,7 @@ User-facing (plain English):        Internal (codes, never shown):
 
 | Table | Purpose |
 |-------|---------|
-| `users` | Auth, phone (primary), email, plan, theme, accessibility settings |
+| `users` | Auth, phone (primary), email, plan, `is_admin` (bypass all limits), theme, accessibility settings |
 | `user_verification` | Email + mobile OTP status |
 | `subscriptions` | Plan type, Stripe customer ID, billing status, `trial_start`/`trial_end`/`trial_converted` |
 | `usage` | Appeal count per phone number |
@@ -671,8 +671,9 @@ How each data source connects to the others:
 | Trial | $0 (14 days, CMS A4) | Unlimited | 10 | Email OTP |
 | Pay Per Appeal | $10/appeal | Unlimited | Unlimited | Mobile + Email OTP |
 | Unlimited | $25/month | Unlimited | Unlimited | Mobile + Email OTP |
+| **Admin** | — | Unlimited | Unlimited | `is_admin = TRUE` on `users` row |
 
-Coverage guidance is **always free** (unlimited, no signup). Paywall only appears for appeal letters. Chat rate limiting enforced via `check_and_increment_chat` RPC (identifier = user_id for authenticated, IP for anonymous). Returns 429 when limit exceeded.
+Coverage guidance is **always free** (unlimited, no signup). Paywall only appears for appeal letters. Chat rate limiting enforced via `check_and_increment_chat` RPC (identifier = user_id for authenticated, IP for anonymous). Returns 429 when limit exceeded. **Admin users** (`users.is_admin`) bypass all rate limits and appeal paywalls.
 
 ### Auth Gating
 

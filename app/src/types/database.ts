@@ -1679,6 +1679,7 @@ export type Database = {
           email: string
           high_contrast: boolean | null
           id: string
+          is_admin: boolean
           notifications_enabled: boolean | null
           organization: string | null
           phone: string | null
@@ -1698,6 +1699,7 @@ export type Database = {
           email: string
           high_contrast?: boolean | null
           id: string
+          is_admin?: boolean
           notifications_enabled?: boolean | null
           organization?: string | null
           phone?: string | null
@@ -1717,6 +1719,7 @@ export type Database = {
           email?: string
           high_contrast?: boolean | null
           id?: string
+          is_admin?: boolean
           notifications_enabled?: boolean | null
           organization?: string | null
           phone?: string | null

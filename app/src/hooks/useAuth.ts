@@ -17,6 +17,7 @@ export interface AuthState {
   appealCount: number;
   trialStatus: "none" | "active" | "expired" | "converted";
   trialDaysRemaining: number;
+  isAdmin: boolean;
   isLoading: boolean;
   error: string | null;
 }
@@ -46,6 +47,7 @@ const DEFAULT_AUTH_STATE: AuthState = {
   appealCount: 0,
   trialStatus: "none",
   trialDaysRemaining: 0,
+  isAdmin: false,
   isLoading: true,
   error: null,
 };
@@ -86,7 +88,7 @@ export function useAuth(): UseAuthReturn {
         // User profile from database
         const { data: profile } = await supabase
           .from("users")
-          .select("plan, role")
+          .select("plan, role, is_admin")
           .eq("id", userId)
           .single();
 
@@ -148,6 +150,7 @@ export function useAuth(): UseAuthReturn {
           appealCount,
           trialStatus,
           trialDaysRemaining,
+          isAdmin: profile?.is_admin || false,
         }));
       } catch (error) {
         console.error("Error loading profile data:", error);
@@ -458,6 +461,11 @@ export function useAuth(): UseAuthReturn {
   // Check appeal access based on email and plan
   const checkAppealAccess =
     useCallback(async (): Promise<AppealAccessStatus> => {
+      // Admins always get unlimited access
+      if (authState.isAdmin) {
+        return "allowed";
+      }
+
       // Counselors and providers always get free access
       if (authState.role === "counselor" || authState.role === "provider") {
         return "allowed";

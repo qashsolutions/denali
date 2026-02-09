@@ -159,7 +159,9 @@ export default function AppSettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-[var(--text-primary)]">
-                  {authState.plan === "monthly"
+                  {authState.isAdmin
+                    ? "Admin"
+                    : authState.plan === "monthly"
                     ? "Unlimited Plan"
                     : authState.plan === "trial"
                     ? "Free Trial"
@@ -168,7 +170,9 @@ export default function AppSettingsPage() {
                     : "Free Plan"}
                 </p>
                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                  {authState.plan === "monthly"
+                  {authState.isAdmin
+                    ? "Unlimited access"
+                    : authState.plan === "monthly"
                     ? `${formatPrice(PRICING.MONTHLY.amount)}/month \u00b7 Unlimited appeals`
                     : authState.plan === "trial" && authState.trialStatus === "active"
                     ? `${authState.trialDaysRemaining} days remaining`

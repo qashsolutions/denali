@@ -111,15 +111,19 @@ export async function POST(request: NextRequest) {
       // Check if paid subscriber (unlimited)
       const { data: profile } = await authSupabase
         .from("users")
-        .select("plan")
+        .select("plan, is_admin")
         .eq("id", authUser.id)
         .single();
 
-      const plan = profile?.plan || "free";
-      if (plan === "monthly" || plan === "per_appeal") {
-        chatLimit = PRICING.CHAT_LIMITS.PAID; // 0 = unlimited
+      if (profile?.is_admin) {
+        chatLimit = 0; // Admin: unlimited
       } else {
-        chatLimit = PRICING.CHAT_LIMITS.AUTH_FREE; // 10/day
+        const plan = profile?.plan || "free";
+        if (plan === "monthly" || plan === "per_appeal") {
+          chatLimit = PRICING.CHAT_LIMITS.PAID; // 0 = unlimited
+        } else {
+          chatLimit = PRICING.CHAT_LIMITS.AUTH_FREE; // 10/day
+        }
       }
     } else {
       // Hash IP for privacy
