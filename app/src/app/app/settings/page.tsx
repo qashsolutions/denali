@@ -181,7 +181,7 @@ export default function AppSettingsPage() {
                     : `${authState.appealCount} of ${PRICING.FREE_APPEAL_LIMIT} free appeals used`}
                 </p>
               </div>
-              {authState.plan !== "monthly" && (
+              {authState.plan !== "monthly" && !authState.isAdmin && (
                 <button
                   onClick={() => router.push("/app/chat")}
                   className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
