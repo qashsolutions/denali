@@ -46,12 +46,13 @@
 8. [User Flows](#user-flows)
 9. [Orchestration Flows](#orchestration-flows)
 10. [Business Model & Auth](#business-model--auth)
-11. [UI/UX Guidelines](#uiux-guidelines)
-12. [Learning System](#learning-system)
-13. [Coding Standards](#coding-standards)
-14. [MCP Integration](#mcp-integration)
-15. [Blue Button 2.0 (Medicare FHIR API)](#blue-button-20-medicare-fhir-api)
-16. [CMS Interoperability Framework](#cms-interoperability-framework)
+11. [Stripe Payment Integration](#stripe-payment-integration)
+12. [UI/UX Guidelines](#uiux-guidelines)
+13. [Learning System](#learning-system)
+14. [Coding Standards](#coding-standards)
+15. [MCP Integration](#mcp-integration)
+16. [Blue Button 2.0 (Medicare FHIR API)](#blue-button-20-medicare-fhir-api)
+17. [CMS Interoperability Framework](#cms-interoperability-framework)
 
 ---
 
@@ -129,7 +130,10 @@ Where to find specific logic in the codebase.
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table, gates health data injection |
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
-| `src/config/pricing.ts` | Pricing constants: free appeal limit, trial duration, daily chat limits, Stripe price IDs |
+| `src/config/pricing.ts` | Pricing constants: free appeal limit, trial duration, daily chat limits, Stripe price IDs. `MONTHLY.appealLimit: 0` = unlimited |
+| `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade), `handleSubscriptionEvent()` (lifecycle). Uses admin client |
+| `src/components/payment/PaywallModal.tsx` | Paywall UI: plan selection (single/monthly), Stripe checkout redirect. CSS variables for theme. No dev bypass |
+| `src/components/appeal/AppealGate.tsx` | Appeal access orchestration: email OTP → TOTP → access check → PaywallModal pipeline |
 | `src/middleware.ts` | Supabase SSR middleware. Refreshes auth tokens on every request to prevent browser/server refresh token race. MUST run before any Supabase client call |
 | `src/hooks/useConversationHistory.ts` | Chat sidebar history. Fetches from `/api/conversations` (server route, cookie-authenticated) — NOT browser Supabase client. Subscribes to `onAuthStateChange` for re-fetch on sign-in/out. Groups conversations by date |
 | `src/lib/conversation-service.ts` | Conversation persistence: create, load, claim, save messages, appeals, feedback, events. Uses `getClient()` singleton for auth context |
@@ -720,6 +724,108 @@ Coverage guidance is **always free** (unlimited, no signup). Paywall only appear
 
 ---
 
+## Stripe Payment Integration
+
+Stripe handles all paid features: single appeal purchases ($10) and monthly subscriptions ($25/month). Currently in **sandbox mode** — switch to live keys for production.
+
+### Architecture
+
+```
+PaywallModal (client) → POST /api/checkout → Stripe Checkout Session
+                                                    ↓
+                                        User completes payment on Stripe
+                                                    ↓
+                              Stripe fires webhook → POST /api/webhooks/stripe
+                                                    ↓
+                                        stripe-fulfillment.ts
+                                        ├── fulfillCheckoutSession() → update user plan
+                                        └── handleSubscriptionEvent() → sync status
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/config/pricing.ts` | Price amounts, Stripe Price IDs (from env vars), appeal limits, trial duration |
+| `src/app/api/checkout/route.ts` | Creates Stripe Checkout Session. Uses `createServerSupabaseClient()` for auth. Returns 503 if Stripe not configured (no dev bypass) |
+| `src/app/api/webhooks/stripe/route.ts` | Receives Stripe webhook events, verifies signature, dispatches to fulfillment handlers |
+| `src/lib/stripe-fulfillment.ts` | `fulfillCheckoutSession()`: reads session metadata → upgrades user plan. `handleSubscriptionEvent()`: syncs subscription status changes. Both use `createAdminClient()` |
+| `src/components/payment/PaywallModal.tsx` | Client-side plan selection UI. Posts to `/api/checkout`, redirects to Stripe. CSS variables for theme support |
+| `src/components/appeal/AppealGate.tsx` | Orchestrates: email OTP → TOTP check → `checkAppealAccess()` → PaywallModal if needed |
+
+### Environment Variables
+
+| Variable | Purpose | Where Used |
+|----------|---------|------------|
+| `STRIPE_SECRET_KEY` | Server-side API key (sandbox: `sk_test_...`, live: `sk_live_...`) | `checkout/route.ts`, `webhooks/stripe/route.ts`, `stripe-fulfillment.ts`, `account/delete/route.ts` |
+| `STRIPE_WEBHOOK_SECRET` | Webhook signature verification (`whsec_...`) | `webhooks/stripe/route.ts` |
+| `STRIPE_PRICE_PAY_PER_CLAIM` | Price ID for $10 single appeal | `pricing.ts` → `checkout/route.ts` |
+| `STRIPE_PRICE_UNLIMITED_MONTHLY` | Price ID for $25/month subscription | `pricing.ts` → `checkout/route.ts` |
+| `STRIPE_PRICE_UNLIMITED_ANNUAL` | Price ID for annual plan (reserved, not yet in UI) | — |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Client-side publishable key (`pk_test_...` / `pk_live_...`) | Not currently used (PaywallModal uses server-side checkout, not Stripe.js) |
+
+### Webhook Events
+
+Endpoint: `https://www.denali.health/api/webhooks/stripe`
+API Version: `2025-04-30.basil` (Stripe SDK v20.2.0)
+
+| Event | Handler | What It Does |
+|-------|---------|-------------|
+| `checkout.session.completed` | `fulfillCheckoutSession()` | Reads `metadata.user_id` + `metadata.plan` → upgrades user to `per_appeal` or creates `monthly` subscription record via `fulfill_checkout` RPC |
+| `customer.subscription.updated` | `handleSubscriptionEvent()` | Syncs subscription status (active/past_due/cancelled) and `period_end` via `handle_subscription_change` RPC |
+| `customer.subscription.deleted` | `handleSubscriptionEvent()` | Same as updated — marks subscription cancelled |
+| `invoice.payment_failed` | Retrieves subscription → `handleSubscriptionEvent()` | Marks subscription as `past_due` when renewal payment fails |
+| `customer.subscription.created` | Logged only | No action needed — `checkout.session.completed` handles initial creation |
+| `customer.subscription.trial_will_end` | Logged only | Future: send notification before trial expires |
+| `invoice.finalized` | Logged only | Informational |
+| `invoice.paid` | Logged only | Informational |
+
+### Payment Flow (Detail)
+
+```
+1. User hits appeal paywall (appeal_count >= 3, no active subscription)
+2. PaywallModal shows: "Pay Per Appeal ($10)" or "Monthly ($25/month)"
+3. User clicks → POST /api/checkout { plan: "single" | "monthly" }
+4. Server (cookie-auth):
+   a. Verifies user via createServerSupabaseClient()
+   b. Creates Stripe Checkout Session with metadata: { user_id, email, plan }
+   c. Returns { url: "https://checkout.stripe.com/..." }
+5. Client redirects to Stripe Checkout
+6. User completes payment → Stripe redirects to /app/chat?payment=success
+7. Stripe fires checkout.session.completed webhook:
+   a. stripe-fulfillment.ts reads session.metadata.user_id
+   b. If plan=monthly: creates subscription record via fulfill_checkout RPC
+   c. If plan=single: updates users.plan to "per_appeal"
+8. User's next appeal access check returns "allowed"
+```
+
+### Subscription Lifecycle
+
+| Status | Meaning | User Experience |
+|--------|---------|-----------------|
+| `active` | Payment current | Full access to appeals + unlimited chat |
+| `past_due` | Renewal payment failed | Access continues briefly; Stripe retries payment |
+| `cancelled` | User cancelled or payment permanently failed | Reverts to free plan (3 appeals lifetime) |
+
+### Critical Rules
+
+- **CRITICAL: `checkout/route.ts` must use `createServerSupabaseClient()`** — the browser client has no auth context server-side, so `user.id` would be empty, causing `metadata.user_id` to be missing. Without user_id, `fulfillCheckoutSession()` skips the plan upgrade entirely.
+- **CRITICAL: Never return `{ url: null }` from checkout** — the old code did this when `STRIPE_SECRET_KEY` was missing, and `PaywallModal` called `onSuccess()`, granting free access. Now returns 503 error.
+- **Admin bypass**: Users with `is_admin = TRUE` in the `users` table bypass all paywalls. `checkAppealAccess()` in `useAuth.ts` returns `"allowed"` immediately for admins.
+- **Stripe SDK v20**: `current_period_end` lives on `subscription.items.data[0]`, NOT directly on `subscription`. The `stripe-fulfillment.ts` accesses it via `firstItem.current_period_end`.
+- **Idempotent fulfillment**: `fulfillCheckoutSession()` is safe to call multiple times — Stripe may retry webhooks.
+
+### Sandbox → Production Checklist
+
+1. Replace `STRIPE_SECRET_KEY` with live key (`sk_live_...`)
+2. Replace `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` with live key (`pk_live_...`)
+3. Create live Price IDs in Stripe dashboard, update `STRIPE_PRICE_*` env vars
+4. Create live webhook endpoint pointing to `https://www.denali.health/api/webhooks/stripe`
+5. Update `STRIPE_WEBHOOK_SECRET` with the live webhook signing secret
+6. Verify webhook events match the 8 events listed above
+
+---
+
 ## UI/UX Guidelines
 
 - Minimal interface: just a chat box
@@ -910,8 +1016,12 @@ BLUEBUTTON_CLIENT_ID=...          # CMS Blue Button OAuth client ID
 BLUEBUTTON_CLIENT_SECRET=...      # CMS Blue Button OAuth client secret
 BLUEBUTTON_BASE_URL=https://sandbox.bluebutton.cms.gov  # or production URL
 FHIR_TOKEN_ENCRYPTION_KEY=...     # 32-byte hex key for AES-256-GCM token encryption
-STRIPE_SECRET_KEY=sk_...          # Stripe API key
-STRIPE_WEBHOOK_SECRET=whsec_...   # Stripe webhook signing secret
+STRIPE_SECRET_KEY=sk_...                       # Stripe secret key (sandbox or live)
+STRIPE_WEBHOOK_SECRET=whsec_...                # Stripe webhook signing secret
+STRIPE_PRICE_PAY_PER_CLAIM=price_...           # Stripe Price ID for $10 single appeal
+STRIPE_PRICE_UNLIMITED_MONTHLY=price_...       # Stripe Price ID for $25/month subscription
+STRIPE_PRICE_UNLIMITED_ANNUAL=price_...        # Stripe Price ID for annual plan (reserved)
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...      # Stripe publishable key (client-side, not currently used)
 ```
 
 ---
