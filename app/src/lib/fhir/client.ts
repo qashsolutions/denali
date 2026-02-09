@@ -27,6 +27,11 @@ export class FhirError extends Error {
 
 /**
  * Make an authenticated GET request to the FHIR API.
+ *
+ * Uses redirect: 'manual' to prevent Node.js fetch (undici) from stripping
+ * the Authorization header on redirects. Blue Button API may redirect
+ * requests, and the default fetch behavior drops auth headers on redirect.
+ *
  * @param purpose CMS Section I.3 — purpose code for data request tagging
  */
 export async function fhirGet<T>(
@@ -35,32 +40,49 @@ export async function fhirGet<T>(
   purpose: RequestPurpose = "patient-request"
 ): Promise<T> {
   const { blueButton } = API_CONFIG;
-  const url = `${blueButton.baseUrl}/${blueButton.version}/fhir/${path}`;
+  let url = `${blueButton.baseUrl}/${blueButton.version}/fhir/${path}`;
 
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/fhir+json",
-      "X-Request-Purpose": purpose,
-    },
-  });
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: "application/fhir+json",
+    "X-Request-Purpose": purpose,
+  };
 
-  if (res.status === 401) {
-    const body401 = await res.text();
-    console.error("[FHIR client] 401 response from:", url, "body:", body401);
-    throw new FhirError("Token expired or invalid", 401, body401);
+  // Follow up to 5 redirects manually to preserve Authorization header
+  for (let i = 0; i < 5; i++) {
+    const res = await fetch(url, { headers, redirect: "manual" });
+
+    // Handle redirects — re-send with Authorization header preserved
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("Location");
+      if (!location) {
+        throw new FhirError(`Redirect ${res.status} without Location header`, res.status);
+      }
+      // Resolve relative redirects
+      url = location.startsWith("http") ? location : new URL(location, url).toString();
+      console.log("[FHIR client] Following redirect to:", url);
+      continue;
+    }
+
+    if (res.status === 401) {
+      const body401 = await res.text();
+      console.error("[FHIR client] 401 response from:", url, "body:", body401);
+      throw new FhirError("Token expired or invalid", 401, body401);
+    }
+
+    if (res.status === 429) {
+      throw new FhirError("Rate limited by CMS", 429);
+    }
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new FhirError(`FHIR API error: ${res.status}`, res.status, body);
+    }
+
+    return res.json();
   }
 
-  if (res.status === 429) {
-    throw new FhirError("Rate limited by CMS", 429);
-  }
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new FhirError(`FHIR API error: ${res.status}`, res.status, body);
-  }
-
-  return res.json();
+  throw new FhirError("Too many redirects", 310);
 }
 
 /**
