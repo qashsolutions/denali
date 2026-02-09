@@ -144,6 +144,11 @@ export interface SessionState {
   }>;
   diabetesClassification?: "diabetic" | "pre-diabetic" | "at-risk" | "none";
 
+  // Lab trends (longitudinal, from diabetes_snapshots)
+  labTrends?: Array<{ date: string; value: number; loincCode: string }>;
+  // Recent self-reported log summary
+  recentLogSummary?: string;
+
   // Consent (set by client from useConsent hook)
   consentHealthDataAi?: boolean;               // Whether user consents to health data in AI
 }

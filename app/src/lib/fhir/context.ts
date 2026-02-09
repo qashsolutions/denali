@@ -94,6 +94,38 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
     lines.push("");
   }
 
+  // Lab trends (longitudinal A1C history)
+  if (sessionState.labTrends && sessionState.labTrends.length > 0) {
+    const a1cTrends = sessionState.labTrends.filter((t) =>
+      t.loincCode === "4548-4" || t.loincCode === "59261-8"
+    );
+    if (a1cTrends.length > 0) {
+      lines.push("**A1C History (longitudinal):**");
+      let prevValue: number | null = null;
+      for (const t of a1cTrends) {
+        let arrow = "";
+        if (prevValue !== null) {
+          const diff = t.value - prevValue;
+          if (diff > 0.01) arrow = " \u2191 rising";
+          else if (diff < -0.01) arrow = " \u2193 improving";
+          else arrow = " \u2192 stable";
+        }
+        lines.push(`- ${t.date}: ${t.value}%${arrow}`);
+        prevValue = t.value;
+      }
+      lines.push("");
+      lines.push("**ACTION:** Reference actual A1C trend when coaching. Note improvements or concerns.");
+      lines.push("");
+    }
+  }
+
+  // Recent self-reported log summary
+  if (sessionState.recentLogSummary) {
+    lines.push("**Recent Patient Log Entries:**");
+    lines.push(sessionState.recentLogSummary);
+    lines.push("");
+  }
+
   // Recent denials
   if (sessionState.recentDenials && sessionState.recentDenials.length > 0) {
     lines.push("**Recent Denied Claims (proactively offer appeal help):**");

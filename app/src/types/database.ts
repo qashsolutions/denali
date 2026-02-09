@@ -638,6 +638,147 @@ export type Database = {
         }
         Relationships: []
       }
+      diabetes_insights: {
+        Row: {
+          classification: string
+          created_at: string
+          data_hash: string
+          generated_at: string
+          id: string
+          recommendations: Json
+          risk_alerts: Json
+          screening_reminders: Json
+          summary: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          classification: string
+          created_at?: string
+          data_hash: string
+          generated_at?: string
+          id?: string
+          recommendations?: Json
+          risk_alerts?: Json
+          screening_reminders?: Json
+          summary: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          classification?: string
+          created_at?: string
+          data_hash?: string
+          generated_at?: string
+          id?: string
+          recommendations?: Json
+          risk_alerts?: Json
+          screening_reminders?: Json
+          summary?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diabetes_insights_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diabetes_log: {
+        Row: {
+          activity_minutes: number | null
+          activity_type: string | null
+          created_at: string
+          entry_type: string
+          glucose_context: string | null
+          glucose_value: number | null
+          id: string
+          logged_at: string
+          note: string | null
+          user_id: string
+        }
+        Insert: {
+          activity_minutes?: number | null
+          activity_type?: string | null
+          created_at?: string
+          entry_type: string
+          glucose_context?: string | null
+          glucose_value?: number | null
+          id?: string
+          logged_at: string
+          note?: string | null
+          user_id: string
+        }
+        Update: {
+          activity_minutes?: number | null
+          activity_type?: string | null
+          created_at?: string
+          entry_type?: string
+          glucose_context?: string | null
+          glucose_value?: number | null
+          id?: string
+          logged_at?: string
+          note?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diabetes_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diabetes_snapshots: {
+        Row: {
+          created_at: string
+          id: string
+          lab_name: string
+          loinc_code: string
+          observed_date: string
+          source: string
+          unit: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lab_name: string
+          loinc_code: string
+          observed_date: string
+          source?: string
+          unit?: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lab_name?: string
+          loinc_code?: string
+          observed_date?: string
+          source?: string
+          unit?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diabetes_snapshots_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ehr_connections: {
         Row: {
           access_token_encrypted: string

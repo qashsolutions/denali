@@ -5,12 +5,30 @@ import { useRouter } from "next/navigation";
 import { DiabetesIcon } from "@/components/icons";
 import { CmsPledge } from "@/components/ui";
 import { useHealthData } from "@/hooks/useHealthData";
+import { useAuth } from "@/hooks/useAuth";
+import { useConsent } from "@/hooks/useConsent";
+import { useDiabetesSnapshots } from "@/hooks/useDiabetesSnapshots";
+import { useDiabetesLog } from "@/hooks/useDiabetesLog";
+import { useDiabetesInsights } from "@/hooks/useDiabetesInsights";
 import { PreDiabetesRiskCard } from "@/components/health";
+import {
+  A1CTrendChart,
+  ScreeningReminders,
+  RiskAlerts,
+  QuickLog,
+  InsightsCard,
+} from "@/components/diabetes";
 import { classifyDiabetesStatus, type DiabetesClassification } from "@/lib/fhir/transforms";
 
 export default function DiabetesPage() {
   const router = useRouter();
+  const { authState } = useAuth();
+  const isSignedIn = !!authState.userId;
   const { labs, conditions, medications, isConnected, isLoading } = useHealthData();
+  const { consent } = useConsent();
+  const { a1cHistory } = useDiabetesSnapshots();
+  const { entries: logEntries, addEntry, deleteEntry } = useDiabetesLog();
+  const { insight, isLoading: insightLoading, refresh: refreshInsight } = useDiabetesInsights();
 
   const askAbout = (topic: string) => {
     router.push(`/app/chat?message=${encodeURIComponent(topic)}`);
@@ -26,8 +44,9 @@ export default function DiabetesPage() {
   const diabetesMeds = medications.filter(m => m.isDiabetesMed);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="flex items-center gap-4 mb-6">
+    <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
+      {/* Header */}
+      <div className="flex items-center gap-4">
         <div className="w-14 h-14 rounded-2xl bg-violet-500/15 flex items-center justify-center shrink-0">
           <DiabetesIcon className="w-7 h-7 text-violet-500" />
         </div>
@@ -41,9 +60,29 @@ export default function DiabetesPage() {
         </div>
       </div>
 
-      {/* Section 1: Personal Status (only when connected) */}
+      {/* Risk Alerts (connected + alerts exist) */}
       {isConnected && !isLoading && classification && classification !== "none" && (
-        <section className="mb-8">
+        <RiskAlerts
+          labs={labs}
+          conditions={conditions}
+          medications={medications}
+          classification={classification}
+          a1cHistory={a1cHistory}
+        />
+      )}
+
+      {/* AI Insights (consent + insight exists) */}
+      {isConnected && consent.health_data_ai && (
+        <InsightsCard
+          insight={insight}
+          isLoading={insightLoading}
+          onRefresh={refreshInsight}
+        />
+      )}
+
+      {/* Personal Status (only when connected with indicators) */}
+      {isConnected && !isLoading && classification && classification !== "none" && (
+        <section>
           <div className="bg-[var(--bg-secondary)] rounded-xl border border-[var(--border)] p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">
@@ -52,8 +91,10 @@ export default function DiabetesPage() {
               <ClassificationBadge classification={classification} />
             </div>
 
-            {/* Latest A1C */}
-            {latestA1C && (
+            {/* A1C: prefer trend chart when >1 snapshot, fallback to range bar */}
+            {a1cHistory.length > 1 ? (
+              <A1CTrendChart dataPoints={a1cHistory} />
+            ) : latestA1C ? (
               <div className="flex items-center gap-4">
                 <div>
                   <p className="text-2xl font-bold text-[var(--text-primary)]">
@@ -65,7 +106,7 @@ export default function DiabetesPage() {
                 </div>
                 <A1CRangeBar value={latestA1C.value} />
               </div>
-            )}
+            ) : null}
 
             {/* Active diabetes diagnosis */}
             {conditions.filter(c => ["type1", "type2", "pre-diabetic", "other-diabetes"].includes(c.category)).map((c, i) => (
@@ -104,7 +145,7 @@ export default function DiabetesPage() {
 
       {/* Connected but no diabetes indicators */}
       {isConnected && !isLoading && classification === "none" && (
-        <section className="mb-8">
+        <section>
           <div className="bg-green-500/5 border border-green-500/20 rounded-xl p-4 text-center">
             <p className="text-sm text-green-700 dark:text-green-400">
               No diabetes indicators found in your Medicare records. Keep up the good work!
@@ -118,7 +159,7 @@ export default function DiabetesPage() {
 
       {/* Connected but no labs at all */}
       {isConnected && !isLoading && labs.length === 0 && conditions.length === 0 && (
-        <section className="mb-8">
+        <section>
           <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-4 text-center">
             <p className="text-sm text-[var(--text-secondary)]">
               No diabetes labs found in your Medicare records.
@@ -130,8 +171,18 @@ export default function DiabetesPage() {
         </section>
       )}
 
+      {/* Screening Reminders (connected) */}
+      {isConnected && !isLoading && (
+        <ScreeningReminders labs={labs} classification={classification} />
+      )}
+
+      {/* Quick Log (any signed-in user) */}
+      {isSignedIn && (
+        <QuickLog entries={logEntries} onAdd={addEntry} onDelete={deleteEntry} />
+      )}
+
       {/* Quick Actions */}
-      <section className="mb-8">
+      <section>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <QuickAction
             label={isConnected && latestA1C ? `My A1C is ${latestA1C.value}%` : "Ask about my A1C"}
@@ -165,7 +216,7 @@ export default function DiabetesPage() {
       </section>
 
       {/* Coverage Quick Reference */}
-      <section className="mb-8">
+      <section>
         <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
           Medicare Diabetes Coverage
         </h2>
@@ -180,7 +231,7 @@ export default function DiabetesPage() {
       </section>
 
       {/* A1C Guide — highlight user's range when available */}
-      <section className="mb-8">
+      <section>
         <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
           Understanding A1C
         </h2>
@@ -221,7 +272,7 @@ export default function DiabetesPage() {
 
       {/* MDPP section for pre-diabetic users */}
       {(classification === "pre-diabetic" || classification === "at-risk") && (
-        <section className="mb-8">
+        <section>
           <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
             Medicare Diabetes Prevention Program
           </h2>
@@ -249,7 +300,7 @@ export default function DiabetesPage() {
 
       {/* Pre-diabetes risk test — shown when NOT connected */}
       {!isConnected && !isLoading && (
-        <section className="mb-8">
+        <section>
           <PreDiabetesRiskCard />
         </section>
       )}
@@ -325,7 +376,7 @@ function CoverageItem({
   return (
     <div className="flex items-start gap-3 px-4 py-3">
       <span className={`text-sm mt-0.5 ${covered ? "text-green-600" : "text-[var(--text-muted)]"}`}>
-        {covered ? "✓" : "—"}
+        {covered ? "\u2713" : "\u2014"}
       </span>
       <div>
         <p className="text-sm font-medium text-[var(--text-primary)]">{title}</p>

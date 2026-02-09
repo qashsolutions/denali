@@ -13,7 +13,9 @@ import {
   LabResultsCard,
   ConditionsCard,
   MedicationsCard,
+  DiabetesConsentCard,
 } from "@/components/health";
+import { useConsent } from "@/hooks/useConsent";
 
 export default function HealthPage() {
   return (
@@ -40,6 +42,13 @@ function HealthPageInner() {
     disconnect,
     refresh,
   } = useHealthData();
+  const { consent, isLoading: consentLoading, updateConsent } = useConsent();
+
+  // Show consent card when connected + has diabetes data + hasn't enabled AI consent
+  const hasDiabetesData = labs.length > 0 || conditions.some(c =>
+    ["type1", "type2", "pre-diabetic", "other-diabetes"].includes(c.category)
+  );
+  const showConsentCard = isConnected && hasDiabetesData && !consent.health_data_ai && !consentLoading;
 
   // Handle OAuth callback params
   const oauthError = searchParams.get("error");
@@ -144,6 +153,10 @@ function HealthPageInner() {
           onRefresh={refresh}
           onDisconnect={disconnect}
         />
+
+        {showConsentCard && (
+          <DiabetesConsentCard consent={consent} onUpdateConsent={updateConsent} />
+        )}
 
         {patient && <PatientCard patient={patient} />}
 

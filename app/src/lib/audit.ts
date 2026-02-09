@@ -20,7 +20,9 @@ export type AuditAction =
   | "LOGIN"
   | "SETTINGS_CHANGED"
   | "CHECKOUT_STARTED"
-  | "TRIAL_STARTED";
+  | "TRIAL_STARTED"
+  | "DIABETES_INSIGHT_GENERATED"
+  | "DIABETES_LOG_ENTRY";
 
 type ResourceType =
   | "ehr_connection"
@@ -29,7 +31,9 @@ type ResourceType =
   | "consent"
   | "account"
   | "subscription"
-  | "settings";
+  | "settings"
+  | "diabetes_insight"
+  | "diabetes_log";
 
 /**
  * Log an auditable action. Uses the admin client to bypass RLS.

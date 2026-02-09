@@ -17,7 +17,9 @@ import { CmsPledge } from "@/components/ui";
 import { useChat } from "@/hooks/useChat";
 import { useAuth } from "@/hooks/useAuth";
 import { useHealthData } from "@/hooks/useHealthData";
+import { useDiabetesSnapshots } from "@/hooks/useDiabetesSnapshots";
 import { classifyDiabetesStatus } from "@/lib/fhir/transforms";
+import { ShieldCheckIcon, ScaleIcon, DiabetesIcon } from "@/components/icons";
 import type { SessionState } from "@/lib/claude";
 
 
@@ -34,6 +36,7 @@ function ChatContent() {
 
   // Health data → sessionState bridge
   const { coverage, claims, labs, conditions, medications, isConnected } = useHealthData();
+  const { a1cHistory } = useDiabetesSnapshots();
 
   const initialSessionState = useMemo(() => {
     if (!isConnected) return undefined;
@@ -43,7 +46,7 @@ function ChatContent() {
 
     const { classification: diabetesClassification } = classifyDiabetesStatus(conditions, labs, medications);
 
-    return {
+    const partial: Partial<SessionState> = {
       healthDataAvailable: true,
       activeCoverage: coverage.filter(c => c.status === "Active").map(c => c.type),
       recentDenials: claims.filter(c => c.status === "Denied").slice(0, 5).map(c => ({
@@ -56,8 +59,19 @@ function ChatContent() {
       conditions: conditionsForState,
       medications: medsForState,
       diabetesClassification,
-    } satisfies Partial<SessionState>;
-  }, [isConnected, coverage, claims, labs, conditions, medications]);
+    };
+
+    // Add longitudinal lab trends if available
+    if (a1cHistory.length > 0) {
+      partial.labTrends = a1cHistory.map(s => ({
+        date: s.date,
+        value: s.value,
+        loincCode: s.loincCode,
+      }));
+    }
+
+    return partial;
+  }, [isConnected, coverage, claims, labs, conditions, medications, a1cHistory]);
 
   useEffect(() => {
     const payment = searchParams.get("payment");
@@ -105,8 +119,10 @@ function ChatContent() {
     const initialMessage = searchParams.get("message") || searchParams.get("q");
     if (initialMessage && messages.length === 0) {
       sendMessage(initialMessage);
+    } else if (topic === "diabetes" && messages.length === 0) {
+      sendMessage("What should I know about diabetes and Medicare coverage?");
     }
-  }, [searchParams, messages.length, sendMessage]);
+  }, [searchParams, topic, messages.length, sendMessage]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -276,33 +292,38 @@ export default function AppChatPage() {
   );
 }
 
+const EMPTY_STATE_CARDS = [
+  {
+    icon: ShieldCheckIcon,
+    color: "#3b82f6",
+    title: "Check Coverage",
+    description: "Find out if Medicare covers your procedure",
+    message: "I want to check if Medicare covers a procedure",
+  },
+  {
+    icon: ScaleIcon,
+    color: "#ef4444",
+    title: "Appeal a Denial",
+    description: "Get help fighting a Medicare denial",
+    message: "Medicare denied my claim and I need help appealing",
+  },
+  {
+    icon: DiabetesIcon,
+    color: "#8b5cf6",
+    title: "Diabetes Care",
+    description: "Diabetes coverage, screening, and prevention",
+    message: "What should I know about diabetes and Medicare coverage?",
+  },
+] as const;
+
 function EmptyState({
   onSuggestionSelect,
-  topic,
 }: {
   onSuggestionSelect: (suggestion: string) => void;
   topic?: string | null;
 }) {
-  const diabetesQuestions = [
-    "What does my A1C level mean?",
-    "Does Medicare cover diabetes screening?",
-    "What diabetes supplies does Medicare cover?",
-    "Am I eligible for the Medicare Diabetes Prevention Program?",
-  ];
-
-  const commonQuestions = topic === "diabetes"
-    ? diabetesQuestions
-    : [
-        "Check my symptoms",
-        "Check coverage for a procedure",
-        "Help me file an appeal",
-      ];
-
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="w-16 h-16 rounded-full bg-[var(--accent-primary)]/20 flex items-center justify-center mb-4">
-        <ChatIcon className="w-8 h-8 text-[var(--accent-primary)]" />
-      </div>
       <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-2">
         How can I help?
       </h2>
@@ -311,35 +332,33 @@ function EmptyState({
         doctor needs to document.
       </p>
 
-      <div className="w-full max-w-sm space-y-2">
-        {commonQuestions.map((question, index) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg w-full">
+        {EMPTY_STATE_CARDS.map((card) => (
           <button
-            key={index}
-            onClick={() => onSuggestionSelect(question)}
-            className="w-full text-left px-4 py-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] hover:border-[var(--accent-primary)] transition-colors text-sm"
+            key={card.title}
+            onClick={() => onSuggestionSelect(card.message)}
+            className="flex items-start gap-3 text-left px-4 py-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] hover:bg-[var(--bg-tertiary)] hover:border-[var(--accent-primary)] transition-colors group"
           >
-            {question}
+            <div
+              className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+              style={{
+                backgroundColor: `color-mix(in srgb, ${card.color} 15%, transparent)`,
+                color: card.color,
+              }}
+            >
+              <card.icon className="w-5 h-5" strokeWidth={2} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
+                {card.title}
+              </div>
+              <div className="text-xs text-[var(--text-secondary)] mt-0.5">
+                {card.description}
+              </div>
+            </div>
           </button>
         ))}
       </div>
     </div>
-  );
-}
-
-function ChatIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-      />
-    </svg>
   );
 }

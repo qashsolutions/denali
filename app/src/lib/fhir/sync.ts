@@ -24,6 +24,7 @@ import {
   type DiagnosisSummary,
   type MedicationSummary,
 } from "./transforms";
+import { appendDiabetesSnapshots } from "./snapshots";
 
 export interface HealthData {
   patient: PatientSummary | null;
@@ -119,6 +120,11 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
       { onConflict: "user_id,resource_type" }
     ),
   ]);
+
+  // Append labs to longitudinal snapshot history (fire-and-forget)
+  appendDiabetesSnapshots(userId, labs).catch((err) =>
+    console.warn("[Sync] Snapshot append failed:", err)
+  );
 
   // Update last_synced_at on the connection
   await admin

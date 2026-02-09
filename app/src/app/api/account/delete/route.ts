@@ -58,6 +58,11 @@ export async function DELETE(request: NextRequest) {
       .delete()
       .eq("user_id", userId);
 
+    // 0b. Delete diabetes data
+    await supabase.from("diabetes_snapshots").delete().eq("user_id", userId);
+    await supabase.from("diabetes_log").delete().eq("user_id", userId);
+    await supabase.from("diabetes_insights").delete().eq("user_id", userId);
+
     // 1. Delete user feedback
     await supabase
       .from("user_feedback")

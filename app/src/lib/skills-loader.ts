@@ -310,9 +310,13 @@ export function buildSystemPrompt(
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // ONBOARDING GATE - Must complete before ANY other skills load
+  // ONBOARDING GATE - Only blocks when flow actually needs name/ZIP
+  // Coverage and appeal flows need name+ZIP; informational queries don't.
   // ─────────────────────────────────────────────────────────────────────────
-  if (!triggers.hasUserName || !triggers.hasUserZip) {
+  const needsOnboarding = !triggers.hasUserName || !triggers.hasUserZip;
+  const isOnboardingRequired = triggers.hasProcedure || triggers.isAppeal || triggers.hasCoverage;
+
+  if (needsOnboarding && isOnboardingRequired) {
     sections.push(TOOL_RESTRAINT);
     sections.push(ONBOARDING_SKILL);
     sections.push(PROMPTING_SKILL);
@@ -329,7 +333,8 @@ export function buildSystemPrompt(
   // ─────────────────────────────────────────────────────────────────────────
   // After onboarding, ask if they have Original Medicare or Advantage.
   // Appeals skip this gate (appeal process is similar for both).
-  if (!triggers.hasMedicareType && triggers.hasProblem && !triggers.isAppeal) {
+  // Informational queries (no procedure/coverage) skip this gate too.
+  if (!triggers.hasMedicareType && triggers.hasProblem && !triggers.isAppeal && isOnboardingRequired) {
     sections.push(TOOL_RESTRAINT);
     sections.push(MEDICARE_TYPE_SKILL);
     sections.push(PROMPTING_SKILL);
@@ -679,7 +684,25 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
     return reminder.join("\n");
   }
 
-  // Step 1: Get name
+  // Informational queries — respond helpfully without gating on name/ZIP
+  const isInformationalQuery = !triggers.hasProcedure && !triggers.isAppeal && !triggers.hasCoverage;
+  if (isInformationalQuery && (!triggers.hasUserName || !triggers.hasUserZip)) {
+    if (triggers.hasDiabetesContext) {
+      reminder.push("**RESPOND:** Answer their diabetes question directly");
+      reminder.push("**DO NOT** ask for name or ZIP — answer first");
+      reminder.push("**OFFER** to check specific coverage if they want (that will need ZIP)");
+    } else if (triggers.hasProblem) {
+      reminder.push("**RESPOND:** Address what they described");
+      reminder.push("**DO NOT** ask for name or ZIP — understand their situation first");
+      reminder.push("**GUIDE** toward next step via suggestions");
+    } else {
+      reminder.push("**RESPOND:** Welcome and ask what they need help with");
+      reminder.push("**DO NOT** ask for name first — understand their need first");
+    }
+    return reminder.join("\n");
+  }
+
+  // Step 1: Get name (only reached when onboarding is required)
   if (!triggers.hasUserName) {
     reminder.push("**ASK:** 'Happy to help! What's your name?'");
     reminder.push("**KEEP IT SHORT** — one line only");

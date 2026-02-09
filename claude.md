@@ -105,7 +105,12 @@ Where to find specific logic in the codebase.
 | `src/lib/skills-loader.ts` | Conditional prompt builder. Loads skill sections based on SkillTriggers (onboarding, symptom gathering, coverage, appeal, etc.) |
 | `src/lib/denial-patterns.ts` | Async Supabase queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
 | `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via admin client (bypasses RLS). Non-blocking fire-and-forget |
-| `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI + `extractDiabetesLabs()` + `extractDiabetesConditions()` + `extractDiabetesMedications()` + `classifyDiabetesStatus()`), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + classification + denials), `sync.ts` (cache sync: Patient + Coverage + EOB + Observation + Condition + MedicationRequest) |
+| `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI + `extractDiabetesLabs()` + `extractDiabetesConditions()` + `extractDiabetesMedications()` + `classifyDiabetesStatus()`), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + classification + lab trends + denials), `sync.ts` (cache sync: Patient + Coverage + EOB + Observation + Condition + MedicationRequest + snapshot append), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
+| `src/lib/diabetes-insights.ts` | Claude-powered diabetes insight generation. `generateDiabetesInsight(data)` calls Sonnet for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls |
+| `src/components/diabetes/` | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from lab dates), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display) |
+| `src/hooks/useDiabetesSnapshots.ts` | Fetches longitudinal lab data from `diabetes_snapshots`. Returns `{ snapshots, a1cHistory, isLoading }` |
+| `src/hooks/useDiabetesLog.ts` | CRUD for daily log entries via `/api/diabetes/log`. Returns `{ entries, isLoading, addEntry, deleteEntry }` |
+| `src/hooks/useDiabetesInsights.ts` | AI insight fetch/refresh via `/api/diabetes/insights`. Returns `{ insight, isLoading, refresh }` |
 | `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
 | `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
 | `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
@@ -131,6 +136,8 @@ src/app/api/
   fhir/callback/route.ts      # Blue Button OAuth callback (token exchange)
   fhir/data/route.ts          # FHIR data retrieval + caching
   fhir/disconnect/route.ts    # Revoke Blue Button connection
+  diabetes/log/route.ts       # Quick log CRUD (glucose, activity, meal, note)
+  diabetes/insights/route.ts  # AI insights GET/POST (Claude-generated diabetes analysis)
   webhooks/stripe/route.ts    # Stripe webhook events
 ```
 
@@ -244,6 +251,9 @@ User-facing (plain English):        Internal (codes, never shown):
 | `consent_preferences` | Per-user consent toggles: `health_data_ai`, `health_data_storage`, `analytics`. Versioned, audit-logged on change |
 | `ehr_connections` | Blue Button OAuth tokens (AES-256-GCM encrypted), FHIR patient ID, connection status |
 | `fhir_cache` | Transformed FHIR data (patient, coverage, claims, labs, conditions, medications), 24h TTL. RLS-protected reads |
+| `diabetes_snapshots` | Append-only longitudinal lab history. Unique on `(user_id, loinc_code, observed_date)`. RLS: users read own, service_role inserts. Auto-populated on FHIR sync |
+| `diabetes_log` | User-entered daily entries (glucose/activity/meal/note). Any signed-in user. CHECK constraint on entry_type. RLS: users CRUD own |
+| `diabetes_insights` | Claude-generated diabetes analysis (summary, recommendations, risk_alerts, screening_reminders). Unique on user_id. Hash-based dedup avoids redundant Claude calls. RLS: users read own, service_role manages |
 
 ### Denial Code Tables
 
@@ -794,7 +804,7 @@ After every chat response, `persistLearning()` runs non-blocking:
 
 ```
 src/
-  app/api/          # API routes (chat, fhir/*, consent, trial, cms-metadata, account, checkout, webhooks)
+  app/api/          # API routes (chat, fhir/*, diabetes/*, consent, trial, cms-metadata, account, checkout, webhooks)
   app/app/          # App shell routes (/app, /app/chat, /app/health, /app/diabetes, /app/settings)
   components/
     ui/             # Primitives (Button, Input, Card, Modal, CmsPledge)
@@ -802,10 +812,11 @@ src/
     appeal/         # Appeal-specific (AppealLetter, StatusBadge)
     auth/           # Auth components (EmailOTPModal, TOTPEnrollModal, TOTPChallengeModal). Passkey modals exist but non-functional (Supabase has no WebAuthn)
     layout/         # Layout (AppHeader, BottomTabs, Container)
-    health/         # Health page (ConnectMedicare, PatientCard, CoverageCards, LabResultsCard, ConditionsCard, MedicationsCard, ClaimsList, PreDiabetesRiskCard)
-  hooks/            # Custom hooks (useAuth, useChat, useConsent, useHealthData, useSettings, etc.)
-  lib/              # Core libraries (claude.ts, supabase.ts, audit.ts, tools/, skills-loader.ts, denial-patterns.ts)
-  lib/fhir/         # Blue Button 2.0 (crypto, tokens, client, transforms, context, sync)
+    health/         # Health page (ConnectMedicare, PatientCard, CoverageCards, LabResultsCard, ConditionsCard, MedicationsCard, ClaimsList, PreDiabetesRiskCard, DiabetesConsentCard)
+    diabetes/       # Diabetes dashboard (A1CTrendChart, ScreeningReminders, RiskAlerts, QuickLog, InsightsCard)
+  hooks/            # Custom hooks (useAuth, useChat, useConsent, useHealthData, useDiabetesSnapshots, useDiabetesLog, useDiabetesInsights, useSettings, etc.)
+  lib/              # Core libraries (claude.ts, supabase.ts, audit.ts, tools/, skills-loader.ts, denial-patterns.ts, diabetes-insights.ts)
+  lib/fhir/         # Blue Button 2.0 (crypto, tokens, client, transforms, context, sync, snapshots)
   lib/skills/       # AI skills injected via skills-loader (health-records, medicare-notifications, diabetes-prevention)
   config/           # Config (api.ts, brand.ts, pricing.ts, ui.ts)
   types/            # TypeScript types (database.ts from Supabase gen)
@@ -1035,6 +1046,13 @@ Pledge text displayed via `CmsPledge` component (`src/components/ui/CmsPledge.ts
 | **Health page labs/conditions/meds** | Diabetes criteria | `LabResultsCard` (with A1C trends), `ConditionsCard` (diabetes diagnoses), `MedicationsCard` (diabetes meds highlighted) on health page |
 | **Pre-diabetes resources** | Diabetes criteria | `PreDiabetesRiskCard` (CDC 7-question risk test), MDPP eligibility section, dedicated pre-diabetic coaching in AI skill |
 | **Unified navigation** | — | Diabetes integrated into Ask Denali chat; 3-item nav (Health, Ask Denali, Blog); diabetes page kept as reference |
+| **Longitudinal lab storage** | Diabetes criteria | `diabetes_snapshots` table — append-only, auto-populated on FHIR sync. `useDiabetesSnapshots` hook, `A1CTrendChart` SVG sparkline + list toggle |
+| **Nutrition/activity tracking** | Diabetes criteria | `diabetes_log` table + `QuickLog` component (glucose/activity/meal/note). Any signed-in user. `/api/diabetes/log` CRUD route |
+| **Proactive screening reminders** | Diabetes criteria | `ScreeningReminders` component on diabetes dashboard — calculates from lab dates (>3mo diabetic, >6mo amber, >12mo red) |
+| **Dashboard risk alerts** | Diabetes criteria | `RiskAlerts` component — A1C >= 9.0 (red), dx without meds (amber), A1C trending up (amber). Links to chat |
+| **Diabetes consent flow** | Data privacy | `DiabetesConsentCard` on health page — gates AI analysis + storage consent. Shown when connected + diabetes data + no consent |
+| **Stored AI diabetes analysis** | Diabetes criteria | `diabetes_insights` table + `diabetes-insights.ts` (Claude Sonnet, structured JSON) + `/api/diabetes/insights` API + `InsightsCard` component. Hash-based dedup, auto-triggered on FHIR sync |
+| **Chat lab trend context** | Diabetes + Conv. AI | `labTrends` + `recentLogSummary` on SessionState. `buildHealthContextForPrompt()` injects A1C history with arrows (improving/rising/stable) |
 
 #### Remaining Gaps
 

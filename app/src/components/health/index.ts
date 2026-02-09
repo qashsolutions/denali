@@ -8,3 +8,4 @@ export { LabResultsCard } from "./LabResultsCard";
 export { ConditionsCard } from "./ConditionsCard";
 export { MedicationsCard } from "./MedicationsCard";
 export { PreDiabetesRiskCard } from "./PreDiabetesRiskCard";
+export { DiabetesConsentCard } from "./DiabetesConsentCard";
