@@ -4,7 +4,7 @@
  * Handles saving and loading conversations and messages to/from Supabase.
  */
 
-import { createClient } from "./supabase";
+import { getClient } from "./supabase";
 import { MEDICARE_CONSTANTS } from "@/config";
 import type { Database } from "@/types/database";
 
@@ -45,7 +45,7 @@ export async function createConversation(
     title?: string;
   } = {}
 ): Promise<string | null> {
-  const supabase = createClient();
+  const supabase = getClient();
 
   const conversationData: ConversationInsert = {
     user_id: options.userId || null,
@@ -84,7 +84,7 @@ export async function saveMessage(
     policyRefs?: string[];
   }
 ): Promise<string | null> {
-  const supabase = createClient();
+  const supabase = getClient();
 
   const messageData: MessageInsert = {
     conversation_id: conversationId,
@@ -116,7 +116,7 @@ export async function saveMessage(
 export async function loadConversation(
   conversationId: string
 ): Promise<ConversationData | null> {
-  const supabase = createClient();
+  const supabase = getClient();
 
   // Fetch conversation
   const { data: conversation, error: convError } = await supabase
@@ -174,7 +174,7 @@ export async function loadRecentConversations(
     limit?: number;
   } = {}
 ): Promise<ConversationData[]> {
-  const supabase = createClient();
+  const supabase = getClient();
   const limit = options.limit || 10;
 
   let query = supabase
@@ -249,7 +249,7 @@ export async function loadRecentConversations(
 //   status: "active" | "completed" | "archived",
 //   title?: string
 // ): Promise<boolean> {
-//   const supabase = createClient();
+//   const supabase = getClient();
 //   const updates: Record<string, unknown> = { status };
 //   if (status === "completed") {
 //     updates.completed_at = new Date().toISOString();
@@ -278,7 +278,7 @@ export async function submitMessageFeedback(
   userId?: string,
   correction?: string
 ): Promise<boolean> {
-  const supabase = createClient();
+  const supabase = getClient();
 
   const params = {
     p_message_id: messageId,
@@ -323,7 +323,7 @@ export async function saveAppeal(
     userId?: string;
   }
 ): Promise<string | null> {
-  const supabase = createClient();
+  const supabase = getClient();
 
   // Resolve email: if empty, look up from conversation's user_id
   let resolvedEmail = email;
@@ -406,7 +406,7 @@ export async function saveAppeal(
 //   appealCount: number;
 //   hasSubscription: boolean;
 // }> {
-//   const supabase = createClient();
+//   const supabase = getClient();
 //   try {
 //     const { data: rpcResult, error: rpcError } = await supabase.rpc(
 //       "check_appeal_access",
@@ -473,7 +473,7 @@ export interface AppealSummary {
 export async function loadAppealsForConversation(
   conversationId: string
 ): Promise<AppealSummary[]> {
-  const supabase = createClient();
+  const supabase = getClient();
 
   const { data, error } = await supabase
     .from("appeals")
@@ -510,7 +510,7 @@ export async function loadAppealsForConversation(
 export async function claimConversation(
   conversationId: string
 ): Promise<boolean> {
-  const supabase = createClient();
+  const supabase = getClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)("claim_conversation", {
@@ -528,7 +528,7 @@ export async function claimConversation(
 // DEAD CODE — No consumers. Appeal count is checked via useAuth hook or RPC.
 // Commented out 2026-02-06.
 // export async function getAppealCount(email: string): Promise<number> {
-//   const supabase = createClient();
+//   const supabase = getClient();
 //   const { data, error } = await supabase
 //     .from("usage")
 //     .select("appeal_count")
@@ -543,7 +543,7 @@ export async function claimConversation(
 // DEAD CODE — No consumers. Subscription checked via useAuth hook.
 // Commented out 2026-02-06.
 // export async function hasActiveSubscription(userId: string): Promise<boolean> {
-//   const supabase = createClient();
+//   const supabase = getClient();
 //   const { data, error } = await supabase
 //     .from("subscriptions")
 //     .select("id")
@@ -584,7 +584,7 @@ export async function trackEvent(
     eventData?: Record<string, unknown>;
   } = {}
 ): Promise<void> {
-  const supabase = createClient();
+  const supabase = getClient();
 
   console.log("[TrackEvent] Input:", { eventType, options });
 
@@ -654,7 +654,7 @@ async function scheduleOutcomeFollowups(
   appealId: string,
   email: string
 ): Promise<void> {
-  const supabase = createClient();
+  const supabase = getClient();
   const now = new Date();
   const day30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const day60 = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
@@ -695,7 +695,7 @@ export async function getUnreportedOutcome(
 } | null> {
   if (!email) return null;
 
-  const supabase = createClient();
+  const supabase = getClient();
 
   const { data, error } = await supabase.rpc("get_unreported_outcome", {
     p_email: email,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -28,9 +28,13 @@ export function Sidebar({
   const { conversations, isLoading, refresh } = useConversationHistory();
   const groupedConversations = groupConversationsByDate(conversations);
 
-  // Refresh conversation list when a new conversation is created
+  // Refresh conversation list when conversation changes (new chat or new conversation created)
+  const prevConversationIdRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (currentConversationId) {
+    const prev = prevConversationIdRef.current;
+    prevConversationIdRef.current = currentConversationId;
+    // Refresh when: new conversation created (null→id) OR new chat clicked (id→undefined)
+    if (currentConversationId || (prev && !currentConversationId)) {
       refresh();
     }
   }, [currentConversationId, refresh]);
@@ -185,6 +189,9 @@ function ConversationItem({
           <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">
             {conversation.preview}
           </p>
+          <p className="text-[11px] italic text-[var(--text-muted)] mt-0.5">
+            {formatConversationDate(conversation.createdAt)}
+          </p>
         </div>
       </div>
     </button>
@@ -202,6 +209,26 @@ export function SidebarToggle({ onClick }: { onClick: () => void }) {
       <MenuIcon className="w-6 h-6 text-[var(--text-primary)]" />
     </button>
   );
+}
+
+// Helpers
+function formatConversationDate(date: Date): string {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const convDate = new Date(date);
+
+  if (convDate >= today) {
+    return convDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (convDate >= yesterday) {
+    return "Yesterday " + convDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+
+  return convDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+    " " + convDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
 // Icons
