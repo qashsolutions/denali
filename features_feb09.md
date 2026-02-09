@@ -2,22 +2,24 @@
 
 > Comprehensive code review of every feature, file, and Supabase integration.
 > Generated from full codebase audit across chat/AI, auth/payment, FHIR/health, UI, and database layers.
-> Updated with second pass findings (critical server-side auth bugs, payment pipeline issues).
+> **All issues resolved**: 16 Pass 1 bugs, 11 Pass 2 critical/high/medium issues, and 4 Pass 3 pipeline fixes — all applied, verified, and committed.
 
 ### Status Summary
 
-| Category | Count |
-|----------|-------|
-| Fully Implemented | 38 |
-| Bugs Fixed (Pass 1) | 16 |
-| Critical/High Issues (Pass 2) | 9 |
-| Medium Issues (Pass 2) | 2 |
-| Design Decisions Pending | 8 |
-| Dead Code Candidates | 9 |
+| Category | Count | Status |
+|----------|-------|--------|
+| Fully Implemented & Working | 38 | Verified |
+| Bugs Found & Fixed (Pass 1) | 16 | All Fixed |
+| Critical/High Issues Found & Fixed (Pass 2) | 9 | All Fixed |
+| Medium Issues Found & Fixed (Pass 2) | 2 | All Fixed |
+| Skill Pipeline Fixes (Pass 3) | 4 | All Fixed |
+| Design Decisions Pending | 7 | Open |
+| Dead Code Candidates | 9 | Not yet removed |
+| **Total Fixes Applied** | **31** | |
 
 ---
 
-## Fully Implemented Features (No TODOs, No Stubs, No Gaps)
+## Fully Implemented Features (Working End-to-End)
 
 | # | Feature | Key Files | Notes |
 |---|---------|-----------|-------|
@@ -48,7 +50,7 @@
 | 25 | Denial code lookup | `tools/index.ts`, `denial-patterns.ts` | CARC/RARC/EOB search, appeal strategy, success rates |
 | 26 | Appeal letter generation | `tools/index.ts` (`generate_appeal_letter`) | Inline codes, policy refs, PubMed citations, deadline |
 | 27 | Appeal gating | `AppealGate.tsx`, `PaywallModal.tsx` | Email OTP -> TOTP -> access check -> paywall pipeline |
-| 28 | Appeal outcome reporting | `AppealOutcomePrompt.tsx`, `/api/appeal-outcome` | 3 outcomes, days to decision, learning system |
+| 28 | Appeal outcome reporting + incentive | `AppealOutcomePrompt.tsx`, `/api/appeal-outcome` | 3 outcomes, days to decision, learning system, free appeal credit on report |
 | 29 | Appeal letter PDF | `AppealLetterModal.tsx`, `buildPDF()` | jsPDF download, PDF-in-new-tab print, copy, deadline banner |
 | 30 | Skills system | `skills-loader.ts`, `src/skills/*`, `src/lib/skills/*` | 20+ skills, gate-based loading, learning context |
 | 31 | Pre-diabetes risk test | `PreDiabetesRiskCard.tsx` | CDC 7-question test, scoring, chat routing |
@@ -62,7 +64,9 @@
 
 ---
 
-## Bugs Found and Fixed (Feb 9)
+## Bugs Found and Fixed — Pass 1 (Feb 9)
+
+All 16 bugs fixed, committed, and verified.
 
 | # | Bug | File:Line | Severity | Fix |
 |---|-----|-----------|----------|-----|
@@ -85,55 +89,69 @@
 
 ---
 
-## Second Pass Findings (Feb 9 — Critical/High)
+## Critical/High Issues Found and Fixed — Pass 2 (Feb 9)
 
-### CRITICAL: Server routes using browser Supabase client
+All 9 critical/high and 2 medium issues fixed, committed, and verified.
 
-The `createClient()` browser client has NO auth context in server route handlers — `auth.uid()` is always NULL. This means all DB operations silently fail under RLS. Three server routes have this bug:
+### Server Routes Using Browser Client (FIXED)
 
-| # | Route | File | Impact | Fix |
-|---|-------|------|--------|-----|
-| 1 | `DELETE /api/account/delete` | `account/delete/route.ts:11,16` | **Account deletion is completely non-functional.** All `.delete()` calls run as anon → RLS blocks every row → user data remains. GDPR/CCPA violation. | Migrate to `createServerSupabaseClient()` + `createAdminClient()` for cascade |
-| 2 | `POST /api/checkout` | `checkout/route.ts:12,55` | **Stripe metadata.user_id is empty string.** `fulfillCheckoutSession()` skips when `!userId`. Payments succeed but plan is never upgraded. | Migrate to `createServerSupabaseClient()` |
-| 3 | `POST /api/outcome-report` | `outcome-report/route.ts:11,36` | **Token lookups and outcome recording silently fail** if `outcome_followups` table has user-scoped RLS. `recordAppealOutcome()` calls into `learning.ts` which also uses browser client. | Migrate to `createServerSupabaseClient()` for lookups, `createAdminClient()` for incentive |
+Three server routes were using `createClient()` (browser Supabase client) which has NO auth context server-side — `auth.uid()` is always NULL, so all DB operations silently fail under RLS.
 
-### CRITICAL: learning.ts uses browser client throughout
+| # | Route | File | Impact | Fix Applied |
+|---|-------|------|--------|-------------|
+| 1 | `DELETE /api/account/delete` | `account/delete/route.ts` | **Account deletion was completely non-functional.** All `.delete()` calls ran as anon → RLS blocked every row → user data remained. GDPR/CCPA violation. | **FIXED**: Migrated to `createServerSupabaseClient()` for auth + `createAdminClient()` for cascade deletion |
+| 2 | `POST /api/checkout` | `checkout/route.ts` | **Stripe metadata.user_id was empty string.** `fulfillCheckoutSession()` skipped when `!userId`. Payments succeeded but plan was never upgraded. | **FIXED**: Migrated to `createServerSupabaseClient()` |
+| 3 | `POST /api/outcome-report` | `outcome-report/route.ts` | **Token lookups and outcome recording silently failed** under RLS. | **FIXED**: Migrated to `createServerSupabaseClient()` for lookups, `createAdminClient()` for writes |
 
-| # | Issue | File | Impact |
-|---|-------|------|--------|
-| 4 | **Entire `learning.ts` uses `createClient()`** (17 call sites) | `lib/learning.ts:18,265,300,343,372,414,492,510,544,577,640,721,741,802,867,884,911` | Called from server `route.ts` via `persistLearning()`. All learning writes (symptom mappings, procedure mappings, coverage paths, feedback, flywheel) silently fail. Learning system is non-functional. |
+### learning.ts Browser Client (FIXED)
 
-### HIGH: Pricing & Payment Issues
+| # | Issue | File | Impact | Fix Applied |
+|---|-------|------|--------|-------------|
+| 4 | **Entire `learning.ts` used `createClient()` browser client** (17 call sites) | `lib/learning.ts` | Called from server `route.ts` via `persistLearning()`. All learning writes (symptom mappings, procedure mappings, coverage paths, feedback, flywheel) silently failed. Learning system was non-functional. | **FIXED**: All 17 call sites migrated to `createAdminClient()` |
 
-| # | Issue | File | Impact | Fix |
-|---|-------|------|--------|-----|
-| 5 | `MONTHLY.appealLimit: 6` contradicts CLAUDE.md, FAQ, Settings ("unlimited") | `pricing.ts:38` | PaywallModal shows "6 appeals per month" — misleading if plan is unlimited. FAQ says "unlimited." | Change to `Infinity` or `0` (unlimited) |
-| 6 | **Dev paywall bypass**: When `STRIPE_SECRET_KEY` missing, checkout returns `{ url: null }`, PaywallModal calls `onSuccess()` | `checkout/route.ts:42-48`, `PaywallModal.tsx:60-63` | In dev/staging without Stripe key, users get free access to paid features. No error shown. | Return error response instead of `{ url: null }` |
-| 7 | Stripe price IDs are placeholders | `pricing.ts:30,39` | `"price_single_appeal"` and `"price_unlimited_monthly"` — Stripe will reject checkout.sessions.create | Need real Stripe dashboard price IDs |
-| 8 | `stripe-fulfillment.ts` never populates `period_end` | `stripe-fulfillment.ts:50,95` | Subscription records have NULL end date — can't detect expired subscriptions | Parse `subscription.current_period_end` from Stripe object |
-| 9 | Missing webhook handlers | `webhooks/stripe/route.ts` | No `invoice.payment_failed` (can't detect failed renewals) or `customer.subscription.trial_will_end` (can't notify before trial expiry) | Add event handlers |
+### Pricing & Payment Issues (FIXED)
 
-### MEDIUM: UI & UX Issues
+| # | Issue | File | Impact | Fix Applied |
+|---|-------|------|--------|-------------|
+| 5 | `MONTHLY.appealLimit: 6` contradicted CLAUDE.md, FAQ, Settings ("unlimited") | `pricing.ts:38` | PaywallModal showed "6 appeals per month" — misleading. FAQ says "unlimited." | **FIXED**: Changed to `0` (unlimited) |
+| 6 | **Dev paywall bypass**: When `STRIPE_SECRET_KEY` missing, checkout returned `{ url: null }`, PaywallModal called `onSuccess()` | `checkout/route.ts`, `PaywallModal.tsx` | In dev/staging without Stripe key, users got free access to paid features. No error shown. | **FIXED**: Returns 503 error response instead of `{ url: null }` |
+| 7 | Stripe price IDs were placeholders | `pricing.ts:30,39` | `"price_single_appeal"` and `"price_unlimited_monthly"` would be rejected by Stripe | **FIXED**: Now reads from `STRIPE_PRICE_*` env vars. Sandbox price IDs configured in Vercel |
+| 8 | `stripe-fulfillment.ts` never populated `period_end` | `stripe-fulfillment.ts:50,95` | Subscription records had NULL end date — couldn't detect expired subscriptions | **FIXED**: Reads `current_period_end` from `subscription.items.data[0]` |
+| 9 | Missing webhook handlers | `webhooks/stripe/route.ts` | No `invoice.payment_failed` (couldn't detect failed renewals). Missing `customer.subscription.trial_will_end` | **FIXED**: Added handlers for `invoice.payment_failed`, `customer.subscription.created`, `customer.subscription.trial_will_end`, `invoice.finalized`, `invoice.paid` |
 
-| # | Issue | File | Impact | Fix |
-|---|-------|------|--------|-----|
-| 10 | PaywallModal hardcoded dark theme (`slate-900`, `blue-500/600`) | `PaywallModal.tsx:82+` | Broken in light mode — dark background on light page | Rewrite with CSS variables |
-| 11 | PaywallModal lists phantom features: "Priority support", "Appeal tracking" | `PaywallModal.tsx:234,248` | Features not implemented — misleading to users | Remove or replace with real features |
+### UI & UX Issues (FIXED)
+
+| # | Issue | File | Impact | Fix Applied |
+|---|-------|------|--------|-------------|
+| 10 | PaywallModal hardcoded dark theme (`slate-900`, `blue-500/600`) | `PaywallModal.tsx` | Broken in light mode — dark background on light page | **FIXED**: Rewritten with CSS variables (`var(--bg-primary)`, etc.) |
+| 11 | PaywallModal listed phantom features: "Priority support", "Appeal tracking" | `PaywallModal.tsx` | Features not implemented — misleading to users | **FIXED**: Replaced with real features: "Unlimited appeal letters", "Unlimited daily messages" |
 
 ---
 
-## Known Issues (Not Fixed — Design Decisions or External Dependencies)
+## Skill Pipeline Fixes — Pass 3 (Feb 9)
 
-| # | Issue | File | Why Not Fixed |
-|---|-------|------|---------------|
-| 1 | `useSettings` only persists `textScale` to localStorage, not synced to DB | `useSettings.ts` | Design decision: cross-device sync needed? |
-| 2 | No forced FHIR refresh (24h cache can't be bypassed) | `/api/fhir/data` | Design decision: add `?force=true` param? |
-| 3 | No SQL migration files in repo (schema not version-controlled) | -- | Process: export from Supabase dashboard |
-| 4 | Wildcard CORS `*` on edge functions | `_shared/cors.ts:6` | Needs domain restriction for prod |
-| 5 | No `payment=success` handler after Stripe redirect | chat page | Needs payment confirmation UX |
-| 6 | Home page has no personalized greeting with user name | `app/page.tsx` | Needs auth hook integration |
-| 7 | `consent/route.ts` never increments `version` column | `consent/route.ts:75` | Needs DB trigger or explicit increment |
-| 8 | FHIR Condition fetch uses `category=encounter-diagnosis` only (misses problem-list-item) | `fhir/sync.ts:69` | Needs Blue Button sandbox testing first |
+4 pipeline gaps identified from skill design specs (`skills/domain/*/SKILL.md`), all fixed and committed.
+
+| # | Gap | Severity | Files Modified | Fix Applied |
+|---|-----|----------|---------------|-------------|
+| 1 | **Requirement verification pipeline broken** — vacuous truth gate: `!triggers.hasRequirementsToVerify` evaluated to `true` when requirements array was empty (extraction never happened), causing system to skip directly to guidance delivery without verifying any LCD/NCD requirements | **HIGH** | `skills-loader.ts`, `claude.ts`, `coverage-check.ts` | **FIXED**: (a) Removed vacuous truth condition from guidance gate — guidance now only loads when `verificationComplete === true`. (b) Added step 9b flow reminder prompting Claude to emit `[REQUIREMENTS]` block after coverage lookup. (c) Added implicit skip safety valve in `extractUserInfo()` for stuck-state prevention. (d) Strengthened `COVERAGE_SKILL` prompt: `[REQUIREMENTS]` marked MANDATORY with "do this EVERY time" |
+| 2 | **Outcome incentive never delivered** — `applyOutcomeIncentive()` existed in `learning.ts` but was never called anywhere. Users who reported appeal outcomes got no free appeal credit | **MEDIUM-HIGH** | `appeal-outcome/route.ts` | **FIXED**: Wired `applyOutcomeIncentive(user.email)` call after `recordAppealOutcome()`. Returns `incentiveApplied` flag + appropriate thank-you message |
+| 3 | **Denial codes empty in appeals** — `denialCodes` only populated from `lookup_denial_code` tool results via `updateSessionFromToolResults()`. If user mentioned "CO-50" in text but Claude summarized without calling the tool, codes stayed empty | **MEDIUM** | `claude.ts` | **FIXED**: Added regex extraction in `extractUserInfo()` for CARC/RARC patterns (CO-50, PR-1, CARC 167, RARC N56, denial code 96). Gated on appeal/denial context to avoid false positives |
+| 4 | **LCD prior auth extraction unreliable** — `COVERAGE_SKILL` prompt instructions for `[PRIOR_AUTH_LCD]` and `[REQUIREMENTS]` blocks were vague. Claude sometimes skipped emitting them | **LOW-MEDIUM** | `coverage-check.ts` | **FIXED**: Strengthened prompt: `[PRIOR_AUTH_LCD]` block clarified as "auto-parsed and removed". `[REQUIREMENTS]` section marked "MANDATORY — Do This EVERY Time After Coverage Lookup" with explicit format example |
+
+---
+
+## Known Issues (Design Decisions — Not Bugs)
+
+| # | Issue | File | Status | Notes |
+|---|-------|------|--------|-------|
+| 1 | `useSettings` only persists `textScale` to localStorage, not synced to DB | `useSettings.ts` | Open | Design decision: cross-device sync needed? |
+| 2 | No forced FHIR refresh (24h cache can't be bypassed) | `/api/fhir/data` | Open | Design decision: add `?force=true` param? |
+| 3 | No SQL migration files in repo (schema not version-controlled) | -- | Open | Process: Supabase MCP `apply_migration` used instead |
+| 4 | Wildcard CORS `*` on edge functions | `_shared/cors.ts:6` | Open | Needs domain restriction for prod |
+| 5 | No `payment=success` handler after Stripe redirect | chat page | Open | Needs payment confirmation UX |
+| 6 | `consent/route.ts` never increments `version` column | `consent/route.ts:75` | Open | Needs DB trigger or explicit increment |
+| 7 | FHIR Condition fetch uses `category=encounter-diagnosis` only (misses problem-list-item) | `fhir/sync.ts:69` | Open | Needs Blue Button sandbox testing first |
 
 ---
 
@@ -150,3 +168,41 @@ The `createClient()` browser client has NO auth context in server route handlers
 | 7 | `ACCESSIBILITY_CONFIG` | `config/ui.ts` | Never consumed by any component |
 | 8 | `claim_learning_job`, `complete_learning_job` RPCs | DB functions | Never called by edge function |
 | 9 | `pubmed` MCP URL | `config/api.ts:26` | PubMed uses local tool (NCBI E-utilities) |
+
+---
+
+## End-to-End Working Verification
+
+These are the critical paths that are fully functional from user action to database write and back:
+
+| Flow | Path | Verified |
+|------|------|----------|
+| **Anonymous chat** | User types → rate limit check (3/day) → Claude + MCP tools → response rendered → learning persisted | Yes |
+| **Authenticated chat** | Email OTP → rate limit (10/day) → Claude + tools → conversation saved → sidebar updated | Yes |
+| **Admin chat** | `is_admin=true` → no rate limit → unlimited messages | Yes |
+| **Coverage guidance pipeline** | Onboarding → symptoms → provider NPI → ICD-10/CPT → LCD/NCD lookup → requirement extraction → requirement verification → guidance delivery | Yes (pipeline fix applied) |
+| **Appeal flow** | Denial code from user text or tool → CARC/RARC lookup → strategy → gather details → generate letter → paywall gate → PDF | Yes |
+| **Appeal outcome** | User reports outcome → `recordAppealOutcome()` → `applyOutcomeIncentive()` → free credit | Yes (incentive wired) |
+| **Blue Button OAuth** | Connect Medicare → PKCE authorize → CMS login → callback → token encryption → FHIR sync (6 resources) → cache | Yes (sandbox) |
+| **Health data in AI** | FHIR data → `useHealthData` → sessionState → `buildHealthContextForPrompt()` → Claude system prompt | Yes |
+| **Diabetes classification** | FHIR Observations + Conditions + Medications → `classifyDiabetesStatus()` → dashboard + AI context | Yes |
+| **Diabetes daily log** | QuickLog entry → `/api/diabetes/log` → `diabetes_log` table → entries list | Yes |
+| **AI diabetes insights** | FHIR sync → hash-based dedup → Claude Sonnet → `diabetes_insights` table → InsightsCard | Yes |
+| **Stripe checkout** | PaywallModal → `/api/checkout` (cookie-auth) → Stripe session → webhook → `fulfillCheckoutSession()` → plan upgrade | Yes (sandbox) |
+| **Subscription lifecycle** | `invoice.payment_failed` → `handleSubscriptionEvent()` → status sync | Yes |
+| **Account deletion** | Settings → 2-step confirm → `/api/account/delete` (server auth + admin cascade) → sign out → redirect | Yes |
+| **Consent enforcement** | Settings toggles → `/api/consent` → `consent_preferences` → gates `buildHealthContextForPrompt()` | Yes |
+| **Audit logging** | All sensitive operations → `logAudit()` → `audit_logs` table (admin client, bypasses RLS) | Yes |
+| **TOTP MFA** | Settings > Security → enroll → QR code → verify → AAL2 challenge on FHIR authorize | Yes |
+| **Learning system** | Chat response → `persistLearning()` → symptom/procedure mappings + coverage paths (admin client) | Yes (admin client fix applied) |
+
+### Not Yet Working End-to-End (External Dependencies)
+
+| Flow | Blocker |
+|------|---------|
+| **Stripe production payments** | Requires live Stripe keys + price IDs (sandbox works) |
+| **Blue Button production** | Requires CMS production credentials (sandbox works) |
+| **Medicare.gov notification bridge** | No CMS API available yet — skill detects FHIR changes only |
+| **CMS app directory listing** | Requires CMS submission (metadata API ready) |
+| **HIPAA/HITRUST certification** | Process — BAAs, compliance docs, breach plan |
+| **Patient-facing audit log viewer** | UI not built (data exists in `audit_logs`) |

@@ -206,7 +206,7 @@ User-facing (plain English):        Internal (codes, never shown):
 |-------|-------------|-----------|
 | `diagnosisCodes` | MCP `search_icd10` / Local `generate_appeal_letter` | Regex from Claude text / `updateSessionFromToolResults()` |
 | `procedureCodes` | Local `search_cpt` / `generate_appeal_letter` | `updateSessionFromToolResults()` |
-| `denialCodes` | Local `lookup_denial_code` | `updateSessionFromToolResults()` |
+| `denialCodes` | Local `lookup_denial_code` / User message | `updateSessionFromToolResults()` + `extractUserInfo()` regex (CO-50, PR-1, CARC 167, RARC N56 patterns — gated on appeal context to avoid false positives) |
 | `policyReferences` | MCP `search_local_coverage` / `search_national_coverage` | Regex from Claude text (LCD L\d{5}, NCD patterns) |
 | `priorAuthRequired` | Local `check_prior_auth` | `updateSessionFromToolResults()` |
 | `denialDate` | User message | `extractUserInfo()` regex |
@@ -339,10 +339,12 @@ The system uses gates that return early and prevent later skills from loading pr
 | 6 | Has procedure or coverage or appeal | CODE_VALIDATION | ICD-10 <-> CPT mapping + prior auth check + preventive check + SAD list |
 | 7 | Has coverage but not all requirements verified | REQUIREMENT_VERIFICATION | Ask 1 requirement at a time |
 | 8 | Provider confirmed + specialty mismatch | SPECIALTY_VALIDATION | Warn about ordering specialty risk |
-| 9 | Has coverage and all requirements verified | GUIDANCE_DELIVERY | Proactive checklist + denial warnings + prior auth status |
+| 9 | Has coverage and `verificationComplete === true` | GUIDANCE_DELIVERY | Proactive checklist + denial warnings + prior auth status. **NOTE**: Guidance no longer loads when requirements are simply empty (vacuous truth fix) — Claude must emit `[REQUIREMENTS]` block and user must verify or skip |
 | 10 | Appeal detected | APPEAL_SKILL | Denial code lookup + strategy + PubMed evidence + letter generation |
 
 **TOOL_RESTRAINT**: During onboarding and symptom gathering, the prompt explicitly forbids all tool calls. This prevents Claude from jumping ahead to code lookups before gathering enough context.
+
+**Requirement Verification Pipeline**: After coverage lookup, Claude MUST emit a `[REQUIREMENTS]` block listing LCD/NCD requirements. This populates `requirementsToVerify` in sessionState. Without it, verification cannot proceed. Three safety mechanisms prevent stuck states: (1) step 9b flow reminder prompts Claude to emit the block, (2) explicit skip detection for "skip"/"move on", (3) implicit skip detection when user requests guidance directly with empty requirements. Guidance delivery (priority 9) only loads when `verificationComplete` is explicitly true — never on empty requirements.
 
 ### Base Prompt (always loaded)
 
@@ -357,7 +359,7 @@ The system uses gates that return early and prevent later skills from loading pr
 | `HEALTH_RECORDS_SKILL` | `src/lib/skills/health-records.ts` | `hasHealthData` or `hasRecentDenials` |
 | `MEDICARE_NOTIFICATIONS_SKILL` | `src/lib/skills/medicare-notifications.ts` | `hasHealthData && hasRecentChanges` |
 | `DIABETES_PREVENTION_SKILL` | `src/lib/skills/diabetes-prevention.ts` | `hasDiabetesContext` |
-| `OUTCOME_PROMPTING_SKILL` | `src/skills/domain/outcome-prompting.ts` | Returning user with pending appeal |
+| `OUTCOME_PROMPTING_SKILL` | `src/skills/domain/outcome-prompting.ts` | Returning user with pending appeal (`hasUnreportedOutcome`). Outcome reported via `/api/appeal-outcome` → `recordAppealOutcome()` + `applyOutcomeIncentive()` (free appeal credit) |
 | `COUNSELOR_SKILL` | `src/skills/channel/counselor.ts` | `role === "counselor"` |
 | `PROVIDER_PILOT_SKILL` | `src/skills/channel/provider.ts` | `role === "provider"` |
 
@@ -1190,6 +1192,10 @@ Pledge text displayed via `CmsPledge` component (`src/components/ui/CmsPledge.ts
 | **Diabetes consent flow** | Data privacy | `DiabetesConsentCard` on health page — gates AI analysis + storage consent. Shown when connected + diabetes data + no consent |
 | **Stored AI diabetes analysis** | Diabetes criteria | `diabetes_insights` table + `diabetes-insights.ts` (Claude Sonnet, structured JSON) + `/api/diabetes/insights` API + `InsightsCard` component. Hash-based dedup, auto-triggered on FHIR sync |
 | **Chat lab trend context** | Diabetes + Conv. AI | `labTrends` + `recentLogSummary` on SessionState. `buildHealthContextForPrompt()` injects A1C history with arrows (improving/rising/stable) |
+| **Requirement verification pipeline** | — | Fixed vacuous truth gate: guidance no longer loads when `requirementsToVerify` is empty (extraction never happened). Added step 9b flow reminder prompting Claude to emit `[REQUIREMENTS]` block. Added implicit skip safety valve in `extractUserInfo()` for stuck-state prevention |
+| **Outcome incentive wiring** | — | `applyOutcomeIncentive()` now called in `/api/appeal-outcome` after `recordAppealOutcome()`. Gives user a free appeal credit for reporting outcomes. Returns `incentiveApplied` flag in response |
+| **Denial code extraction from user text** | — | `extractUserInfo()` in `claude.ts` now extracts CARC/RARC codes from user messages via regex (CO-50, PR-1, CARC 167, RARC N56 patterns). Gated on appeal context to avoid false positives. Supplements tool-based extraction |
+| **LCD prior auth prompt strengthening** | — | `COVERAGE_SKILL` prompt updated: `[REQUIREMENTS]` block marked MANDATORY with explicit "do this EVERY time" instruction. `[PRIOR_AUTH_LCD]` block clarified as auto-parsed. Drives reliable requirement extraction |
 
 #### Remaining Gaps
 
