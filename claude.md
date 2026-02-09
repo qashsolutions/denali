@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-08
+     Last updated: 2026-02-09
      Maintainer: @cvr
 -->
 
@@ -86,7 +86,7 @@ These cause bugs or bad UX if violated. Read before every coding session.
 ### Performance & Reliability
 
 - **CRITICAL: Never block UI rendering on database operations.** In `useChat.ts`, `setMessages()` must run IMMEDIATELY after parsing the API response. Database saves (`saveMessage`, `claimConversation`) must be fire-and-forget (`.then()/.catch()`, not `await`). Blocking on Supabase causes the "Thinking..." spinner to hang indefinitely even when the API returns 200.
-- **CRITICAL: Chain message saves after claimConversation.** Server creates conversations with `user_id=NULL` (anon role). Client must call `claimConversation()` BEFORE `saveMessage()`. If `saveMessage()` races ahead while the conversation still has `user_id=NULL`, it fails RLS silently and chat history is lost. In `useChat.ts`, message saves are chained inside `.then()` of `claimConversation()` to guarantee ordering.
+- **CRITICAL: Server route creates conversations with `authSupabase`, not browser client.** `route.ts` creates conversations directly using the cookie-authenticated server client (`authSupabase` from `createServerSupabaseClient()`), setting `user_id` at creation time. Never use `getClient()`/`createClient()` (browser client) for DB writes in server route handlers — they have NO auth context server-side, so `auth.uid()` is always NULL, causing RLS to insert `user_id=NULL`. Client-side `claimConversation()` exists as a fallback but is unreliable. Message saves (`saveMessage`) are fire-and-forget after conversation creation.
 - **CRITICAL: Auth detection pattern — follow AppHeader, not ad-hoc.** The canonical pattern for detecting auth in client hooks is in `AppHeader.tsx`. Three rules MUST be followed:
   1. **Use `onAuthStateChange` without event-type filtering.** Check `session?.user` existence, NOT the event name. Supabase fires `INITIAL_SESSION` on subscribe with the current session — filtering for only `SIGNED_IN`/`TOKEN_REFRESHED` misses this event, causing auth-dependent UI to stay stuck in "not signed in" state.
   2. **Set UI state immediately from the session object, then fetch DB data non-blocking.** Never block on profile/plan/MFA/usage queries before showing the signed-in UI. In `useAuth.ts`, `setBasicAuth()` sets email+userId+isLoading=false instantly; `loadProfileData()` enhances with plan/trial/MFA afterward. Blocking on DB queries causes the Settings "Checking account..." spinner to hang.
@@ -97,6 +97,8 @@ These cause bugs or bad UX if violated. Read before every coding session.
   - **DON'T:** `import { createClient } from "./supabase"` in client-side service modules — use `getClient()` to share the authenticated session
 - **Timeout guards on pre-Claude async calls**: `route.ts` uses `withFallback()` for non-critical Supabase queries before the Claude API call (e.g., `getUnreportedOutcome` at 5s, `buildSystemPromptWithLearning` at 10s). Falls back to defaults on timeout instead of blocking.
 - **AbortController for Claude API**: `withTimeout()` in `claude.ts` uses `AbortController` to truly cancel hung requests (not just `Promise.race`). 60s per iteration for Sonnet, 120s for Opus.
+- **CRITICAL: Supabase SSR middleware is required.** `src/middleware.ts` refreshes auth tokens on every request, preventing the refresh token race condition between browser and server Supabase clients. Without it, both clients independently try to refresh the same expired token — one wins (`token_refreshed`), the other gets `token_revoked` and loses its session permanently. The middleware refreshes ONCE via `supabase.auth.getUser()` and writes updated cookies to the response.
+- **CRITICAL: Never use browser Supabase client for data fetching.** Browser `getClient()` + `.from("table").select()` fails when tokens are stale (even with middleware, there are edge cases). Always fetch data via server API routes using `createServerSupabaseClient()` (cookie-authenticated). Pattern: client calls `fetch("/api/route")` → server route uses `createServerSupabaseClient()` → returns JSON. Examples: `useConversationHistory` → `/api/conversations`, `useHealthData` → `/api/fhir/data`.
 - **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
 - **MCP servers are NOT testable via curl/HTTP.** MCP protocol is handled internally by the Anthropic API. Use Claude.ai to verify MCP server health.
 
@@ -128,7 +130,8 @@ Where to find specific logic in the codebase.
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
 | `src/config/pricing.ts` | Pricing constants: free appeal limit, trial duration, daily chat limits, Stripe price IDs |
-| `src/hooks/useConversationHistory.ts` | Chat sidebar history. Subscribes to `onAuthStateChange` (no event filtering). Uses `getClient()` singleton. Groups conversations by date |
+| `src/middleware.ts` | Supabase SSR middleware. Refreshes auth tokens on every request to prevent browser/server refresh token race. MUST run before any Supabase client call |
+| `src/hooks/useConversationHistory.ts` | Chat sidebar history. Fetches from `/api/conversations` (server route, cookie-authenticated) — NOT browser Supabase client. Subscribes to `onAuthStateChange` for re-fetch on sign-in/out. Groups conversations by date |
 | `src/lib/conversation-service.ts` | Conversation persistence: create, load, claim, save messages, appeals, feedback, events. Uses `getClient()` singleton for auth context |
 | `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date with timestamps. Refreshes on both new conversation creation AND new chat click (via `useRef` tracking previous conversationId). No sign-in prompt — anon users see "No conversations yet" |
 | `src/types/database.ts` | Supabase-generated TypeScript types. Regenerate with `npx supabase gen types` |
@@ -138,6 +141,7 @@ Where to find specific logic in the codebase.
 ```
 src/app/api/
   chat/route.ts               # Main chat with Claude + tools + MCP
+  conversations/route.ts      # Conversation history (server-side, cookie-auth)
   appeal-outcome/route.ts     # Record appeal results
   account/delete/route.ts     # GDPR/CCPA account deletion
   checkout/route.ts           # Stripe payment

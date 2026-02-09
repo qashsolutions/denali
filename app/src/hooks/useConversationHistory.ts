@@ -1,10 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  loadRecentConversations,
-  type ConversationData,
-} from "@/lib/conversation-service";
 import { getClient } from "@/lib/supabase";
 
 export interface ConversationHistoryItem {
@@ -23,8 +19,10 @@ interface UseConversationHistoryReturn {
 }
 
 /**
- * Hook to fetch and manage conversation history
- * Only loads history for paid/authenticated users
+ * Hook to fetch and manage conversation history.
+ *
+ * Fetches via /api/conversations (server-side, cookie-authenticated)
+ * to avoid the browser Supabase client refresh-token race condition.
  */
 export function useConversationHistory(): UseConversationHistoryReturn {
   const [conversations, setConversations] = useState<ConversationHistoryItem[]>([]);
@@ -32,24 +30,41 @@ export function useConversationHistory(): UseConversationHistoryReturn {
   const [isVerifiedUser, setIsVerifiedUser] = useState(false);
   const supabase = getClient();
 
-  // Load conversations for a known user ID (no getSession re-check)
-  const loadForUser = useCallback(async (userId: string) => {
-    setIsVerifiedUser(true);
+  const loadConversations = useCallback(async () => {
     setIsLoading(true);
 
     try {
-      const recentConversations = await loadRecentConversations({
-        userId,
-        limit: 50,
-      });
+      const res = await fetch("/api/conversations");
+      if (!res.ok) {
+        throw new Error(`Conversations API returned ${res.status}`);
+      }
 
-      const historyItems: ConversationHistoryItem[] = recentConversations.map((conv) => ({
-        id: conv.id,
-        title: conv.title || generateTitle(conv),
-        preview: generatePreview(conv),
-        createdAt: conv.createdAt,
-        isAppeal: conv.isAppeal,
-      }));
+      const data = await res.json();
+
+      if (!data.authenticated) {
+        setConversations([]);
+        setIsVerifiedUser(false);
+        return;
+      }
+
+      setIsVerifiedUser(true);
+
+      const historyItems: ConversationHistoryItem[] = (data.conversations || []).map(
+        (conv: {
+          id: string;
+          title: string | null;
+          isAppeal: boolean;
+          createdAt: string;
+          firstUserMessage: string | null;
+          lastAssistantMessage: string | null;
+        }) => ({
+          id: conv.id,
+          title: conv.title || generateTitle(conv.firstUserMessage, conv.isAppeal),
+          preview: generatePreview(conv.lastAssistantMessage),
+          createdAt: new Date(conv.createdAt),
+          isAppeal: conv.isAppeal,
+        })
+      );
 
       setConversations(historyItems);
     } catch (error) {
@@ -66,20 +81,14 @@ export function useConversationHistory(): UseConversationHistoryReturn {
     setIsLoading(false);
   }, []);
 
-  // Check session on mount, then listen for auth changes
+  // Load on mount, then re-fetch when auth state changes (sign-in / sign-out)
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        loadForUser(session.user.id);
-      } else {
-        clearUser();
-      }
-    }).catch(() => clearUser());
+    loadConversations();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session?.user) {
-          loadForUser(session.user.id);
+          loadConversations();
         } else {
           clearUser();
         }
@@ -89,14 +98,11 @@ export function useConversationHistory(): UseConversationHistoryReturn {
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase, loadForUser, clearUser]);
+  }, [supabase, loadConversations, clearUser]);
 
   const refresh = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      await loadForUser(session.user.id);
-    }
-  }, [supabase, loadForUser]);
+    await loadConversations();
+  }, [loadConversations]);
 
   return {
     conversations,
@@ -109,19 +115,14 @@ export function useConversationHistory(): UseConversationHistoryReturn {
 /**
  * Generate a title from conversation data if not set
  */
-function generateTitle(conv: ConversationData): string {
-  if (conv.isAppeal) {
+function generateTitle(firstUserMessage: string | null, isAppeal: boolean): string {
+  if (isAppeal) {
     return "Appeal Help";
   }
 
-  // Try to extract key topic from messages
-  if (conv.messages.length > 0) {
-    const firstUserMsg = conv.messages.find((m) => m.role === "user");
-    if (firstUserMsg) {
-      // Extract first ~30 chars as title
-      const content = firstUserMsg.content.slice(0, 30);
-      return content.length < firstUserMsg.content.length ? `${content}...` : content;
-    }
+  if (firstUserMessage) {
+    const content = firstUserMessage.slice(0, 30);
+    return content.length < firstUserMessage.length ? `${content}...` : content;
   }
 
   return "Coverage Question";
@@ -130,22 +131,13 @@ function generateTitle(conv: ConversationData): string {
 /**
  * Generate a preview snippet from the conversation
  */
-function generatePreview(conv: ConversationData): string {
-  if (conv.messages.length === 0) {
+function generatePreview(lastAssistantMessage: string | null): string {
+  if (!lastAssistantMessage) {
     return "No messages yet";
   }
 
-  // Get last assistant message as preview
-  const lastAssistant = [...conv.messages]
-    .reverse()
-    .find((m) => m.role === "assistant");
-
-  if (lastAssistant) {
-    const preview = lastAssistant.content.slice(0, 50);
-    return preview.length < lastAssistant.content.length ? `${preview}...` : preview;
-  }
-
-  return "...";
+  const preview = lastAssistantMessage.slice(0, 50);
+  return preview.length < lastAssistantMessage.length ? `${preview}...` : preview;
 }
 
 /**
