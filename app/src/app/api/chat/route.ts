@@ -49,7 +49,7 @@ import {
   recordCoveragePath,
   type ExtractedEntities,
 } from "@/lib/learning";
-import { createConversation, saveAppeal, getUnreportedOutcome } from "@/lib/conversation-service";
+import { saveAppeal, getUnreportedOutcome } from "@/lib/conversation-service";
 import { FEEDBACK_CONFIG, API_CONFIG, PRICING } from "@/config";
 import { logAudit } from "@/lib/audit";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
@@ -298,25 +298,35 @@ export async function POST(request: NextRequest) {
     let conversationId = body.conversationId;
 
     if (!conversationId) {
-      // Create new conversation in database (required for FK constraints)
-      // Use the first user message as the title
+      // Create conversation using the authenticated server client (authSupabase).
+      // This sets user_id directly at creation time — no client-side claiming needed.
+      // The browser client (getClient) has no auth context on the server, so it can
+      // only create with user_id=NULL, requiring a separate claim step that often fails.
       const firstUserMsg = body.messages.find((m) => m.role === "user");
       const title = firstUserMsg
         ? firstUserMsg.content.slice(0, 60) + (firstUserMsg.content.length > 60 ? "..." : "")
         : null;
       console.log("[Chat API] Creating new conversation...");
-      const newConvId = await createConversation({
-        isAppeal: result.sessionState.isAppeal,
-        title: title || undefined,
-      });
 
-      if (newConvId) {
-        conversationId = newConvId;
-        console.log("[Chat API] Created conversation:", conversationId);
-      } else {
+      const { data: newConv, error: convError } = await authSupabase
+        .from("conversations")
+        .insert({
+          user_id: authUser?.id || null,
+          is_appeal: result.sessionState.isAppeal || false,
+          title: title || null,
+          status: "active",
+          started_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+
+      if (convError || !newConv) {
         // Fallback: generate UUID but log warning (tracking won't work)
         conversationId = crypto.randomUUID();
-        console.warn("[Chat API] Failed to create conversation in DB, using local UUID:", conversationId);
+        console.warn("[Chat API] Failed to create conversation in DB:", convError?.message);
+      } else {
+        conversationId = newConv.id;
+        console.log("[Chat API] Created conversation:", conversationId, authUser ? "(owned)" : "(anon)");
       }
     }
 
