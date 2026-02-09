@@ -87,7 +87,13 @@ These cause bugs or bad UX if violated. Read before every coding session.
 
 - **CRITICAL: Never block UI rendering on database operations.** In `useChat.ts`, `setMessages()` must run IMMEDIATELY after parsing the API response. Database saves (`saveMessage`, `claimConversation`) must be fire-and-forget (`.then()/.catch()`, not `await`). Blocking on Supabase causes the "Thinking..." spinner to hang indefinitely even when the API returns 200.
 - **CRITICAL: Chain message saves after claimConversation.** Server creates conversations with `user_id=NULL` (anon role). Client must call `claimConversation()` BEFORE `saveMessage()`. If `saveMessage()` races ahead while the conversation still has `user_id=NULL`, it fails RLS silently and chat history is lost. In `useChat.ts`, message saves are chained inside `.then()` of `claimConversation()` to guarantee ordering.
-- **CRITICAL: Hooks that depend on auth state must subscribe to `onAuthStateChange`.** Calling `getSession()` once on mount is NOT sufficient — the session may not be hydrated yet (cookies parse asynchronously). If `getSession()` returns `null` at mount and the hook never re-checks, auth-dependent UI stays in the "not signed in" state permanently. Always add `supabase.auth.onAuthStateChange()` listener and re-fetch on `SIGNED_IN`/`SIGNED_OUT`/`TOKEN_REFRESHED` events. Use `getClient()` (singleton) instead of `createClient()` to prevent unstable references in dependency arrays.
+- **CRITICAL: Auth detection pattern — follow AppHeader, not ad-hoc.** The canonical pattern for detecting auth in client hooks is in `AppHeader.tsx`. Three rules MUST be followed:
+  1. **Use `onAuthStateChange` without event-type filtering.** Check `session?.user` existence, NOT the event name. Supabase fires `INITIAL_SESSION` on subscribe with the current session — filtering for only `SIGNED_IN`/`TOKEN_REFRESHED` misses this event, causing auth-dependent UI to stay stuck in "not signed in" state.
+  2. **Set UI state immediately from the session object, then fetch DB data non-blocking.** Never block on profile/plan/MFA/usage queries before showing the signed-in UI. In `useAuth.ts`, `setBasicAuth()` sets email+userId+isLoading=false instantly; `loadProfileData()` enhances with plan/trial/MFA afterward. Blocking on DB queries causes the Settings "Checking account..." spinner to hang.
+  3. **Use `getClient()` singleton, not `createClient()`.** `createClient()` may return a new reference each render, destabilizing `useEffect` dependency arrays. `getClient()` caches one instance.
+  - **DO:** `(_event, session) => { if (session?.user) { handleSignedIn(session.user); } else { handleSignedOut(); } }`
+  - **DON'T:** `(event, session) => { if (event === "SIGNED_IN") { ... } }` — misses `INITIAL_SESSION`
+  - **DON'T:** `await getSession()` as the sole auth check — cookies may not be parsed yet on mount
 - **Timeout guards on pre-Claude async calls**: `route.ts` uses `withFallback()` for non-critical Supabase queries before the Claude API call (e.g., `getUnreportedOutcome` at 5s, `buildSystemPromptWithLearning` at 10s). Falls back to defaults on timeout instead of blocking.
 - **AbortController for Claude API**: `withTimeout()` in `claude.ts` uses `AbortController` to truly cancel hung requests (not just `Promise.race`). 60s per iteration for Sonnet, 120s for Opus.
 - **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
@@ -121,8 +127,8 @@ Where to find specific logic in the codebase.
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
 | `src/config/pricing.ts` | Pricing constants: free appeal limit, trial duration, daily chat limits, Stripe price IDs |
-| `src/hooks/useConversationHistory.ts` | Chat sidebar history. Subscribes to `onAuthStateChange` for reactive auth. Uses `getClient()` singleton. Groups conversations by date |
-| `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date, sign-in prompt for unauthenticated users |
+| `src/hooks/useConversationHistory.ts` | Chat sidebar history. Subscribes to `onAuthStateChange` (no event filtering). Uses `getClient()` singleton. Groups conversations by date |
+| `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date. No sign-in prompt — anon users see "No conversations yet"; rate limiting handles free experience |
 | `src/types/database.ts` | Supabase-generated TypeScript types. Regenerate with `npx supabase gen types` |
 
 ### API Routes
@@ -1038,7 +1044,7 @@ Pledge text displayed via `CmsPledge` component (`src/components/ui/CmsPledge.ts
 | **TOTP MFA (opt-in)** | Defense-in-depth | `TOTPEnrollModal`/`TOTPChallengeModal` in Settings > Security. Opt-in extra security — not CMS-required. FHIR authorize gates on AAL2 if enrolled |
 | **14-day free trial** | A4 | `/api/trial` (start/check), `subscriptions` trial fields, paywall bypass for active trials |
 | **Daily chat rate limiting** | — | `check_and_increment_chat` RPC, `chat_daily_usage` table, 429 response in `route.ts`, `useChat.ts` handles limit-reached UI |
-| **Sidebar auth reactivity** | — | `useConversationHistory` subscribes to `onAuthStateChange`, uses `getClient()` singleton. Sidebar updates immediately on sign-in/sign-out |
+| **Sidebar auth reactivity** | — | `useConversationHistory` subscribes to `onAuthStateChange` (no event filtering — handles `INITIAL_SESSION`). No sign-in prompt in sidebar; anon users see empty state. Rate limiting handles free tier |
 | **Chat history RLS fix** | — | `useChat.ts` chains `saveMessage()` after `claimConversation()` to prevent RLS race condition (server creates conversations with `user_id=NULL`) |
 | **CMS metadata API** | A3, A5 | `/api/cms-metadata` returns app listing data for CMS directory |
 | **Request purpose tagging** | Criterion 22 | `X-Request-Purpose` header on FHIR calls (`patient-request`, `appeal`, `coverage-determination`) |
