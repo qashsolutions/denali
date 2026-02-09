@@ -63,6 +63,9 @@ export async function DELETE(request: NextRequest) {
     await supabase.from("diabetes_log").delete().eq("user_id", userId);
     await supabase.from("diabetes_insights").delete().eq("user_id", userId);
 
+    // 0c. Delete chat usage tracking
+    await supabase.from("chat_daily_usage").delete().eq("identifier", userId);
+
     // 1. Delete user feedback
     await supabase
       .from("user_feedback")

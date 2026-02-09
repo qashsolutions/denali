@@ -50,8 +50,10 @@ import {
   type ExtractedEntities,
 } from "@/lib/learning";
 import { createConversation, saveAppeal, getUnreportedOutcome } from "@/lib/conversation-service";
-import { FEEDBACK_CONFIG, API_CONFIG } from "@/config";
+import { FEEDBACK_CONFIG, API_CONFIG, PRICING } from "@/config";
 import { logAudit } from "@/lib/audit";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { createHash } from "crypto";
 
 // Request body type
 interface ChatRequestBody {
@@ -94,6 +96,64 @@ export async function POST(request: NextRequest) {
         { error: "ANTHROPIC_API_KEY is not configured" },
         { status: 500 }
       );
+    }
+
+    // --- Rate limiting: check daily chat usage ---
+    const authSupabase = await createServerSupabaseClient();
+    const { data: { user: authUser } } = await authSupabase.auth.getUser();
+
+    let chatLimit: number = PRICING.CHAT_LIMITS.ANON; // 3/day for unauthenticated
+    let chatIdentifier: string;
+
+    if (authUser) {
+      chatIdentifier = authUser.id;
+
+      // Check if paid subscriber (unlimited)
+      const { data: profile } = await authSupabase
+        .from("users")
+        .select("plan")
+        .eq("id", authUser.id)
+        .single();
+
+      const plan = profile?.plan || "free";
+      if (plan === "monthly" || plan === "per_appeal") {
+        chatLimit = PRICING.CHAT_LIMITS.PAID; // 0 = unlimited
+      } else {
+        chatLimit = PRICING.CHAT_LIMITS.AUTH_FREE; // 10/day
+      }
+    } else {
+      // Hash IP for privacy
+      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        || request.headers.get("x-real-ip")
+        || "unknown";
+      chatIdentifier = `ip:${createHash("sha256").update(ip).digest("hex").slice(0, 16)}`;
+    }
+
+    if (chatLimit > 0) {
+      const { data: usageResult, error: usageError } = await authSupabase.rpc(
+        "check_and_increment_chat",
+        { p_identifier: chatIdentifier, p_daily_limit: chatLimit }
+      );
+
+      if (usageError) {
+        console.warn("[Chat API] Rate limit check failed:", usageError.message);
+        // Don't block on rate limit errors — proceed with the request
+      } else if (usageResult && !(usageResult as { allowed: boolean; count: number }).allowed) {
+        const usage = usageResult as { allowed: boolean; count: number };
+        const isAuthed = !!authUser;
+        return NextResponse.json(
+          {
+            error: isAuthed
+              ? `You've reached your daily limit of ${chatLimit} messages. Upgrade for unlimited access.`
+              : `You've used your ${chatLimit} free messages today. Sign in for more.`,
+            code: "RATE_LIMITED",
+            limit: chatLimit,
+            count: usage.count,
+            isAuthenticated: isAuthed,
+          },
+          { status: 429 }
+        );
+      }
     }
 
     // Initialize or restore session state

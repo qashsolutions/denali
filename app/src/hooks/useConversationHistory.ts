@@ -46,16 +46,8 @@ export function useConversationHistory(): UseConversationHistoryReturn {
         return;
       }
 
-      // Check if user has verified their email
-      const emailVerified = session.user.email_confirmed_at !== null;
-      setIsVerifiedUser(emailVerified);
-
-      // Only load conversations for verified users
-      if (!emailVerified) {
-        setConversations([]);
-        setIsLoading(false);
-        return;
-      }
+      // User is authenticated — show history
+      setIsVerifiedUser(true);
 
       // Load recent conversations
       const recentConversations = await loadRecentConversations({

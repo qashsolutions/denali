@@ -1,7 +1,7 @@
 /**
  * Trial API Route
  *
- * POST /api/trial — start 30-day trial
+ * POST /api/trial — start free trial
  * GET  /api/trial — check trial status
  *
  * CMS criteria A4: trial access for Medicare patients
@@ -10,8 +10,9 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { logAudit } from "@/lib/audit";
+import { PRICING } from "@/config";
 
-const TRIAL_DURATION_DAYS = 30;
+const TRIAL_DURATION_DAYS = PRICING.TRIAL_DURATION_DAYS;
 
 export async function GET() {
   try {

@@ -113,8 +113,15 @@ export function Sidebar({
             <div className="text-center py-8 px-4">
               <LockIcon className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-3" />
               <p className="text-sm text-[var(--text-muted)]">
-                Verify your email to see chat history
+                Sign in to save your conversations
               </p>
+              <Link
+                href="/app/settings"
+                className="inline-block mt-2 text-xs font-medium text-[var(--accent-primary)] hover:underline"
+                onClick={onClose}
+              >
+                Sign in
+              </Link>
             </div>
           ) : isLoading ? (
             <div className="space-y-2 py-4">

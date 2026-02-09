@@ -302,39 +302,36 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+
+        // Handle rate limiting (429)
+        if (response.status === 429 && errorData.code === "RATE_LIMITED") {
+          const rateLimitMsg: Message = {
+            id: generateId(),
+            role: "assistant",
+            content: errorData.isAuthenticated
+              ? `You've reached your daily limit of ${errorData.limit} messages. You can continue tomorrow, or upgrade for unlimited access.`
+              : `You've used your ${errorData.limit} free messages for today. **Sign in** for up to 10 messages per day — it's free.`,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, rateLimitMsg]);
+          setSuggestions(
+            errorData.isAuthenticated
+              ? ["Upgrade plan"]
+              : ["Sign in"]
+          );
+          setIsLoading(false);
+          clearTimeout(timeoutId);
+          return;
+        }
+
         throw new Error(errorData.error || `API error: ${response.status}`);
       }
 
       const data = await response.json();
 
-      // Update conversation ID from server response
-      if (data.conversationId && !currentConversationId) {
-        currentConversationId = data.conversationId;
-
-        // Claim conversation in background — don't block message rendering
-        if (userId) {
-          claimConversation(data.conversationId)
-            .then(() => setConversationId(data.conversationId))
-            .catch((err) => {
-              console.warn("Failed to claim conversation:", err);
-              setConversationId(data.conversationId); // Set ID anyway so sidebar works
-            });
-        } else {
-          setConversationId(data.conversationId);
-        }
-      }
-
       // Update session state
       if (data.sessionState) {
         setSessionState(data.sessionState);
-      }
-
-      // Save user message to database (after claim so RLS passes)
-      if (currentConversationId) {
-        saveMessage(currentConversationId, {
-          role: "user",
-          content: userMessage.content,
-        }).catch((err) => console.warn("Failed to save user message:", err));
       }
 
       // Create assistant message and render IMMEDIATELY (don't block on DB save)
@@ -347,9 +344,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       setMessages((prev) => [...prev, assistantMessage]);
 
-      // Save assistant message to database (non-blocking — UI already updated)
-      if (currentConversationId) {
-        saveMessage(currentConversationId, {
+      // Helper: save both messages to DB (fire-and-forget, UI already updated)
+      const saveMessages = (convId: string) => {
+        saveMessage(convId, {
+          role: "user",
+          content: userMessage.content,
+        }).catch((err) => console.warn("Failed to save user message:", err));
+
+        saveMessage(convId, {
           role: "assistant",
           content: assistantMessage.content,
         }).then((savedMsgId) => {
@@ -359,6 +361,31 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             );
           }
         }).catch((err) => console.warn("Failed to save assistant message:", err));
+      };
+
+      // Handle conversation creation + claiming + message persistence
+      if (data.conversationId && !currentConversationId) {
+        // New conversation — claim FIRST, then save messages (RLS requires ownership)
+        currentConversationId = data.conversationId;
+
+        if (userId) {
+          claimConversation(data.conversationId)
+            .then(() => {
+              setConversationId(data.conversationId);
+              saveMessages(data.conversationId);
+            })
+            .catch((err) => {
+              console.warn("Failed to claim conversation:", err);
+              setConversationId(data.conversationId);
+              saveMessages(data.conversationId); // Try anyway
+            });
+        } else {
+          setConversationId(data.conversationId);
+          saveMessages(data.conversationId);
+        }
+      } else if (currentConversationId) {
+        // Existing conversation — already claimed, save immediately
+        saveMessages(currentConversationId);
       }
       setSuggestions(data.suggestions || []);
 

@@ -10,7 +10,17 @@ export const PRICING = {
   FREE_APPEAL_LIMIT: 3,
 
   /** Trial duration in days (CMS criteria A4) */
-  TRIAL_DURATION_DAYS: 30,
+  TRIAL_DURATION_DAYS: 14,
+
+  /** Daily chat message limits */
+  CHAT_LIMITS: {
+    /** Unauthenticated users */
+    ANON: 3,
+    /** Authenticated users (free / trial) */
+    AUTH_FREE: 10,
+    /** Paid subscribers (0 = unlimited) */
+    PAID: 0,
+  },
 
   /** Single appeal one-time payment */
   SINGLE_APPEAL: {

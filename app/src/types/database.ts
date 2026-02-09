@@ -342,6 +342,33 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_daily_usage: {
+        Row: {
+          created_at: string
+          id: string
+          identifier: string
+          message_count: number
+          updated_at: string
+          usage_date: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          identifier: string
+          message_count?: number
+          updated_at?: string
+          usage_date?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          identifier?: string
+          message_count?: number
+          updated_at?: string
+          usage_date?: string
+        }
+        Relationships: []
+      }
       consent_preferences: {
         Row: {
           consent_type: string
@@ -1929,6 +1956,10 @@ export type Database = {
     }
     Functions: {
       apply_outcome_incentive: { Args: { p_email: string }; Returns: boolean }
+      check_and_increment_chat: {
+        Args: { p_daily_limit: number; p_identifier: string }
+        Returns: Json
+      }
       check_appeal_access: { Args: { p_email?: string }; Returns: string }
       claim_conversation: {
         Args: { p_conversation_id: string }

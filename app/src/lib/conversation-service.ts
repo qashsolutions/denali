@@ -196,15 +196,51 @@ export async function loadRecentConversations(
     return [];
   }
 
-  return conversations.map((conv) => ({
-    id: conv.id,
-    title: conv.title,
-    status: conv.status,
-    isAppeal: conv.is_appeal || false,
-    createdAt: new Date(conv.created_at),
-    completedAt: conv.completed_at ? new Date(conv.completed_at) : null,
-    messages: [], // Messages loaded separately on demand
-  }));
+  // Load first user message + last assistant message per conversation for previews
+  const conversationIds = conversations.map((c) => c.id);
+  let messagesByConv = new Map<string, Array<{ role: string; content: string }>>();
+
+  if (conversationIds.length > 0) {
+    const { data: msgs } = await supabase
+      .from("messages")
+      .select("conversation_id, role, content, created_at")
+      .in("conversation_id", conversationIds)
+      .order("created_at", { ascending: true });
+
+    if (msgs) {
+      // Group by conversation, keep first user + last assistant
+      for (const msg of msgs) {
+        const convId = msg.conversation_id;
+        if (!messagesByConv.has(convId)) {
+          messagesByConv.set(convId, []);
+        }
+        messagesByConv.get(convId)!.push({ role: msg.role, content: msg.content });
+      }
+    }
+  }
+
+  return conversations.map((conv) => {
+    const convMsgs = messagesByConv.get(conv.id) || [];
+    const firstUser = convMsgs.find((m) => m.role === "user");
+    const lastAssistant = [...convMsgs].reverse().find((m) => m.role === "assistant");
+    const previewMessages: MessageData[] = [];
+    if (firstUser) {
+      previewMessages.push({ id: "", role: "user", content: firstUser.content, timestamp: new Date() });
+    }
+    if (lastAssistant) {
+      previewMessages.push({ id: "", role: "assistant", content: lastAssistant.content, timestamp: new Date() });
+    }
+
+    return {
+      id: conv.id,
+      title: conv.title,
+      status: conv.status,
+      isAppeal: conv.is_appeal || false,
+      createdAt: new Date(conv.created_at),
+      completedAt: conv.completed_at ? new Date(conv.completed_at) : null,
+      messages: previewMessages,
+    };
+  });
 }
 
 // DEAD CODE — No consumers. Commented out 2026-02-06.
