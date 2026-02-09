@@ -213,7 +213,8 @@ export function useAuth(): UseAuthReturn {
 
         setAuthState((prev) => ({
           ...prev,
-          email,
+          // Don't set email here — only after OTP verification.
+          // Setting it prematurely makes Settings show "Signed in" and hides the OTP input.
           isLoading: false,
         }));
         return true;
