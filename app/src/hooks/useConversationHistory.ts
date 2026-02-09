@@ -5,7 +5,7 @@ import {
   loadRecentConversations,
   type ConversationData,
 } from "@/lib/conversation-service";
-import { createClient } from "@/lib/supabase";
+import { getClient } from "@/lib/supabase";
 
 export interface ConversationHistoryItem {
   id: string;
@@ -30,7 +30,7 @@ export function useConversationHistory(): UseConversationHistoryReturn {
   const [conversations, setConversations] = useState<ConversationHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isVerifiedUser, setIsVerifiedUser] = useState(false);
-  const supabase = createClient();
+  const supabase = getClient();
 
   const fetchHistory = useCallback(async () => {
     setIsLoading(true);
@@ -73,10 +73,22 @@ export function useConversationHistory(): UseConversationHistoryReturn {
     }
   }, [supabase]);
 
-  // Fetch on mount
+  // Fetch on mount and re-fetch when auth state changes
   useEffect(() => {
     fetchHistory();
-  }, [fetchHistory]);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event) => {
+        if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
+          fetchHistory();
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchHistory, supabase]);
 
   return {
     conversations,
