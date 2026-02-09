@@ -90,10 +90,11 @@ These cause bugs or bad UX if violated. Read before every coding session.
 - **CRITICAL: Auth detection pattern — follow AppHeader, not ad-hoc.** The canonical pattern for detecting auth in client hooks is in `AppHeader.tsx`. Three rules MUST be followed:
   1. **Use `onAuthStateChange` without event-type filtering.** Check `session?.user` existence, NOT the event name. Supabase fires `INITIAL_SESSION` on subscribe with the current session — filtering for only `SIGNED_IN`/`TOKEN_REFRESHED` misses this event, causing auth-dependent UI to stay stuck in "not signed in" state.
   2. **Set UI state immediately from the session object, then fetch DB data non-blocking.** Never block on profile/plan/MFA/usage queries before showing the signed-in UI. In `useAuth.ts`, `setBasicAuth()` sets email+userId+isLoading=false instantly; `loadProfileData()` enhances with plan/trial/MFA afterward. Blocking on DB queries causes the Settings "Checking account..." spinner to hang.
-  3. **Use `getClient()` singleton, not `createClient()`.** `createClient()` may return a new reference each render, destabilizing `useEffect` dependency arrays. `getClient()` caches one instance.
+  3. **Use `getClient()` singleton, not `createClient()`.** `createClient()` may return a new reference each render, destabilizing `useEffect` dependency arrays. `getClient()` caches one instance. This applies to ALL client-side Supabase callers — hooks AND service modules (e.g., `conversation-service.ts`). Using `createClient()` in `claimConversation()` caused conversations to stay unclaimed (`user_id=NULL`) because the new client instance didn't always carry the auth session.
   - **DO:** `(_event, session) => { if (session?.user) { handleSignedIn(session.user); } else { handleSignedOut(); } }`
   - **DON'T:** `(event, session) => { if (event === "SIGNED_IN") { ... } }` — misses `INITIAL_SESSION`
   - **DON'T:** `await getSession()` as the sole auth check — cookies may not be parsed yet on mount
+  - **DON'T:** `import { createClient } from "./supabase"` in client-side service modules — use `getClient()` to share the authenticated session
 - **Timeout guards on pre-Claude async calls**: `route.ts` uses `withFallback()` for non-critical Supabase queries before the Claude API call (e.g., `getUnreportedOutcome` at 5s, `buildSystemPromptWithLearning` at 10s). Falls back to defaults on timeout instead of blocking.
 - **AbortController for Claude API**: `withTimeout()` in `claude.ts` uses `AbortController` to truly cancel hung requests (not just `Promise.race`). 60s per iteration for Sonnet, 120s for Opus.
 - **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
@@ -128,7 +129,8 @@ Where to find specific logic in the codebase.
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
 | `src/config/pricing.ts` | Pricing constants: free appeal limit, trial duration, daily chat limits, Stripe price IDs |
 | `src/hooks/useConversationHistory.ts` | Chat sidebar history. Subscribes to `onAuthStateChange` (no event filtering). Uses `getClient()` singleton. Groups conversations by date |
-| `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date. No sign-in prompt — anon users see "No conversations yet"; rate limiting handles free experience |
+| `src/lib/conversation-service.ts` | Conversation persistence: create, load, claim, save messages, appeals, feedback, events. Uses `getClient()` singleton for auth context |
+| `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date with timestamps. Refreshes on both new conversation creation AND new chat click (via `useRef` tracking previous conversationId). No sign-in prompt — anon users see "No conversations yet" |
 | `src/types/database.ts` | Supabase-generated TypeScript types. Regenerate with `npx supabase gen types` |
 
 ### API Routes
@@ -1044,8 +1046,8 @@ Pledge text displayed via `CmsPledge` component (`src/components/ui/CmsPledge.ts
 | **TOTP MFA (opt-in)** | Defense-in-depth | `TOTPEnrollModal`/`TOTPChallengeModal` in Settings > Security. Opt-in extra security — not CMS-required. FHIR authorize gates on AAL2 if enrolled |
 | **14-day free trial** | A4 | `/api/trial` (start/check), `subscriptions` trial fields, paywall bypass for active trials |
 | **Daily chat rate limiting** | — | `check_and_increment_chat` RPC, `chat_daily_usage` table, 429 response in `route.ts`, `useChat.ts` handles limit-reached UI |
-| **Sidebar auth reactivity** | — | `useConversationHistory` subscribes to `onAuthStateChange` (no event filtering — handles `INITIAL_SESSION`). No sign-in prompt in sidebar; anon users see empty state. Rate limiting handles free tier |
-| **Chat history RLS fix** | — | `useChat.ts` chains `saveMessage()` after `claimConversation()` to prevent RLS race condition (server creates conversations with `user_id=NULL`) |
+| **Sidebar auth + refresh** | — | `useConversationHistory` subscribes to `onAuthStateChange` (no event filtering). Sidebar refreshes on both new conversation creation AND new chat click (tracks previous ID via `useRef`). Conversation items show date/time in grey italic. No sign-in prompt; anon users see empty state |
+| **Chat history persistence** | — | `conversation-service.ts` uses `getClient()` singleton (not `createClient()`) so `claimConversation()` has auth context. `useChat.ts` chains `saveMessage()` after `claimConversation()` to prevent RLS race condition |
 | **CMS metadata API** | A3, A5 | `/api/cms-metadata` returns app listing data for CMS directory |
 | **Request purpose tagging** | Criterion 22 | `X-Request-Purpose` header on FHIR calls (`patient-request`, `appeal`, `coverage-determination`) |
 | **Consent enforcement** | Criterion 24 | Consent state gates health data injection into AI prompts |
