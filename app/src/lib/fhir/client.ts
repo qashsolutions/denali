@@ -44,7 +44,7 @@ export async function fhirGet<T>(
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
-    Accept: "application/fhir+json",
+    Accept: "application/json",
     "X-Request-Purpose": purpose,
   };
 
