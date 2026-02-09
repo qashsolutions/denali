@@ -32,30 +32,17 @@ export function useConversationHistory(): UseConversationHistoryReturn {
   const [isVerifiedUser, setIsVerifiedUser] = useState(false);
   const supabase = getClient();
 
-  const fetchHistory = useCallback(async () => {
+  // Load conversations for a known user ID (no getSession re-check)
+  const loadForUser = useCallback(async (userId: string) => {
+    setIsVerifiedUser(true);
     setIsLoading(true);
 
     try {
-      // Check if user is authenticated
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session?.user) {
-        setConversations([]);
-        setIsVerifiedUser(false);
-        setIsLoading(false);
-        return;
-      }
-
-      // User is authenticated — show history
-      setIsVerifiedUser(true);
-
-      // Load recent conversations
       const recentConversations = await loadRecentConversations({
-        userId: session.user.id,
+        userId,
         limit: 50,
       });
 
-      // Transform to history items with preview
       const historyItems: ConversationHistoryItem[] = recentConversations.map((conv) => ({
         id: conv.id,
         title: conv.title || generateTitle(conv),
@@ -71,16 +58,30 @@ export function useConversationHistory(): UseConversationHistoryReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [supabase]);
+  }, []);
 
-  // Fetch on mount and re-fetch when auth state changes
+  const clearUser = useCallback(() => {
+    setConversations([]);
+    setIsVerifiedUser(false);
+    setIsLoading(false);
+  }, []);
+
+  // Check session on mount, then listen for auth changes
   useEffect(() => {
-    fetchHistory();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        loadForUser(session.user.id);
+      } else {
+        clearUser();
+      }
+    }).catch(() => clearUser());
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event) => {
-        if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
-          fetchHistory();
+      (event, session) => {
+        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session?.user) {
+          loadForUser(session.user.id);
+        } else if (event === "SIGNED_OUT") {
+          clearUser();
         }
       }
     );
@@ -88,13 +89,20 @@ export function useConversationHistory(): UseConversationHistoryReturn {
     return () => {
       subscription.unsubscribe();
     };
-  }, [fetchHistory, supabase]);
+  }, [supabase, loadForUser, clearUser]);
+
+  const refresh = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await loadForUser(session.user.id);
+    }
+  }, [supabase, loadForUser]);
 
   return {
     conversations,
     isLoading,
     isVerifiedUser,
-    refresh: fetchHistory,
+    refresh,
   };
 }
 
