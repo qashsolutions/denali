@@ -77,6 +77,7 @@ export async function GET(request: NextRequest) {
       scope: blueButton.scopes,
       code_challenge: codeChallenge,
       code_challenge_method: "S256",
+      prompt: "login", // Force CMS to show login page (prevents auto-reuse of previous session)
     });
 
     const authorizeUrl = `${blueButton.baseUrl}/${blueButton.version}/o/authorize/?${params}`;
