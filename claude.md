@@ -98,7 +98,7 @@ These cause bugs or bad UX if violated. Read before every coding session.
 - **Timeout guards on pre-Claude async calls**: `route.ts` uses `withFallback()` for non-critical Supabase queries before the Claude API call (e.g., `getUnreportedOutcome` at 5s, `buildSystemPromptWithLearning` at 10s). Falls back to defaults on timeout instead of blocking.
 - **AbortController for Claude API**: `withTimeout()` in `claude.ts` uses `AbortController` to truly cancel hung requests (not just `Promise.race`). 60s per iteration for Sonnet, 120s for Opus.
 - **CRITICAL: Supabase SSR middleware is required.** `src/middleware.ts` refreshes auth tokens on every request, preventing the refresh token race condition between browser and server Supabase clients. Without it, both clients independently try to refresh the same expired token — one wins (`token_refreshed`), the other gets `token_revoked` and loses its session permanently. The middleware refreshes ONCE via `supabase.auth.getUser()` and writes updated cookies to the response.
-- **CRITICAL: Never use browser Supabase client for data fetching.** Browser `getClient()` + `.from("table").select()` fails when tokens are stale (even with middleware, there are edge cases). Always fetch data via server API routes using `createServerSupabaseClient()` (cookie-authenticated). Pattern: client calls `fetch("/api/route")` → server route uses `createServerSupabaseClient()` → returns JSON. Examples: `useConversationHistory` → `/api/conversations`, `useHealthData` → `/api/fhir/data`.
+- **CRITICAL: Never use browser Supabase client for data fetching.** Browser `getClient()` + `.from("table").select()` fails when tokens are stale (even with middleware, there are edge cases). Always fetch data via server API routes using `createServerSupabaseClient()` (cookie-authenticated). Pattern: client calls `fetch("/api/route")` → server route uses `createServerSupabaseClient()` → returns JSON. Examples: `useConversationHistory` → `/api/conversations`, `useHealthData` → `/api/fhir/data`, `useAuth`/`AppHeader` → `/api/profile`.
 - **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
 - **MCP servers are NOT testable via curl/HTTP.** MCP protocol is handled internally by the Anthropic API. Use Claude.ai to verify MCP server health.
 
@@ -125,7 +125,7 @@ Where to find specific logic in the codebase.
 | `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
 | `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
 | `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
-| `src/hooks/useAuth.ts` | Auth state: email OTP, TOTP MFA enroll/challenge, AAL tracking, plan/role/trial detection, appeal access gating |
+| `src/hooks/useAuth.ts` | Auth state: email OTP, TOTP MFA enroll/challenge, AAL tracking, plan/role/trial/admin detection, appeal access gating. Profile data fetched from `/api/profile` (server route), NOT browser Supabase client |
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table, gates health data injection |
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
@@ -142,6 +142,7 @@ Where to find specific logic in the codebase.
 src/app/api/
   chat/route.ts               # Main chat with Claude + tools + MCP
   conversations/route.ts      # Conversation history (server-side, cookie-auth)
+  profile/route.ts            # User profile: plan, role, is_admin, appeal count (server-side, cookie-auth)
   appeal-outcome/route.ts     # Record appeal results
   account/delete/route.ts     # GDPR/CCPA account deletion
   checkout/route.ts           # Stripe payment
