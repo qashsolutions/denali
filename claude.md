@@ -34,28 +34,6 @@
 
 ---
 
-## Table of Contents
-
-1. [Quick Reference](#quick-reference)
-2. [Critical Rules](#critical-rules)
-3. [Key Files](#key-files)
-4. [Architecture](#architecture)
-5. [Tools & Data Sources](#tools--data-sources)
-6. [Database Schema](#database-schema)
-7. [Skills & Prompt System](#skills--prompt-system)
-8. [User Flows](#user-flows)
-9. [Orchestration Flows](#orchestration-flows)
-10. [Business Model & Auth](#business-model--auth)
-11. [Stripe Payment Integration](#stripe-payment-integration)
-12. [UI/UX Guidelines](#uiux-guidelines)
-13. [Learning System](#learning-system)
-14. [Coding Standards](#coding-standards)
-15. [MCP Integration](#mcp-integration)
-16. [Blue Button 2.0 (Medicare FHIR API)](#blue-button-20-medicare-fhir-api)
-17. [CMS Interoperability Framework](#cms-interoperability-framework)
-
----
-
 ## Critical Rules
 
 These cause bugs or bad UX if violated. Read before every coding session.
@@ -369,74 +347,6 @@ Skills are string constants exported from `src/skills/` (core domain skills) and
 
 ---
 
-## User Flows
-
-### Coverage Guidance Flow (Free, No Auth)
-
-```
-User: "Will Medicare cover my MRI?"
-  |
-  v
-[ONBOARDING] Name? ZIP? (TOOL_RESTRAINT active)
-  |
-  v
-[SYMPTOM GATHERING] What symptoms? How long? Treatments tried? (TOOL_RESTRAINT active)
-  |
-  v
-[PROVIDER VERIFICATION] Who's your doctor? (NPI tools only)
-  -> MCP: npi_search by name + ZIP -> validate specialty
-  |
-  v
-[CODE VALIDATION] All tools unlock
-  -> MCP: icd10_codes -> diagnosis codes
-  -> Local: search_cpt -> CPT codes
-  -> MCP: cms-coverage -> LCD/NCD for CPT + diagnosis
-  |
-  v
-[REQUIREMENT VERIFICATION] Interactive Q&A
-  "Has she had symptoms for 6+ weeks?" -> check requirement
-  |
-  v
-[GUIDANCE DELIVERY] Proactive checklist
-  -> Policy reference (e.g., LCD L35936)
-  -> Requirements shown AS-IS (exact medical language)
-  -> User's data mapped to requirements
-  -> Local: get_common_denials -> warn about likely denial reasons
-```
-
-### Appeal Flow (Requires Phone OTP)
-
-```
-User: "Medicare denied my MRI, code CO-50"
-  |
-  v
-[APPEAL_SKILL loaded]
-  -> Local: lookup_denial_code("CO-50")
-     -> Supabase: carc_codes_latest + eob_denial_mappings_latest
-     -> denial-patterns.ts: getAppealStrategyForCARC("50")
-     -> Returns: description, plain English, appeal strategy, success rate, deadline
-  |
-  v
-[Gather denial details] Date, procedure, doctor, patient history
-  |
-  v
-[Generate appeal]
-  -> Local: generate_appeal_letter(denial_reason, procedure, diagnosis, history, ...)
-     -> Internally calls: searchICD10 + searchCPT for codes
-     -> Builds letter with inline codes, coverage requirements, deadline
-  |
-  v
-[PAYWALL GATE]
-  New user -> Signup wall -> Email OTP
-  appeal_count<3 -> Show letter (FREE)
-  appeal_count>=3 -> Check subscription -> Paywall ($10 or $25/mo)
-  |
-  v
-[Letter revealed] Full letter with citations, Print/Copy/Download
-```
-
----
-
 ## Orchestration Flows
 
 How ICD-10, CMS coverage, CARC/RARC, and NPI data come together in end-to-end tool sequences. These are the canonical patterns — Claude should follow these sequences when handling each scenario.
@@ -445,229 +355,42 @@ How ICD-10, CMS coverage, CARC/RARC, and NPI data come together in end-to-end to
 
 **Trigger**: User asks about Medicare coverage for a procedure or treatment.
 
-**Example**: "Will Medicare cover a lumbar MRI for my back pain?"
+**Goal**: Walk the user through every check needed so the claim does NOT get denied — verifying provider, codes, policy, requirements, and warning about common denial traps before the service happens.
 
-**Goal**: Walk the user through every check needed so that when they show up for treatment, the claim does NOT get denied. This means verifying the provider, the codes, the policy, the requirements, and warning about common denial traps — all before the service happens.
+**Tool chain** (6 phases, gated by skill loading order):
 
-#### Phase 1: Intake (No Tools — TOOL_RESTRAINT active)
+1. **Intake** (TOOL_RESTRAINT — no tools): Gather name, ZIP, symptoms, duration, prior treatments, red flags → stored in `sessionState`. Gate: 2a-2c answered before tools unlock.
+2. **Provider Verification** (NPI only): `npi_search` by name+ZIP → check Medicare enrollment + specialty match. Non-enrolled = automatic denial. Specialty mismatch = warn + suggest referral. Skippable.
+3. **Code Validation** (all tools unlock): `search_icd10` → ICD-10 codes. `search_cpt` → CPT codes. `get_related_diagnoses` → cross-validate. `check_preventive` → no cost-sharing path. `check_prior_auth` → PA required? `check_sad_list` → Part B vs D (drugs only).
+4. **Coverage Policy Lookup**: `search_local_coverage` (CPT+ICD-10+ZIP → LCD). `search_national_coverage` (CPT+ICD-10 → NCD). `get_coverage_document` (full policy text). LCD/NCD requirements shown **AS-IS**.
+5. **Requirement Verification**: Claude walks through each LCD requirement one at a time, checking user's situation. Stored in `.requirementAnswers`.
+6. **Guidance Delivery**: `get_common_denials` (CPT → top CARC reasons + prevention tips). Final output = personalized checklist with policy ref, requirements mapped to user data, denial warnings, provider status.
 
-No tool calls allowed during this phase. Claude gathers context through conversation only.
-
-| Step | Action | What Claude Asks | Why (Denial It Prevents) | Stored In |
-|------|--------|-----------------|--------------------------|-----------|
-| 1a | Get name | "What's your name?" | Personalization, used in checklist | `.name` |
-| 1b | Get ZIP | "What ZIP code are you in?" | Determines MAC jurisdiction for regional LCD lookup | `.zip` |
-| 2a | Get symptoms | "Can you tell me what's going on?" | Maps to ICD-10 diagnosis — wrong diagnosis = denial | `.symptoms` |
-| 2b | Get duration | "How long has this been going on?" | Many LCDs require minimum duration (e.g., 6 weeks conservative treatment) | `.duration` |
-| 2c | Get prior treatments | "What have you tried so far?" | LCDs often require failed conservative treatment before approving imaging/surgery | `.priorTreatments` |
-| 2d | Get red flags | Claude listens for: bowel/bladder issues, progressive weakness, fever, trauma, weight loss | Red flags can EXPEDITE approval and bypass duration requirements | `.redFlagsPresent` |
-
-**Gate**: All of 2a-2c must be answered before tools unlock. If user has asked about 2+ procedures before (rush mode), symptom gathering can be abbreviated.
-
-#### Phase 2: Provider Verification (NPI Tools Only)
-
-Only NPI registry tools allowed. No ICD-10, CPT, or coverage lookups yet.
-
-| Step | Tool | Input | What It Checks | Why (Denial It Prevents) |
-|------|------|-------|---------------|--------------------------|
-| 3a | Claude (no tool) | — | "Do you have a doctor for this?" | — |
-| 3b | MCP: `npi_search` | Doctor name + ZIP | NPI number, Medicare enrollment status | **Non-enrolled provider = automatic denial.** Medicare won't pay providers not enrolled in their system |
-| 3c | MCP: `npi_search` result | — | Provider's specialty | **Specialty mismatch = higher denial risk.** E.g., family medicine ordering advanced imaging may trigger review |
-| 3d | Local: `validateSpecialtyMatch()` (internal) | Procedure + provider specialty | Does specialty match the procedure? | If mismatch: warn user, suggest referral or strong medical necessity documentation |
-
-**Stored**: `.provider` (name, NPI, specialty), `.providerNPI`
-
-**Skippable**: User can say "not yet" or "show coverage first" to skip. Claude proceeds but notes the gap.
-
-**What to tell the user**:
-- If provider IS enrolled: "Dr. Chen is enrolled in Medicare — good."
-- If specialty mismatch: "Dr. Chen is Family Medicine. She can order this, but a referral from a specialist (orthopedist, neurologist) strengthens the case."
-- If provider NOT found: "I couldn't find that provider in Medicare's system. Double-check the name, or confirm they accept Medicare before your visit."
-
-#### Phase 3: Code Validation (All Tools Unlock)
-
-| Step | Tool | Input | Output | Why (Denial It Prevents) |
-|------|------|-------|--------|--------------------------|
-| 4 | MCP: `search_icd10` | User's symptom description | ICD-10 codes (e.g., M54.5, M54.41) | **Wrong diagnosis code = denial.** The ICD-10 must match the LCD's covered indications |
-| 5 | Local: `search_cpt` | User's procedure description | CPT codes (e.g., 72148, 72149) | **Wrong procedure code = denial.** CPT must be on the LCD's covered procedure list |
-| 5a | Local: `get_related_diagnoses` | CPT code | Related ICD-10 codes that support this CPT | Cross-validates: does the diagnosis actually justify the procedure? |
-| 5b | Local: `check_preventive` | CPT code | Is this a preventive service? | **If preventive: no cost-sharing** (no deductible, no coinsurance). Different coverage path |
-| 5c | Local: `check_prior_auth` | CPT code | Does this commonly require prior authorization? | **Missing prior auth = denial.** Provider must submit PA request BEFORE the service |
-| 5d | Local: `check_sad_list` | Drug name (if applicable) | Part B vs Part D coverage | **Wrong Part = denial.** Self-administered drugs go to Part D, physician-administered to Part B |
-
-**Stored**: `.diagnosisCodes`, `.procedureCodes`
-
-**What to tell the user** (plain English, never codes):
-- If prior auth required: "Your doctor will need to get pre-approval from Medicare before scheduling this. Ask them to submit a prior authorization."
-- If preventive: "This is a preventive service — Medicare covers it with no out-of-pocket cost when done by a participating provider."
-- If SAD list applies: "This medication is covered under Part B (your doctor administers it) / Part D (you pick it up at a pharmacy)."
-
-#### Phase 4: Coverage Policy Lookup
-
-| Step | Tool | Input | Output | Why |
-|------|------|-------|--------|-----|
-| 6a | MCP: `search_local_coverage` | CPT + ICD-10 + state from ZIP | LCD (e.g., L35936) with full coverage criteria text | Regional policies (LCDs) have specific requirements per MAC jurisdiction |
-| 6b | MCP: `search_national_coverage` | CPT + ICD-10 | NCD (if applicable) | National policies override regional. Some procedures only have NCDs |
-| 6c | MCP: `get_coverage_document` | Policy ID from 6a/6b | Full policy text with indications, limitations, documentation requirements | The actual rules that determine approval or denial |
-
-**Stored**: `.coverageCriteria`, `.policyReferences`
-
-**Critical rule**: LCD/NCD requirements are shown **AS-IS** to the user. Do not simplify the medical language — the doctor needs to see the exact terms Medicare uses.
-
-#### Phase 5: Requirement Verification (Interactive Q&A)
-
-Claude walks through each LCD requirement one at a time, checking the user's situation against the policy.
-
-| Step | Action | Example | Why |
-|------|--------|---------|-----|
-| 7a | Ask about each unmet requirement | "Has she had symptoms for at least 6 weeks?" | LCD L35936 requires 6-week duration of symptoms |
-| 7b | Ask about prior imaging | "Has she had an X-ray of the lower back already?" | Many LCDs require step therapy (X-ray before MRI) |
-| 7c | Ask about conservative treatment | "Has she tried physical therapy or anti-inflammatory medication?" | LCDs often require 4-6 weeks of failed conservative treatment |
-| 7d | Check red flags again | "Any numbness, tingling, or weakness in the legs? Bladder issues?" | Red flags bypass duration/conservative treatment requirements and expedite approval |
-
-**Stored**: `.requirementAnswers` (map of requirement -> met/not met)
-
-#### Phase 6: Proactive Denial Prevention + Guidance Delivery
-
-| Step | Tool | Input | Output |
-|------|------|-------|--------|
-| 8 | Local: `get_common_denials` | CPT code | Top 3 CARC denial reasons + prevention tips |
-| 9 | Claude: GUIDANCE_DELIVERY | All accumulated session data | Final personalized checklist |
-
-**What the user sees** (example output):
-
-```
-Based on what you've told me, here's what Medicare needs to approve this lumbar MRI.
-
-Policy: LCD L35936
-
-What your doctor needs to document:
-  [requirements shown AS-IS from LCD]
-
-Your situation:
-  Duration: 3 months of symptoms ✓
-  Conservative treatment: Physical therapy for 6 weeks ✓
-  Prior imaging: No X-ray yet ☐ — Ask your doctor about this
-
-Heads up — common reasons this gets denied:
-  1. "Not medically necessary" (CO-50) — Make sure your doctor documents
-     WHY the MRI is needed and what treatments have failed
-  2. "Insufficient documentation" (CO-167) — The doctor's notes must
-     include symptom duration, failed treatments, and functional limitations
-
-Provider: Dr. Chen (NPI verified, Medicare enrolled ✓)
-  Note: Dr. Chen is Family Medicine. Consider asking for a referral note
-  from a specialist to strengthen the claim.
-
-Print this checklist and bring it to your appointment.
-```
-
-**Data handoff chain**: Symptoms -> ICD-10 + CPT -> Provider NPI (enrolled? specialty match?) -> Prior auth check -> Preventive check -> SAD list (if drug) -> LCD/NCD policy -> Requirements Q&A -> Common denials -> Personalized checklist
-
-**Every check in this flow exists to prevent a specific denial reason.** If any check fails (provider not enrolled, prior auth missing, wrong diagnosis code, unmet LCD requirement), Claude warns the user and tells them how to fix it BEFORE the claim is submitted.
+**Data handoff**: Symptoms → ICD-10+CPT → Provider NPI (enrolled? specialty?) → Prior auth/preventive/SAD → LCD/NCD policy → Requirements Q&A → Common denials → Personalized checklist
 
 ### Flow 2: Appeal (Reactive Denial Response)
 
 **Trigger**: User mentions a denial, appeal, or denial code.
 
-**Example**: "My MRI was denied. The letter says CO-50."
+**Tool chain**: `lookup_denial_code` (FIRST — explains denial in plain English + appeal strategy) → gather denial details (no tools) → `search_icd10` → `search_cpt` → `search_local_coverage` (for letter citations) → `generate_appeal_letter` → PAYWALL GATE (`check_appeal_access`)
 
-| Step | Who | Tool / Action | Input | Output | Stored In |
-|------|-----|--------------|-------|--------|-----------|
-| 1 | Local | `lookup_denial_code` | code="CO-50" | CARC description, plain English, category | `.denialCodes` |
-| 1a | — | `getAppealStrategyForCARC("50")` (internal) | CARC code "50" | Appeal strategy, documentation checklist, ~40% success rate, 120-day deadline | Returned with step 1 |
-| 2 | Claude | APPEAL_SKILL prompt | Denial explanation | Plain English: "Medicare said this wasn't medically necessary" + appeal strategy | Response to user |
-| 3 | Claude | Gather details (no tools) | — | Ask: denial date, procedure, doctor, patient history | `sessionState` fields |
-| 4 | MCP | `search_icd10` (icd10-codes) | User's diagnosis description | ICD-10 codes | `.diagnosisCodes` |
-| 5 | Local | `search_cpt` | User's procedure description | CPT codes | `.procedureCodes` |
-| 6 | MCP | `search_local_coverage` (cms-coverage) | CPT + ICD-10 + state | LCD/NCD policy text (for citations in letter) | `.policyReferences` |
-| 7 | Local | `generate_appeal_letter` | denial_reason, procedure, diagnosis, history, provider, policy refs | Formatted Level 1 appeal with inline codes + citations + deadline | Appeal letter |
-| 8 | — | PAYWALL GATE | `check_appeal_access(email)` | free / paywall / allowed | Letter revealed or paywall shown |
-
-**Data handoff chain**: Denial code -> CARC/RARC lookup -> Appeal strategy -> User details -> ICD-10 + CPT -> LCD policy -> Appeal letter
-
-**Key rule**: `lookup_denial_code` is the FIRST tool called. It immediately gives Claude enough context to explain the denial in plain English, before gathering additional details for the letter.
+**Key rule**: `lookup_denial_code` is the FIRST tool called. It immediately gives Claude enough context to explain the denial before gathering additional details for the letter.
 
 ### Flow 3: Quick Denial Code Lookup
 
-**Trigger**: User asks what a denial code means (no full appeal requested).
+**Trigger**: User asks what a denial code means (no full appeal).
 
-**Example**: "What does code 96 on my EOB mean?"
-
-| Step | Who | Tool / Action | Input | Output |
-|------|-----|--------------|-------|--------|
-| 1 | Local | `lookup_denial_code` | code="96" | CARC 96: "Non-covered charge(s)" + plain English + category |
-| 1a | — | Also checks `eob_denial_mappings` | eob_code="96" if no CARC match | Mapped CARC/RARC if it's a payer-specific EOB code |
-| 1b | — | `getAppealStrategyForCARC("96")` | CARC code | Appeal strategy if available |
-| 2 | Claude | Respond | All lookup results | Plain English explanation + "Would you like help appealing this?" |
-
-**Single tool call, instant response.** No gates, no intake — just explain and offer next steps.
+Single tool call: `lookup_denial_code` (checks CARC + `eob_denial_mappings` + appeal strategy) → plain English explanation + "Would you like help appealing this?"
 
 ### Flow 4: Coverage-to-Appeal Bridge
 
-**Trigger**: User goes through coverage guidance, then later returns saying it was denied.
+**Trigger**: User returns saying a previously discussed procedure was denied.
 
-**Example**: Session starts with coverage guidance for lumbar MRI, user returns weeks later saying "it got denied."
-
-| Step | Who | Tool / Action | Input | Output |
-|------|-----|--------------|-------|--------|
-| 1 | Claude | Detect appeal intent from message | "it got denied" / "Medicare said no" | `triggers.isAppeal = true`, APPEAL_SKILL loads |
-| 2 | Claude | Ask for denial code | — | "Can you find the code on your denial letter? It usually looks like CO-50 or a number." |
-| 3 | Local | `lookup_denial_code` | User's code | CARC explanation + appeal strategy |
-| 4 | — | Reuse session data | `sessionState` already has diagnosisCodes, procedureCodes, policyReferences from earlier coverage flow | No need to re-gather |
-| 5 | Local | `generate_appeal_letter` | All session data + denial reason | Appeal letter with all codes and policy citations already populated |
-
-**Key advantage**: If the user already went through coverage guidance in the same session, `sessionState` retains their ICD-10 codes, CPT codes, provider NPI, and policy references. The appeal letter can be generated with minimal additional questions.
-
-### Tool Interaction Summary
-
-How each data source connects to the others:
-
-```
-                       User's words (plain English)
-                                  |
-                 +----------------+----------------+
-                 |                |                 |
-                 v                v                 v
-        MCP: icd10-codes   Local: search_cpt   MCP: npi-registry
-        (symptoms->ICD-10) (procedure->CPT)    (doctor->NPI)
-                 |                |                 |
-                 |                +---+---+         |
-                 |                    |   |         |
-                 |                    v   v         v
-                 |        Local: check_   Local:   Enrolled in
-                 |        prior_auth    check_     Medicare?
-                 |        check_prev    sad_list   Specialty
-                 |        (PA needed?)  (B vs D?)  match?
-                 |                    |
-                 +--------+-----------+
-                          |
-                          v
-                 MCP: cms-coverage
-                 (ICD-10 + CPT + ZIP -> LCD/NCD policy)
-                          |
-             +------------+------------+
-             |                         |
-             v                         v
-    Claude: Requirement       Local: get_common_denials
-    Verification Q&A          (CPT -> CARC codes
-    (LCD reqs vs user data)    -> prevention tips)
-             |                         |
-             v                         v
-    GUIDANCE_DELIVERY:         Supabase: carc_codes
-    Personalized checklist     + denial-patterns.ts
-    with policy ref +          (appeal strategies)
-    user's data mapped              |
-    to requirements                 v
-             |              Local: generate_appeal_letter
-             v              (if denied later)
-    User sees: plain English
-    checklist + denial warnings
-```
+Reuses existing `sessionState` (ICD-10, CPT, policy refs from earlier coverage flow) → `lookup_denial_code` → `generate_appeal_letter` with minimal additional questions.
 
 ---
 
-## Business Model & Auth
+## Business Model, Auth & Payments
 
 ### Pricing
 
@@ -696,22 +419,9 @@ Coverage guidance is **always free** (unlimited, no signup). Paywall only appear
 
 ### AAL2 Compliance Strategy (CMS A1 / NIST 800-63B)
 
-**CMS A1 requirement**: "Support data exchange with patient identity verification **either** via an intermediary personal health record application **or** using a CMS-approved service for IAL2/AAL2, in order to generate digital credentials that can be used to access health records."
+**Blue Button satisfies CMS A1** — Blue Button OAuth via Medicare.gov handles IAL2/AAL2 as intermediary PHR path. TOTP MFA is opt-in (Settings > Security) for extra protection, never required. WebAuthn/passkeys NOT supported by Supabase. Future P1: email+password + TOTP if CMS tightens requirements.
 
-**Blue Button satisfies CMS A1** — no additional auth (TOTP, passkeys) is required by CMS:
-
-| Layer | What It Protects | Method | Status |
-|-------|-----------------|--------|--------|
-| **FHIR connection** (CMS A1) | Identity proofing — verifies this is the right Medicare beneficiary | Blue Button OAuth via Medicare.gov (IAL2/AAL2 handled by CMS) | **DONE** |
-| **TOTP MFA** (opt-in) | Extra protection for cached health data if user's email is compromised | TOTP authenticator app via Settings > Security | **Available** — opt-in, not required |
-
-**TOTP is opt-in, not required.** CMS A1 is fully satisfied by Blue Button OAuth. TOTP is available in Settings > Security for users who want extra protection. It is never required to use any feature. Target users are rural Medicare patients (65+, limited tech experience) — mandatory TOTP would be a barrier to access.
-
-**Supabase limitation**: WebAuthn/passkeys NOT supported on any plan. TOTP and Phone are the only MFA factor types.
-
-**Future (P1)**: If app-level AAL2 is ever needed (e.g., CMS tightens requirements), the path is email+password (memorized secret per NIST 800-63B) + TOTP. Components are built; migration would add `signInWithPassword()` alongside email OTP.
-
-### Gating Logic
+### Appeal Gating Logic
 
 ```
 1. User requests appeal letter
@@ -724,13 +434,7 @@ Coverage guidance is **always free** (unlimited, no signup). Paywall only appear
 3. After payment -> Reveal letter, increment count
 ```
 
----
-
-## Stripe Payment Integration
-
-Stripe handles all paid features: single appeal purchases ($10) and monthly subscriptions ($25/month). Currently in **sandbox mode** — switch to live keys for production.
-
-### Architecture
+### Stripe Payment Architecture
 
 ```
 PaywallModal (client) → POST /api/checkout → Stripe Checkout Session
@@ -744,87 +448,78 @@ PaywallModal (client) → POST /api/checkout → Stripe Checkout Session
                                         └── handleSubscriptionEvent() → sync status
 ```
 
-### Key Files
+Currently in **sandbox mode** — switch to live keys for production.
 
-| File | Purpose |
-|------|---------|
-| `src/config/pricing.ts` | Price amounts, Stripe Price IDs (from env vars), appeal limits, trial duration |
-| `src/app/api/checkout/route.ts` | Creates Stripe Checkout Session. Uses `createServerSupabaseClient()` for auth. Returns 503 if Stripe not configured (no dev bypass) |
-| `src/app/api/webhooks/stripe/route.ts` | Receives Stripe webhook events, verifies signature, dispatches to fulfillment handlers |
-| `src/lib/stripe-fulfillment.ts` | `fulfillCheckoutSession()`: reads session metadata → upgrades user plan. `handleSubscriptionEvent()`: syncs subscription status changes. Both use `createAdminClient()` |
-| `src/components/payment/PaywallModal.tsx` | Client-side plan selection UI. Posts to `/api/checkout`, redirects to Stripe. CSS variables for theme support |
-| `src/components/appeal/AppealGate.tsx` | Orchestrates: email OTP → TOTP check → `checkAppealAccess()` → PaywallModal if needed |
+Key webhook events: `checkout.session.completed` → `fulfillCheckoutSession()` (reads metadata → plan upgrade). `customer.subscription.updated/deleted` → `handleSubscriptionEvent()` (syncs status). `invoice.payment_failed` → marks `past_due`.
+
+Subscription states: `active` (full access) → `past_due` (retry) → `cancelled` (reverts to free).
+
+### Stripe Critical Rules
+
+- **CRITICAL: `checkout/route.ts` must use `createServerSupabaseClient()`** — browser client has no auth context server-side, `user.id` would be empty, `fulfillCheckoutSession()` skips upgrade.
+- **CRITICAL: Never return `{ url: null }` from checkout** — grants free access. Returns 503 error when Stripe not configured.
+- **Stripe SDK v20**: `current_period_end` lives on `subscription.items.data[0]`, NOT directly on `subscription`.
+- **Idempotent fulfillment**: `fulfillCheckoutSession()` is safe to call multiple times.
 
 ### Environment Variables
 
-| Variable | Purpose | Where Used |
-|----------|---------|------------|
-| `STRIPE_SECRET_KEY` | Server-side API key (sandbox: `sk_test_...`, live: `sk_live_...`) | `checkout/route.ts`, `webhooks/stripe/route.ts`, `stripe-fulfillment.ts`, `account/delete/route.ts` |
-| `STRIPE_WEBHOOK_SECRET` | Webhook signature verification (`whsec_...`) | `webhooks/stripe/route.ts` |
-| `STRIPE_PRICE_PAY_PER_CLAIM` | Price ID for $10 single appeal | `pricing.ts` → `checkout/route.ts` |
-| `STRIPE_PRICE_UNLIMITED_MONTHLY` | Price ID for $25/month subscription | `pricing.ts` → `checkout/route.ts` |
-| `STRIPE_PRICE_UNLIMITED_ANNUAL` | Price ID for annual plan (reserved, not yet in UI) | — |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Client-side publishable key (`pk_test_...` / `pk_live_...`) | Not currently used (PaywallModal uses server-side checkout, not Stripe.js) |
-
-### Webhook Events
-
-Endpoint: `https://www.denali.health/api/webhooks/stripe`
-API Version: `2025-04-30.basil` (Stripe SDK v20.2.0)
-
-| Event | Handler | What It Does |
-|-------|---------|-------------|
-| `checkout.session.completed` | `fulfillCheckoutSession()` | Reads `metadata.user_id` + `metadata.plan` → upgrades user to `per_appeal` or creates `monthly` subscription record via `fulfill_checkout` RPC |
-| `customer.subscription.updated` | `handleSubscriptionEvent()` | Syncs subscription status (active/past_due/cancelled) and `period_end` via `handle_subscription_change` RPC |
-| `customer.subscription.deleted` | `handleSubscriptionEvent()` | Same as updated — marks subscription cancelled |
-| `invoice.payment_failed` | Retrieves subscription → `handleSubscriptionEvent()` | Marks subscription as `past_due` when renewal payment fails |
-| `customer.subscription.created` | Logged only | No action needed — `checkout.session.completed` handles initial creation |
-| `customer.subscription.trial_will_end` | Logged only | Future: send notification before trial expires |
-| `invoice.finalized` | Logged only | Informational |
-| `invoice.paid` | Logged only | Informational |
-
-### Payment Flow (Detail)
-
 ```
-1. User hits appeal paywall (appeal_count >= 3, no active subscription)
-2. PaywallModal shows: "Pay Per Appeal ($10)" or "Monthly ($25/month)"
-3. User clicks → POST /api/checkout { plan: "single" | "monthly" }
-4. Server (cookie-auth):
-   a. Verifies user via createServerSupabaseClient()
-   b. Creates Stripe Checkout Session with metadata: { user_id, email, plan }
-   c. Returns { url: "https://checkout.stripe.com/..." }
-5. Client redirects to Stripe Checkout
-6. User completes payment → Stripe redirects to /app/chat?payment=success
-7. Stripe fires checkout.session.completed webhook:
-   a. stripe-fulfillment.ts reads session.metadata.user_id
-   b. If plan=monthly: creates subscription record via fulfill_checkout RPC
-   c. If plan=single: updates users.plan to "per_appeal"
-8. User's next appeal access check returns "allowed"
+ANTHROPIC_API_KEY=sk-ant-api03-...
+ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
+ANTHROPIC_APPEAL_MODEL=claude-opus-4-6    # No date suffix — Opus for appeals
+BLUEBUTTON_CLIENT_ID=...          # CMS Blue Button OAuth client ID
+BLUEBUTTON_CLIENT_SECRET=...      # CMS Blue Button OAuth client secret
+BLUEBUTTON_BASE_URL=https://sandbox.bluebutton.cms.gov  # or production URL
+FHIR_TOKEN_ENCRYPTION_KEY=...     # 32-byte hex key for AES-256-GCM token encryption
+STRIPE_SECRET_KEY=sk_...                       # Stripe secret key (sandbox or live)
+STRIPE_WEBHOOK_SECRET=whsec_...                # Stripe webhook signing secret
+STRIPE_PRICE_PAY_PER_CLAIM=price_...           # Stripe Price ID for $10 single appeal
+STRIPE_PRICE_UNLIMITED_MONTHLY=price_...       # Stripe Price ID for $25/month subscription
+STRIPE_PRICE_UNLIMITED_ANNUAL=price_...        # Stripe Price ID for annual plan (reserved)
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...      # Stripe publishable key (client-side, not currently used)
 ```
 
-### Subscription Lifecycle
+---
 
-| Status | Meaning | User Experience |
-|--------|---------|-----------------|
-| `active` | Payment current | Full access to appeals + unlimited chat |
-| `past_due` | Renewal payment failed | Access continues briefly; Stripe retries payment |
-| `cancelled` | User cancelled or payment permanently failed | Reverts to free plan (3 appeals lifetime) |
+## Blue Button 2.0 (Medicare FHIR API)
 
-### Critical Rules
+Blue Button connects patients to their Medicare claims data via FHIR APIs.
 
-- **CRITICAL: `checkout/route.ts` must use `createServerSupabaseClient()`** — the browser client has no auth context server-side, so `user.id` would be empty, causing `metadata.user_id` to be missing. Without user_id, `fulfillCheckoutSession()` skips the plan upgrade entirely.
-- **CRITICAL: Never return `{ url: null }` from checkout** — the old code did this when `STRIPE_SECRET_KEY` was missing, and `PaywallModal` called `onSuccess()`, granting free access. Now returns 503 error.
-- **Admin bypass**: Users with `is_admin = TRUE` in the `users` table bypass all paywalls. `checkAppealAccess()` in `useAuth.ts` returns `"allowed"` immediately for admins.
-- **Stripe SDK v20**: `current_period_end` lives on `subscription.items.data[0]`, NOT directly on `subscription`. The `stripe-fulfillment.ts` accesses it via `firstItem.current_period_end`.
-- **Idempotent fulfillment**: `fulfillCheckoutSession()` is safe to call multiple times — Stripe may retry webhooks.
+### OAuth Flow (PKCE)
 
-### Sandbox → Production Checklist
+```
+1. User clicks "Connect Medicare" on /app/health
+2. GET /api/fhir/authorize:
+   - Generate state (CSRF) + code_verifier (PKCE)
+   - Compute code_challenge = SHA256(code_verifier) → base64url
+   - Store state + code_verifier in httpOnly cookies (10 min TTL)
+   - Redirect to CMS: /v2/o/authorize/?client_id=...&code_challenge=...&code_challenge_method=S256
+3. User authorizes on CMS site → redirected to /api/fhir/callback?code=...&state=...
+4. GET /api/fhir/callback:
+   - Validate state cookie
+   - Read code_verifier cookie
+   - POST /v2/o/token/ with {code, code_verifier, redirect_uri} + Basic Auth
+   - Encrypt tokens (AES-256-GCM) → upsert ehr_connections
+   - Clear cookies → redirect to /app/health?connected=true
+```
 
-1. Replace `STRIPE_SECRET_KEY` with live key (`sk_live_...`)
-2. Replace `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` with live key (`pk_live_...`)
-3. Create live Price IDs in Stripe dashboard, update `STRIPE_PRICE_*` env vars
-4. Create live webhook endpoint pointing to `https://www.denali.health/api/webhooks/stripe`
-5. Update `STRIPE_WEBHOOK_SECRET` with the live webhook signing secret
-6. Verify webhook events match the 8 events listed above
+### Scopes
+
+`patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read profile openid`
+
+### Token Security
+
+- Access & refresh tokens encrypted at rest via `FHIR_TOKEN_ENCRYPTION_KEY` (AES-256-GCM)
+- Token writes use admin client (bypasses RLS); reads via server client (respects RLS)
+- Auto-refresh on expired access tokens via `refreshAccessToken()` in `lib/fhir/tokens.ts`
+
+### Health Data in AI
+
+- Client-side `useHealthData()` fetches from `/api/fhir/data` → populates sessionState fields (`healthDataAvailable`, `activeCoverage`, `recentDenials`, `labs`, `conditions`, `medications`, `diabetesClassification`)
+- Chat page bridges health data into `useChat` via `initialSessionState` (built with `useMemo`, synced via `useEffect` for async loading)
+- Server-side `buildHealthContextForPrompt()` injects health context into Claude system prompt: active coverage, lab results (with clinical interpretations), diabetes diagnoses, active medications, diabetes classification with action directives, recent denials (gated by `health_data_ai` consent)
+- `HEALTH_RECORDS_SKILL` loaded when `hasHealthData` or `hasRecentDenials` triggers fire
+- `DIABETES_PREVENTION_SKILL` loaded when `hasDiabetesContext` triggers (from conditions, labs, or user keywords)
 
 ---
 
@@ -885,39 +580,6 @@ API Version: `2025-04-30.basil` (Stripe SDK v20.2.0)
 - Screen reader compatible
 - Touch targets minimum 44x44px
 - No time-limited interactions
-
----
-
-## Learning System
-
-### Layers
-
-| Layer | Goal | Storage |
-|-------|------|---------|
-| Language | Understand user phrases | `symptom_mappings`, `procedure_mappings` |
-| Clinical | Know what gets approved | `coverage_paths`, `appeal_outcomes` |
-| Conversation | Optimal question flow | `conversation_patterns` |
-| Policy | Track Medicare changes | `policy_cache` |
-| User Behavior | Optimize UX | `user_events` |
-
-### Triggers
-
-| Trigger | What Happens |
-|---------|--------------|
-| Every message | Extract entities, queue mapping updates |
-| Thumbs up | Reinforce all mappings in conversation (+0.1) |
-| Thumbs down | Penalize mappings (-0.15), learn from correction |
-| Appeal generated | Store coverage path as pending |
-| Outcome reported | Update coverage path success/failure |
-| Print/copy/download | Track user event |
-| Nightly batch | Process queue, prune weak mappings, check policy updates |
-
-### Persistence
-
-After every chat response, `persistLearning()` runs non-blocking:
-- If ICD-10 search used + symptoms extracted -> `updateSymptomMapping(phrase, code, +0.1)`
-- If CPT search used + procedures extracted -> `updateProcedureMapping(phrase, code, +0.1)`
-- If coverage checked + codes found -> `recordCoveragePath(icd10, cpt, policy, "pending")`
 
 ---
 
@@ -1008,65 +670,38 @@ Server-side logs (Vercel Functions, not browser console):
 3. Real policy references returned (e.g., `L34220`)
 4. No `Local tools called: search_icd10` (that means MCP fallback was triggered — a bug)
 
-### Environment Variables (Vercel)
-
-```
-ANTHROPIC_API_KEY=sk-ant-api03-...
-ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
-ANTHROPIC_APPEAL_MODEL=claude-opus-4-6    # No date suffix — Opus for appeals
-BLUEBUTTON_CLIENT_ID=...          # CMS Blue Button OAuth client ID
-BLUEBUTTON_CLIENT_SECRET=...      # CMS Blue Button OAuth client secret
-BLUEBUTTON_BASE_URL=https://sandbox.bluebutton.cms.gov  # or production URL
-FHIR_TOKEN_ENCRYPTION_KEY=...     # 32-byte hex key for AES-256-GCM token encryption
-STRIPE_SECRET_KEY=sk_...                       # Stripe secret key (sandbox or live)
-STRIPE_WEBHOOK_SECRET=whsec_...                # Stripe webhook signing secret
-STRIPE_PRICE_PAY_PER_CLAIM=price_...           # Stripe Price ID for $10 single appeal
-STRIPE_PRICE_UNLIMITED_MONTHLY=price_...       # Stripe Price ID for $25/month subscription
-STRIPE_PRICE_UNLIMITED_ANNUAL=price_...        # Stripe Price ID for annual plan (reserved)
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...      # Stripe publishable key (client-side, not currently used)
-```
-
 ---
 
-## Blue Button 2.0 (Medicare FHIR API)
+## Learning System
 
-Blue Button connects patients to their Medicare claims data via FHIR APIs.
+### Layers
 
-### OAuth Flow (PKCE)
+| Layer | Goal | Storage |
+|-------|------|---------|
+| Language | Understand user phrases | `symptom_mappings`, `procedure_mappings` |
+| Clinical | Know what gets approved | `coverage_paths`, `appeal_outcomes` |
+| Conversation | Optimal question flow | `conversation_patterns` |
+| Policy | Track Medicare changes | `policy_cache` |
+| User Behavior | Optimize UX | `user_events` |
 
-```
-1. User clicks "Connect Medicare" on /app/health
-2. GET /api/fhir/authorize:
-   - Generate state (CSRF) + code_verifier (PKCE)
-   - Compute code_challenge = SHA256(code_verifier) → base64url
-   - Store state + code_verifier in httpOnly cookies (10 min TTL)
-   - Redirect to CMS: /v2/o/authorize/?client_id=...&code_challenge=...&code_challenge_method=S256
-3. User authorizes on CMS site → redirected to /api/fhir/callback?code=...&state=...
-4. GET /api/fhir/callback:
-   - Validate state cookie
-   - Read code_verifier cookie
-   - POST /v2/o/token/ with {code, code_verifier, redirect_uri} + Basic Auth
-   - Encrypt tokens (AES-256-GCM) → upsert ehr_connections
-   - Clear cookies → redirect to /app/health?connected=true
-```
+### Triggers
 
-### Scopes
+| Trigger | What Happens |
+|---------|--------------|
+| Every message | Extract entities, queue mapping updates |
+| Thumbs up | Reinforce all mappings in conversation (+0.1) |
+| Thumbs down | Penalize mappings (-0.15), learn from correction |
+| Appeal generated | Store coverage path as pending |
+| Outcome reported | Update coverage path success/failure |
+| Print/copy/download | Track user event |
+| Nightly batch | Process queue, prune weak mappings, check policy updates |
 
-`patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read profile openid`
+### Persistence
 
-### Token Security
-
-- Access & refresh tokens encrypted at rest via `FHIR_TOKEN_ENCRYPTION_KEY` (AES-256-GCM)
-- Token writes use admin client (bypasses RLS); reads via server client (respects RLS)
-- Auto-refresh on expired access tokens via `refreshAccessToken()` in `lib/fhir/tokens.ts`
-
-### Health Data in AI
-
-- Client-side `useHealthData()` fetches from `/api/fhir/data` → populates sessionState fields (`healthDataAvailable`, `activeCoverage`, `recentDenials`, `labs`, `conditions`, `medications`, `diabetesClassification`)
-- Chat page bridges health data into `useChat` via `initialSessionState` (built with `useMemo`, synced via `useEffect` for async loading)
-- Server-side `buildHealthContextForPrompt()` injects health context into Claude system prompt: active coverage, lab results (with clinical interpretations), diabetes diagnoses, active medications, diabetes classification with action directives, recent denials (gated by `health_data_ai` consent)
-- `HEALTH_RECORDS_SKILL` loaded when `hasHealthData` or `hasRecentDenials` triggers fire
-- `DIABETES_PREVENTION_SKILL` loaded when `hasDiabetesContext` triggers (from conditions, labs, or user keywords)
+After every chat response, `persistLearning()` runs non-blocking:
+- If ICD-10 search used + symptoms extracted -> `updateSymptomMapping(phrase, code, +0.1)`
+- If CPT search used + procedures extracted -> `updateProcedureMapping(phrase, code, +0.1)`
+- If coverage checked + codes found -> `recordCoveragePath(icd10, cpt, policy, "pending")`
 
 ---
 
@@ -1074,144 +709,39 @@ Blue Button connects patients to their Medicare claims data via FHIR APIs.
 
 > **Full compliance report**: See [`cms_readiness.md`](cms_readiness.md) for detailed status of every CMS requirement with code references and evidence.
 
-**Sources**:
-- Framework (26 network criteria): https://www.cms.gov/health-technology-ecosystem/interoperability-framework
-- Categories (app-specific pledges): https://www.cms.gov/health-technology-ecosystem/categories
-- Early adopters: https://www.cms.gov/health-tech-ecosystem/early-adopters
-- Pledge form: https://surveys.cms.gov/jfe/form/SV_6SbVcS5IOqXXOnk
+**Sources**: [Framework](https://www.cms.gov/health-technology-ecosystem/interoperability-framework) (26 criteria) | [Categories](https://www.cms.gov/health-technology-ecosystem/categories) (app pledges) | [Early Adopters](https://www.cms.gov/health-tech-ecosystem/early-adopters) | [Pledge Form](https://surveys.cms.gov/jfe/form/SV_6SbVcS5IOqXXOnk)
 
-Denali participates as a **Patient-Facing App** under two CMS early adopter categories:
-1. **Conversational AI Assistants** — Ask Denali (chat)
-2. **Diabetes & Obesity Prevention** — Diabetes Care feature
+Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabetes & Obesity Prevention**. Must meet ALL 6 app criteria (A1–A6) + ALL category-specific criteria.
 
-**Key rule**: "You must meet the FULL list of criteria to be considered in this category." This means ALL 6 overall app criteria + ALL category-specific criteria.
+### What's Done (by category)
 
-### Patient-Facing App Criteria (ALL Apps — 6 Requirements)
+**Identity & Security** (A1, Criteria 3/22/23/24/25): Blue Button OAuth (IAL2/AAL2 via Medicare.gov), PKCE+encrypted tokens, TOTP MFA opt-in, audit logging on all sensitive ops, consent preferences with enforcement, request purpose tagging on FHIR calls.
 
-These apply to Denali regardless of category. Source: categories page.
+**Trial & Discovery** (A3/A4/A5): 14-day free trial, `/api/cms-metadata` for CMS directory, `CmsPledge` component (AI + Diabetes pledges).
 
-| # | Requirement | Denali Status |
-|---|-------------|---------------|
-| **A1** | **IAL2/AAL2 identity verification** — via intermediary PHR app or CMS-approved service (passkeys, mDLs) | **DONE.** Blue Button OAuth through Medicare.gov = IAL2/AAL2 via intermediary PHR path. PKCE + encrypted token storage. TOTP MFA available as opt-in extra security (Settings > Security) but not CMS-required |
-| **A2** | **Medicare.gov connectivity** — notify Medicare beneficiaries of communications (notices, EOBs, fraud alerts) | **PARTIAL.** `MEDICARE_NOTIFICATIONS_SKILL` exists but `hasRecentChanges` trigger was not wired — now fixed. Skill detects EOB/coverage changes from FHIR data. Still need: direct Medicare.gov notification bridge API |
-| **A3** | **CMS review participation** — disclose data sources, terms/agreements, complete basic security checklist | **PARTIAL.** `/api/cms-metadata` exposes app metadata for CMS directory. Still need: terms doc, security self-assessment |
-| **A4** | **Trial access for Medicare patients** if app charges a fee | **DONE.** 14-day free trial via `/api/trial`. Trial status tracked in `subscriptions` table. Settings shows trial days remaining |
-| **A5** | **CMS discovery experience** — allow app to be listed as recommended option on Medicare.gov | **PARTIAL.** `/api/cms-metadata` returns app listing metadata. Still need: CMS submission |
-| **A6** | **HIPAA compliance** when provided by a covered entity or business associate | **IN PROGRESS.** Audit logging + consent management done. Need: BAA with Supabase/Vercel, HIPAA compliance documentation |
+**Conversational AI criteria**: Personalized AI across clinical record (coverage+denials+labs+conditions+meds+classification). Blue Button PHR connection. AI-generated disclaimers (SparkleIcon + "Not medical advice"). "Talk to your doctor" patterns in all skills.
 
-### Conversational AI — Additional Criteria
+**Diabetes & Obesity criteria**: FHIR pipelines (Observation+Condition+MedicationRequest → `classifyDiabetesStatus()`). Personalized coaching via `DIABETES_PREVENTION_SKILL` (classification-based, lab trends, screening reminders, risk alerts, medication coaching, MDPP, nutrition/activity). `PreDiabetesRiskCard` (CDC risk test). Diabetes dashboard (A1C range bar, diagnoses, medications, quick actions). `diabetes_snapshots` for longitudinal tracking. `QuickLog` for daily entries. `InsightsCard` for Claude-generated analysis.
 
-| Requirement | Denali Status |
-|-------------|---------------|
-| Personalized AI support across clinical record — symptom checking, care planning, coordination, chronic disease | **DONE.** Core product functionality. Coverage + denials + lab results (A1C/glucose/BMI) + diabetes diagnoses + medications + classification flow to AI context |
-| Must connect to CMS Aligned Network directly OR via personal health record app | **DONE.** Blue Button 2.0 (PHR path) with PKCE OAuth, encrypted tokens, audit logging. Future: direct CMS Aligned Network |
-| Responses must clearly indicate AI-generated + disclaimers when not replacing clinical judgment | **DONE.** SparkleIcon + "AI-generated · Not medical advice" on all assistant messages |
-| Clearly distinguish educational content from clinical guidance; guide to health professional when needed | **DONE.** Coverage guidance framing + "talk to your doctor" patterns in skills |
+**Medicare Notifications** (A2 partial): `MEDICARE_NOTIFICATIONS_SKILL` detects EOB/coverage changes from FHIR data.
 
-### Diabetes & Obesity — Additional Criteria
+**Chat & Appeal Infrastructure**: Rate limiting, sidebar auth+refresh, conversation persistence, requirement verification pipeline (vacuous truth fix), outcome incentive wiring, denial code extraction from user text, LCD prior auth prompt strengthening.
 
-| Requirement | Denali Status |
-|-------------|---------------|
-| Must connect to CMS Aligned Network directly or via PHR app | **DONE.** Blue Button 2.0 (PHR path). Health data flows to chat via `DIABETES_PREVENTION_SKILL` |
-| Use clinical record for personalized coaching, reminders, risk alerts | **DONE.** `DIABETES_PREVENTION_SKILL` with classification-based coaching (diabetic/pre-diabetic/at-risk), lab trend awareness, screening reminders (>6mo/>12mo since last A1C), risk alerts (A1C >= 9.0, diagnosis without meds). FHIR pipeline: Observation + Condition + MedicationRequest → `classifyDiabetesStatus()` → AI context. Diabetes page: personalized status (A1C range bar, diagnoses, medications), context-aware quick actions |
-| Support both prevention AND active management (meds, lab trends, nutrition/activity) | **DONE.** Prevention: MDPP eligibility guidance, CDC pre-diabetes risk test, lifestyle coaching prompts. Management: medication coaching (insulin $35/month cap, Part D coverage), lab trend tracking (A1C up/down/stable), MNT referral suggestions, DSMT coverage. Health page shows labs + conditions + medications. AI skill covers nutrition/activity coaching with actual A1C references |
-| Must specifically provide resources for pre-Diabetic patients | **DONE.** `PreDiabetesRiskCard` (CDC 7-question risk test on diabetes page when not connected), MDPP section (eligibility criteria, enrollment CTA) shown for pre-diabetic/at-risk users, `DIABETES_PREVENTION_SKILL` has dedicated pre-diabetic coaching section |
-| HIPAA compliance | Same as A6 above |
-
-### Framework Section I: Patient Access & Empowerment
-
-These are network-level criteria but affect how Denali interacts with CMS Aligned Networks.
-
-| Criterion | Requirement | Denali Impact |
-|-----------|-------------|---------------|
-| **1 — Universal Data Access** | Patients access electronic medical info via apps of their choice | **DONE.** Blue Button 2.0 with PKCE OAuth. Future: CMS Aligned Network connectivity |
-| **2 — Claims & Benefits** | Access claims, EOBs, prior auths, clinical data from payers | **DONE.** Health page shows patient info, coverage, claims list + detail |
-| **3 — Simplified Identity** | IAL2/AAL2 credentials, no extra logins | **DONE.** Blue Button OAuth = IAL2/AAL2 via Medicare.gov (no extra login needed). TOTP MFA opt-in for extra security. See A1 |
-| **4 — Audit Log Transparency** | Accounting of all data access — who, when, why | **DONE.** `audit_logs` table + `logAudit()` calls on all sensitive operations (FHIR, appeals, consent, account deletion, checkout) |
-| **5 — Consent Preferences** | Patient consent preferences shared with all parties; honor restrictions | **DONE.** `consent_preferences` table + Settings UI toggles + enforcement in FHIR context pipeline |
-
-### Framework Section V: Identity, Security & Trust
-
-| Criterion | Requirement | Denali Impact |
-|-----------|-------------|---------------|
-| **22 — Request Purpose** | All queries include purpose code | **DONE.** `X-Request-Purpose` header on FHIR calls, derived from skill triggers (appeal/coverage-determination/patient-request) |
-| **23 — Digital Credentials** | Accept IAL2/AAL2 via CMS-approved service | **DONE.** Blue Button OAuth provides IAL2/AAL2 via Medicare.gov. TOTP MFA opt-in for additional security. See A1 |
-| **24 — Access Control** | Enforce access control + consent policy per context | **DONE.** Consent preferences gate health data injection. FHIR authorize checks TOTP enrollment and requires AAL2 challenge if enrolled |
-| **25 — Audit Records** | Verifiable logs for all auth requests/responses | **DONE.** `audit_logs` table with action, resource, IP, user agent, metadata. See Criterion 4 |
-| **26 — Security Validation** | HITRUST certification or CMS-approved equivalent | **REQUIRED.** Org-level process |
-
-### Framework Sections II–IV (Reference)
-
-| Section | Focus | Key Deadlines |
-|---------|-------|--------------|
-| **II — Provider Access** | Provider delegation, quality gap queries, 60-day claims encounter access | — |
-| **III — Data Standards** | USCDI v3, FHIR APIs (US Core IG), LOINC/RxNorm/SNOMED, FHIR subscriptions | **July 4, 2026**: FHIR API mandate |
-| **IV — Network Connectivity** | CMS National Provider Directory, inter-network queries, metrics reporting | — |
-
-### CMS Pledges (Implemented)
-
-Pledge text displayed via `CmsPledge` component (`src/components/ui/CmsPledge.tsx`):
-- **AI Assistant pledge**: shown on Ask Denali (chat) page, above input
-- **Diabetes & Obesity pledge**: shown on Diabetes Care page, below feature preview
-
-### Compliance Status Summary
-
-#### Completed (Code Done)
-
-| Item | CMS Ref | What's Implemented |
-|------|---------|-------------------|
-| **Blue Button IAL2/AAL2** | A1 (Layer 1) | Blue Button OAuth via Medicare.gov = IAL2/AAL2 via intermediary PHR path. PKCE (S256) + encrypted token storage + audit logging |
-| **Audit logging** | Criteria 4, 25 | `audit_logs` table + `logAudit()` on 7+ API routes (FHIR, appeals, consent, account, checkout, trial) |
-| **Consent preferences** | Criterion 5 | `consent_preferences` table + Settings toggles + enforcement in FHIR context pipeline |
-| **TOTP MFA (opt-in)** | Defense-in-depth | `TOTPEnrollModal`/`TOTPChallengeModal` in Settings > Security. Opt-in extra security — not CMS-required. FHIR authorize gates on AAL2 if enrolled |
-| **14-day free trial** | A4 | `/api/trial` (start/check), `subscriptions` trial fields, paywall bypass for active trials |
-| **Daily chat rate limiting** | — | `check_and_increment_chat` RPC, `chat_daily_usage` table, 429 response in `route.ts`, `useChat.ts` handles limit-reached UI |
-| **Sidebar auth + refresh** | — | `useConversationHistory` subscribes to `onAuthStateChange` (no event filtering). Sidebar refreshes on both new conversation creation AND new chat click (tracks previous ID via `useRef`). Conversation items show date/time in grey italic. No sign-in prompt; anon users see empty state |
-| **Chat history persistence** | — | `conversation-service.ts` uses `getClient()` singleton (not `createClient()`) so `claimConversation()` has auth context. `useChat.ts` chains `saveMessage()` after `claimConversation()` to prevent RLS race condition |
-| **CMS metadata API** | A3, A5 | `/api/cms-metadata` returns app listing data for CMS directory |
-| **Request purpose tagging** | Criterion 22 | `X-Request-Purpose` header on FHIR calls (`patient-request`, `appeal`, `coverage-determination`) |
-| **Consent enforcement** | Criterion 24 | Consent state gates health data injection into AI prompts |
-| **AI-generated disclaimers** | Conv. AI criteria | SparkleIcon + "AI-generated . Not medical advice" on every assistant message |
-| **CMS pledges** | Conv. AI + Diabetes | `CmsPledge` component with AI Assistant and Diabetes & Obesity pledge text |
-| **Medicare notifications skill** | A2 (partial) | `MEDICARE_NOTIFICATIONS_SKILL` detects EOB/coverage changes from FHIR data. `hasRecentChanges` trigger wired |
-| **Diabetes prevention skill** | Diabetes criteria | `DIABETES_PREVENTION_SKILL` with classification-based coaching, lab trends, screening reminders, risk alerts, medication coaching, MDPP guidance, nutrition/activity coaching |
-| **Guide to health professional** | Conv. AI criteria | Skills consistently pattern: "ask your doctor to document...", "consult specialist" |
-| **Diabetes page** | Diabetes criteria | Personalized dashboard: classification badge, A1C range bar, diagnoses, medications, context-aware quick actions, A1C guide (highlighted range), MDPP section, `PreDiabetesRiskCard` (CDC risk test) |
-| **FHIR Observation pipeline** | Diabetes criteria | `syncHealthData()` fetches Observations (laboratory), `extractDiabetesLabs()` extracts A1C/glucose/BMI, labs cached in `fhir_cache`, AI context includes lab values with clinical interpretations |
-| **FHIR Condition pipeline** | Diabetes criteria | `syncHealthData()` fetches Conditions, `extractDiabetesConditions()` extracts diabetes diagnoses (ICD-10 E10/E11/E13/R73/E66), cached as `resource_type: "conditions"` |
-| **FHIR Medication pipeline** | Diabetes criteria | `syncHealthData()` fetches MedicationRequests, `extractDiabetesMedications()` extracts meds with `isDiabetesMed` flag (~30 drug classes), cached as `resource_type: "medications"` |
-| **Diabetes classification** | Diabetes criteria | `classifyDiabetesStatus()` in transforms.ts: diabetic/pre-diabetic/at-risk/none from diagnoses + labs + medications with evidence tracking. Shared by chat page + diabetes page |
-| **Chat ↔ Health data bridge** | Diabetes + Conv. AI | `useChat` accepts `initialSessionState`, syncs async health data via `useEffect`. Chat page builds sessionState from `useHealthData()` including conditions, medications, classification |
-| **Health page labs/conditions/meds** | Diabetes criteria | `LabResultsCard` (with A1C trends), `ConditionsCard` (diabetes diagnoses), `MedicationsCard` (diabetes meds highlighted) on health page |
-| **Pre-diabetes resources** | Diabetes criteria | `PreDiabetesRiskCard` (CDC 7-question risk test), MDPP eligibility section, dedicated pre-diabetic coaching in AI skill |
-| **Unified navigation** | — | Diabetes integrated into Ask Denali chat; 3-item nav (Health, Ask Denali, Blog); diabetes page kept as reference |
-| **Longitudinal lab storage** | Diabetes criteria | `diabetes_snapshots` table — append-only, auto-populated on FHIR sync. `useDiabetesSnapshots` hook, `A1CTrendChart` SVG sparkline + list toggle |
-| **Nutrition/activity tracking** | Diabetes criteria | `diabetes_log` table + `QuickLog` component (glucose/activity/meal/note). Any signed-in user. `/api/diabetes/log` CRUD route |
-| **Proactive screening reminders** | Diabetes criteria | `ScreeningReminders` component on diabetes dashboard — calculates from lab dates (>3mo diabetic, >6mo amber, >12mo red) |
-| **Dashboard risk alerts** | Diabetes criteria | `RiskAlerts` component — A1C >= 9.0 (red), dx without meds (amber), A1C trending up (amber). Links to chat |
-| **Diabetes consent flow** | Data privacy | `DiabetesConsentCard` on health page — gates AI analysis + storage consent. Shown when connected + diabetes data + no consent |
-| **Stored AI diabetes analysis** | Diabetes criteria | `diabetes_insights` table + `diabetes-insights.ts` (Claude Sonnet, structured JSON) + `/api/diabetes/insights` API + `InsightsCard` component. Hash-based dedup, auto-triggered on FHIR sync |
-| **Chat lab trend context** | Diabetes + Conv. AI | `labTrends` + `recentLogSummary` on SessionState. `buildHealthContextForPrompt()` injects A1C history with arrows (improving/rising/stable) |
-| **Requirement verification pipeline** | — | Fixed vacuous truth gate: guidance no longer loads when `requirementsToVerify` is empty (extraction never happened). Added step 9b flow reminder prompting Claude to emit `[REQUIREMENTS]` block. Added implicit skip safety valve in `extractUserInfo()` for stuck-state prevention |
-| **Outcome incentive wiring** | — | `applyOutcomeIncentive()` now called in `/api/appeal-outcome` after `recordAppealOutcome()`. Gives user a free appeal credit for reporting outcomes. Returns `incentiveApplied` flag in response |
-| **Denial code extraction from user text** | — | `extractUserInfo()` in `claude.ts` now extracts CARC/RARC codes from user messages via regex (CO-50, PR-1, CARC 167, RARC N56 patterns). Gated on appeal context to avoid false positives. Supplements tool-based extraction |
-| **LCD prior auth prompt strengthening** | — | `COVERAGE_SKILL` prompt updated: `[REQUIREMENTS]` block marked MANDATORY with explicit "do this EVERY time" instruction. `[PRIOR_AUTH_LCD]` block clarified as auto-parsed. Drives reliable requirement extraction |
-
-#### Remaining Gaps
+### Remaining Gaps
 
 | Gap | CMS Ref | Priority | Type |
 |-----|---------|----------|------|
 | **HIPAA compliance** | A6 | **P0** | Process — BAAs with Supabase/Vercel, compliance docs, breach notification plan |
 | **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
 | **Terms of service + security checklist** | A3 | **P0** | Docs — required for CMS review participation |
-| **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct integration with Medicare.gov communication system (beyond FHIR change detection) |
+| **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct Medicare.gov communication integration |
 | **CMS credential service integration** | A1 | **P1** | Code — connect to CMS-approved identity service when available |
-| **CMS review submission** | A3 | **P1** | Docs — data source inventory, security self-assessment for CMS |
+| **CMS review submission** | A3 | **P1** | Docs — data source inventory, security self-assessment |
 | **CMS app directory submission** | A5 | **P1** | Docs — screenshots, descriptions for Medicare.gov listing |
-| **Patient-facing audit log viewer** | Criterion 4 | **P1** | Code — let users see who accessed their data (Settings Activity Log) |
-| **AAL2 app auth** (if CMS tightens) | A1, Criteria 3, 23 | **P2** | Code — email+password sign-in + TOTP for full AAL2 at app level. TOTP components ready; would need password migration. Only needed if CMS requires app-level AAL2 beyond Blue Button |
-| **EOB detail enrichment** | Criterion 2 | **P2** | Code — CARC/RARC extraction from FHIR EOB adjudication items |
-| **FHIR USCDI v3 compliance** | Criterion 13 | **P2** | Code — verify Blue Button data maps to USCDI v3 by July 2026 |
+| **Patient-facing audit log viewer** | Criterion 4 | **P1** | Code — let users see who accessed their data |
+| **AAL2 app auth** (if CMS tightens) | A1, Criteria 3, 23 | **P2** | Code — email+password + TOTP. Components ready; needs password migration |
+| **EOB detail enrichment** | Criterion 2 | **P2** | Code — CARC/RARC extraction from FHIR EOB adjudication |
+| **FHIR USCDI v3 compliance** | Criterion 13 | **P2** | Code — verify Blue Button maps to USCDI v3 by July 2026 |
 
 ### Key Dates
 
