@@ -76,10 +76,10 @@ export async function GET(request: NextRequest) {
         new URL("/app/health?error=config", request.url)
       );
     }
-    // Must match EXACTLY what was sent in authorize — strip www. to match CMS registration
-    const rawOrigin = getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin);
-    const origin = rawOrigin.replace("://www.", "://");
-    const redirectUri = `${origin}${blueButton.callbackPath}`;
+    // Must match EXACTLY what was sent in authorize — use same env var
+    const redirectUri = process.env.BLUEBUTTON_CALLBACK_URL
+      || `${getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin).replace("://www.", "://")}${blueButton.callbackPath}`;
+    console.log("[FHIR callback] redirect_uri:", redirectUri);
 
     const tokenUrl = `${blueButton.baseUrl}/${blueButton.version}/o/token/`;
     const body = new URLSearchParams({

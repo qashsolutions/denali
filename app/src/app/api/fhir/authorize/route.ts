@@ -63,10 +63,10 @@ export async function GET(request: NextRequest) {
       .digest("base64url");
 
     // Build callback URL — must match EXACTLY what's registered at CMS
-    // CMS has https://denali.health (no www), so strip www. if present
-    const rawOrigin = getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin);
-    const origin = rawOrigin.replace("://www.", "://");
-    const redirectUri = `${origin}${blueButton.callbackPath}`;
+    // Use explicit env var to avoid origin-detection issues on Vercel
+    const redirectUri = process.env.BLUEBUTTON_CALLBACK_URL
+      || `${getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin).replace("://www.", "://")}${blueButton.callbackPath}`;
+    console.log("[FHIR authorize] redirect_uri:", redirectUri);
 
     // Build authorization URL
     const params = new URLSearchParams({
