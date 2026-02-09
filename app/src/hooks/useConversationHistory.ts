@@ -77,10 +77,10 @@ export function useConversationHistory(): UseConversationHistoryReturn {
     }).catch(() => clearUser());
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session?.user) {
+      (_event, session) => {
+        if (session?.user) {
           loadForUser(session.user.id);
-        } else if (event === "SIGNED_OUT") {
+        } else {
           clearUser();
         }
       }

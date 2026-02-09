@@ -25,7 +25,7 @@ export function Sidebar({
   onNewChat,
 }: SidebarProps) {
   const router = useRouter();
-  const { conversations, isLoading, isVerifiedUser, refresh } = useConversationHistory();
+  const { conversations, isLoading, refresh } = useConversationHistory();
   const groupedConversations = groupConversationsByDate(conversations);
 
   // Refresh conversation list when a new conversation is created
@@ -109,21 +109,7 @@ export function Sidebar({
 
         {/* Conversation History */}
         <div className="flex-1 overflow-y-auto px-3 pb-3">
-          {!isVerifiedUser ? (
-            <div className="text-center py-8 px-4">
-              <LockIcon className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-3" />
-              <p className="text-sm text-[var(--text-muted)]">
-                Sign in to save your conversations
-              </p>
-              <Link
-                href="/app/settings"
-                className="inline-block mt-2 text-xs font-medium text-[var(--accent-primary)] hover:underline"
-                onClick={onClose}
-              >
-                Sign in
-              </Link>
-            </div>
-          ) : isLoading ? (
+          {isLoading ? (
             <div className="space-y-2 py-4">
               {[1, 2, 3].map((i) => (
                 <div
@@ -243,13 +229,6 @@ function MenuIcon({ className }: { className?: string }) {
   );
 }
 
-function LockIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-    </svg>
-  );
-}
 
 function ChatBubblesIcon({ className }: { className?: string }) {
   return (

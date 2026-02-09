@@ -167,15 +167,15 @@ export function useAuth(): UseAuthReturn {
       setAuthState((prev) => ({ ...prev, isLoading: false }));
     });
 
-    // Listen for auth changes
+    // Listen for auth changes (including INITIAL_SESSION which fires on subscribe)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
-      (event: AuthChangeEvent, session) => {
-        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session?.user) {
+      (_event: AuthChangeEvent, session) => {
+        if (session?.user) {
           setBasicAuth(session.user);
           loadProfileData(session.user.id, session.user.email || null);
-        } else if (event === "SIGNED_OUT") {
+        } else {
           setAuthState({ ...DEFAULT_AUTH_STATE, isLoading: false });
         }
       }
