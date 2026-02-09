@@ -48,9 +48,12 @@ export async function fhirGet<T>(
     "X-Request-Purpose": purpose,
   };
 
+  console.log("[FHIR client] Request:", url, "Authorization:", `Bearer ${accessToken.substring(0, 6)}...`);
+
   // Follow up to 5 redirects manually to preserve Authorization header
   for (let i = 0; i < 5; i++) {
     const res = await fetch(url, { headers, redirect: "manual" });
+    console.log("[FHIR client] Response status:", res.status, "url:", url, "redirected:", res.redirected);
 
     // Handle redirects — re-send with Authorization header preserved
     if (res.status >= 300 && res.status < 400) {

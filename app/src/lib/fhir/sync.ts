@@ -49,6 +49,18 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
+  // Debug: test token validity via userinfo endpoint first
+  const { blueButton } = await import("@/config").then(m => m.API_CONFIG);
+  try {
+    const userinfoRes = await fetch(`${blueButton.baseUrl}/${blueButton.version}/connect/userinfo`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const userinfoBody = await userinfoRes.text();
+    console.log("[FHIR sync] userinfo test:", userinfoRes.status, userinfoBody.substring(0, 200));
+  } catch (e) {
+    console.error("[FHIR sync] userinfo test failed:", e);
+  }
+
   // Fetch Patient, Coverage, EOBs, Observations, Conditions, Medications in parallel
   const [patientRaw, coverageRaw, eobsRaw, observationsRaw, conditionsRaw, medsRaw] = await Promise.all([
     fhirPatientId
