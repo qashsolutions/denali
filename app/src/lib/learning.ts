@@ -15,7 +15,7 @@
  * 5. User Behavior - Optimize UX (user_events)
  */
 
-import { createClient } from "./supabase";
+import { createAdminClient } from "./supabase-admin";
 import {
   CONFIDENCE_CONFIG,
   FEEDBACK_CONFIG,
@@ -262,7 +262,7 @@ export async function updateSymptomMapping(
   icd10Description: string,
   boost: number = FEEDBACK_CONFIG.positiveBoost
 ): Promise<void> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   try {
     // Use RPC function if available, otherwise direct upsert
@@ -297,7 +297,7 @@ async function directUpdateSymptomMapping(
   icd10Description: string,
   boost: number
 ): Promise<void> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
   const normalizedPhrase = phrase.toLowerCase().trim();
 
   // Check if mapping exists
@@ -341,7 +341,7 @@ export async function updateProcedureMapping(
   cptDescription: string,
   boost: number = FEEDBACK_CONFIG.positiveBoost
 ): Promise<void> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase.rpc("update_procedure_mapping", {
@@ -369,7 +369,7 @@ async function directUpdateProcedureMapping(
   cptDescription: string,
   boost: number
 ): Promise<void> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
   const normalizedPhrase = phrase.toLowerCase().trim();
 
   const { data: existing } = await supabase
@@ -411,7 +411,7 @@ export async function recordCoveragePath(
   outcome: "approved" | "denied" | "pending",
   documentationRequired?: string[]
 ): Promise<void> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   try {
     const { data: existing } = await supabase
@@ -489,7 +489,7 @@ export async function processFeedback(
 
   // Store the correction for manual review if provided
   if (correction && rating === "down") {
-    const supabase = createClient();
+    const supabase = createAdminClient();
     await supabase.from("user_feedback").insert({
       message_id: messageId,
       rating,
@@ -507,7 +507,7 @@ export async function getSymptomMappings(
   phrase: string,
   minConfidence: number = CONFIDENCE_CONFIG.minForPrompt
 ): Promise<SymptomMapping[]> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
   const normalizedPhrase = phrase.toLowerCase().trim();
 
   const { data, error } = await supabase
@@ -541,7 +541,7 @@ export async function getProcedureMappings(
   phrase: string,
   minConfidence: number = CONFIDENCE_CONFIG.minForPrompt
 ): Promise<ProcedureMapping[]> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
   const normalizedPhrase = phrase.toLowerCase().trim();
 
   const { data, error } = await supabase
@@ -574,7 +574,7 @@ export async function getProcedureMappings(
 export async function getSuccessfulCoveragePaths(
   cptCode: string
 ): Promise<CoveragePath[]> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("coverage_paths")
@@ -637,7 +637,7 @@ export async function getLearningContext(
   }
 
   // Get recent denials from coverage paths
-  const supabase = createClient();
+  const supabase = createAdminClient();
   const { data: denials } = await supabase
     .from("coverage_paths")
     .select("cpt_code, icd10_code")
@@ -718,7 +718,7 @@ export async function queueLearningJob(
   jobType: "extract_entities" | "update_mappings" | "analyze_patterns",
   jobData: Record<string, unknown>
 ): Promise<void> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   try {
     await supabase.from("learning_queue").insert({
@@ -738,7 +738,7 @@ export async function pruneLowConfidenceMappings(
   minConfidence: number = CONFIDENCE_CONFIG.minBeforePrune,
   maxAge: number = PRUNING_CONFIG.maxAgeDays
 ): Promise<{ symptoms: number; procedures: number }> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - maxAge);
 
@@ -799,7 +799,7 @@ export async function getFlywheelContext(
 ): Promise<FlywheelContext[]> {
   if (!cptCodes.length) return [];
 
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase.rpc("get_flywheel_context", {
     p_cpt_codes: cptCodes,
@@ -864,7 +864,7 @@ Use this data to:
  * Check if user has an unredeemed outcome incentive (reported outcome but no credit yet)
  */
 export async function checkOutcomeIncentive(email: string): Promise<boolean> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   const { data } = await supabase
     .from("outcome_followups")
@@ -881,7 +881,7 @@ export async function checkOutcomeIncentive(email: string): Promise<boolean> {
  * Apply outcome incentive: decrement appeal_count by 1 (gives a free appeal)
  */
 export async function applyOutcomeIncentive(email: string): Promise<boolean> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase.rpc("apply_outcome_incentive", {
     p_email: email,
@@ -908,7 +908,7 @@ export async function recordAppealOutcome(
     daysToDecision?: number;
   }
 ): Promise<boolean> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   try {
     // Get the appeal to find associated codes

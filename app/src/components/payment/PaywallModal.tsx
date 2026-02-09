@@ -36,15 +36,10 @@ export function PaywallModal({
     setError(null);
 
     try {
-      // Create checkout session
       const response = await fetch("/api/checkout", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          plan: selectedPlan,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: selectedPlan }),
       });
 
       if (!response.ok) {
@@ -54,13 +49,10 @@ export function PaywallModal({
 
       const { url } = await response.json();
 
-      // Redirect to Stripe Checkout
       if (url) {
         window.location.href = url;
       } else {
-        // For development/testing, simulate success
-        console.log("[DEV] Would redirect to Stripe checkout");
-        onSuccess();
+        throw new Error("No checkout URL returned");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Payment failed");
@@ -79,12 +71,12 @@ export function PaywallModal({
       />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-lg mx-4 bg-slate-900 rounded-2xl shadow-2xl border border-slate-700/50 overflow-hidden">
+      <div className="relative z-10 w-full max-w-lg mx-4 bg-[var(--bg-primary)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden">
         {/* Header */}
-        <div className="relative p-6 pb-4 border-b border-slate-700/50 bg-gradient-to-r from-blue-600/10 to-violet-600/10">
+        <div className="relative p-6 pb-4 border-b border-[var(--border)]">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-200 transition-colors"
+            className="absolute top-4 right-4 p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -102,10 +94,10 @@ export function PaywallModal({
             </svg>
           </button>
 
-          <h2 className="text-xl font-semibold text-slate-100">
+          <h2 className="text-xl font-semibold text-[var(--text-primary)]">
             Get Your Appeal Letter
           </h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
             Choose how you&apos;d like to access appeal letters
           </p>
         </div>
@@ -119,7 +111,7 @@ export function PaywallModal({
                 <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 text-green-400"
+                    className="h-5 w-5 text-green-500"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -133,8 +125,10 @@ export function PaywallModal({
                   </svg>
                 </div>
                 <div>
-                  <p className="font-medium text-green-400">{FREE_LIMIT - appealCount} Free Appeal{FREE_LIMIT - appealCount !== 1 ? "s" : ""} Left</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="font-medium text-green-600 dark:text-green-400">
+                    {FREE_LIMIT - appealCount} Free Appeal{FREE_LIMIT - appealCount !== 1 ? "s" : ""} Left
+                  </p>
+                  <p className="text-sm text-[var(--text-secondary)]">
                     Your first {FREE_LIMIT} appeal letters are on us
                   </p>
                 </div>
@@ -150,31 +144,31 @@ export function PaywallModal({
               className={cn(
                 "w-full p-4 rounded-xl border-2 text-left transition-all",
                 selectedPlan === "single"
-                  ? "border-blue-500 bg-blue-500/10"
-                  : "border-slate-700 bg-slate-800/50 hover:border-slate-600"
+                  ? "border-[var(--accent-primary)] bg-[var(--accent-primary)]/10"
+                  : "border-[var(--border)] bg-[var(--bg-secondary)] hover:border-[var(--text-muted)]"
               )}
             >
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-100">
+                    <span className="font-semibold text-[var(--text-primary)]">
                       Pay Per Appeal
                     </span>
                     {selectedPlan === "single" && (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-blue-500/20 text-blue-400 rounded-full">
+                      <span className="px-2 py-0.5 text-xs font-medium bg-[var(--accent-primary)]/20 text-[var(--accent-primary)] rounded-full">
                         Selected
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-sm text-slate-400">
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
                     One appeal letter, no commitment
                   </p>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-slate-100">
+                  <div className="text-2xl font-bold text-[var(--text-primary)]">
                     {formatPrice(PRICING.SINGLE_APPEAL.amount)}
                   </div>
-                  <div className="text-xs text-slate-500">{PRICING.SINGLE_APPEAL.label}</div>
+                  <div className="text-xs text-[var(--text-muted)]">{PRICING.SINGLE_APPEAL.label}</div>
                 </div>
               </div>
             </button>
@@ -186,28 +180,28 @@ export function PaywallModal({
                 "w-full p-4 rounded-xl border-2 text-left transition-all relative",
                 selectedPlan === "monthly"
                   ? "border-violet-500 bg-violet-500/10"
-                  : "border-slate-700 bg-slate-800/50 hover:border-slate-600"
+                  : "border-[var(--border)] bg-[var(--bg-secondary)] hover:border-[var(--text-muted)]"
               )}
             >
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-100">
+                    <span className="font-semibold text-[var(--text-primary)]">
                       Monthly
                     </span>
                     {selectedPlan === "monthly" && (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-violet-500/20 text-violet-400 rounded-full">
+                      <span className="px-2 py-0.5 text-xs font-medium bg-violet-500/20 text-violet-500 rounded-full">
                         Selected
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {PRICING.MONTHLY.appealLimit} appeals per month, cancel anytime
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                    Unlimited appeals, cancel anytime
                   </p>
                   <ul className="mt-2 space-y-1">
-                    <li className="flex items-center gap-2 text-xs text-slate-400">
+                    <li className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                       <svg
-                        className="w-3 h-3 text-green-400"
+                        className="w-3 h-3 text-green-500"
                         fill="currentColor"
                         viewBox="0 0 20 20"
                       >
@@ -217,11 +211,11 @@ export function PaywallModal({
                           clipRule="evenodd"
                         />
                       </svg>
-                      {PRICING.MONTHLY.appealLimit} appeal letters per month
+                      Unlimited appeal letters
                     </li>
-                    <li className="flex items-center gap-2 text-xs text-slate-400">
+                    <li className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                       <svg
-                        className="w-3 h-3 text-green-400"
+                        className="w-3 h-3 text-green-500"
                         fill="currentColor"
                         viewBox="0 0 20 20"
                       >
@@ -231,29 +225,15 @@ export function PaywallModal({
                           clipRule="evenodd"
                         />
                       </svg>
-                      Priority support
-                    </li>
-                    <li className="flex items-center gap-2 text-xs text-slate-400">
-                      <svg
-                        className="w-3 h-3 text-green-400"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Appeal tracking
+                      Unlimited daily messages
                     </li>
                   </ul>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-slate-100">
+                  <div className="text-2xl font-bold text-[var(--text-primary)]">
                     {formatPrice(PRICING.MONTHLY.amount)}
                   </div>
-                  <div className="text-xs text-slate-500">/{PRICING.MONTHLY.label}</div>
+                  <div className="text-xs text-[var(--text-muted)]">/{PRICING.MONTHLY.label}</div>
                 </div>
               </div>
             </button>
@@ -262,7 +242,7 @@ export function PaywallModal({
           {/* Error message */}
           {error && (
             <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-              <p className="text-sm text-red-400">{error}</p>
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             </div>
           )}
 
@@ -312,7 +292,7 @@ export function PaywallModal({
           </button>
 
           {/* Security note */}
-          <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center justify-center gap-2 text-xs text-[var(--text-muted)]">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-4 w-4"

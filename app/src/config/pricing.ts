@@ -30,12 +30,12 @@ export const PRICING = {
     stripePriceId: process.env.STRIPE_PRICE_PAY_PER_CLAIM || "price_single_appeal",
   },
 
-  /** Monthly subscription (6 appeals/month) */
+  /** Monthly subscription (unlimited appeals) */
   MONTHLY: {
     amount: parseInt(process.env.NEXT_PUBLIC_PRICE_UNLIMITED_MONTHLY || "25", 10),
     currency: "USD",
     label: "per month",
-    appealLimit: 6,
+    appealLimit: 0, // 0 = unlimited
     stripePriceId: process.env.STRIPE_PRICE_UNLIMITED_MONTHLY || "price_unlimited_monthly",
   },
 } as const;

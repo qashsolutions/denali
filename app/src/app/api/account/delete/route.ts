@@ -8,23 +8,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { createAdminClient } from "@/lib/supabase-admin";
 import { logAudit } from "@/lib/audit";
 
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = createClient();
-
-    // Get user from auth header
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader) {
-      return NextResponse.json(
-        { error: "Authorization required" },
-        { status: 401 }
-      );
-    }
-
-    // Verify the user
+    // Cookie-authenticated server client for auth verification
+    const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
@@ -36,6 +27,9 @@ export async function DELETE(request: NextRequest) {
 
     const userId = user.id;
     const email = user.email;
+
+    // Admin client bypasses RLS for cascade deletion
+    const admin = createAdminClient();
 
     // Log before deletion (userId will be SET NULL after delete via FK)
     logAudit("ACCOUNT_DELETED", {
@@ -49,65 +43,68 @@ export async function DELETE(request: NextRequest) {
     // Order matters due to foreign key constraints
 
     // 0. Delete EHR connections and FHIR cache (Blue Button data)
-    await supabase
+    await admin
       .from("fhir_cache")
       .delete()
       .eq("user_id", userId);
-    await supabase
+    await admin
       .from("ehr_connections")
       .delete()
       .eq("user_id", userId);
 
     // 0b. Delete diabetes data
-    await supabase.from("diabetes_snapshots").delete().eq("user_id", userId);
-    await supabase.from("diabetes_log").delete().eq("user_id", userId);
-    await supabase.from("diabetes_insights").delete().eq("user_id", userId);
+    await admin.from("diabetes_snapshots").delete().eq("user_id", userId);
+    await admin.from("diabetes_log").delete().eq("user_id", userId);
+    await admin.from("diabetes_insights").delete().eq("user_id", userId);
 
     // 0c. Delete chat usage tracking
-    await supabase.from("chat_daily_usage").delete().eq("identifier", userId);
+    await admin.from("chat_daily_usage").delete().eq("identifier", userId);
+
+    // 0d. Delete consent preferences
+    await admin.from("consent_preferences").delete().eq("user_id", userId);
 
     // 1. Delete user feedback
-    await supabase
+    await admin
       .from("user_feedback")
       .delete()
       .eq("user_id", userId);
 
     // 2. Delete messages from user's conversations
-    const { data: conversations } = await supabase
+    const { data: conversations } = await admin
       .from("conversations")
       .select("id")
       .eq("user_id", userId);
 
     if (conversations && conversations.length > 0) {
-      const conversationIds = conversations.map((c) => c.id);
-      await supabase
+      const conversationIds = conversations.map((c: { id: string }) => c.id);
+      await admin
         .from("messages")
         .delete()
         .in("conversation_id", conversationIds);
     }
 
     // 3. Delete appeals
-    await supabase
+    await admin
       .from("appeals")
       .delete()
       .eq("user_id", userId);
 
     // 4. Delete conversations
-    await supabase
+    await admin
       .from("conversations")
       .delete()
       .eq("user_id", userId);
 
     // 5. Delete usage record
     if (email) {
-      await supabase
+      await admin
         .from("usage")
         .delete()
         .eq("email", email);
     }
 
     // 6. Cancel any active subscriptions via Stripe
-    const { data: subscription } = await supabase
+    const { data: subscription } = await admin
       .from("subscriptions")
       .select("stripe_subscription_id")
       .eq("user_id", userId)
@@ -116,7 +113,6 @@ export async function DELETE(request: NextRequest) {
 
     if (subscription?.stripe_subscription_id) {
       try {
-        // Cancel Stripe subscription
         const stripeKey = process.env.STRIPE_SECRET_KEY;
         if (stripeKey) {
           await fetch(
@@ -136,37 +132,36 @@ export async function DELETE(request: NextRequest) {
     }
 
     // 7. Delete subscriptions
-    await supabase
+    await admin
       .from("subscriptions")
       .delete()
       .eq("user_id", userId);
 
     // 8. Delete user events
-    await supabase
+    await admin
       .from("user_events")
       .delete()
       .eq("user_id", userId);
 
     // 9. Delete user verification records
-    await supabase
+    await admin
       .from("user_verification")
       .delete()
       .eq("user_id", userId);
 
-    // 10. Delete the user from auth
-    // Note: This requires service role key, so we use RPC if available
+    // 10. Delete the user record + sign out
     try {
-      await supabase.rpc("delete_user_cascade", { target_user_id: userId });
-    } catch (rpcError) {
-      // If RPC doesn't exist, delete from users table
-      await supabase
+      await admin.rpc("delete_user_cascade", { target_user_id: userId });
+    } catch {
+      // If RPC doesn't exist, delete from users table directly
+      await admin
         .from("users")
         .delete()
         .eq("id", userId);
-
-      // Sign out the user (this invalidates their session)
-      await supabase.auth.signOut();
     }
+
+    // Sign out via the cookie-auth client
+    await supabase.auth.signOut();
 
     return NextResponse.json({
       success: true,

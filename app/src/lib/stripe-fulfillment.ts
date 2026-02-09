@@ -36,9 +36,13 @@ export async function fulfillCheckoutSession(sessionId: string) {
   if (plan === "monthly") {
     // Subscription checkout — create subscription record
     const sub = session.subscription as Stripe.Subscription | null;
+    const firstItem = sub?.items?.data?.[0];
     const periodStart = sub?.start_date
       ? new Date(sub.start_date * 1000).toISOString()
       : null;
+    const periodEnd = firstItem?.current_period_end
+      ? new Date(firstItem.current_period_end * 1000).toISOString()
+      : undefined;
 
     const { error } = await admin.rpc("fulfill_checkout", {
       p_user_id: userId,
@@ -47,7 +51,7 @@ export async function fulfillCheckoutSession(sessionId: string) {
       p_stripe_customer_id: (session.customer as string) || undefined,
       p_stripe_subscription_id: sub?.id || undefined,
       p_period_start: periodStart || undefined,
-      p_period_end: undefined,
+      p_period_end: periodEnd,
     });
     if (error) {
       console.error("[STRIPE] fulfill_checkout RPC error:", error);
@@ -84,15 +88,19 @@ export async function handleSubscriptionEvent(
   const status = statusMap[subscription.status] || subscription.status;
   const admin = createAdminClient();
 
+  const firstItem = subscription.items?.data?.[0];
   const periodStart = subscription.start_date
     ? new Date(subscription.start_date * 1000).toISOString()
     : null;
+  const periodEnd = firstItem?.current_period_end
+    ? new Date(firstItem.current_period_end * 1000).toISOString()
+    : undefined;
 
   const { error } = await admin.rpc("handle_subscription_change", {
     p_stripe_subscription_id: subscription.id,
     p_status: status,
     p_period_start: periodStart || undefined,
-    p_period_end: undefined,
+    p_period_end: periodEnd,
   });
 
   if (error) {

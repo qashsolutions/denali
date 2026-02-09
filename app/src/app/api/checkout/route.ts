@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { PRICING, getBaseUrl } from "@/config";
-import { createClient } from "@/lib/supabase";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { logAudit } from "@/lib/audit";
 
 // Stripe is imported dynamically to avoid build errors when key is not set
@@ -37,25 +37,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for Stripe key
+    // Check for Stripe key — never grant free access when missing
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     if (!stripeKey) {
-      console.log("[DEV] Stripe not configured, returning mock response");
-      return NextResponse.json({
-        url: null,
-        message: "Stripe not configured. In development mode, payments are simulated.",
-      });
+      console.error("[CHECKOUT] STRIPE_SECRET_KEY not configured");
+      return NextResponse.json(
+        { error: "Payment system not configured. Please try again later." },
+        { status: 503 }
+      );
     }
 
     // Import and initialize Stripe
     const StripeModule = await import("stripe");
     const stripe = new StripeModule.default(stripeKey);
 
-    // Get authenticated user (paywall requires email OTP, so user should exist)
-    const supabase = createClient();
+    // Get authenticated user via cookie-auth server client
+    const supabase = await createServerSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id || "";
-    const email = user?.email || "";
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+    const email = user.email || "";
 
     // Get the origin for redirect URLs (uses safe fallback from config)
     const origin = getBaseUrl(request.headers.get("origin"));

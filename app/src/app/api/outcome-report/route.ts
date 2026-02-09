@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase";
+import { createAdminClient } from "@/lib/supabase-admin";
 import { recordAppealOutcome } from "@/lib/learning";
 
 interface OutcomeReportRequest {
@@ -33,10 +33,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createClient();
+    // Admin client — this route is token-based (no user auth), needs RLS bypass
+    const admin = createAdminClient();
 
     // Look up the followup by token
-    const { data: followup, error: lookupError } = await supabase
+    const { data: followup, error: lookupError } = await admin
       .from("outcome_followups")
       .select("id, appeal_id, email, responded_at")
       .eq("token", body.token)
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Record the outcome on the followup
-    const { error: updateError } = await supabase
+    const { error: updateError } = await admin
       .from("outcome_followups")
       .update({
         outcome: body.outcome,
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     // Apply incentive: decrement appeal_count by 1
     let earnedCredit = false;
-    const { data: incentiveResult } = await supabase.rpc("apply_outcome_incentive", {
+    const { data: incentiveResult } = await admin.rpc("apply_outcome_incentive", {
       p_email: followup.email,
     });
 
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Cancel remaining followups for this appeal (no need for day_60 if day_30 was answered)
-    await supabase
+    await admin
       .from("outcome_followups")
       .update({ responded_at: new Date().toISOString(), outcome: body.outcome })
       .eq("appeal_id", followup.appeal_id)

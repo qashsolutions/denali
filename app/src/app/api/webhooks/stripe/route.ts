@@ -54,6 +54,19 @@ export async function POST(request: NextRequest) {
         await handleSubscriptionEvent(subscription);
         break;
       }
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const subRef = invoice.parent?.subscription_details?.subscription;
+        const subId = typeof subRef === "string" ? subRef : subRef?.id;
+        if (subId) {
+          console.warn(`[STRIPE WEBHOOK] Payment failed for subscription ${subId}`);
+          // Retrieve latest subscription state and update our records
+          const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+          const subscription = await stripe.subscriptions.retrieve(subId);
+          await handleSubscriptionEvent(subscription);
+        }
+        break;
+      }
       default:
         console.log(`[STRIPE WEBHOOK] Unhandled event type: ${event.type}`);
     }

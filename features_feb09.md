@@ -2,6 +2,18 @@
 
 > Comprehensive code review of every feature, file, and Supabase integration.
 > Generated from full codebase audit across chat/AI, auth/payment, FHIR/health, UI, and database layers.
+> Updated with second pass findings (critical server-side auth bugs, payment pipeline issues).
+
+### Status Summary
+
+| Category | Count |
+|----------|-------|
+| Fully Implemented | 38 |
+| Bugs Fixed (Pass 1) | 16 |
+| Critical/High Issues (Pass 2) | 9 |
+| Medium Issues (Pass 2) | 2 |
+| Design Decisions Pending | 8 |
+| Dead Code Candidates | 9 |
 
 ---
 
@@ -73,26 +85,55 @@
 
 ---
 
-## Known Issues (Not Fixed — Require External Action or Design Decision)
+## Second Pass Findings (Feb 9 — Critical/High)
+
+### CRITICAL: Server routes using browser Supabase client
+
+The `createClient()` browser client has NO auth context in server route handlers — `auth.uid()` is always NULL. This means all DB operations silently fail under RLS. Three server routes have this bug:
+
+| # | Route | File | Impact | Fix |
+|---|-------|------|--------|-----|
+| 1 | `DELETE /api/account/delete` | `account/delete/route.ts:11,16` | **Account deletion is completely non-functional.** All `.delete()` calls run as anon → RLS blocks every row → user data remains. GDPR/CCPA violation. | Migrate to `createServerSupabaseClient()` + `createAdminClient()` for cascade |
+| 2 | `POST /api/checkout` | `checkout/route.ts:12,55` | **Stripe metadata.user_id is empty string.** `fulfillCheckoutSession()` skips when `!userId`. Payments succeed but plan is never upgraded. | Migrate to `createServerSupabaseClient()` |
+| 3 | `POST /api/outcome-report` | `outcome-report/route.ts:11,36` | **Token lookups and outcome recording silently fail** if `outcome_followups` table has user-scoped RLS. `recordAppealOutcome()` calls into `learning.ts` which also uses browser client. | Migrate to `createServerSupabaseClient()` for lookups, `createAdminClient()` for incentive |
+
+### CRITICAL: learning.ts uses browser client throughout
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| 4 | **Entire `learning.ts` uses `createClient()`** (17 call sites) | `lib/learning.ts:18,265,300,343,372,414,492,510,544,577,640,721,741,802,867,884,911` | Called from server `route.ts` via `persistLearning()`. All learning writes (symptom mappings, procedure mappings, coverage paths, feedback, flywheel) silently fail. Learning system is non-functional. |
+
+### HIGH: Pricing & Payment Issues
+
+| # | Issue | File | Impact | Fix |
+|---|-------|------|--------|-----|
+| 5 | `MONTHLY.appealLimit: 6` contradicts CLAUDE.md, FAQ, Settings ("unlimited") | `pricing.ts:38` | PaywallModal shows "6 appeals per month" — misleading if plan is unlimited. FAQ says "unlimited." | Change to `Infinity` or `0` (unlimited) |
+| 6 | **Dev paywall bypass**: When `STRIPE_SECRET_KEY` missing, checkout returns `{ url: null }`, PaywallModal calls `onSuccess()` | `checkout/route.ts:42-48`, `PaywallModal.tsx:60-63` | In dev/staging without Stripe key, users get free access to paid features. No error shown. | Return error response instead of `{ url: null }` |
+| 7 | Stripe price IDs are placeholders | `pricing.ts:30,39` | `"price_single_appeal"` and `"price_unlimited_monthly"` — Stripe will reject checkout.sessions.create | Need real Stripe dashboard price IDs |
+| 8 | `stripe-fulfillment.ts` never populates `period_end` | `stripe-fulfillment.ts:50,95` | Subscription records have NULL end date — can't detect expired subscriptions | Parse `subscription.current_period_end` from Stripe object |
+| 9 | Missing webhook handlers | `webhooks/stripe/route.ts` | No `invoice.payment_failed` (can't detect failed renewals) or `customer.subscription.trial_will_end` (can't notify before trial expiry) | Add event handlers |
+
+### MEDIUM: UI & UX Issues
+
+| # | Issue | File | Impact | Fix |
+|---|-------|------|--------|-----|
+| 10 | PaywallModal hardcoded dark theme (`slate-900`, `blue-500/600`) | `PaywallModal.tsx:82+` | Broken in light mode — dark background on light page | Rewrite with CSS variables |
+| 11 | PaywallModal lists phantom features: "Priority support", "Appeal tracking" | `PaywallModal.tsx:234,248` | Features not implemented — misleading to users | Remove or replace with real features |
+
+---
+
+## Known Issues (Not Fixed — Design Decisions or External Dependencies)
 
 | # | Issue | File | Why Not Fixed |
 |---|-------|------|---------------|
-| 1 | Stripe price IDs are placeholders (`"price_single_appeal"`, `"price_unlimited_monthly"`) | `pricing.ts:30,39` | Need real Stripe dashboard IDs |
-| 2 | `MONTHLY.appealLimit: 6` contradicts CLAUDE.md "unlimited" | `pricing.ts:38` | Needs product decision: 6 or unlimited? |
-| 3 | `PaywallModal` lists "Priority support" and "Appeal tracking" as features | `PaywallModal.tsx:234,248` | Features not implemented; needs product decision |
-| 4 | `PaywallModal` hardcoded dark theme colors (no CSS variables) | `PaywallModal.tsx:82+` | Needs full redesign to use CSS vars |
-| 5 | `checkout/route.ts` uses browser `createClient` (no auth context) | `checkout/route.ts:12` | Needs refactor to `createServerSupabaseClient` |
-| 6 | `account/delete/route.ts` uses browser `createClient` | `account/delete/route.ts:12` | Needs refactor to `createServerSupabaseClient` |
-| 7 | Stripe webhook missing `invoice.payment_failed`, `trial_will_end` handlers | `webhooks/stripe/route.ts` | Needs Stripe integration work |
-| 8 | `stripe-fulfillment.ts` never populates `period_end` | `stripe-fulfillment.ts:50,95` | Needs Stripe subscription object parsing |
-| 9 | `useSettings` only persists `textScale` to localStorage, not synced to DB | `useSettings.ts` | Design decision: cross-device sync needed? |
-| 10 | No forced FHIR refresh (24h cache can't be bypassed) | `/api/fhir/data` | Design decision: add `?force=true` param? |
-| 11 | No SQL migration files in repo (schema not version-controlled) | -- | Process: export from Supabase dashboard |
-| 12 | Wildcard CORS `*` on edge functions | `_shared/cors.ts:6` | Needs domain restriction for prod |
-| 13 | No `payment=success` handler after Stripe redirect | chat page | Needs payment confirmation UX |
-| 14 | Home page has no personalized greeting with user name | `app/page.tsx` | Needs auth hook integration |
-| 15 | `consent/route.ts` never increments `version` column | `consent/route.ts:75` | Needs DB trigger or explicit increment |
-| 16 | FHIR Condition fetch uses `category=encounter-diagnosis` only (misses problem-list-item) | `fhir/sync.ts:69` | Needs Blue Button sandbox testing first |
+| 1 | `useSettings` only persists `textScale` to localStorage, not synced to DB | `useSettings.ts` | Design decision: cross-device sync needed? |
+| 2 | No forced FHIR refresh (24h cache can't be bypassed) | `/api/fhir/data` | Design decision: add `?force=true` param? |
+| 3 | No SQL migration files in repo (schema not version-controlled) | -- | Process: export from Supabase dashboard |
+| 4 | Wildcard CORS `*` on edge functions | `_shared/cors.ts:6` | Needs domain restriction for prod |
+| 5 | No `payment=success` handler after Stripe redirect | chat page | Needs payment confirmation UX |
+| 6 | Home page has no personalized greeting with user name | `app/page.tsx` | Needs auth hook integration |
+| 7 | `consent/route.ts` never increments `version` column | `consent/route.ts:75` | Needs DB trigger or explicit increment |
+| 8 | FHIR Condition fetch uses `category=encounter-diagnosis` only (misses problem-list-item) | `fhir/sync.ts:69` | Needs Blue Button sandbox testing first |
 
 ---
 
