@@ -46,7 +46,9 @@ export async function fhirGet<T>(
   });
 
   if (res.status === 401) {
-    throw new FhirError("Token expired or invalid", 401);
+    const body401 = await res.text();
+    console.error("[FHIR client] 401 response from:", url, "body:", body401);
+    throw new FhirError("Token expired or invalid", 401, body401);
   }
 
   if (res.status === 429) {

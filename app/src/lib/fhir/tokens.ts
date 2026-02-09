@@ -40,8 +40,10 @@ export async function getValidToken(userId: string): Promise<TokenPair | null> {
     return { accessToken: refreshed, fhirPatientId: conn.fhir_patient_id };
   }
 
+  const accessToken = decrypt(conn.access_token_encrypted);
+  console.log("[FHIR tokens] Token decrypted, length:", accessToken.length, "first4:", accessToken.substring(0, 4), "patientId:", conn.fhir_patient_id, "expiresAt:", conn.token_expires_at);
   return {
-    accessToken: decrypt(conn.access_token_encrypted),
+    accessToken,
     fhirPatientId: conn.fhir_patient_id,
   };
 }

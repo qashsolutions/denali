@@ -107,6 +107,7 @@ export async function GET(request: NextRequest) {
     }
 
     const tokens = await tokenRes.json();
+    console.log("[FHIR callback] Token response keys:", Object.keys(tokens), "patient:", tokens.patient, "expires_in:", tokens.expires_in, "token_type:", tokens.token_type, "access_token_length:", tokens.access_token?.length);
 
     // Extract FHIR patient ID from token response
     // Blue Button includes patient ID in the token response
