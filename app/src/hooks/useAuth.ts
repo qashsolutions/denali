@@ -85,7 +85,7 @@ export function useAuth(): UseAuthReturn {
     }
 
     // Fetch profile, MFA, usage, trial — non-blocking enhancement
-    async function loadProfileData(userId: string, email: string | null) {
+    async function loadProfileData(userId: string, _email: string | null) {
       try {
         // MFA status
         const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
@@ -98,35 +98,27 @@ export function useAuth(): UseAuthReturn {
             (m) => typeof m === "object" && "method" in m && m.method === "totp"
           ) || false;
 
-        // User profile from database
-        const { data: profile } = await supabase
-          .from("users")
-          .select("plan, role, is_admin")
-          .eq("id", userId)
-          .single();
-
-        // Appeal count by email
-        let appealCount = 0;
-        if (email) {
-          const { data: usage } = await supabase
-            .from("usage")
-            .select("appeal_count")
-            .eq("email", email)
-            .single();
-          appealCount = usage?.appeal_count || 0;
-        }
+        // Profile + appeal count from server route (cookie-authenticated).
+        // Browser Supabase .from("users").select() is unreliable with stale tokens.
+        const res = await fetch("/api/profile");
+        const profileData = res.ok ? await res.json() : null;
 
         // Validate plan type
         const validPlans = ["free", "per_appeal", "monthly", "trial"] as const;
-        const userPlan = validPlans.includes(profile?.plan as (typeof validPlans)[number])
-          ? (profile?.plan as "free" | "per_appeal" | "monthly" | "trial")
+        const rawPlan = profileData?.plan || "free";
+        const userPlan = validPlans.includes(rawPlan as (typeof validPlans)[number])
+          ? (rawPlan as "free" | "per_appeal" | "monthly" | "trial")
           : "free";
 
         // Validate role
         const validRoles = ["patient", "counselor", "provider"] as const;
-        const userRole = validRoles.includes(profile?.role as (typeof validRoles)[number])
-          ? (profile?.role as "patient" | "counselor" | "provider")
+        const rawRole = profileData?.role || "patient";
+        const userRole = validRoles.includes(rawRole as (typeof validRoles)[number])
+          ? (rawRole as "patient" | "counselor" | "provider")
           : "patient";
+
+        const appealCount = profileData?.appealCount || 0;
+        const isAdmin = profileData?.isAdmin || false;
 
         // Trial status
         let trialStatus: "none" | "active" | "expired" | "converted" = "none";
@@ -163,7 +155,7 @@ export function useAuth(): UseAuthReturn {
           appealCount,
           trialStatus,
           trialDaysRemaining,
-          isAdmin: profile?.is_admin || false,
+          isAdmin,
         }));
       } catch (error) {
         console.error("Error loading profile data:", error);

@@ -63,19 +63,20 @@ export function AppHeader() {
         planLabel: "Free Plan",
       });
 
-      // Then fetch plan + admin status from DB (non-blocking enhancement)
+      // Fetch plan + admin status from server route (cookie-authenticated).
+      // Browser Supabase .from("users").select() is unreliable with stale tokens.
       try {
-        const { data: profile } = await supabase
-          .from("users")
-          .select("plan, is_admin")
-          .eq("id", u.id)
-          .single();
-
-        if (profile) {
-          const label = profile.is_admin ? "Admin" : (planLabels[profile.plan] || "Free Plan");
-          setUserInfo((prev) =>
-            prev ? { ...prev, planLabel: label } : prev
-          );
+        const res = await fetch("/api/profile");
+        if (res.ok) {
+          const profileData = await res.json();
+          if (profileData?.authenticated) {
+            const label = profileData.isAdmin
+              ? "Admin"
+              : (planLabels[profileData.plan] || "Free Plan");
+            setUserInfo((prev) =>
+              prev ? { ...prev, planLabel: label } : prev
+            );
+          }
         }
       } catch {
         // Plan fetch failed — avatar already showing, just keep default
