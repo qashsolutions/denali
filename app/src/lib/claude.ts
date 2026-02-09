@@ -1048,13 +1048,25 @@ export function extractUserInfo(
       }
     }
 
-    // Detect requirement verification skip
-    if (updatedState.requirementsToVerify.length > 0 &&
-        !updatedState.verificationComplete &&
-        /\b(skip|just show me|move on|don't need|go ahead|show checklist)\b/i.test(content)) {
-      updatedState.verificationComplete = true;
-      // Leave meetsAllRequirements as null to indicate skipped
-      console.log("[extractUserInfo] User skipped requirement verification");
+    // Detect requirement verification skip (explicit or implicit)
+    if (!updatedState.verificationComplete) {
+      // Explicit skip: user says "skip", "just show me", etc.
+      if (updatedState.requirementsToVerify.length > 0 &&
+          /\b(skip|just show me|move on|don't need|go ahead|show checklist)\b/i.test(content)) {
+        updatedState.verificationComplete = true;
+        // Leave meetsAllRequirements as null to indicate skipped
+        console.log("[extractUserInfo] User skipped requirement verification");
+      }
+
+      // Implicit skip: user asks for checklist/guidance directly when coverage exists
+      // but requirements haven't been extracted yet (Claude didn't emit [REQUIREMENTS])
+      if (updatedState.coverageCriteria.length > 0 &&
+          updatedState.requirementsToVerify.length === 0 &&
+          /\b(checklist|coverage|what do i need|am i covered|show me|give me)\b/i.test(content)) {
+        updatedState.verificationComplete = true;
+        updatedState.meetsAllRequirements = null; // Unknown — skipped extraction
+        console.log("[extractUserInfo] Implicit skip: user requesting guidance, no requirements extracted");
+      }
     }
 
     // Detect appeal intent from USER messages only
@@ -1062,6 +1074,29 @@ export function extractUserInfo(
     if (!updatedState.isAppeal) {
       if (/\b(appeal|appealing|denied|denial|rejected|refused)\b/i.test(content)) {
         updatedState.isAppeal = true;
+      }
+    }
+
+    // Extract denial codes from user messages (CARC/RARC patterns)
+    // Captures codes like "CO-50", "denial code 96", "CARC 167", "PR-1"
+    if (updatedState.isAppeal || /\b(carc|rarc|co-|pr-|oa-|denial.code)\d/i.test(content)) {
+      const codePatterns = [
+        /\b(?:CO|PR|OA|PI)-?(\d{1,4})\b/gi,                       // CO-50, PR-1, OA-23
+        /\b(?:CARC|RARC)\s*[:#-]?\s*(\d{1,4})\b/gi,               // CARC 50, RARC N123
+        /\bcode\s*[:#]?\s*(\d{1,4})\b/gi,                          // code 50, code: 96
+        /\bdenial\s*code\s*[:#]?\s*(\d{1,4})\b/gi,                 // denial code 50
+        /\b(?:RARC)\s*[:#-]?\s*([A-Z]\d{1,4})\b/gi,               // RARC N56, RARC M144
+      ];
+
+      for (const pattern of codePatterns) {
+        let codeMatch;
+        while ((codeMatch = pattern.exec(content)) !== null) {
+          const code = codeMatch[1].toUpperCase();
+          if (!updatedState.denialCodes.includes(code)) {
+            updatedState.denialCodes.push(code);
+            console.log("[extractUserInfo] Extracted denial code:", code);
+          }
+        }
       }
     }
 

@@ -471,10 +471,13 @@ Coverage tools come AFTER the provider is confirmed.
     sections.push(SPECIALTY_VALIDATION_SKILL);
   }
 
-  // Guidance delivery - only after verification complete
+  // Guidance delivery - only after verification complete or explicitly skipped
+  // NOTE: We do NOT skip to guidance when requirementsToVerify is empty.
+  // Empty requirements means extraction hasn't happened yet — coverage just returned.
+  // Claude needs another turn to emit the [REQUIREMENTS] block.
+  // GUIDANCE_SKILL loads when: (a) verification is done, or (b) guidance already generated.
   if (
     (triggers.hasCoverage && triggers.verificationComplete) ||
-    (triggers.hasCoverage && !triggers.hasRequirementsToVerify) ||
     triggers.hasGuidance
   ) {
     sections.push(GUIDANCE_SKILL);
@@ -803,6 +806,23 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
     reminder.push("**TELL USER:** 'Your doctor needs to get pre-approval before scheduling this procedure.'");
   }
 
+  // Step 9b: Extract requirements from coverage results
+  // Coverage was checked but no requirements extracted yet — Claude needs to emit [REQUIREMENTS] block
+  if (triggers.hasCoverage && !triggers.hasRequirementsToVerify && !triggers.verificationComplete && !triggers.hasGuidance) {
+    reminder.push("**STEP:** Extract requirements from the LCD/NCD policy you just looked up");
+    reminder.push("**ACTION:** Re-read the policy text and emit a [REQUIREMENTS] block listing specific, checkable requirements");
+    reminder.push("**FORMAT:**");
+    reminder.push("```");
+    reminder.push("[REQUIREMENTS]");
+    reminder.push("Symptoms present for at least 6 weeks");
+    reminder.push("Conservative treatment tried and failed");
+    reminder.push("Prior imaging completed");
+    reminder.push("[/REQUIREMENTS]");
+    reminder.push("```");
+    reminder.push("**THEN:** Ask the user about each requirement one at a time");
+    return reminder.join("\n");
+  }
+
   // Step 10: Verify requirements
   if (triggers.hasCoverage && !triggers.verificationComplete && triggers.hasRequirementsToVerify) {
     const total = sessionState?.requirementsToVerify?.length ?? 0;
@@ -828,7 +848,7 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
   }
 
   // Step 12: Generate guidance (BE PROACTIVE)
-  if (triggers.hasCoverage && (triggers.verificationComplete || !triggers.hasRequirementsToVerify) && !triggers.hasGuidance) {
+  if (triggers.hasCoverage && triggers.verificationComplete && !triggers.hasGuidance) {
     reminder.push("**STEP:** Deliver guidance (PROACTIVELY — don't ask if they want it)");
     reminder.push("**FIRST:** High-level answer (covered? yes/no) personalized to their situation");
     reminder.push("**THEN:** IMMEDIATELY show the full checklist (don't offer, just provide it)");

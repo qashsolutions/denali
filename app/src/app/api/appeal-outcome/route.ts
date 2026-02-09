@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { recordAppealOutcome } from "@/lib/learning";
+import { recordAppealOutcome, applyOutcomeIncentive } from "@/lib/learning";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { logAudit } from "@/lib/audit";
 
@@ -71,9 +71,21 @@ export async function POST(request: NextRequest) {
       request,
     }).catch(() => {});
 
+    // Apply outcome incentive: give user a free appeal credit for reporting
+    let incentiveApplied = false;
+    if (user.email) {
+      incentiveApplied = await applyOutcomeIncentive(user.email);
+      if (incentiveApplied) {
+        console.log(`[Appeal Outcome] Incentive applied for ${user.email}`);
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      message: "Thank you for reporting your appeal outcome. This helps us improve our recommendations.",
+      incentiveApplied,
+      message: incentiveApplied
+        ? "Thank you for reporting your appeal outcome! You've earned a free appeal credit."
+        : "Thank you for reporting your appeal outcome. This helps us improve our recommendations.",
     });
   } catch (error) {
     console.error("Appeal outcome error:", error);
