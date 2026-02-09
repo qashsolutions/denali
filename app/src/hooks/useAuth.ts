@@ -52,9 +52,22 @@ const DEFAULT_AUTH_STATE: AuthState = {
   error: null,
 };
 
+// Module-level cache: survives SPA navigations so settings page
+// doesn't flash a spinner every time the user clicks the gear icon.
+let _cachedAuthState: AuthState | null = null;
+
 export function useAuth(): UseAuthReturn {
-  const [authState, setAuthState] = useState<AuthState>(DEFAULT_AUTH_STATE);
+  const [authState, setAuthState] = useState<AuthState>(
+    _cachedAuthState ?? DEFAULT_AUTH_STATE
+  );
   const supabase = getClient();
+
+  // Sync module-level cache when auth state settles
+  useEffect(() => {
+    if (!authState.isLoading) {
+      _cachedAuthState = authState;
+    }
+  }, [authState]);
 
   // Check for existing session on mount + auth state changes
   useEffect(() => {

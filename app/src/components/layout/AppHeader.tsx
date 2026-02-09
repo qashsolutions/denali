@@ -12,7 +12,7 @@ import {
   GearIcon,
 } from "@/components/icons";
 import { BRAND } from "@/config";
-import { createClient } from "@/lib/supabase";
+import { getClient } from "@/lib/supabase";
 
 const NAV_ITEMS = [
   { label: "Health", href: "/app/health", Icon: HeartPulseIcon, color: "text-rose-500" },
@@ -37,7 +37,7 @@ export function AppHeader() {
 
   // Check auth state
   useEffect(() => {
-    const supabase = createClient();
+    const supabase = getClient();
 
     async function updateUser(session: { user: { id: string; email?: string; user_metadata?: Record<string, string>; last_sign_in_at?: string } } | null) {
       if (!session?.user) {
@@ -63,17 +63,18 @@ export function AppHeader() {
         planLabel: "Free Plan",
       });
 
-      // Then fetch plan from DB (non-blocking enhancement)
+      // Then fetch plan + admin status from DB (non-blocking enhancement)
       try {
         const { data: profile } = await supabase
           .from("users")
-          .select("plan")
+          .select("plan, is_admin")
           .eq("id", u.id)
           .single();
 
-        if (profile?.plan) {
+        if (profile) {
+          const label = profile.is_admin ? "Admin" : (planLabels[profile.plan] || "Free Plan");
           setUserInfo((prev) =>
-            prev ? { ...prev, planLabel: planLabels[profile.plan] || "Free Plan" } : prev
+            prev ? { ...prev, planLabel: label } : prev
           );
         }
       } catch {
@@ -105,7 +106,7 @@ export function AppHeader() {
 
   async function handleSignOut() {
     setAccountOpen(false);
-    const supabase = createClient();
+    const supabase = getClient();
     await supabase.auth.signOut();
     router.push("/");
   }
