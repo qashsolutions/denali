@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { createClient } from "@/lib/supabase";
+import { getClient } from "@/lib/supabase";
 import { PRICING } from "@/config";
-import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+import type { AuthChangeEvent } from "@supabase/supabase-js";
 
 export interface AuthState {
   userId: string | null;
@@ -52,7 +52,7 @@ const DEFAULT_AUTH_STATE: AuthState = {
 
 export function useAuth(): UseAuthReturn {
   const [authState, setAuthState] = useState<AuthState>(DEFAULT_AUTH_STATE);
-  const supabase = createClient();
+  const supabase = getClient();
 
   // Check for existing session on mount
   useEffect(() => {
@@ -172,21 +172,13 @@ export function useAuth(): UseAuthReturn {
 
     checkSession();
 
-    // Listen for auth changes
+    // Listen for auth changes — re-run full session check
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
-      async (event: AuthChangeEvent, session: Session | null) => {
-        if (event === "SIGNED_IN" && session?.user) {
-          const email = session.user.email || null;
-          setAuthState((prev) => ({
-            ...prev,
-            userId: session.user.id,
-            email,
-            isEmailVerified:
-              !!email && session.user.email_confirmed_at !== null,
-            isLoading: false,
-          }));
+      (event: AuthChangeEvent) => {
+        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+          checkSession();
         } else if (event === "SIGNED_OUT") {
           setAuthState({ ...DEFAULT_AUTH_STATE, isLoading: false });
         }
