@@ -6,7 +6,6 @@ import type { ChecklistData } from "@/components/chat/PrintableChecklist";
 import { type SessionState, createDefaultSessionState } from "@/lib/claude";
 import { MEDICARE_CONSTANTS } from "@/config";
 import {
-  saveMessage,
   loadConversation,
   loadAppealsForConversation,
   claimConversation,
@@ -344,48 +343,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       setMessages((prev) => [...prev, assistantMessage]);
 
-      // Helper: save both messages to DB (fire-and-forget, UI already updated)
-      const saveMessages = (convId: string) => {
-        saveMessage(convId, {
-          role: "user",
-          content: userMessage.content,
-        }).catch((err) => console.warn("Failed to save user message:", err));
-
-        saveMessage(convId, {
-          role: "assistant",
-          content: assistantMessage.content,
-        }).then((savedMsgId) => {
-          if (savedMsgId) {
-            setMessages((prev) =>
-              prev.map((m) => m.id === assistantMessage.id ? { ...m, id: savedMsgId } : m)
-            );
-          }
-        }).catch((err) => console.warn("Failed to save assistant message:", err));
-      };
-
-      // Handle conversation creation + claiming + message persistence
+      // Messages are saved server-side by route.ts using authSupabase.
+      // Client-side saveMessage was unreliable due to browser Supabase client
+      // RLS auth issues. Just update the conversation ID for UI tracking.
       if (data.conversationId && !currentConversationId) {
-        // New conversation — claim FIRST, then save messages (RLS requires ownership)
         currentConversationId = data.conversationId;
-
-        if (userId) {
-          claimConversation(data.conversationId)
-            .then(() => {
-              setConversationId(data.conversationId);
-              saveMessages(data.conversationId);
-            })
-            .catch((err) => {
-              console.warn("Failed to claim conversation:", err);
-              setConversationId(data.conversationId);
-              saveMessages(data.conversationId); // Try anyway
-            });
-        } else {
-          setConversationId(data.conversationId);
-          saveMessages(data.conversationId);
-        }
-      } else if (currentConversationId) {
-        // Existing conversation — already claimed, save immediately
-        saveMessages(currentConversationId);
+        setConversationId(data.conversationId);
       }
       setSuggestions(data.suggestions || []);
 
@@ -467,7 +430,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [conversationId, onError, checklistData, userEmail, messages, sessionState, userId]);
+  }, [conversationId, onError, checklistData, userEmail, messages, sessionState]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);

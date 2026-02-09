@@ -296,8 +296,10 @@ export async function POST(request: NextRequest) {
 
     // Get or create conversation ID
     let conversationId = body.conversationId;
+    let isNewConversation = false;
 
     if (!conversationId) {
+      isNewConversation = true;
       // Create conversation using the authenticated server client (authSupabase).
       // This sets user_id directly at creation time — no client-side claiming needed.
       // The browser client (getClient) has no auth context on the server, so it can
@@ -327,6 +329,39 @@ export async function POST(request: NextRequest) {
       } else {
         conversationId = newConv.id;
         console.log("[Chat API] Created conversation:", conversationId, authUser ? "(owned)" : "(anon)");
+      }
+    }
+
+    // Save messages server-side using authSupabase (has proper auth context).
+    // Client-side saveMessage via getClient() fails because the browser Supabase
+    // client's RLS auth context is unreliable for INSERT + RETURNING queries.
+    if (conversationId && isNewConversation) {
+      const lastUserMsg = body.messages[body.messages.length - 1];
+      if (lastUserMsg) {
+        authSupabase
+          .from("messages")
+          .insert([
+            { conversation_id: conversationId, role: lastUserMsg.role, content: lastUserMsg.content },
+            { conversation_id: conversationId, role: "assistant", content: result.content },
+          ])
+          .then(({ error: msgErr }) => {
+            if (msgErr) console.warn("[Chat API] Failed to save messages:", msgErr.message);
+            else console.log("[Chat API] Messages saved for conversation:", conversationId);
+          });
+      }
+    } else if (conversationId && !isNewConversation) {
+      // Existing conversation: save the latest exchange
+      const lastUserMsg = body.messages[body.messages.length - 1];
+      if (lastUserMsg) {
+        authSupabase
+          .from("messages")
+          .insert([
+            { conversation_id: conversationId, role: lastUserMsg.role, content: lastUserMsg.content },
+            { conversation_id: conversationId, role: "assistant", content: result.content },
+          ])
+          .then(({ error: msgErr }) => {
+            if (msgErr) console.warn("[Chat API] Failed to save messages:", msgErr.message);
+          });
       }
     }
 
