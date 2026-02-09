@@ -76,7 +76,9 @@ export async function GET(request: NextRequest) {
         new URL("/app/health?error=config", request.url)
       );
     }
-    const origin = getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin);
+    // Must match EXACTLY what was sent in authorize — strip www. to match CMS registration
+    const rawOrigin = getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin);
+    const origin = rawOrigin.replace("://www.", "://");
     const redirectUri = `${origin}${blueButton.callbackPath}`;
 
     const tokenUrl = `${blueButton.baseUrl}/${blueButton.version}/o/token/`;

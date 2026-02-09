@@ -62,8 +62,10 @@ export async function GET(request: NextRequest) {
       .update(codeVerifier)
       .digest("base64url");
 
-    // Build callback URL
-    const origin = getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin);
+    // Build callback URL — must match EXACTLY what's registered at CMS
+    // CMS has https://denali.health (no www), so strip www. if present
+    const rawOrigin = getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin);
+    const origin = rawOrigin.replace("://www.", "://");
     const redirectUri = `${origin}${blueButton.callbackPath}`;
 
     // Build authorization URL
