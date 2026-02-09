@@ -960,6 +960,8 @@ Blue Button connects patients to their Medicare claims data via FHIR APIs.
 
 ## CMS Interoperability Framework
 
+> **Full compliance report**: See [`cms_readiness.md`](cms_readiness.md) for detailed status of every CMS requirement with code references and evidence.
+
 **Sources**:
 - Framework (26 network criteria): https://www.cms.gov/health-technology-ecosystem/interoperability-framework
 - Categories (app-specific pledges): https://www.cms.gov/health-technology-ecosystem/categories
