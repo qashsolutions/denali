@@ -65,9 +65,18 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
     if (diabetesMeds.length > 0) {
       lines.push("**Active Diabetes Medications:**");
       for (const med of diabetesMeds) {
-        lines.push(`- ${med.name} (${med.status})`);
+        let detail = `(${med.status})`;
+        if (med.daysSupply) detail += ` — ${med.daysSupply}-day supply`;
+        if (med.isBrandName != null) detail += med.isBrandName ? " [Brand]" : " [Generic]";
+        if (med.gapDays != null && med.gapDays >= 14) detail += ` — REFILL OVERDUE by ${med.gapDays} days`;
+        lines.push(`- ${med.name} ${detail}`);
       }
       lines.push("");
+      const gapMeds = diabetesMeds.filter(m => m.gapDays != null && m.gapDays >= 14);
+      if (gapMeds.length > 0) {
+        lines.push(`**ACTION:** ${gapMeds.length} diabetes medication(s) may need refilling. Ask if they need help with refills.`);
+        lines.push("");
+      }
     }
     if (otherActiveMeds.length > 0) {
       lines.push(`**Other Active Medications:** ${otherActiveMeds.length} non-diabetes medications`);
@@ -124,6 +133,53 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
     lines.push("**Recent Patient Log Entries:**");
     lines.push(sessionState.recentLogSummary);
     lines.push("");
+  }
+
+  // Screenings (P0)
+  if (sessionState.screenings && sessionState.screenings.length > 0) {
+    lines.push("**Recent Screenings:**");
+    const overdue: string[] = [];
+    for (const s of sessionState.screenings) {
+      const status = s.isOverdue ? "(OVERDUE)" : "";
+      lines.push(`- ${s.displayName}: ${s.lastDate} (${s.monthsSinceLast} months ago) ${status}`);
+      if (s.isOverdue) overdue.push(s.displayName);
+    }
+    lines.push("");
+    if (overdue.length > 0) {
+      lines.push(`**ACTION:** ${overdue.length} screening(s) overdue: ${overdue.join(", ")}. Proactively mention when relevant. All covered by Medicare.`);
+      lines.push("");
+    }
+  }
+
+  // Providers (P2)
+  if (sessionState.providers && sessionState.providers.length > 0) {
+    lines.push("**Care Team:**");
+    for (const p of sessionState.providers.slice(0, 8)) {
+      const spec = p.specialty ? ` (${p.specialty})` : "";
+      lines.push(`- ${p.name}${spec}: ${p.visitCount} visit(s), last seen ${p.lastSeen}`);
+    }
+    lines.push("");
+  }
+
+  // Hospitalizations (P3)
+  if (sessionState.hospitalizations && sessionState.hospitalizations.length > 0) {
+    const recent = sessionState.hospitalizations.filter(h => h.daysSinceDischarge <= 90);
+    if (recent.length > 0) {
+      lines.push("**Recent Hospitalizations:**");
+      for (const h of recent) {
+        const followUp = h.needsFollowUp ? " — FOLLOW-UP NEEDED" : "";
+        lines.push(`- ${h.admissionDate} to ${h.dischargeDate} (${h.lengthOfStay} days) at ${h.provider}${followUp}`);
+        if (h.diagnoses.length > 0) {
+          lines.push(`  Diagnoses: ${h.diagnoses.slice(0, 3).join(", ")}`);
+        }
+      }
+      lines.push("");
+      const needsFollowUp = recent.filter(h => h.needsFollowUp);
+      if (needsFollowUp.length > 0) {
+        lines.push(`**ACTION:** ${needsFollowUp.length} recent discharge(s) within 30 days. Proactively ask about follow-up care and recovery.`);
+        lines.push("");
+      }
+    }
   }
 
   // Recent denials

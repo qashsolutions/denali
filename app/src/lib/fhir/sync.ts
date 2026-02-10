@@ -20,10 +20,16 @@ import {
   type LabResult,
   type DiagnosisSummary,
   type MedicationSummary,
+  type ScreeningHistory,
+  type ProviderDetail,
+  type HospitalizationSummary,
 } from "./transforms";
 import {
   extractConditionsFromClaims,
   extractMedicationsFromClaims,
+  extractScreeningsFromClaims,
+  extractProvidersFromClaims,
+  extractHospitalizationsFromClaims,
 } from "./eob-clinical";
 
 export interface HealthData {
@@ -33,6 +39,9 @@ export interface HealthData {
   labs: LabResult[];
   conditions: DiagnosisSummary[];
   medications: MedicationSummary[];
+  screenings: ScreeningHistory[];
+  providers: ProviderDetail[];
+  hospitalizations: HospitalizationSummary[];
   lastSynced: string | null;
 }
 
@@ -78,6 +87,9 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
   const labs: LabResult[] = []; // No lab values available from EOBs
   const conditions = extractConditionsFromClaims(claims);
   const medications = extractMedicationsFromClaims(claims);
+  const screenings = extractScreeningsFromClaims(claims);
+  const providers = extractProvidersFromClaims(claims);
+  const hospitalizations = extractHospitalizationsFromClaims(claims);
 
   // Cache transformed data
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -102,6 +114,18 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
       { user_id: userId, resource_type: "medications", data: medications as unknown as Json, cached_at: now, expires_at: expires },
       { onConflict: "user_id,resource_type" }
     ),
+    admin.from("fhir_cache").upsert(
+      { user_id: userId, resource_type: "screenings", data: screenings as unknown as Json, cached_at: now, expires_at: expires },
+      { onConflict: "user_id,resource_type" }
+    ),
+    admin.from("fhir_cache").upsert(
+      { user_id: userId, resource_type: "providers", data: providers as unknown as Json, cached_at: now, expires_at: expires },
+      { onConflict: "user_id,resource_type" }
+    ),
+    admin.from("fhir_cache").upsert(
+      { user_id: userId, resource_type: "hospitalizations", data: hospitalizations as unknown as Json, cached_at: now, expires_at: expires },
+      { onConflict: "user_id,resource_type" }
+    ),
   ]);
 
   // Update last_synced_at on the connection
@@ -111,7 +135,7 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
     .eq("user_id", userId)
     .eq("provider", "bluebutton");
 
-  return { patient, coverage, claims, labs, conditions, medications, lastSynced: now };
+  return { patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, lastSynced: now };
 }
 
 /**
@@ -133,6 +157,9 @@ export async function getCachedHealthData(userId: string): Promise<HealthData | 
   let labs: LabResult[] = [];
   let conditions: DiagnosisSummary[] = [];
   let medications: MedicationSummary[] = [];
+  let screenings: ScreeningHistory[] = [];
+  let providers: ProviderDetail[] = [];
+  let hospitalizations: HospitalizationSummary[] = [];
   let lastSynced: string | null = null;
 
   for (const row of rows) {
@@ -151,6 +178,12 @@ export async function getCachedHealthData(userId: string): Promise<HealthData | 
       conditions = row.data as unknown as DiagnosisSummary[];
     } else if (row.resource_type === "medications") {
       medications = row.data as unknown as MedicationSummary[];
+    } else if (row.resource_type === "screenings") {
+      screenings = row.data as unknown as ScreeningHistory[];
+    } else if (row.resource_type === "providers") {
+      providers = row.data as unknown as ProviderDetail[];
+    } else if (row.resource_type === "hospitalizations") {
+      hospitalizations = row.data as unknown as HospitalizationSummary[];
     }
 
     if (row.cached_at && (!lastSynced || row.cached_at > lastSynced)) {
@@ -160,6 +193,6 @@ export async function getCachedHealthData(userId: string): Promise<HealthData | 
 
   if (!patient && coverage.length === 0 && claims.length === 0) return null;
 
-  return { patient, coverage, claims, labs, conditions, medications, lastSynced };
+  return { patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, lastSynced };
 }
 

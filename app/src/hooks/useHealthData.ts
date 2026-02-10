@@ -15,6 +15,9 @@ import type {
   LabResult,
   DiagnosisSummary,
   MedicationSummary,
+  ScreeningHistory,
+  ProviderDetail,
+  HospitalizationSummary,
 } from "@/lib/fhir/transforms";
 import { computeDashboardMetrics, type HealthDashboardMetrics } from "@/lib/health-analytics";
 
@@ -25,6 +28,9 @@ interface UseHealthDataReturn {
   labs: LabResult[];
   conditions: DiagnosisSummary[];
   medications: MedicationSummary[];
+  screenings: ScreeningHistory[];
+  providers: ProviderDetail[];
+  hospitalizations: HospitalizationSummary[];
   metrics: HealthDashboardMetrics;
   isConnected: boolean;
   isLoading: boolean;
@@ -42,6 +48,9 @@ export function useHealthData(): UseHealthDataReturn {
   const [labs, setLabs] = useState<LabResult[]>([]);
   const [conditions, setConditions] = useState<DiagnosisSummary[]>([]);
   const [medications, setMedications] = useState<MedicationSummary[]>([]);
+  const [screenings, setScreenings] = useState<ScreeningHistory[]>([]);
+  const [providers, setProviders] = useState<ProviderDetail[]>([]);
+  const [hospitalizations, setHospitalizations] = useState<HospitalizationSummary[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
@@ -67,6 +76,9 @@ export function useHealthData(): UseHealthDataReturn {
       setLabs(data.labs ?? []);
       setConditions(data.conditions ?? []);
       setMedications(data.medications ?? []);
+      setScreenings(data.screenings ?? []);
+      setProviders(data.providers ?? []);
+      setHospitalizations(data.hospitalizations ?? []);
       setLastSynced(data.lastSynced ? new Date(data.lastSynced) : null);
     } catch {
       setError("Unable to connect. Please try again.");
@@ -95,6 +107,9 @@ export function useHealthData(): UseHealthDataReturn {
         setLabs([]);
         setConditions([]);
         setMedications([]);
+        setScreenings([]);
+        setProviders([]);
+        setHospitalizations([]);
         setLastSynced(null);
       }
     } catch {
@@ -118,6 +133,9 @@ export function useHealthData(): UseHealthDataReturn {
     labs,
     conditions,
     medications,
+    screenings,
+    providers,
+    hospitalizations,
     metrics,
     isConnected,
     isLoading,

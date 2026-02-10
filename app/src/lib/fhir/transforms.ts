@@ -41,6 +41,22 @@ export interface ClaimSummary {
   denialReasons?: string[];
   carcCodes?: string[];  // CARC codes from adjudication (for richer denial context)
   rarcCodes?: string[];  // RARC codes from adjudication
+  // P1: PDE enrichment
+  pdeInfo?: {
+    daysSupply?: number;
+    refillNumber?: number;
+    totalRefillsAuthorized?: number;
+    isBrandName?: boolean;
+    quantityDispensed?: number;
+  };
+  // P2: Carrier enrichment
+  careTeam?: Array<{ npi?: string; name: string; role: string; specialty?: string }>;
+  placeOfService?: string;  // "Office", "Emergency Room", etc.
+  // P3: Inpatient enrichment
+  dischargeDate?: string;
+  admissionType?: string;
+  drgCode?: string;
+  dischargeStatus?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,13 +90,17 @@ interface FhirEOB {
   status?: string;
   outcome?: string;
   billablePeriod?: { start?: string; end?: string };
-  provider?: { display?: string };
+  provider?: { display?: string; reference?: string };
   facility?: { display?: string };
   diagnosis?: Array<{
     diagnosisCodeableConcept?: { coding?: Array<{ code?: string; display?: string }> };
+    type?: Array<{ coding?: Array<{ code?: string }> }>;
   }>;
   item?: Array<{
     productOrService?: { coding?: Array<{ code?: string; display?: string }> };
+    servicedDate?: string;
+    quantity?: { value?: number; unit?: string };
+    locationCodeableConcept?: { coding?: Array<{ code?: string; display?: string }> };
     adjudication?: Array<{
       category?: { coding?: Array<{ code?: string }> };
       amount?: { value?: number; currency?: string };
@@ -92,6 +112,22 @@ interface FhirEOB {
     amount?: { value?: number; currency?: string };
   }>;
   payment?: { amount?: { value?: number } };
+  supportingInfo?: Array<{
+    category?: { coding?: Array<{ code?: string }> };
+    code?: { coding?: Array<{ code?: string; display?: string }> };
+    timingDate?: string;
+    timingPeriod?: { start?: string; end?: string };
+    valueQuantity?: { value?: number; unit?: string };
+  }>;
+  careTeam?: Array<{
+    provider?: { display?: string; reference?: string };
+    role?: { coding?: Array<{ code?: string; display?: string }> };
+    qualification?: { coding?: Array<{ code?: string; display?: string }> };
+  }>;
+  procedure?: Array<{
+    procedureCodeableConcept?: { coding?: Array<{ code?: string; display?: string }> };
+    date?: string;
+  }>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -203,6 +239,19 @@ export function transformEOB(eob: FhirEOB): ClaimSummary {
   // Denial detection + CARC/RARC extraction
   const { denialReasons, carcCodes, rarcCodes } = extractDenials(eob);
 
+  // P1: PDE info (Part D claims)
+  const pdeInfo = extractPDEInfo(eob);
+
+  // P2: Care team + place of service
+  const careTeam = extractCareTeam(eob);
+  const placeOfService = extractPlaceOfService(eob);
+
+  // P3: Inpatient fields
+  const dischargeDate = eob.billablePeriod?.end ? formatDate(eob.billablePeriod.end) : undefined;
+  const admissionType = extractAdmissionType(eob);
+  const drgCode = extractDRGCode(eob);
+  const dischargeStatus = extractDischargeStatus(eob);
+
   return {
     id,
     type,
@@ -219,6 +268,13 @@ export function transformEOB(eob: FhirEOB): ClaimSummary {
     denialReasons: denialReasons.length > 0 ? denialReasons : undefined,
     carcCodes: carcCodes.length > 0 ? carcCodes : undefined,
     rarcCodes: rarcCodes.length > 0 ? rarcCodes : undefined,
+    pdeInfo: pdeInfo ?? undefined,
+    careTeam: careTeam.length > 0 ? careTeam : undefined,
+    placeOfService,
+    dischargeDate: isInpatientType(typeCode) ? dischargeDate : undefined,
+    admissionType: isInpatientType(typeCode) ? admissionType : undefined,
+    drgCode: isInpatientType(typeCode) ? drgCode : undefined,
+    dischargeStatus: isInpatientType(typeCode) ? dischargeStatus : undefined,
   };
 }
 
@@ -247,9 +303,54 @@ export interface MedicationSummary {
   dosage: string;       // "500mg twice daily"
   startDate: string;
   isDiabetesMed: boolean;
+  // PDE enrichment (P1) — all optional, populated from Part D claims
+  daysSupply?: number;
+  refillNumber?: number;
+  totalRefillsAuthorized?: number;
+  quantityDispensed?: number;
+  isBrandName?: boolean;
+  lastFillDate?: string;
+  estimatedRunOutDate?: string;
+  gapDays?: number;     // positive = overdue by this many days
 }
 
 export type DiabetesClassification = "diabetic" | "pre-diabetic" | "at-risk" | "none";
+
+export interface ScreeningHistory {
+  screeningType: "a1c" | "eye-exam" | "metabolic-panel" | "kidney" | "ecg" | "office-visit" | "nutrition" | "dsmt";
+  displayName: string;
+  lastDate: string;
+  monthsSinceLast: number;
+  isOverdue: boolean;
+  recommendedFrequency: string;
+  cptCodes: string[];  // matched CPT codes (never shown to user)
+}
+
+export interface ProviderDetail {
+  npi: string;
+  name: string;
+  role: string;
+  specialty?: string;
+  visitCount: number;
+  lastSeen: string;
+  claimTypes: string[];
+}
+
+export interface HospitalizationSummary {
+  admissionDate: string;
+  dischargeDate: string;
+  lengthOfStay: number;
+  admissionType?: string;      // "Emergency", "Urgent", "Elective"
+  dischargeStatus?: string;    // "Home", "Skilled Nursing", etc.
+  drgDescription?: string;     // Plain English (never show DRG code)
+  diagnoses: string[];
+  provider: string;
+  totalCharged: string;
+  medicarePaid: string;
+  youOwe: string;
+  daysSinceDischarge: number;
+  needsFollowUp: boolean;     // < 30 days since discharge
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Diabetes Classification
@@ -325,6 +426,159 @@ export function classifyDiabetesStatus(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P1: PDE Info Extraction
+// ─────────────────────────────────────────────────────────────────────────────
+
+function extractPDEInfo(eob: FhirEOB): ClaimSummary["pdeInfo"] | null {
+  const typeCode = eob.type?.coding?.[0]?.code?.toUpperCase() ?? "";
+  if (typeCode !== "PDE") return null;
+
+  let daysSupply: number | undefined;
+  let refillNumber: number | undefined;
+  let totalRefillsAuthorized: number | undefined;
+  let isBrandName: boolean | undefined;
+
+  for (const info of eob.supportingInfo ?? []) {
+    const catCode = info.category?.coding?.[0]?.code?.toLowerCase() ?? "";
+    if (catCode === "dayssupply" && info.valueQuantity?.value != null) {
+      daysSupply = info.valueQuantity.value;
+    } else if (catCode === "refillnum" && info.valueQuantity?.value != null) {
+      refillNumber = info.valueQuantity.value;
+    } else if (catCode === "refillsauthorized" && info.valueQuantity?.value != null) {
+      totalRefillsAuthorized = info.valueQuantity.value;
+    } else if (catCode === "brandgenericindicator" || catCode === "brandgenericcode") {
+      const code = info.code?.coding?.[0]?.code?.toLowerCase() ?? "";
+      isBrandName = code === "b" || code === "brand";
+    }
+  }
+
+  // Quantity from first item
+  const quantityDispensed = eob.item?.[0]?.quantity?.value;
+
+  if (daysSupply == null && refillNumber == null && quantityDispensed == null) return null;
+
+  return { daysSupply, refillNumber, totalRefillsAuthorized, isBrandName, quantityDispensed };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P2: Care Team + Place of Service Extraction
+// ─────────────────────────────────────────────────────────────────────────────
+
+const POS_CODE_MAP: Record<string, string> = {
+  "11": "Office",
+  "12": "Patient Home",
+  "21": "Inpatient Hospital",
+  "22": "Outpatient Hospital",
+  "23": "Emergency Room",
+  "31": "Skilled Nursing Facility",
+  "32": "Nursing Facility",
+  "41": "Ambulance (Land)",
+  "42": "Ambulance (Air/Water)",
+  "50": "Federally Qualified Health Center",
+  "51": "Inpatient Psychiatric",
+  "61": "Comprehensive Inpatient Rehab",
+  "65": "End-Stage Renal Disease Facility",
+  "71": "State/Local Public Health Clinic",
+  "81": "Independent Laboratory",
+};
+
+function extractCareTeam(eob: FhirEOB): NonNullable<ClaimSummary["careTeam"]> {
+  if (!eob.careTeam || eob.careTeam.length === 0) return [];
+
+  return eob.careTeam
+    .map((member) => {
+      const name = member.provider?.display ?? "Unknown";
+      const role = member.role?.coding?.[0]?.display ?? member.role?.coding?.[0]?.code ?? "Provider";
+      const specialty = member.qualification?.coding?.[0]?.display ?? undefined;
+      // Extract NPI from reference (e.g., "Practitioner/1234567890")
+      const ref = member.provider?.reference ?? "";
+      const npi = ref.includes("/") ? ref.split("/").pop() : undefined;
+      return { npi, name, role, specialty };
+    })
+    .filter((m) => m.name !== "Unknown");
+}
+
+function extractPlaceOfService(eob: FhirEOB): string | undefined {
+  // Check item-level location first
+  for (const item of eob.item ?? []) {
+    const locCode = item.locationCodeableConcept?.coding?.[0]?.code;
+    if (locCode && POS_CODE_MAP[locCode]) return POS_CODE_MAP[locCode];
+    const locDisplay = item.locationCodeableConcept?.coding?.[0]?.display;
+    if (locDisplay) return locDisplay;
+  }
+  return undefined;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P3: Inpatient Field Extraction
+// ─────────────────────────────────────────────────────────────────────────────
+
+function isInpatientType(typeCode: string): boolean {
+  const upper = typeCode.toUpperCase();
+  return upper === "71" || upper === "60" || upper === "SNF" || upper === "HOSPICE";
+}
+
+function extractAdmissionType(eob: FhirEOB): string | undefined {
+  for (const info of eob.supportingInfo ?? []) {
+    const catCode = info.category?.coding?.[0]?.code?.toLowerCase() ?? "";
+    if (catCode === "admtype" || catCode === "typeofadmission" || catCode === "admissiontype") {
+      const code = info.code?.coding?.[0]?.code ?? "";
+      const display = info.code?.coding?.[0]?.display;
+      if (display) return display;
+      const admMap: Record<string, string> = { "1": "Emergency", "2": "Urgent", "3": "Elective", "4": "Newborn", "9": "Unknown" };
+      return admMap[code] ?? undefined;
+    }
+  }
+  return undefined;
+}
+
+function extractDRGCode(eob: FhirEOB): string | undefined {
+  for (const info of eob.supportingInfo ?? []) {
+    const catCode = info.category?.coding?.[0]?.code?.toLowerCase() ?? "";
+    if (catCode === "drg" || catCode === "clmdrg") {
+      return info.code?.coding?.[0]?.code ?? undefined;
+    }
+  }
+  return undefined;
+}
+
+const DISCHARGE_STATUS_MAP: Record<string, string> = {
+  "01": "Home",
+  "02": "Short-Term Hospital",
+  "03": "Skilled Nursing Facility",
+  "04": "Intermediate Care Facility",
+  "05": "Another Institution",
+  "06": "Home Under Care of Home Health",
+  "07": "Left Against Medical Advice",
+  "20": "Expired",
+  "30": "Still a Patient",
+  "43": "Federal Health Care Facility",
+  "50": "Hospice — Home",
+  "51": "Hospice — Medical Facility",
+  "61": "Swing Bed",
+  "62": "Inpatient Rehab",
+  "63": "Long-Term Care Hospital",
+  "65": "Psychiatric Hospital",
+};
+
+function extractDischargeStatus(eob: FhirEOB): string | undefined {
+  for (const info of eob.supportingInfo ?? []) {
+    const catCode = info.category?.coding?.[0]?.code?.toLowerCase() ?? "";
+    if (catCode === "discharge-status" || catCode === "dischargestatus" || catCode === "ptntdschrgsttscd") {
+      const code = info.code?.coding?.[0]?.code ?? "";
+      const display = info.code?.coding?.[0]?.display;
+      if (display) return display;
+      return DISCHARGE_STATUS_MAP[code] ?? undefined;
+    }
+  }
+  return undefined;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Coverage + Claim Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 function mapCoverageType(code: string, coverage: FhirCoverage): string {

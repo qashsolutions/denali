@@ -8,7 +8,14 @@
  * This module bridges that gap — mining clinical intelligence from claims.
  */
 
-import type { ClaimSummary, DiagnosisSummary, MedicationSummary } from "./transforms";
+import type {
+  ClaimSummary,
+  DiagnosisSummary,
+  MedicationSummary,
+  ScreeningHistory,
+  ProviderDetail,
+  HospitalizationSummary,
+} from "./transforms";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -103,12 +110,24 @@ export function extractMedicationsFromClaims(claims: ClaimSummary[]): Medication
       const claimDate = parseDate(claim.serviceDate);
       const isRecent = claimDate >= cutoffDate;
 
+      // PDE enrichment from claim data
+      const pde = claim.pdeInfo;
+
       const existing = medMap.get(normalized);
       if (existing) {
         // Update to most recent date and status
         if (claimDate > parseDate(existing.startDate)) {
           existing.startDate = claim.serviceDate;
+          existing.lastFillDate = claim.serviceDate;
           existing.status = isRecent ? "Active" : existing.status;
+          // Update PDE fields from most recent claim
+          if (pde) {
+            if (pde.daysSupply != null) existing.daysSupply = pde.daysSupply;
+            if (pde.refillNumber != null) existing.refillNumber = pde.refillNumber;
+            if (pde.totalRefillsAuthorized != null) existing.totalRefillsAuthorized = pde.totalRefillsAuthorized;
+            if (pde.isBrandName != null) existing.isBrandName = pde.isBrandName;
+            if (pde.quantityDispensed != null) existing.quantityDispensed = pde.quantityDispensed;
+          }
         }
       } else {
         medMap.set(normalized, {
@@ -117,8 +136,27 @@ export function extractMedicationsFromClaims(claims: ClaimSummary[]): Medication
           dosage: "", // Not available from EOB
           startDate: claim.serviceDate,
           isDiabetesMed,
+          daysSupply: pde?.daysSupply,
+          refillNumber: pde?.refillNumber,
+          totalRefillsAuthorized: pde?.totalRefillsAuthorized,
+          quantityDispensed: pde?.quantityDispensed,
+          isBrandName: pde?.isBrandName,
+          lastFillDate: claim.serviceDate,
         });
       }
+    }
+  }
+
+  // Compute estimated run-out dates and gap days
+  const now = new Date();
+  for (const med of medMap.values()) {
+    if (med.lastFillDate && med.daysSupply) {
+      const fillDate = parseDate(med.lastFillDate);
+      const runOut = new Date(fillDate);
+      runOut.setDate(runOut.getDate() + med.daysSupply);
+      med.estimatedRunOutDate = runOut.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      const gapMs = now.getTime() - runOut.getTime();
+      med.gapDays = Math.floor(gapMs / (1000 * 60 * 60 * 24));
     }
   }
 
@@ -127,6 +165,192 @@ export function extractMedicationsFromClaims(claims: ClaimSummary[]): Medication
     if (a.isDiabetesMed !== b.isDiabetesMed) return a.isDiabetesMed ? -1 : 1;
     return a.name.localeCompare(b.name);
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Screening Extraction (P0)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ScreeningSpec {
+  type: ScreeningHistory["screeningType"];
+  displayName: string;
+  recommendedFrequency: string;
+  overdueMonths: number;
+}
+
+const SCREENING_CPT_MAP: Record<string, ScreeningSpec> = {
+  "83036": { type: "a1c", displayName: "A1C Test", recommendedFrequency: "Every 3-6 months", overdueMonths: 12 },
+  "83037": { type: "a1c", displayName: "A1C Test", recommendedFrequency: "Every 3-6 months", overdueMonths: 12 },
+  "92250": { type: "eye-exam", displayName: "Diabetic Eye Exam", recommendedFrequency: "Yearly", overdueMonths: 15 },
+  "92134": { type: "eye-exam", displayName: "Diabetic Eye Exam", recommendedFrequency: "Yearly", overdueMonths: 15 },
+  "92228": { type: "eye-exam", displayName: "Diabetic Eye Exam", recommendedFrequency: "Yearly", overdueMonths: 15 },
+  "80053": { type: "metabolic-panel", displayName: "Metabolic Panel", recommendedFrequency: "Yearly", overdueMonths: 15 },
+  "80048": { type: "metabolic-panel", displayName: "Metabolic Panel", recommendedFrequency: "Yearly", overdueMonths: 15 },
+  "81001": { type: "kidney", displayName: "Kidney Screening", recommendedFrequency: "Yearly", overdueMonths: 15 },
+  "81003": { type: "kidney", displayName: "Kidney Screening", recommendedFrequency: "Yearly", overdueMonths: 15 },
+  "93000": { type: "ecg", displayName: "ECG/Heart Check", recommendedFrequency: "As recommended", overdueMonths: 24 },
+  "93005": { type: "ecg", displayName: "ECG/Heart Check", recommendedFrequency: "As recommended", overdueMonths: 24 },
+  "93010": { type: "ecg", displayName: "ECG/Heart Check", recommendedFrequency: "As recommended", overdueMonths: 24 },
+  "99213": { type: "office-visit", displayName: "Office Visit", recommendedFrequency: "Every 3-6 months", overdueMonths: 9 },
+  "99214": { type: "office-visit", displayName: "Office Visit", recommendedFrequency: "Every 3-6 months", overdueMonths: 9 },
+  "97802": { type: "nutrition", displayName: "Nutrition Counseling", recommendedFrequency: "As recommended", overdueMonths: 18 },
+  "97803": { type: "nutrition", displayName: "Nutrition Counseling", recommendedFrequency: "As recommended", overdueMonths: 18 },
+  "G0108": { type: "dsmt", displayName: "Diabetes Self-Management Training", recommendedFrequency: "Yearly", overdueMonths: 15 },
+  "G0109": { type: "dsmt", displayName: "Diabetes Self-Management Training", recommendedFrequency: "Yearly", overdueMonths: 15 },
+};
+
+/**
+ * Extract screening history from Carrier/Outpatient claims by matching CPT codes.
+ * Deduplicates by screening type, keeps most recent date.
+ */
+export function extractScreeningsFromClaims(claims: ClaimSummary[]): ScreeningHistory[] {
+  // Filter to Carrier and Outpatient claims
+  const relevantClaims = claims.filter(
+    (c) => c.type.includes("Carrier") || c.type.includes("Outpatient")
+  );
+
+  const screeningMap = new Map<string, { spec: ScreeningSpec; lastDate: Date; cptCodes: Set<string> }>();
+  const now = new Date();
+
+  for (const claim of relevantClaims) {
+    const codes = claim.procedureCodes;
+    if (!codes || codes.length === 0) continue;
+    const claimDate = parseDate(claim.serviceDate);
+
+    for (const code of codes) {
+      if (!code) continue;
+      const spec = SCREENING_CPT_MAP[code.toUpperCase()];
+      if (!spec) continue;
+
+      const existing = screeningMap.get(spec.type);
+      if (existing) {
+        existing.cptCodes.add(code);
+        if (claimDate > existing.lastDate) {
+          existing.lastDate = claimDate;
+        }
+      } else {
+        screeningMap.set(spec.type, {
+          spec,
+          lastDate: claimDate,
+          cptCodes: new Set([code]),
+        });
+      }
+    }
+  }
+
+  return Array.from(screeningMap.values()).map(({ spec, lastDate, cptCodes }) => {
+    const monthsSinceLast = (now.getFullYear() - lastDate.getFullYear()) * 12 + (now.getMonth() - lastDate.getMonth());
+    return {
+      screeningType: spec.type,
+      displayName: spec.displayName,
+      lastDate: lastDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+      monthsSinceLast,
+      isOverdue: monthsSinceLast >= spec.overdueMonths,
+      recommendedFrequency: spec.recommendedFrequency,
+      cptCodes: [...cptCodes],
+    };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Provider Extraction (P2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Extract unique providers from claim care teams.
+ * Aggregates by NPI (or name if no NPI), tracks visit count and claim types.
+ */
+export function extractProvidersFromClaims(claims: ClaimSummary[]): ProviderDetail[] {
+  const providerMap = new Map<string, {
+    name: string;
+    role: string;
+    specialty?: string;
+    visitCount: number;
+    lastSeen: Date;
+    claimTypes: Set<string>;
+  }>();
+
+  for (const claim of claims) {
+    if (!claim.careTeam || claim.careTeam.length === 0) continue;
+    const claimDate = parseDate(claim.serviceDate);
+
+    for (const member of claim.careTeam) {
+      const key = member.npi ?? member.name;
+      const existing = providerMap.get(key);
+      if (existing) {
+        existing.visitCount++;
+        existing.claimTypes.add(claim.type);
+        if (claimDate > existing.lastSeen) {
+          existing.lastSeen = claimDate;
+          // Update specialty if previously unknown
+          if (!existing.specialty && member.specialty) {
+            existing.specialty = member.specialty;
+          }
+        }
+      } else {
+        providerMap.set(key, {
+          name: member.name,
+          role: member.role,
+          specialty: member.specialty,
+          visitCount: 1,
+          lastSeen: claimDate,
+          claimTypes: new Set([claim.type]),
+        });
+      }
+    }
+  }
+
+  return Array.from(providerMap.entries())
+    .map(([key, p]) => ({
+      npi: key.match(/^\d+$/) ? key : "",
+      name: p.name,
+      role: p.role,
+      specialty: p.specialty,
+      visitCount: p.visitCount,
+      lastSeen: p.lastSeen.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+      claimTypes: [...p.claimTypes],
+    }))
+    .sort((a, b) => b.visitCount - a.visitCount);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hospitalization Extraction (P3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Extract hospitalization summaries from Inpatient/SNF claims.
+ */
+export function extractHospitalizationsFromClaims(claims: ClaimSummary[]): HospitalizationSummary[] {
+  const now = new Date();
+
+  return claims
+    .filter((c) => {
+      const t = c.type.toLowerCase();
+      return t.includes("inpatient") || t.includes("snf") || t.includes("skilled nursing");
+    })
+    .map((claim) => {
+      const admDate = parseDate(claim.serviceDate);
+      const dischDate = claim.dischargeDate ? parseDate(claim.dischargeDate) : admDate;
+      const lengthOfStay = Math.max(1, Math.ceil((dischDate.getTime() - admDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const daysSinceDischarge = Math.ceil((now.getTime() - dischDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      return {
+        admissionDate: claim.serviceDate,
+        dischargeDate: claim.dischargeDate ?? claim.serviceDate,
+        lengthOfStay,
+        admissionType: claim.admissionType,
+        dischargeStatus: claim.dischargeStatus,
+        drgDescription: undefined, // DRG code-to-description mapping not included to keep scope minimal
+        diagnoses: claim.diagnosis,
+        provider: claim.provider,
+        totalCharged: claim.totalCharged,
+        medicarePaid: claim.medicarePaid,
+        youOwe: claim.youOwe,
+        daysSinceDischarge,
+        needsFollowUp: daysSinceDischarge <= 30 && daysSinceDischarge >= 0,
+      };
+    })
+    .sort((a, b) => parseDate(b.dischargeDate).getTime() - parseDate(a.dischargeDate).getTime());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

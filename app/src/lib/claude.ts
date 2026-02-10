@@ -141,8 +141,39 @@ export interface SessionState {
     name: string;
     status: string;
     isDiabetesMed: boolean;
+    daysSupply?: number;
+    isBrandName?: boolean;
+    gapDays?: number;
   }>;
   diabetesClassification?: "diabetic" | "pre-diabetic" | "at-risk" | "none";
+
+  // Screenings (P0 — from CPT codes in Carrier/Outpatient claims)
+  screenings?: Array<{
+    screeningType: string;
+    displayName: string;
+    lastDate: string;
+    monthsSinceLast: number;
+    isOverdue: boolean;
+  }>;
+
+  // Providers (P2 — from care team in claims)
+  providers?: Array<{
+    name: string;
+    specialty?: string;
+    visitCount: number;
+    lastSeen: string;
+  }>;
+
+  // Hospitalizations (P3 — from inpatient claims)
+  hospitalizations?: Array<{
+    admissionDate: string;
+    dischargeDate: string;
+    lengthOfStay: number;
+    diagnoses: string[];
+    provider: string;
+    daysSinceDischarge: number;
+    needsFollowUp: boolean;
+  }>;
 
   // Lab trends (longitudinal, from diabetes_snapshots)
   labTrends?: Array<{ date: string; value: number; loincCode: string }>;

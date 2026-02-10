@@ -24,7 +24,7 @@ export default function DiabetesPage() {
   const router = useRouter();
   const { authState } = useAuth();
   const isSignedIn = !!authState.userId;
-  const { labs, conditions, medications, isConnected, isLoading } = useHealthData();
+  const { labs, conditions, medications, screenings, providers, hospitalizations, isConnected, isLoading } = useHealthData();
   const { consent } = useConsent();
   const { a1cHistory } = useDiabetesSnapshots();
   const { entries: logEntries, addEntry, deleteEntry } = useDiabetesLog();
@@ -68,6 +68,8 @@ export default function DiabetesPage() {
           medications={medications}
           classification={classification}
           a1cHistory={a1cHistory}
+          providers={providers}
+          hospitalizations={hospitalizations}
         />
       )}
 
@@ -173,7 +175,7 @@ export default function DiabetesPage() {
 
       {/* Screening Reminders (connected) */}
       {isConnected && !isLoading && (
-        <ScreeningReminders labs={labs} classification={classification} />
+        <ScreeningReminders screenings={screenings} classification={classification} />
       )}
 
       {/* Quick Log (any signed-in user) */}

@@ -7,6 +7,8 @@ import type {
   DiagnosisSummary,
   MedicationSummary,
   DiabetesClassification,
+  ProviderDetail,
+  HospitalizationSummary,
 } from "@/lib/fhir/transforms";
 import type { SnapshotPoint } from "@/hooks/useDiabetesSnapshots";
 
@@ -16,6 +18,8 @@ interface RiskAlertsProps {
   medications: MedicationSummary[];
   classification: DiabetesClassification | null;
   a1cHistory?: SnapshotPoint[];
+  providers?: ProviderDetail[];
+  hospitalizations?: HospitalizationSummary[];
 }
 
 interface Alert {
@@ -24,7 +28,7 @@ interface Alert {
   chatMessage: string;
 }
 
-export function RiskAlerts({ labs, conditions, medications, classification, a1cHistory }: RiskAlertsProps) {
+export function RiskAlerts({ labs, conditions, medications, classification, a1cHistory, providers, hospitalizations }: RiskAlertsProps) {
   const router = useRouter();
 
   const alerts = useMemo(() => {
@@ -56,6 +60,19 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
       });
     }
 
+    // Medication refill gap (P1) — overdue by 14+ days
+    const overdueMeds = medications.filter(
+      (m) => m.isDiabetesMed && m.gapDays != null && m.gapDays >= 14
+    );
+    if (overdueMeds.length > 0) {
+      const medName = overdueMeds[0].name;
+      result.push({
+        severity: "amber",
+        title: "Medication refill may be overdue",
+        chatMessage: `My ${medName} refill may be overdue. Can you help me understand my options?`,
+      });
+    }
+
     // A1C trending up (compare last 2 points from snapshot history)
     if (a1cHistory && a1cHistory.length >= 2) {
       const latest = a1cHistory[a1cHistory.length - 1];
@@ -69,8 +86,35 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
       }
     }
 
+    // No endocrinologist visits (P2) — if diabetic and no endo in providers
+    if (hasDiabetesDx && providers && providers.length > 0) {
+      const hasEndo = providers.some(
+        (p) => p.specialty?.toLowerCase().includes("endocrin")
+      );
+      if (!hasEndo) {
+        result.push({
+          severity: "amber",
+          title: "No endocrinologist visits found",
+          chatMessage: "I have diabetes but haven't seen an endocrinologist. Should I get a referral?",
+        });
+      }
+    }
+
+    // Post-discharge follow-up (P3) — recent discharge within 30 days
+    if (hospitalizations && hospitalizations.length > 0) {
+      const recentDischarges = hospitalizations.filter((h) => h.needsFollowUp);
+      if (recentDischarges.length > 0) {
+        const h = recentDischarges[0];
+        result.push({
+          severity: "red",
+          title: "Post-discharge follow-up needed",
+          chatMessage: `I was discharged from ${h.provider} ${h.daysSinceDischarge} days ago. What follow-up care should I schedule?`,
+        });
+      }
+    }
+
     return result;
-  }, [labs, conditions, medications, classification, a1cHistory]);
+  }, [labs, conditions, medications, classification, a1cHistory, providers, hospitalizations]);
 
   if (alerts.length === 0) return null;
 

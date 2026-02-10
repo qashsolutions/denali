@@ -35,14 +35,21 @@ function ChatContent() {
   const [paymentToast, setPaymentToast] = useState<string | null>(null);
 
   // Health data → sessionState bridge
-  const { coverage, claims, labs, conditions, medications, isConnected } = useHealthData();
+  const { coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, isConnected } = useHealthData();
   const { a1cHistory } = useDiabetesSnapshots();
 
   const initialSessionState = useMemo(() => {
     if (!isConnected) return undefined;
 
     const conditionsForState = conditions.map(c => ({ code: c.code, name: c.name, category: c.category }));
-    const medsForState = medications.map(m => ({ name: m.name, status: m.status, isDiabetesMed: m.isDiabetesMed }));
+    const medsForState = medications.map(m => ({
+      name: m.name,
+      status: m.status,
+      isDiabetesMed: m.isDiabetesMed,
+      daysSupply: m.daysSupply,
+      isBrandName: m.isBrandName,
+      gapDays: m.gapDays,
+    }));
 
     const { classification: diabetesClassification } = classifyDiabetesStatus(conditions, labs, medications);
 
@@ -59,6 +66,28 @@ function ChatContent() {
       conditions: conditionsForState,
       medications: medsForState,
       diabetesClassification,
+      screenings: screenings.map(s => ({
+        screeningType: s.screeningType,
+        displayName: s.displayName,
+        lastDate: s.lastDate,
+        monthsSinceLast: s.monthsSinceLast,
+        isOverdue: s.isOverdue,
+      })),
+      providers: providers.slice(0, 10).map(p => ({
+        name: p.name,
+        specialty: p.specialty,
+        visitCount: p.visitCount,
+        lastSeen: p.lastSeen,
+      })),
+      hospitalizations: hospitalizations.map(h => ({
+        admissionDate: h.admissionDate,
+        dischargeDate: h.dischargeDate,
+        lengthOfStay: h.lengthOfStay,
+        diagnoses: h.diagnoses,
+        provider: h.provider,
+        daysSinceDischarge: h.daysSinceDischarge,
+        needsFollowUp: h.needsFollowUp,
+      })),
     };
 
     // Add longitudinal lab trends if available
@@ -71,7 +100,7 @@ function ChatContent() {
     }
 
     return partial;
-  }, [isConnected, coverage, claims, labs, conditions, medications, a1cHistory]);
+  }, [isConnected, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, a1cHistory]);
 
   useEffect(() => {
     const payment = searchParams.get("payment");
