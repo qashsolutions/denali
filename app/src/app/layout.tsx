@@ -3,6 +3,7 @@ import { Playfair_Display } from "next/font/google";
 import { BRAND } from "@/config";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -40,11 +41,34 @@ export const viewport: Viewport = {
   ],
 };
 
-// Service worker registration script
+// Service worker registration with update detection + offline queue sync
 const swScript = `
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
-      navigator.serviceWorker.register('/sw.js');
+      navigator.serviceWorker.register('/sw.js').then(function(reg) {
+        // Check for updates periodically (every 60 min)
+        setInterval(function() { reg.update(); }, 60 * 60 * 1000);
+        // Auto-activate waiting worker
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+        reg.addEventListener('updatefound', function() {
+          var newWorker = reg.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', function() {
+              if (newWorker.state === 'activated') {
+                // New SW activated — could show update toast, but keep it simple
+              }
+            });
+          }
+        });
+      });
+    });
+    // On reconnect: tell SW to process offline queue
+    window.addEventListener('online', function() {
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'SYNC_QUEUE' });
+      }
     });
   }
 `;
@@ -93,6 +117,7 @@ export default function RootLayout({
       <body className="antialiased">
         <ThemeProvider>
           <AppHeader />
+          <OfflineBanner />
           {children}
         </ThemeProvider>
       </body>

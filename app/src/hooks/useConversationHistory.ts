@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getClient } from "@/lib/supabase";
+import { cacheSet, cacheGetIfFresh, STORES, TTL } from "@/lib/offline-cache";
 
 export interface ConversationHistoryItem {
   id: string;
@@ -67,9 +68,27 @@ export function useConversationHistory(): UseConversationHistoryReturn {
       );
 
       setConversations(historyItems);
+
+      // Write-through: cache for offline access (fire-and-forget)
+      cacheSet(STORES.CONVERSATIONS, "list", historyItems);
     } catch (error) {
       console.error("Failed to fetch conversation history:", error);
-      setConversations([]);
+
+      // Offline fallback: try IndexedDB cache
+      const cached = await cacheGetIfFresh<ConversationHistoryItem[]>(
+        STORES.CONVERSATIONS,
+        "list",
+        TTL.CONVERSATIONS
+      );
+      if (cached) {
+        // Restore Date objects from serialized strings
+        setConversations(
+          cached.data.map((c) => ({ ...c, createdAt: new Date(c.createdAt) }))
+        );
+        setIsVerifiedUser(true);
+      } else {
+        setConversations([]);
+      }
     } finally {
       setIsLoading(false);
     }

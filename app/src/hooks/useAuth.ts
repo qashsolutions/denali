@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { getClient } from "@/lib/supabase";
 import { PRICING } from "@/config";
+import { cacheSet, cacheGetIfFresh, STORES, TTL } from "@/lib/offline-cache";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 export interface AuthState {
@@ -157,9 +158,39 @@ export function useAuth(): UseAuthReturn {
           trialDaysRemaining,
           isAdmin,
         }));
+
+        // Cache non-sensitive profile data for offline (fire-and-forget)
+        cacheSet(STORES.PROFILE, "profile", {
+          plan: userPlan,
+          role: userRole,
+          appealCount,
+          isAdmin,
+          trialStatus,
+          trialDaysRemaining,
+        });
       } catch (error) {
         console.error("Error loading profile data:", error);
-        // Basic auth already set — profile fetch failure is non-fatal
+        // Basic auth already set — try offline cache for profile data
+        const cached = await cacheGetIfFresh<{
+          plan: string;
+          role: string;
+          appealCount: number;
+          isAdmin: boolean;
+          trialStatus: string;
+          trialDaysRemaining: number;
+        }>(STORES.PROFILE, "profile", TTL.PROFILE);
+        if (cached) {
+          const d = cached.data;
+          setAuthState((prev) => ({
+            ...prev,
+            plan: d.plan as AuthState["plan"],
+            role: d.role as AuthState["role"],
+            appealCount: d.appealCount,
+            isAdmin: d.isAdmin,
+            trialStatus: d.trialStatus as AuthState["trialStatus"],
+            trialDaysRemaining: d.trialDaysRemaining,
+          }));
+        }
       }
     }
 

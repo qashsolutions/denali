@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { cacheSet, cacheGetIfFresh, queueOfflineRequest, STORES, TTL } from "@/lib/offline-cache";
 
 export interface LogEntry {
   id: string;
@@ -40,9 +41,20 @@ export function useDiabetesLog(): UseDiabetesLogReturn {
       if (res.ok) {
         const data = await res.json();
         setEntries(data.entries ?? []);
+        // Write-through cache (fire-and-forget)
+        cacheSet(STORES.DIABETES_LOG, "entries", data.entries ?? []);
       }
     } catch (err) {
       console.warn("[DiabetesLog] Fetch failed:", err);
+      // Offline fallback
+      const cached = await cacheGetIfFresh<LogEntry[]>(
+        STORES.DIABETES_LOG,
+        "entries",
+        TTL.DIABETES_LOG
+      );
+      if (cached) {
+        setEntries(cached.data);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -54,11 +66,12 @@ export function useDiabetesLog(): UseDiabetesLogReturn {
 
   const addEntry = useCallback(
     async (entry: NewLogEntry): Promise<boolean> => {
+      const body = JSON.stringify(entry);
       try {
         const res = await fetch("/api/diabetes/log", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(entry),
+          body,
         });
         if (res.ok) {
           const data = await res.json();
@@ -67,7 +80,24 @@ export function useDiabetesLog(): UseDiabetesLogReturn {
         }
         return false;
       } catch {
-        return false;
+        // Offline: optimistic local add + queue for sync
+        const optimisticEntry: LogEntry = {
+          id: `offline-${Date.now()}`,
+          logged_at: entry.logged_at || new Date().toISOString(),
+          entry_type: entry.entry_type,
+          glucose_value: entry.glucose_value ?? null,
+          glucose_context: entry.glucose_context ?? null,
+          activity_minutes: entry.activity_minutes ?? null,
+          activity_type: entry.activity_type ?? null,
+          note: entry.note ?? null,
+        };
+        setEntries((prev) => [optimisticEntry, ...prev].slice(0, 30));
+        queueOfflineRequest({
+          url: "/api/diabetes/log",
+          method: "POST",
+          body,
+        });
+        return true;
       }
     },
     []

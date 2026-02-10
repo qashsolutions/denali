@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { cacheSet, cacheGetIfFresh, STORES, TTL } from "@/lib/offline-cache";
 import type {
   PatientSummary,
   CoverageSummary,
@@ -80,8 +81,53 @@ export function useHealthData(): UseHealthDataReturn {
       setProviders(data.providers ?? []);
       setHospitalizations(data.hospitalizations ?? []);
       setLastSynced(data.lastSynced ? new Date(data.lastSynced) : null);
+
+      // Write-through: cache full health snapshot (fire-and-forget)
+      cacheSet(STORES.HEALTH_DATA, "snapshot", {
+        connected: data.connected,
+        patient: data.patient,
+        coverage: data.coverage,
+        claims: data.claims,
+        labs: data.labs,
+        conditions: data.conditions,
+        medications: data.medications,
+        screenings: data.screenings,
+        providers: data.providers,
+        hospitalizations: data.hospitalizations,
+        lastSynced: data.lastSynced,
+      });
     } catch {
-      setError("Unable to connect. Please try again.");
+      // Offline fallback: try IndexedDB cache
+      const cached = await cacheGetIfFresh<{
+        connected: boolean;
+        patient: PatientSummary | null;
+        coverage: CoverageSummary[];
+        claims: ClaimSummary[];
+        labs: LabResult[];
+        conditions: DiagnosisSummary[];
+        medications: MedicationSummary[];
+        screenings: ScreeningHistory[];
+        providers: ProviderDetail[];
+        hospitalizations: HospitalizationSummary[];
+        lastSynced: string | null;
+      }>(STORES.HEALTH_DATA, "snapshot", TTL.HEALTH_DATA);
+
+      if (cached) {
+        const d = cached.data;
+        setIsConnected(d.connected ?? false);
+        setPatient(d.patient ?? null);
+        setCoverage(d.coverage ?? []);
+        setClaims(d.claims ?? []);
+        setLabs(d.labs ?? []);
+        setConditions(d.conditions ?? []);
+        setMedications(d.medications ?? []);
+        setScreenings(d.screenings ?? []);
+        setProviders(d.providers ?? []);
+        setHospitalizations(d.hospitalizations ?? []);
+        setLastSynced(d.lastSynced ? new Date(d.lastSynced) : null);
+      } else {
+        setError("Unable to connect. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }

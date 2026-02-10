@@ -1,6 +1,7 @@
 "use client";
 
-import { MountainIcon } from "@/components/icons";
+import { MountainIcon, HeartPulseIcon, ChatBubbleIcon } from "@/components/icons";
+import Link from "next/link";
 
 export default function OfflinePage() {
   return (
@@ -14,6 +15,27 @@ export default function OfflinePage() {
         Check your internet connection and try again. Some features need a
         connection to work.
       </p>
+
+      <div className="flex flex-col gap-3 w-full max-w-xs mb-8">
+        <Link
+          href="/app/health"
+          className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] hover:bg-[var(--bg-tertiary)] transition-colors"
+        >
+          <HeartPulseIcon className="w-5 h-5 text-rose-500 shrink-0" />
+          <span className="text-sm font-medium text-[var(--text-primary)]">
+            View saved health records
+          </span>
+        </Link>
+        <Link
+          href="/app/chat"
+          className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] hover:bg-[var(--bg-tertiary)] transition-colors"
+        >
+          <ChatBubbleIcon className="w-5 h-5 text-blue-500 shrink-0" />
+          <span className="text-sm font-medium text-[var(--text-primary)]">
+            View past conversations
+          </span>
+        </Link>
+      </div>
 
       <button
         onClick={() => window.location.reload()}

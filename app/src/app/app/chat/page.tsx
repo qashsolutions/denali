@@ -17,6 +17,7 @@ import { CmsPledge } from "@/components/ui";
 import { useChat } from "@/hooks/useChat";
 import { useAuth } from "@/hooks/useAuth";
 import { useHealthData } from "@/hooks/useHealthData";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useDiabetesSnapshots } from "@/hooks/useDiabetesSnapshots";
 import { classifyDiabetesStatus } from "@/lib/fhir/transforms";
 import {
@@ -36,6 +37,7 @@ function ChatContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { authState } = useAuth();
+  const { isOnline } = useOnlineStatus();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [pendingInput, setPendingInput] = useState<string | undefined>(
     undefined
@@ -314,8 +316,8 @@ function ChatContent() {
             </div>
             <ChatInput
               onSend={sendMessage}
-              disabled={isLoading}
-              placeholder="Ask about Medicare, coverage, or health..."
+              disabled={isLoading || !isOnline}
+              placeholder={isOnline ? "Ask about Medicare, coverage, or health..." : "Chat requires an internet connection"}
               externalValue={pendingInput}
               onExternalValueUsed={handlePendingInputUsed}
               suggestions={

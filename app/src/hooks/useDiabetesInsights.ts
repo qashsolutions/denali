@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { cacheSet, cacheGetIfFresh, STORES, TTL } from "@/lib/offline-cache";
 
 export interface StoredInsight {
   id: string;
@@ -29,9 +30,22 @@ export function useDiabetesInsights(): UseDiabetesInsightsReturn {
         if (res.ok) {
           const data = await res.json();
           setInsight(data.insight ?? null);
+          // Write-through cache (fire-and-forget)
+          if (data.insight) {
+            cacheSet(STORES.DIABETES_INSIGHTS, "current", data.insight);
+          }
         }
       } catch (err) {
         console.warn("[DiabetesInsights] Fetch failed:", err);
+        // Offline fallback
+        const cached = await cacheGetIfFresh<StoredInsight>(
+          STORES.DIABETES_INSIGHTS,
+          "current",
+          TTL.INSIGHTS
+        );
+        if (cached) {
+          setInsight(cached.data);
+        }
       } finally {
         setIsLoading(false);
       }

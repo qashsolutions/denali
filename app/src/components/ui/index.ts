@@ -10,3 +10,4 @@ export {
 } from "./Card";
 export { PrintButton } from "./PrintButton";
 export { CmsPledge } from "./CmsPledge";
+export { OfflineBanner } from "./OfflineBanner";
