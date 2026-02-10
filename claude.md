@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-11
+     Last updated: 2026-02-10
      Maintainer: @cvr
 -->
 
@@ -124,12 +124,12 @@ Where to find specific logic in the codebase.
 | `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
 | `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
 | `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
-| `src/hooks/useAuth.ts` | Auth state: email OTP, TOTP MFA enroll/challenge, AAL tracking, plan/role/trial/admin detection, appeal access gating. Profile data fetched from `/api/profile` (server route), NOT browser Supabase client |
+| `src/hooks/useAuth.ts` | Auth state: email OTP, TOTP MFA enroll/challenge, AAL tracking, plan/role/trial/admin detection, credit-based appeal access gating (`appealCredits`), auto-trial on signup. Profile data fetched from `/api/profile` (server route), NOT browser Supabase client |
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table, gates health data injection |
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations. IndexedDB write-through + offline fallback |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
-| `src/config/pricing.ts` | Pricing constants: free appeal limit, trial duration, daily chat limits, Stripe price IDs. `MONTHLY.appealLimit: 0` = unlimited |
-| `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade), `handleSubscriptionEvent()` (lifecycle). Uses admin client |
+| `src/config/pricing.ts` | Pricing constants: credit amounts (`TRIAL_APPEAL_CREDITS: 1`, `MONTHLY_APPEAL_CREDITS: 3`), trial duration, daily chat limits (`ANON: 1`, `TRIAL: 3`, `PER_APPEAL: 5`, `PAID: 0`), Stripe price IDs. `MONTHLY.appealLimit: 3` |
+| `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade + credit add), `handleSubscriptionEvent()` (lifecycle + monthly credit reset). Uses admin client |
 | `src/components/payment/PaywallModal.tsx` | Paywall UI: plan selection (single/monthly), Stripe checkout redirect. CSS variables for theme. No dev bypass |
 | `src/components/appeal/AppealGate.tsx` | Appeal access orchestration: email OTP → TOTP → access check → PaywallModal pipeline |
 | `src/middleware.ts` | Supabase SSR middleware. Refreshes auth tokens on every request to prevent browser/server refresh token race. MUST run before any Supabase client call |
@@ -138,7 +138,7 @@ Where to find specific logic in the codebase.
 | `src/hooks/useOnlineStatus.ts` | SSR-safe hook: `navigator.onLine` + `online`/`offline` events. Returns `{ isOnline, wasOffline }` |
 | `src/components/ui/OfflineBanner.tsx` | Fixed amber-accent banner below AppHeader when offline. Auto-dismisses on reconnect |
 | `src/hooks/useConversationHistory.ts` | Chat sidebar history. Fetches from `/api/conversations` (server route, cookie-authenticated) — NOT browser Supabase client. Subscribes to `onAuthStateChange` for re-fetch on sign-in/out. Groups conversations by date. IndexedDB write-through + offline fallback |
-| `src/lib/conversation-service.ts` | Conversation persistence: create, load, claim, save messages, appeals, feedback, events. Uses `getClient()` singleton for auth context |
+| `src/lib/conversation-service.ts` | Conversation persistence: create, load, claim, save messages, appeals (+ credit decrement), feedback, events. Uses `getClient()` singleton for auth context |
 | `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date with timestamps. Refreshes on both new conversation creation AND new chat click (via `useRef` tracking previous conversationId). No sign-in prompt — anon users see "No conversations yet" |
 | `src/types/database.ts` | Supabase-generated TypeScript types. Regenerate with `npx supabase gen types` |
 
@@ -148,7 +148,7 @@ Where to find specific logic in the codebase.
 src/app/api/
   chat/route.ts               # Main chat with Claude + tools + MCP
   conversations/route.ts      # Conversation history (server-side, cookie-auth)
-  profile/route.ts            # User profile: plan, role, is_admin, appeal count (server-side, cookie-auth)
+  profile/route.ts            # User profile: plan, role, is_admin, appeal count + credits (server-side, cookie-auth)
   appeal-outcome/route.ts     # Record appeal results
   account/delete/route.ts     # GDPR/CCPA account deletion
   checkout/route.ts           # Stripe payment
@@ -265,7 +265,7 @@ User-facing (plain English):        Internal (codes, never shown):
 | `users` | Auth, phone (primary), email, plan, `is_admin` (bypass all limits), theme, accessibility settings |
 | `user_verification` | Email + mobile OTP status |
 | `subscriptions` | Plan type, Stripe customer ID, billing status, `trial_start`/`trial_end`/`trial_converted` |
-| `usage` | Appeal count per phone number |
+| `usage` | Appeal count (lifetime) + appeal credits (available) per email. Credits decremented on appeal save, added by Stripe fulfillment |
 | `conversations` | Chat history per user |
 | `messages` | Individual messages (role: user/assistant) |
 | `appeals` | Generated appeal letters with codes, policy refs, `carc_codes TEXT[]`, `rarc_codes TEXT[]` |
@@ -308,8 +308,11 @@ User-facing (plain English):        Internal (codes, never shown):
 
 | Function | Purpose |
 |----------|---------|
-| `check_appeal_access(email)` | Returns 'free', 'paywall', or 'allowed' |
-| `increment_appeal_count(email)` | Increments usage counter |
+| `check_appeal_access(email)` | Returns 'free', 'paywall', or 'allowed' (legacy — client now checks `appeal_credits` directly) |
+| `increment_appeal_count(email)` | Increments lifetime appeal counter |
+| `decrement_appeal_credit(p_email)` | Decrements available credit, returns remaining (-1 if none). SECURITY DEFINER |
+| `add_appeal_credits(p_email, p_credits)` | Adds credits (used by Stripe single-payment fulfillment). SECURITY DEFINER |
+| `reset_monthly_appeal_credits(p_email, p_credits)` | Resets credits to N (used by Stripe monthly renewal). SECURITY DEFINER |
 | `process_feedback(message_id, rating, correction)` | Handle thumbs up/down, update mappings |
 | `update_symptom_mapping(phrase, code, boost)` | Upsert symptom -> ICD-10 |
 | `update_procedure_mapping(phrase, code, boost)` | Upsert procedure -> CPT |
@@ -473,7 +476,7 @@ Currently in **sandbox mode** — switch to live keys for production.
 
 Key webhook events: `checkout.session.completed` → `fulfillCheckoutSession()` (reads metadata → plan upgrade). `customer.subscription.updated/deleted` → `handleSubscriptionEvent()` (syncs status). `invoice.payment_failed` → marks `past_due`.
 
-Subscription states: `active` (full access) → `past_due` (retry) → `cancelled` (reverts to free).
+Subscription states: `active` (full access) → `past_due` (retry) → `cancelled` (reverts to expired/locked).
 
 ### Stripe Critical Rules
 
@@ -495,7 +498,7 @@ FHIR_TOKEN_ENCRYPTION_KEY=...     # 32-byte hex key for AES-256-GCM token encryp
 STRIPE_SECRET_KEY=sk_...                       # Stripe secret key (sandbox or live)
 STRIPE_WEBHOOK_SECRET=whsec_...                # Stripe webhook signing secret
 STRIPE_PRICE_PAY_PER_CLAIM=price_...           # Stripe Price ID for $10 single appeal
-STRIPE_PRICE_UNLIMITED_MONTHLY=price_...       # Stripe Price ID for $25/month subscription
+STRIPE_PRICE_UNLIMITED_MONTHLY=price_...       # Stripe Price ID for $20/month subscription
 STRIPE_PRICE_UNLIMITED_ANNUAL=price_...        # Stripe Price ID for annual plan (reserved)
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...      # Stripe publishable key (client-side, not currently used)
 ```
@@ -668,7 +671,7 @@ Designed for rural Medicare patients on spotty connections. Caches API responses
 | `health-data` | `"snapshot"` | 24h | Full health snapshot (patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations) |
 | `diabetes-log` | `"entries"` | 24h | `LogEntry[]` |
 | `diabetes-insights` | `"current"` | 24h | `StoredInsight` |
-| `profile` | `"profile"` | 4h | Non-sensitive profile data (plan, role, appealCount, isAdmin, trialStatus) |
+| `profile` | `"profile"` | 4h | Non-sensitive profile data (plan, role, appealCount, appealCredits, isAdmin, trialStatus) |
 | `offline-queue` | Auto-generated ID | — | Failed POST requests awaiting replay |
 
 All operations are try/catch guarded — gracefully degrades if IndexedDB is unavailable (private browsing, Safari restrictions).
