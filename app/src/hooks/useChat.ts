@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { Message } from "@/types";
+import type { FileAttachment } from "@/types/attachment";
 import type { ChecklistData } from "@/components/chat/PrintableChecklist";
 import { type SessionState, createDefaultSessionState } from "@/lib/claude";
 import { MEDICARE_CONSTANTS } from "@/config";
@@ -48,7 +49,7 @@ interface UseChatReturn {
   checklistData: ChecklistData | null;
   userEmail: string | null;
   appealData: AppealLetterData | null;
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, attachment?: FileAttachment) => Promise<void>;
   clearMessages: () => void;
   resetChat: () => void;
   submitFeedback: (messageId: string, rating: "up" | "down") => Promise<void>;
@@ -245,8 +246,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     }
   }, [userId, conversationId]);
 
-  const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim()) return;
+  const sendMessage = useCallback(async (content: string, attachment?: FileAttachment) => {
+    if (!content.trim() && !attachment) return;
 
     // Cancel any pending request
     if (abortControllerRef.current) {
@@ -260,11 +261,16 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       abortControllerRef.current?.abort();
     }, 330_000);
 
-    // Create user message
+    // Create user message (with attachment marker for display)
+    let displayContent = content.trim();
+    if (attachment) {
+      const marker = `[Attached: ${attachment.fileName}]`;
+      displayContent = displayContent ? `${displayContent}\n\n${marker}` : marker;
+    }
     const userMessage: Message = {
       id: generateId(),
       role: "user",
-      content: content.trim(),
+      content: displayContent,
       timestamp: new Date(),
     };
 
@@ -294,6 +300,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           messages: apiMessages,
           conversationId: currentConversationId,
           sessionState,
+          ...(attachment ? { attachment } : {}),
         }),
         signal: abortControllerRef.current.signal,
       });

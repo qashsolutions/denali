@@ -21,6 +21,7 @@ import { useDiabetesSnapshots } from "@/hooks/useDiabetesSnapshots";
 import { classifyDiabetesStatus } from "@/lib/fhir/transforms";
 import { ShieldCheckIcon, ScaleIcon, DiabetesIcon } from "@/components/icons";
 import type { SessionState } from "@/lib/claude";
+import { getUploadLimitForPlan } from "@/config/pricing";
 
 
 function ChatContent() {
@@ -37,6 +38,15 @@ function ChatContent() {
   // Health data → sessionState bridge
   const { coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, isConnected } = useHealthData();
   const { a1cHistory } = useDiabetesSnapshots();
+
+  // Compute upload limit based on user's plan
+  const uploadLimit = useMemo(() => {
+    return getUploadLimitForPlan(
+      authState.plan || null,
+      authState.isAdmin || false,
+      !!authState.email
+    );
+  }, [authState.plan, authState.isAdmin, authState.email]);
 
   const initialSessionState = useMemo(() => {
     if (!isConnected) return undefined;
@@ -278,6 +288,7 @@ function ChatContent() {
                 currentAction.type === "none" ? suggestions : []
               }
               onSuggestionClick={handleSuggestionSelect}
+              maxFileSizeBytes={uploadLimit}
             />
           </Container>
         </div>

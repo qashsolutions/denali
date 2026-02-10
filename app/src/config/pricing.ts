@@ -38,7 +38,50 @@ export const PRICING = {
     appealLimit: 0, // 0 = unlimited
     stripePriceId: process.env.STRIPE_PRICE_UNLIMITED_MONTHLY || "price_unlimited_monthly",
   },
+  /** File upload size limits (bytes). 0 = disabled (anon), -1 = unlimited (admin). */
+  UPLOAD_LIMITS: {
+    ANON: 0 as number,
+    FREE: 2 * 1024 * 1024 as number,
+    TRIAL: 2 * 1024 * 1024 as number,
+    PER_APPEAL: 6 * 1024 * 1024 as number,
+    MONTHLY: 10 * 1024 * 1024 as number,
+    ADMIN: -1 as number,
+  },
 } as const;
+
+/**
+ * Get the upload size limit for a user's plan.
+ * Returns 0 for anon (disabled), -1 for admin (unlimited).
+ * Returns byte limit for other plans.
+ */
+export function getUploadLimitForPlan(
+  plan: string | null,
+  isAdmin: boolean,
+  isAuthenticated: boolean
+): number {
+  if (!isAuthenticated) return PRICING.UPLOAD_LIMITS.ANON;
+  if (isAdmin) return PRICING.UPLOAD_LIMITS.ADMIN;
+  switch (plan) {
+    case "monthly":
+      return PRICING.UPLOAD_LIMITS.MONTHLY;
+    case "per_appeal":
+      return PRICING.UPLOAD_LIMITS.PER_APPEAL;
+    case "trial":
+      return PRICING.UPLOAD_LIMITS.TRIAL;
+    default:
+      return PRICING.UPLOAD_LIMITS.FREE;
+  }
+}
+
+/**
+ * Format bytes as human-readable string (e.g., "2 MB")
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${Math.round(bytes / (1024 * 1024))} MB`;
+}
 
 /**
  * Format price for display

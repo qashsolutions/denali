@@ -51,9 +51,12 @@ import {
 } from "@/lib/learning";
 import { saveAppeal, getUnreportedOutcome } from "@/lib/conversation-service";
 import { FEEDBACK_CONFIG, API_CONFIG, PRICING } from "@/config";
+import { getUploadLimitForPlan, formatFileSize } from "@/config/pricing";
 import { logAudit } from "@/lib/audit";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { createHash } from "crypto";
+import type { FileAttachment } from "@/types/attachment";
+import { ALLOWED_MEDIA_TYPES } from "@/types/attachment";
 
 // Request body type
 interface ChatRequestBody {
@@ -63,6 +66,7 @@ interface ChatRequestBody {
   }>;
   conversationId?: string;
   sessionState?: SessionState;
+  attachment?: FileAttachment;
 }
 
 // Response type
@@ -158,6 +162,54 @@ export async function POST(request: NextRequest) {
           { status: 429 }
         );
       }
+    }
+
+    // --- Attachment validation ---
+    let attachment: FileAttachment | undefined;
+    if (body.attachment) {
+      // Must be authenticated to upload files
+      if (!authUser) {
+        return NextResponse.json(
+          { error: "Sign in to upload files." },
+          { status: 401 }
+        );
+      }
+
+      // Validate media type
+      if (!ALLOWED_MEDIA_TYPES.includes(body.attachment.mediaType)) {
+        return NextResponse.json(
+          { error: "Only PDF, PNG, and JPEG files are supported." },
+          { status: 400 }
+        );
+      }
+
+      // Validate base64 data present
+      if (!body.attachment.base64Data) {
+        return NextResponse.json(
+          { error: "File data is missing." },
+          { status: 400 }
+        );
+      }
+
+      // Check size against plan limit
+      const profile2 = await authSupabase
+        .from("users")
+        .select("plan, is_admin")
+        .eq("id", authUser.id)
+        .single();
+      const userPlan = profile2?.data?.plan || "free";
+      const userIsAdmin = profile2?.data?.is_admin || false;
+      const uploadLimit = getUploadLimitForPlan(userPlan, userIsAdmin, true);
+
+      // uploadLimit 0 for admin = unlimited
+      if (uploadLimit > 0 && body.attachment.sizeBytes > uploadLimit) {
+        return NextResponse.json(
+          { error: `File exceeds your ${formatFileSize(uploadLimit)} upload limit.` },
+          { status: 413 }
+        );
+      }
+
+      attachment = body.attachment;
     }
 
     // Initialize or restore session state
@@ -262,8 +314,17 @@ export async function POST(request: NextRequest) {
       }).catch((err) => console.warn("Failed to queue learning job:", err));
     }
 
-    // Format messages for Claude API
-    const formattedMessages = formatMessages(body.messages);
+    // Format messages for Claude API (with optional multimodal attachment)
+    // Strip [Attached: ...] markers from text sent to Claude — Claude gets the actual
+    // file via multimodal blocks, so the marker is redundant. DB saves keep the marker.
+    const claudeMessages = attachment
+      ? body.messages.map((msg, idx) =>
+          idx === body.messages.length - 1 && msg.role === "user"
+            ? { ...msg, content: msg.content.replace(/\n?\n?\[Attached: .+?\]/, "").trim() }
+            : msg
+        )
+      : body.messages;
+    const formattedMessages = formatMessages(claudeMessages, attachment);
 
     // Call Claude with tools
     // Use Opus for appeals (higher quality), Sonnet for chat (faster)

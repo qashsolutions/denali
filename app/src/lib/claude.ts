@@ -6,9 +6,10 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { MessageParam, ContentBlock, ToolUseBlock, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
+import type { MessageParam, ContentBlock, ToolUseBlock, ToolResultBlockParam, ImageBlockParam, DocumentBlockParam, TextBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import type { BetaMessage, BetaRequestMCPServerURLDefinition } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { API_CONFIG } from "@/config";
+import type { FileAttachment } from "@/types/attachment";
 
 // MCP Server configurations for Claude to access directly
 // These give Claude direct access to real CMS coverage data (LCDs/NCDs)
@@ -1146,12 +1147,57 @@ export function extractUserInfo(
   return updatedState;
 }
 
+// Build multimodal content blocks for a message with a file attachment
+function buildMultimodalContent(
+  text: string,
+  attachment: FileAttachment
+): Array<ImageBlockParam | DocumentBlockParam | TextBlockParam> {
+  const blocks: Array<ImageBlockParam | DocumentBlockParam | TextBlockParam> = [];
+
+  if (attachment.mediaType === "application/pdf") {
+    blocks.push({
+      type: "document",
+      source: {
+        type: "base64",
+        media_type: "application/pdf",
+        data: attachment.base64Data,
+      },
+    } as DocumentBlockParam);
+  } else {
+    blocks.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: attachment.mediaType,
+        data: attachment.base64Data,
+      },
+    } as ImageBlockParam);
+  }
+
+  blocks.push({
+    type: "text",
+    text: text || `Please analyze this ${attachment.mediaType === "application/pdf" ? "document" : "image"}. Extract any denial codes, dates, procedure names, and coverage details you can find.`,
+  });
+
+  return blocks;
+}
+
 // Format messages for Claude API
 export function formatMessages(
-  messages: Array<{ role: "user" | "assistant"; content: string }>
+  messages: Array<{ role: "user" | "assistant"; content: string }>,
+  attachment?: FileAttachment
 ): MessageParam[] {
-  return messages.map((msg) => ({
-    role: msg.role,
-    content: msg.content,
-  }));
+  return messages.map((msg, idx) => {
+    // Only attach file to the last user message
+    if (attachment && msg.role === "user" && idx === messages.length - 1) {
+      return {
+        role: msg.role,
+        content: buildMultimodalContent(msg.content, attachment),
+      };
+    }
+    return {
+      role: msg.role,
+      content: msg.content,
+    };
+  });
 }
