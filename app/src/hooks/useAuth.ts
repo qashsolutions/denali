@@ -367,8 +367,10 @@ export function useAuth(): UseAuthReturn {
 
         if (!totpFactor) {
           // If no verified factor, this is enrollment verification
-          const unverified = factorsData?.totp?.find(
-            (f) => (f.status as string) === "unverified"
+          // NOTE: listFactors().totp only contains verified factors.
+          // Unverified factors are only in .all — filter by factor_type.
+          const unverified = factorsData?.all?.find(
+            (f) => f.factor_type === "totp" && (f.status as string) === "unverified"
           );
           if (!unverified) {
             setAuthState((prev) => ({
