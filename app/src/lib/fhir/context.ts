@@ -34,6 +34,23 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
     lines.push("");
   }
 
+  // Recent claims (for EOB review)
+  if (sessionState.recentClaims && sessionState.recentClaims.length > 0) {
+    lines.push("**Recent Claims (most recent first):**");
+    for (const claim of sessionState.recentClaims) {
+      const procedures = claim.procedures.length > 0 ? claim.procedures.join(", ") : "N/A";
+      const diagnoses = claim.diagnosis.length > 0 ? claim.diagnosis.join(", ") : "N/A";
+      lines.push(`- **${claim.serviceDate}** — ${claim.type} | ${claim.status}`);
+      lines.push(`  Provider: ${claim.provider}`);
+      lines.push(`  Services: ${procedures}`);
+      lines.push(`  Diagnoses: ${diagnoses}`);
+      lines.push(`  Charged: ${claim.totalCharged} | Medicare paid: ${claim.medicarePaid} | You owe: ${claim.youOwe}`);
+    }
+    lines.push("");
+    lines.push("**ACTION:** When a user asks about their bill or EOB, reference this claim data directly. Summarize the most recent claim proactively instead of asking which one. Explain charges, what Medicare paid, and what the user owes in plain English.");
+    lines.push("");
+  }
+
   // Lab results (diabetes-relevant)
   if (sessionState.labs && sessionState.labs.length > 0) {
     lines.push("**Lab Results:**");

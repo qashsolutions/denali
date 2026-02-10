@@ -106,6 +106,17 @@ function ChatContent() {
         daysSinceDischarge: h.daysSinceDischarge,
         needsFollowUp: h.needsFollowUp,
       })),
+      recentClaims: claims.slice(0, 5).map(c => ({
+        serviceDate: c.serviceDate,
+        type: c.type,
+        provider: c.provider,
+        procedures: c.procedures,
+        diagnosis: c.diagnosis,
+        totalCharged: c.totalCharged,
+        medicarePaid: c.medicarePaid,
+        youOwe: c.youOwe,
+        status: c.status,
+      })),
     };
 
     // Add longitudinal lab trends if available
@@ -375,7 +386,7 @@ const EMPTY_STATE_CARDS = [
     color: "#f59e0b",
     title: "Understand My Bill",
     description: "Make sense of an EOB or medical bill",
-    message: "I got an Explanation of Benefits and need help understanding it",
+    message: "Show me my most recent Medicare claim and help me understand what I owe and why",
   },
   {
     icon: HeartPulseIcon,

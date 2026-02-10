@@ -176,6 +176,19 @@ export interface SessionState {
     needsFollowUp: boolean;
   }>;
 
+  // Recent claims (top 5 most recent for EOB review)
+  recentClaims?: Array<{
+    serviceDate: string;
+    type: string;          // "Outpatient", "Carrier", "Part D", etc.
+    provider: string;
+    procedures: string[];  // Plain English procedure names
+    diagnosis: string[];   // Plain English diagnosis names
+    totalCharged: string;
+    medicarePaid: string;
+    youOwe: string;
+    status: string;        // "Paid", "Denied", "Partially Paid"
+  }>;
+
   // Lab trends (longitudinal, from diabetes_snapshots)
   labTrends?: Array<{ date: string; value: number; loincCode: string }>;
   // Recent self-reported log summary
