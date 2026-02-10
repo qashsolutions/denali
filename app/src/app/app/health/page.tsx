@@ -13,6 +13,7 @@ import {
   AlertsSection,
   HealthAlertsBanner,
   CoverageCards,
+  ConditionsAlertBanner,
   ClaimsTimeline,
   DiagnosisSummaryCard,
   ProviderSummary,
@@ -156,6 +157,9 @@ function HealthPageInner() {
 
         {/* 6. Coverage */}
         <CoverageCards coverage={coverage} />
+
+        {/* 6b. Conditions needing attention (anchor to full list below) */}
+        <ConditionsAlertBanner diagnoses={metrics.topDiagnoses} conditions={conditions} />
 
         {/* 7. Claims Timeline */}
         <ClaimsTimeline claimsByMonth={metrics.claimsByMonth} />

@@ -9,7 +9,7 @@ interface DiagnosisSummaryCardProps {
 }
 
 /** Strip U+25CC (dotted circle) and other combining mark artifacts from FHIR names */
-function cleanDiagnosisName(name: string): string {
+export function cleanDiagnosisName(name: string): string {
   return name.replace(/\u25CC/g, "").replace(/\s{2,}/g, " ").trim();
 }
 
@@ -49,15 +49,17 @@ const AMBER_KEYWORDS = [
   "depression", "anxiety", "bipolar",
 ];
 
-const RED = { border: "border-l-red-500", dot: "bg-red-500" } as const;
-const AMBER = { border: "border-l-amber-500", dot: "bg-amber-500" } as const;
-const GRAY = { border: "border-l-[var(--border)]", dot: "bg-[var(--text-muted)]" } as const;
+const RED = { border: "border-l-red-500", dot: "bg-red-500", level: "red" } as const;
+const AMBER = { border: "border-l-amber-500", dot: "bg-amber-500", level: "amber" } as const;
+const GRAY = { border: "border-l-[var(--border)]", dot: "bg-[var(--text-muted)]", level: "gray" } as const;
+
+export type SeverityLevel = "red" | "amber" | "gray";
 
 /** Get severity color config based on condition category */
-function getSeverityConfig(
+export function getSeverityConfig(
   name: string,
   conditions: DiagnosisSummary[]
-): { border: string; dot: string } {
+): { border: string; dot: string; level: SeverityLevel } {
   const lower = cleanDiagnosisName(name).toLowerCase();
 
   // Priority 1: match against structured DiagnosisSummary conditions
@@ -99,7 +101,7 @@ export function DiagnosisSummaryCard({ diagnoses, conditions = [] }: DiagnosisSu
   if (filtered.length === 0) return null;
 
   return (
-    <div>
+    <div id="conditions-section">
       <h3 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
         Conditions in Your Claims
       </h3>
@@ -109,7 +111,7 @@ export function DiagnosisSummaryCard({ diagnoses, conditions = [] }: DiagnosisSu
           return (
             <div
               key={i}
-              className={`px-4 py-3 flex items-center gap-3 border-l-3 ${severity.border}`}
+              className={`px-4 py-3 flex items-center gap-3 border-l-[3px] ${severity.border}`}
             >
               <div className={`w-2 h-2 rounded-full ${severity.dot} shrink-0`} />
               <div className="min-w-0 flex-1">

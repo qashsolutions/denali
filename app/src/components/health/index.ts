@@ -11,5 +11,6 @@ export { AlertsSection } from "./AlertsSection";
 export { HealthAlertsBanner } from "./HealthAlertsBanner";
 export { ClaimsTimeline } from "./ClaimsTimeline";
 export { DiagnosisSummaryCard } from "./DiagnosisSummaryCard";
+export { ConditionsAlertBanner } from "./ConditionsAlertBanner";
 export { ProviderSummary } from "./ProviderSummary";
 export { AccountSection } from "./AccountSection";
