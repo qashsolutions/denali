@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-09
+     Last updated: 2026-02-10
      Maintainer: @cvr
 -->
 
@@ -95,9 +95,9 @@ Where to find specific logic in the codebase.
 | `src/lib/skills-loader.ts` | Conditional prompt builder. Loads skill sections based on SkillTriggers (onboarding, symptom gathering, coverage, appeal, etc.) |
 | `src/lib/denial-patterns.ts` | Async Supabase queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
 | `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via admin client (bypasses RLS). Non-blocking fire-and-forget |
-| `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI + `extractDiabetesLabs()` + `extractDiabetesConditions()` + `extractDiabetesMedications()` + `classifyDiabetesStatus()`), `eob-clinical.ts` (extract conditions + medications from EOB claims: `extractConditionsFromClaims()` + `extractMedicationsFromClaims()`), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + classification + lab trends + denials), `sync.ts` (cache sync: Patient + Coverage + EOB → extract conditions/medications from claims → cache all), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
+| `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformEOB()` extracts PDE info/careTeam/POS/inpatient fields + `classifyDiabetesStatus()`), `eob-clinical.ts` (clinical extraction pipeline — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 8 resource types), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
 | `src/lib/diabetes-insights.ts` | Claude-powered diabetes insight generation. `generateDiabetesInsight(data)` calls Sonnet for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls |
-| `src/components/diabetes/` | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from lab dates), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display) |
+| `src/components/diabetes/` | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from CPT-based `ScreeningHistory[]`), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up, med refill gaps, specialty gaps, post-discharge follow-up), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display) |
 | `src/hooks/useDiabetesSnapshots.ts` | Fetches longitudinal lab data from `diabetes_snapshots`. Returns `{ snapshots, a1cHistory, isLoading }` |
 | `src/hooks/useDiabetesLog.ts` | CRUD for daily log entries via `/api/diabetes/log`. Returns `{ entries, isLoading, addEntry, deleteEntry }` |
 | `src/hooks/useDiabetesInsights.ts` | AI insight fetch/refresh via `/api/diabetes/insights`. Returns `{ insight, isLoading, refresh }` |
@@ -106,7 +106,7 @@ Where to find specific logic in the codebase.
 | `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
 | `src/hooks/useAuth.ts` | Auth state: email OTP, TOTP MFA enroll/challenge, AAL tracking, plan/role/trial/admin detection, appeal access gating. Profile data fetched from `/api/profile` (server route), NOT browser Supabase client |
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table, gates health data injection |
-| `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications |
+| `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
 | `src/config/pricing.ts` | Pricing constants: free appeal limit, trial duration, daily chat limits, Stripe price IDs. `MONTHLY.appealLimit: 0` = unlimited |
 | `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade), `handleSubscriptionEvent()` (lifecycle). Uses admin client |
@@ -249,7 +249,7 @@ User-facing (plain English):        Internal (codes, never shown):
 | `audit_logs` | CMS compliance audit trail — who, what, when, why (IP, user agent). RLS: users read own logs, service role writes |
 | `consent_preferences` | Per-user consent toggles: `health_data_ai`, `health_data_storage`, `analytics`. Versioned, audit-logged on change |
 | `ehr_connections` | Blue Button OAuth tokens (AES-256-GCM encrypted), FHIR patient ID, connection status |
-| `fhir_cache` | Transformed FHIR data (patient, coverage, claims, labs, conditions, medications), 24h TTL. RLS-protected reads |
+| `fhir_cache` | Transformed FHIR data (patient, coverage, eob, conditions, medications, screenings, providers, hospitalizations), 24h TTL. RLS-protected reads |
 | `diabetes_snapshots` | Append-only longitudinal lab history. Unique on `(user_id, loinc_code, observed_date)`. RLS: users read own, service_role inserts. Auto-populated on FHIR sync |
 | `diabetes_log` | User-entered daily entries (glucose/activity/meal/note). Any signed-in user. CHECK constraint on entry_type. RLS: users CRUD own |
 | `diabetes_insights` | Claude-generated diabetes analysis (summary, recommendations, risk_alerts, screening_reminders). Unique on user_id. Hash-based dedup avoids redundant Claude calls. RLS: users read own, service_role manages |
@@ -515,11 +515,31 @@ Blue Button connects patients to their Medicare claims data via FHIR APIs.
 
 ### Health Data in AI
 
-- Client-side `useHealthData()` fetches from `/api/fhir/data` → populates sessionState fields (`healthDataAvailable`, `activeCoverage`, `recentDenials`, `labs`, `conditions`, `medications`, `diabetesClassification`)
+- Client-side `useHealthData()` fetches from `/api/fhir/data` → populates sessionState fields (`healthDataAvailable`, `activeCoverage`, `recentDenials`, `labs`, `conditions`, `medications`, `screenings`, `providers`, `hospitalizations`, `diabetesClassification`)
 - Chat page bridges health data into `useChat` via `initialSessionState` (built with `useMemo`, synced via `useEffect` for async loading)
-- Server-side `buildHealthContextForPrompt()` injects health context into Claude system prompt: active coverage, lab results (with clinical interpretations), diabetes diagnoses, active medications, diabetes classification with action directives, recent denials (gated by `health_data_ai` consent)
+- Server-side `buildHealthContextForPrompt()` injects health context into Claude system prompt: active coverage, lab results (with clinical interpretations), diabetes diagnoses, active medications (with PDE supply/gap data), screenings (with overdue alerts), care team providers, recent hospitalizations (with follow-up flags), diabetes classification with action directives, recent denials (gated by `health_data_ai` consent)
 - `HEALTH_RECORDS_SKILL` loaded when `hasHealthData` or `hasRecentDenials` triggers fire
 - `DIABETES_PREVENTION_SKILL` loaded when `hasDiabetesContext` triggers (from conditions, labs, or user keywords)
+
+### EOB Extraction Pipeline
+
+`eob-clinical.ts` mines clinical intelligence from EOB claims data (since Blue Button doesn't provide Observation/Condition/MedicationRequest resources directly). Four extraction layers:
+
+| Function | Input | Output | Key Logic |
+|----------|-------|--------|-----------|
+| `extractConditionsFromClaims()` | All claims | `DiagnosisSummary[]` | Scans `diagnosisCodes[]` for diabetes ICD-10 prefixes (E10, E11, E13, R73, E66). Dedupes by code, keeps most recent date |
+| `extractMedicationsFromClaims()` | Part D claims | `MedicationSummary[]` | Filters PDE claims, matches drug name patterns. Enriched with PDE data: daysSupply, refillNumber, brand/generic, estimatedRunOutDate, gapDays (positive = overdue) |
+| `extractScreeningsFromClaims()` | Carrier/Outpatient claims | `ScreeningHistory[]` | Matches `procedureCodes[]` against `SCREENING_CPT_MAP` (18 CPT codes → 8 screening types: A1C, eye-exam, kidney, ECG, office-visit, nutrition, DSMT, metabolic-panel). Dedupes by type, computes monthsSinceLast + isOverdue |
+| `extractProvidersFromClaims()` | All claims with careTeam | `ProviderDetail[]` | Aggregates by NPI, tracks specialty, visit count, claim types. From `careTeam[]` extracted in `transformEOB()` |
+| `extractHospitalizationsFromClaims()` | Inpatient/SNF claims | `HospitalizationSummary[]` | Filters inpatient claims, computes LOS, daysSinceDischarge, needsFollowUp (< 30 days). Admission type + discharge status from `supportingInfo[]` |
+
+**Data flow**: Blue Button FHIR → `transformEOB()` (extracts PDE/careTeam/POS/inpatient fields onto `ClaimSummary`) → `eob-clinical.ts` extractors → `sync.ts` caches 8 resource types → `useHealthData` hook → `context.ts` prompt injection + `chat/page.tsx` SessionState bridge
+
+**`transformEOB()` enrichments** (in `transforms.ts`):
+- `extractPDEInfo()`: Reads `supportingInfo[]` for dayssupply, refillnum, brandgenericindicator → `ClaimSummary.pdeInfo`
+- `extractCareTeam()`: Maps `careTeam[]` to NPI + name + role + specialty → `ClaimSummary.careTeam`
+- `extractPlaceOfService()`: Maps `item[].locationCodeableConcept` via `POS_CODE_MAP` → `ClaimSummary.placeOfService`
+- Inpatient: `extractAdmissionType()`, `extractDRGCode()`, `extractDischargeStatus()` from `supportingInfo[]` → `ClaimSummary` fields (only populated for inpatient claim types)
 
 ---
 
@@ -719,9 +739,9 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 **Trial & Discovery** (A3/A4/A5): 14-day free trial, `/api/cms-metadata` for CMS directory, `CmsPledge` component (AI + Diabetes pledges).
 
-**Conversational AI criteria**: Personalized AI across clinical record (coverage+denials+conditions+medications+classification — extracted from EOB claims via `eob-clinical.ts`). Blue Button PHR connection. AI-generated disclaimers (SparkleIcon + "Not medical advice"). "Talk to your doctor" patterns in all skills. Note: lab values (A1C etc.) not available from Blue Button — only lab procedures detected in EOB.
+**Conversational AI criteria**: Personalized AI across clinical record (coverage+denials+conditions+medications+screenings+providers+hospitalizations+classification — extracted from EOB claims via `eob-clinical.ts`). Blue Button PHR connection. AI-generated disclaimers (SparkleIcon + "Not medical advice"). "Talk to your doctor" patterns in all skills. Note: lab values (A1C etc.) not available from Blue Button — only lab procedures detected in EOB claims.
 
-**Diabetes & Obesity criteria**: EOB-to-clinical extraction pipeline (`eob-clinical.ts`: ICD-10 diagnoses + Part D medications from claims → `classifyDiabetesStatus()`). Personalized coaching via `DIABETES_PREVENTION_SKILL` (classification-based, screening reminders, risk alerts, medication coaching, MDPP, nutrition/activity). `PreDiabetesRiskCard` (CDC risk test). Diabetes dashboard (diagnoses, medications, quick actions). `diabetes_snapshots` for longitudinal tracking. `QuickLog` for daily entries. `InsightsCard` for Claude-generated analysis.
+**Diabetes & Obesity criteria**: Full EOB extraction pipeline (`eob-clinical.ts`: 5 extractors — conditions, medications with PDE adherence data, screenings from CPT codes, providers with specialty, hospitalizations with follow-up flags → `classifyDiabetesStatus()`). `ScreeningReminders` driven by real CPT claim dates (8 screening types, 18 CPT codes). `RiskAlerts` expanded: high A1C, missing meds, med refill gaps, A1C trending up, no endocrinologist, post-discharge follow-up. Personalized coaching via `DIABETES_PREVENTION_SKILL`. `PreDiabetesRiskCard` (CDC risk test). Diabetes dashboard (diagnoses, medications, quick actions). `diabetes_snapshots` for longitudinal tracking. `QuickLog` for daily entries. `InsightsCard` for Claude-generated analysis.
 
 **Medicare Notifications** (A2 partial): `MEDICARE_NOTIFICATIONS_SKILL` detects EOB/coverage changes from FHIR data.
 
@@ -740,7 +760,6 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 | **CMS app directory submission** | A5 | **P1** | Docs — screenshots, descriptions for Medicare.gov listing |
 | **Patient-facing audit log viewer** | Criterion 4 | **P1** | Code — let users see who accessed their data |
 | **AAL2 app auth** (if CMS tightens) | A1, Criteria 3, 23 | **P2** | Code — email+password + TOTP. Components ready; needs password migration |
-| **EOB detail enrichment** | Criterion 2 | **P2** | Code — CARC/RARC extraction from FHIR EOB adjudication |
 | **FHIR USCDI v3 compliance** | Criterion 13 | **P2** | Code — verify Blue Button maps to USCDI v3 by July 2026 |
 
 ### Key Dates
