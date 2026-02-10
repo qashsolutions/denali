@@ -19,7 +19,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { useHealthData } from "@/hooks/useHealthData";
 import { useDiabetesSnapshots } from "@/hooks/useDiabetesSnapshots";
 import { classifyDiabetesStatus } from "@/lib/fhir/transforms";
-import { ShieldCheckIcon, ScaleIcon, DiabetesIcon } from "@/components/icons";
+import {
+  ShieldCheckIcon,
+  ScaleIcon,
+  DiabetesIcon,
+  DocumentTextIcon,
+  HeartPulseIcon,
+  ClipboardCheckIcon,
+} from "@/components/icons";
+import { getGreeting } from "@/lib/utils";
 import type { SessionState } from "@/lib/claude";
 import { getUploadLimitForPlan } from "@/config/pricing";
 
@@ -236,7 +244,7 @@ function ChatContent() {
         <div className="flex-1 overflow-y-auto flex flex-col">
           {messages.length === 0 && !isLoading ? (
             <Container className="py-4">
-              <EmptyState onSuggestionSelect={handleInitialCardSelect} topic={topic} />
+              <EmptyState onSuggestionSelect={handleInitialCardSelect} topic={topic} email={authState.email} />
             </Container>
           ) : (
             <Container className="py-4 mt-auto">
@@ -352,47 +360,75 @@ const EMPTY_STATE_CARDS = [
     icon: ShieldCheckIcon,
     color: "#3b82f6",
     title: "Check Coverage",
-    description: "Find out if Medicare covers your procedure",
+    description: "Will Medicare cover my procedure?",
     message: "I want to check if Medicare covers a procedure",
   },
   {
     icon: ScaleIcon,
     color: "#ef4444",
     title: "Appeal a Denial",
-    description: "Get help fighting a Medicare denial",
+    description: "Fight back when Medicare says no",
     message: "Medicare denied my claim and I need help appealing",
+  },
+  {
+    icon: DocumentTextIcon,
+    color: "#f59e0b",
+    title: "Understand My Bill",
+    description: "Make sense of an EOB or medical bill",
+    message: "I got an Explanation of Benefits and need help understanding it",
+  },
+  {
+    icon: HeartPulseIcon,
+    color: "#ec4899",
+    title: "Check My Symptoms",
+    description: "What care might Medicare cover?",
+    message: "I have symptoms and want to know what Medicare might cover",
+  },
+  {
+    icon: ClipboardCheckIcon,
+    color: "#10b981",
+    title: "Preventive Care",
+    description: "Free screenings you may be due for",
+    message: "What free preventive screenings am I eligible for with Medicare?",
   },
   {
     icon: DiabetesIcon,
     color: "#8b5cf6",
     title: "Diabetes Care",
-    description: "Diabetes coverage, screening, and prevention",
+    description: "Coverage, screenings, and prevention",
     message: "What should I know about diabetes and Medicare coverage?",
   },
 ] as const;
 
 function EmptyState({
   onSuggestionSelect,
+  email,
 }: {
   onSuggestionSelect: (suggestion: string) => void;
   topic?: string | null;
+  email?: string | null;
 }) {
+  const greeting = getGreeting();
+  const firstName = email ? email.split("@")[0].replace(/[._+]/g, " ").split(" ")[0] : null;
+  const displayGreeting = firstName
+    ? `${greeting}, ${firstName.charAt(0).toUpperCase() + firstName.slice(1)}`
+    : greeting;
+
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-2">
-        How can I help?
+    <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
+      <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-1">
+        {displayGreeting}
       </h2>
-      <p className="text-[var(--text-secondary)] mb-6 max-w-sm">
-        Ask about Medicare coverage, denial codes, appeal letters, or what your
-        doctor needs to document.
+      <p className="text-[var(--text-secondary)] mb-6 max-w-md">
+        Ask anything about your Medicare coverage, bills, symptoms, or health — in plain English.
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg w-full">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 max-w-xl w-full">
         {EMPTY_STATE_CARDS.map((card) => (
           <button
             key={card.title}
             onClick={() => onSuggestionSelect(card.message)}
-            className="flex items-start gap-3 text-left px-4 py-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] hover:bg-[var(--bg-tertiary)] hover:border-[var(--accent-primary)] transition-colors group"
+            className="flex flex-col items-center gap-2 text-center px-3 py-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] hover:bg-[var(--bg-tertiary)] hover:border-[var(--accent-primary)] transition-colors group"
           >
             <div
               className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
@@ -407,7 +443,7 @@ function EmptyState({
               <div className="text-sm font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
                 {card.title}
               </div>
-              <div className="text-xs text-[var(--text-secondary)] mt-0.5">
+              <div className="text-xs text-[var(--text-secondary)] mt-0.5 leading-snug">
                 {card.description}
               </div>
             </div>
