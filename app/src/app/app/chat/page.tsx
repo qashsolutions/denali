@@ -232,12 +232,14 @@ function ChatContent() {
           </div>
         )}
 
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto">
-          <Container className="py-4">
-            {messages.length === 0 && !isLoading ? (
+        {/* Messages Area — flex-col + mt-auto anchors messages to the bottom */}
+        <div className="flex-1 overflow-y-auto flex flex-col">
+          {messages.length === 0 && !isLoading ? (
+            <Container className="py-4">
               <EmptyState onSuggestionSelect={handleInitialCardSelect} topic={topic} />
-            ) : (
+            </Container>
+          ) : (
+            <Container className="py-4 mt-auto">
               <div className="space-y-1">
                 {messages
                   .filter((message) => message.role !== "system")
@@ -281,8 +283,8 @@ function ChatContent() {
 
                 <div ref={messagesEndRef} />
               </div>
-            )}
-          </Container>
+            </Container>
+          )}
         </div>
 
         {/* Chat Input */}
