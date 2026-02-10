@@ -8,49 +8,89 @@ interface DiagnosisSummaryCardProps {
   conditions?: DiagnosisSummary[];
 }
 
+/** Strip U+25CC (dotted circle) and other combining mark artifacts from FHIR names */
+function cleanDiagnosisName(name: string): string {
+  return name.replace(/\u25CC/g, "").replace(/\s{2,}/g, " ").trim();
+}
+
 /** Check if a diagnosis name is garbage (numeric codes, too short, etc.) */
 function isGarbageEntry(name: string): boolean {
-  const trimmed = name.trim();
+  const trimmed = cleanDiagnosisName(name);
   if (trimmed.length < 3) return true;
   if (/^\d+$/.test(trimmed)) return true;
   if (trimmed.toLowerCase() === "unknown") return true;
   return false;
 }
 
+const RED_KEYWORDS = [
+  "neoplasm", "malignant", "tumor", "cancer", "carcinoma", "lymphoma", "melanoma",
+  "hemorrhage", "haemorrhage",
+  "elevated prostate",
+  "acute kidney", "renal failure",
+  "pulmonary embolism", "embolism",
+  "stroke", "cerebrovascular",
+  "heart failure", "cardiac arrest",
+  "sepsis", "septicemia",
+];
+
+const AMBER_KEYWORDS = [
+  "hypertension", "high blood pressure", "hypertensive",
+  "impaired.*glucose", "glucose.*intolerance", "hyperglycemia",
+  "pre-diabet", "obesity", "overweight",
+  "hypothyroid", "hyperthyroid", "thyroid",
+  "anemia", "anaemia",
+  "hyperlipidemia", "cholesterol", "hypercholesterolemia",
+  "chronic kidney", "renal insufficiency",
+  "atrial fibrillation", "arrhythmia",
+  "neuropathy", "retinopathy", "nephropathy",
+  "impotence", "erectile",
+  "osteoporosis", "osteopenia",
+  "copd", "chronic obstructive",
+  "depression", "anxiety", "bipolar",
+];
+
+const RED = { border: "border-l-red-500", dot: "bg-red-500" } as const;
+const AMBER = { border: "border-l-amber-500", dot: "bg-amber-500" } as const;
+const GRAY = { border: "border-l-[var(--border)]", dot: "bg-[var(--text-muted)]" } as const;
+
 /** Get severity color config based on condition category */
 function getSeverityConfig(
   name: string,
   conditions: DiagnosisSummary[]
 ): { border: string; dot: string } {
-  // Try to match by case-insensitive name comparison
-  const lower = name.toLowerCase();
+  const lower = cleanDiagnosisName(name).toLowerCase();
+
+  // Priority 1: match against structured DiagnosisSummary conditions
   const match = conditions.find(
-    (c) => c.name.toLowerCase() === lower
+    (c) => cleanDiagnosisName(c.name).toLowerCase() === lower
   );
 
   if (match) {
     switch (match.category) {
       case "type1":
       case "type2":
-        return { border: "border-l-red-500", dot: "bg-red-500" };
+        return RED;
       case "pre-diabetic":
       case "other-diabetes":
       case "obesity":
-        return { border: "border-l-amber-500", dot: "bg-amber-500" };
+        return AMBER;
       default:
-        return { border: "border-l-[var(--border)]", dot: "bg-[var(--text-muted)]" };
+        break;
     }
   }
 
-  // Keyword-based fallback for unmatched entries
+  // Priority 2: keyword-based classification
+  // Diabetes-specific (red for confirmed, amber for pre-diabetic)
   if (lower.includes("diabetes") && !lower.includes("pre-diabet")) {
-    return { border: "border-l-red-500", dot: "bg-red-500" };
-  }
-  if (lower.includes("pre-diabet") || lower.includes("obesity") || lower.includes("overweight")) {
-    return { border: "border-l-amber-500", dot: "bg-amber-500" };
+    return RED;
   }
 
-  return { border: "border-l-[var(--border)]", dot: "bg-[var(--text-muted)]" };
+  if (RED_KEYWORDS.some((kw) => lower.includes(kw))) return RED;
+  if (AMBER_KEYWORDS.some((kw) =>
+    kw.includes(".*") ? new RegExp(kw).test(lower) : lower.includes(kw)
+  )) return AMBER;
+
+  return GRAY;
 }
 
 export function DiagnosisSummaryCard({ diagnoses, conditions = [] }: DiagnosisSummaryCardProps) {
@@ -74,7 +114,7 @@ export function DiagnosisSummaryCard({ diagnoses, conditions = [] }: DiagnosisSu
               <div className={`w-2 h-2 rounded-full ${severity.dot} shrink-0`} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-[var(--text-primary)] truncate">
-                  {dx.name}
+                  {cleanDiagnosisName(dx.name)}
                 </p>
               </div>
               <div className="text-right flex-shrink-0">
