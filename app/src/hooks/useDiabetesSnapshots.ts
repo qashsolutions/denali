@@ -22,6 +22,8 @@ export function useDiabetesSnapshots(): UseDiabetesSnapshotsReturn {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchSnapshots = async () => {
       try {
         const supabase = getClient();
@@ -30,7 +32,11 @@ export function useDiabetesSnapshots(): UseDiabetesSnapshotsReturn {
           .select("loinc_code, lab_name, value, unit, observed_date")
           .order("observed_date", { ascending: true });
 
+        if (cancelled) return;
+
         if (error) {
+          // Suppress abort errors (component unmount / strict mode double-mount)
+          if (error.message?.includes("abort")) return;
           console.warn("[Snapshots] Fetch failed:", error.message);
           return;
         }
@@ -45,13 +51,16 @@ export function useDiabetesSnapshots(): UseDiabetesSnapshotsReturn {
           }))
         );
       } catch (err) {
+        if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
         console.warn("[Snapshots] Error:", err);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
     fetchSnapshots();
+    return () => { cancelled = true; };
   }, []);
 
   const a1cHistory = useMemo(

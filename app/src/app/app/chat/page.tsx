@@ -194,7 +194,7 @@ function ChatContent() {
   }, [resetChat, router]);
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] sm:h-[calc(100dvh-4rem)]">
+    <div className="flex flex-1 min-h-0">
       {/* Sidebar — only visible when toggled on mobile; hidden on desktop in app shell */}
       <Sidebar
         isOpen={sidebarOpen}
