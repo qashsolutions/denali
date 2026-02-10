@@ -15,6 +15,22 @@ const LOAD_MORE_COUNT = 3;
 export function ClaimsTimeline({ claimsByMonth }: ClaimsTimelineProps) {
   const [visibleMonths, setVisibleMonths] = useState(INITIAL_MONTHS);
   const [selectedClaim, setSelectedClaim] = useState<ClaimSummary | null>(null);
+  // Most recent month expanded by default
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(
+    () => new Set(claimsByMonth.length > 0 ? [claimsByMonth[0].month] : [])
+  );
+
+  const toggleMonth = (month: string) => {
+    setExpandedMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(month)) {
+        next.delete(month);
+      } else {
+        next.add(month);
+      }
+      return next;
+    });
+  };
 
   if (claimsByMonth.length === 0) {
     return (
@@ -33,31 +49,57 @@ export function ClaimsTimeline({ claimsByMonth }: ClaimsTimelineProps) {
         Claims
       </h3>
 
-      <div className="space-y-5">
-        {shownMonths.map((group) => (
-          <div key={group.month}>
-            {/* Month header */}
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-[var(--text-primary)]">
-                {group.month}
-              </p>
-              <p className="text-xs text-[var(--text-muted)]">
-                {group.count} claim{group.count !== 1 ? "s" : ""} &middot; Medicare paid {formatCurrency(group.paid)}
-              </p>
-            </div>
+      <div className="space-y-2">
+        {shownMonths.map((group) => {
+          const isExpanded = expandedMonths.has(group.month);
+          const hasDenied = group.claims.some((c) => c.status === "Denied");
 
-            {/* Claim rows */}
-            <div className="space-y-1.5">
-              {group.claims.map((claim) => (
-                <ClaimRow
-                  key={claim.id}
-                  claim={claim}
-                  onSelect={() => setSelectedClaim(claim)}
-                />
-              ))}
+          return (
+            <div key={group.month}>
+              {/* Month header — clickable toggle */}
+              <button
+                onClick={() => toggleMonth(group.month)}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <svg
+                    className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">
+                    {group.month}
+                  </span>
+                  {hasDenied && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-500/15 text-red-500">
+                      Denied
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-[var(--text-muted)]">
+                  {group.count} claim{group.count !== 1 ? "s" : ""} &middot; Medicare paid {formatCurrency(group.paid)}
+                </span>
+              </button>
+
+              {/* Claim rows — collapsible */}
+              {isExpanded && (
+                <div className="space-y-1.5 mt-1 ml-6">
+                  {group.claims.map((claim) => (
+                    <ClaimRow
+                      key={claim.id}
+                      claim={claim}
+                      onSelect={() => setSelectedClaim(claim)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Load more */}
