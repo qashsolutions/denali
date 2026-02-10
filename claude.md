@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-10
+     Last updated: 2026-02-11
      Maintainer: @cvr
 -->
 
@@ -29,6 +29,7 @@
 - [Business Model, Auth & Payments](#business-model-auth--payments) — [Pricing](#pricing) · [Auth Gating](#auth-gating) · [Appeal Gating](#appeal-gating-logic) · [Stripe](#stripe-payment-architecture)
 - [Blue Button 2.0](#blue-button-20-medicare-fhir-api) — [OAuth Flow](#oauth-flow-pkce) · [EOB Extraction Pipeline](#eob-extraction-pipeline) · [Condition Severity Classification](#condition-severity-classification)
 - [UI/UX Guidelines](#uiux-guidelines) — [Layout Architecture](#layout-architecture) · [Theme](#theme) · [Accessibility](#accessibility)
+- [PWA Offline & Low-Bandwidth](#pwa-offline--low-bandwidth) — [Service Worker](#service-worker-strategies) · [IndexedDB Cache](#indexeddb-cache) · [Offline Write Queue](#offline-write-queue) · [Hook Integration](#hook-integration-pattern)
 - [Coding Standards](#coding-standards) — [Project Structure](#project-structure)
 - [MCP Integration](#mcp-integration)
 - [Learning System](#learning-system)
@@ -118,21 +119,25 @@ Where to find specific logic in the codebase.
 | `src/components/diabetes/` | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from CPT-based `ScreeningHistory[]`), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up, med refill gaps, specialty gaps, post-discharge follow-up), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display) |
 | `src/components/health/DiagnosisSummaryCard.tsx` | Renders "Conditions in Your Claims" list with severity color-coding. `getSeverityConfig()`: structured `DiagnosisSummary` category → `RED_KEYWORDS` (18 terms: neoplasm, cancer, stroke, heart failure, etc.) → `AMBER_KEYWORDS` (27 terms: hypertension, thyroid, anemia, COPD, etc.) → gray. `cleanDiagnosisName()` strips U+25CC combining mark artifacts from FHIR data |
 | `src/hooks/useDiabetesSnapshots.ts` | Fetches longitudinal lab data from `diabetes_snapshots`. Returns `{ snapshots, a1cHistory, isLoading }` |
-| `src/hooks/useDiabetesLog.ts` | CRUD for daily log entries via `/api/diabetes/log`. Returns `{ entries, isLoading, addEntry, deleteEntry }` |
-| `src/hooks/useDiabetesInsights.ts` | AI insight fetch/refresh via `/api/diabetes/insights`. Returns `{ insight, isLoading, refresh }` |
+| `src/hooks/useDiabetesLog.ts` | CRUD for daily log entries via `/api/diabetes/log`. Returns `{ entries, isLoading, addEntry, deleteEntry }`. IndexedDB cache + offline queue for POST (optimistic local add) |
+| `src/hooks/useDiabetesInsights.ts` | AI insight fetch/refresh via `/api/diabetes/insights`. Returns `{ insight, isLoading, refresh }`. IndexedDB write-through + offline fallback |
 | `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
 | `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
 | `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
 | `src/hooks/useAuth.ts` | Auth state: email OTP, TOTP MFA enroll/challenge, AAL tracking, plan/role/trial/admin detection, appeal access gating. Profile data fetched from `/api/profile` (server route), NOT browser Supabase client |
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table, gates health data injection |
-| `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations |
+| `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations. IndexedDB write-through + offline fallback |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
 | `src/config/pricing.ts` | Pricing constants: free appeal limit, trial duration, daily chat limits, Stripe price IDs. `MONTHLY.appealLimit: 0` = unlimited |
 | `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade), `handleSubscriptionEvent()` (lifecycle). Uses admin client |
 | `src/components/payment/PaywallModal.tsx` | Paywall UI: plan selection (single/monthly), Stripe checkout redirect. CSS variables for theme. No dev bypass |
 | `src/components/appeal/AppealGate.tsx` | Appeal access orchestration: email OTP → TOTP → access check → PaywallModal pipeline |
 | `src/middleware.ts` | Supabase SSR middleware. Refreshes auth tokens on every request to prevent browser/server refresh token race. MUST run before any Supabase client call |
-| `src/hooks/useConversationHistory.ts` | Chat sidebar history. Fetches from `/api/conversations` (server route, cookie-authenticated) — NOT browser Supabase client. Subscribes to `onAuthStateChange` for re-fetch on sign-in/out. Groups conversations by date |
+| `src/lib/offline-cache.ts` | IndexedDB wrapper via `idb`. 6 stores (conversations, health-data, diabetes-log, diabetes-insights, profile, offline-queue). Exports `cacheSet()`, `cacheGet()`, `cacheGetIfFresh()`, `queueOfflineRequest()`, `getOfflineQueue()`, `removeFromQueue()`. TTL constants: profile=4h, everything else=24h |
+| `src/lib/offline-sync.ts` | Client-side offline queue processor. `processQueue()` replays failed POSTs, removes on success, drops after 3 retries. `getQueueCount()` for pending item count |
+| `src/hooks/useOnlineStatus.ts` | SSR-safe hook: `navigator.onLine` + `online`/`offline` events. Returns `{ isOnline, wasOffline }` |
+| `src/components/ui/OfflineBanner.tsx` | Fixed amber-accent banner below AppHeader when offline. Auto-dismisses on reconnect |
+| `src/hooks/useConversationHistory.ts` | Chat sidebar history. Fetches from `/api/conversations` (server route, cookie-authenticated) — NOT browser Supabase client. Subscribes to `onAuthStateChange` for re-fetch on sign-in/out. Groups conversations by date. IndexedDB write-through + offline fallback |
 | `src/lib/conversation-service.ts` | Conversation persistence: create, load, claim, save messages, appeals, feedback, events. Uses `getClient()` singleton for auth context |
 | `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date with timestamps. Refreshes on both new conversation creation AND new chat click (via `useRef` tracking previous conversationId). No sign-in prompt — anon users see "No conversations yet" |
 | `src/types/database.ts` | Supabase-generated TypeScript types. Regenerate with `npx supabase gen types` |
@@ -633,6 +638,87 @@ Blue Button connects patients to their Medicare claims data via FHIR APIs.
 
 ---
 
+## PWA Offline & Low-Bandwidth
+
+Designed for rural Medicare patients on spotty connections. Caches API responses in IndexedDB for offline viewing, queues writes for replay on reconnect, and provides network-aware UI.
+
+**Dependencies**: `idb` (~1KB gzipped) — typed IndexedDB wrapper. No Workbox/next-pwa (bundle overhead).
+
+### Service Worker Strategies
+
+`public/sw.js` — plain JS, no build step. Routes requests by URL pattern:
+
+| URL Pattern | Strategy | Cache Name |
+|-------------|----------|------------|
+| `/_next/static/`, `/icon-*`, `/favicon*`, `/logo*` | Cache-first | `denali-static-v2` |
+| `/api/chat` | Network-only | — |
+| `/api/fhir/authorize`, `/api/fhir/callback`, `/api/checkout`, `/api/webhooks/*` | Network-only | — |
+| `/api/conversations`, `/api/fhir/data`, `/api/profile`, `/api/diabetes/log` (GET), `/api/diabetes/insights` (GET) | Network-first, cache fallback | `denali-api-v2` |
+| Navigation (`mode=navigate`) | Network-first → cached page → `/offline` | `denali-static-v2` |
+| Everything else | Stale-while-revalidate | `denali-static-v2` |
+
+**Precached**: `/offline`, `/manifest.json`, `/icon-192.png`, `/icon-512.png`. **Cache versioning**: `CACHE_VERSION = "v2"` — bump on deploy. Old caches deleted on activate. **Update detection**: SW registration checks for updates every 60 min; auto-activates waiting worker.
+
+**Middleware**: `sw.js` excluded from Supabase SSR middleware matcher (`sw\\.js` in regex).
+
+### IndexedDB Cache
+
+`src/lib/offline-cache.ts` — database `denali-offline-cache` v1 with 6 object stores:
+
+| Store | Key | TTL | What's Cached |
+|-------|-----|-----|---------------|
+| `conversations` | `"list"` | 24h | `ConversationHistoryItem[]` |
+| `health-data` | `"snapshot"` | 24h | Full health snapshot (patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations) |
+| `diabetes-log` | `"entries"` | 24h | `LogEntry[]` |
+| `diabetes-insights` | `"current"` | 24h | `StoredInsight` |
+| `profile` | `"profile"` | 4h | Non-sensitive profile data (plan, role, appealCount, isAdmin, trialStatus) |
+| `offline-queue` | Auto-generated ID | — | Failed POST requests awaiting replay |
+
+All operations are try/catch guarded — gracefully degrades if IndexedDB is unavailable (private browsing, Safari restrictions).
+
+### Offline Write Queue
+
+Only diabetes log POSTs are queued (not deletes — ordering risk; not chat — requires real-time API).
+
+**Queue flow**: `useDiabetesLog.addEntry()` catch → `queueOfflineRequest()` → optimistic local state update → on reconnect: `window.addEventListener('online')` → `sw.postMessage({ type: 'SYNC_QUEUE' })` → SW reads queue from IndexedDB → replays POSTs → removes on success, drops after 3 retries.
+
+**Dual consumer**: SW processes queue via raw IndexedDB (can't import `idb`). Client-side `offline-sync.ts` provides `processQueue()` / `getQueueCount()` as alternative.
+
+### Hook Integration Pattern
+
+All 5 data hooks follow the same pattern:
+
+```
+fetch success → setState() → cacheSet() (fire-and-forget)
+fetch failure → cacheGetIfFresh() → setState() from cache (if within TTL)
+```
+
+**CRITICAL: Never `await` IndexedDB writes before `setState()`.** Same rule as Supabase fire-and-forget — blocking on cache writes causes UI hangs.
+
+| Hook | Store | TTL | Offline Behavior |
+|------|-------|-----|------------------|
+| `useConversationHistory` | `conversations` | 24h | Shows cached conversation list |
+| `useHealthData` | `health-data` | 24h | Shows cached health snapshot |
+| `useDiabetesLog` | `diabetes-log` | 24h | Shows cached entries + optimistic adds queued |
+| `useDiabetesInsights` | `diabetes-insights` | 24h | Shows cached insight |
+| `useAuth` (`loadProfileData`) | `profile` | 4h | Restores plan/role/admin from cache |
+
+### Network-Aware UI
+
+- **`OfflineBanner`** — fixed below AppHeader (`top-14 sm:top-16 z-30`), amber-left-border accent, auto-dismisses on reconnect. Rendered in root `layout.tsx`.
+- **Chat page** — `ChatInput` disabled when offline with placeholder "Chat requires an internet connection". Uses `useOnlineStatus()` hook.
+- **Offline page** (`/offline`) — shown when navigation fails. Links to cached health records and past conversations.
+
+### What's NOT Offline
+
+- **Chat**: Requires Claude API + MCP tools — fundamentally online-only
+- **Individual conversation messages**: Loaded via Supabase, not cached (v2 candidate)
+- **Blue Button OAuth**: Network-only (redirect flow)
+- **Stripe checkout/webhooks**: Network-only
+- **Push notifications**: Not implemented (permission complexity for elderly audience)
+
+---
+
 ## Coding Standards
 
 ### Principles
@@ -649,15 +735,15 @@ src/
   app/api/          # API routes (chat, fhir/*, diabetes/*, consent, trial, cms-metadata, account, checkout, webhooks)
   app/app/          # App shell routes (/app, /app/chat, /app/health, /app/diabetes, /app/settings)
   components/
-    ui/             # Primitives (Button, Input, Card, Modal, CmsPledge)
+    ui/             # Primitives (Button, Input, Card, Modal, CmsPledge, OfflineBanner)
     chat/           # Chat-specific (Message, ChatInput, Suggestions)
     appeal/         # Appeal-specific (AppealLetter, StatusBadge)
     auth/           # Auth components (EmailOTPModal, TOTPEnrollModal, TOTPChallengeModal). Passkey modals exist but non-functional (Supabase has no WebAuthn)
     layout/         # Layout (AppHeader, BottomTabs, Container)
     health/         # Health page (ConnectMedicare, PatientCard, CoverageCards, LabResultsCard, ConditionsCard, DiagnosisSummaryCard, MedicationsCard, ClaimsList, PreDiabetesRiskCard, DiabetesConsentCard)
     diabetes/       # Diabetes dashboard (A1CTrendChart, ScreeningReminders, RiskAlerts, QuickLog, InsightsCard)
-  hooks/            # Custom hooks (useAuth, useChat, useConsent, useHealthData, useDiabetesSnapshots, useDiabetesLog, useDiabetesInsights, useSettings, etc.)
-  lib/              # Core libraries (claude.ts, supabase.ts, audit.ts, tools/, skills-loader.ts, denial-patterns.ts, diabetes-insights.ts)
+  hooks/            # Custom hooks (useAuth, useChat, useConsent, useHealthData, useDiabetesSnapshots, useDiabetesLog, useDiabetesInsights, useOnlineStatus, useSettings, etc.)
+  lib/              # Core libraries (claude.ts, supabase.ts, audit.ts, tools/, skills-loader.ts, denial-patterns.ts, diabetes-insights.ts, offline-cache.ts, offline-sync.ts)
   lib/fhir/         # Blue Button 2.0 (crypto, tokens, client, transforms, context, sync, snapshots)
   lib/skills/       # AI skills injected via skills-loader (health-records, medicare-notifications, diabetes-prevention)
   config/           # Config (api.ts, brand.ts, pricing.ts, ui.ts)
