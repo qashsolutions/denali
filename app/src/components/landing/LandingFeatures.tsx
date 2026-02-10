@@ -30,7 +30,7 @@ const FEATURES = [
     title: "Ask Denali",
     description:
       "Ask anything about Medicare coverage or diabetes care. Get a clear checklist of what your doctor needs to document so your claim gets approved.",
-    tags: ["NCD/LCD", "Part A & B", "Coverage Check"],
+    tags: ["Coverage Rules", "Part A & B", "Coverage Check"],
     color: "check-teal" as const,
     href: "/app/chat",
     Illustration: CoverageCheckIllustration,
@@ -41,7 +41,7 @@ const FEATURES = [
     title: "Diabetes & Prevention Coaching",
     description:
       "Personalized coaching from your own A1C and glucose results. Track trends, get reminders, and stay ahead of diabetes.",
-    tags: ["A1C Tracking", "Med Reminders", "MDPP"],
+    tags: ["A1C Tracking", "Med Reminders", "Prevention Program"],
     color: "diabetes-violet" as const,
     href: "/app/chat?topic=diabetes",
     Illustration: DiabetesCareIllustration,

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRightIcon } from "../icons";
+import { BRAND } from "@/config/brand";
 import type { LandingSection, HeroContent } from "@/types/cms";
 
 interface LandingHeroProps {
@@ -23,9 +24,14 @@ export function LandingHero({ section }: LandingHeroProps) {
       <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 lg:py-32">
         <div className="max-w-3xl mx-auto text-center">
           {/* Main Headline */}
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-[var(--text-primary)] leading-tight mb-6">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-[var(--text-primary)] leading-tight mb-4">
             {section.title}
           </h1>
+
+          {/* Brand Tagline */}
+          <p className="text-[1.175rem] sm:text-[1.3rem] font-bold text-[var(--text-primary)] mb-4">
+            {BRAND.TAGLINE}
+          </p>
 
           {/* Subtitle */}
           <p className="text-lg sm:text-xl text-[var(--text-secondary)] mb-10 max-w-2xl mx-auto">
