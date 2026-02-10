@@ -175,6 +175,19 @@ function ChatContent() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Chat page lifecycle: lock body scroll + suppress Supabase AbortErrors
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    const handleRejection = (e: PromiseRejectionEvent) => {
+      if (e.reason?.name === "AbortError") e.preventDefault();
+    };
+    window.addEventListener("unhandledrejection", handleRejection);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, []);
+
   const handleInitialCardSelect = (question: string) => sendMessage(question);
   const handleSuggestionSelect = (suggestion: string) =>
     setPendingInput(suggestion);
@@ -194,7 +207,7 @@ function ChatContent() {
   }, [resetChat, router]);
 
   return (
-    <div className="flex flex-1 min-h-0">
+    <div className="fixed top-14 sm:top-16 bottom-16 md:bottom-0 left-0 right-0 flex bg-[var(--bg-primary)]">
       {/* Sidebar — only visible when toggled on mobile; hidden on desktop in app shell */}
       <Sidebar
         isOpen={sidebarOpen}
