@@ -51,6 +51,12 @@ export function LandingFooter({ settings }: LandingFooterProps) {
               Privacy Policy
             </Link>
             <Link
+              href="/terms"
+              className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+            >
+              Terms of Service
+            </Link>
+            <Link
               href="/hipaa"
               className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
             >
@@ -65,6 +71,7 @@ export function LandingFooter({ settings }: LandingFooterProps) {
             <p>
               Coverage guidance only, not medical advice. Always consult with
               healthcare providers for medical decisions.
+              This product is not endorsed or certified by CMS or HHS.
             </p>
             <p className="shrink-0">
               &copy; {copyrightYear} {brandName}. All rights reserved.

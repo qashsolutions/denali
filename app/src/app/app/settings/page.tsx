@@ -306,7 +306,7 @@ export default function AppSettingsPage() {
           />
           <ConsentToggle
             label="Store health data locally"
-            description="Cache your Blue Button data for faster access. Cached data refreshes every 24 hours."
+            description="Cache your Medicare data for faster access. Cached data refreshes every 24 hours."
             checked={consent.health_data_storage}
             loading={consentLoading}
             onChange={(v) => updateConsent("health_data_storage", v)}

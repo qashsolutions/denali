@@ -6,15 +6,19 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "What data does Denali collect?",
-        a: "We store only what's needed: your email (for login), conversation history, and appeal letters. If you connect Medicare via Blue Button, we cache your claims and coverage data (encrypted, refreshed every 24 hours). We never store your full name, address, SSN, or insurance ID.",
+        a: "We store only what's needed: your email (for login), conversation history, and appeal letters. If you connect Medicare via the official Medicare API, we cache your claims and coverage data (encrypted, refreshed every 24 hours). We never store your full name, address, SSN, or insurance ID.",
       },
       {
         q: "Is my health data encrypted?",
-        a: "Yes. All Blue Button tokens are encrypted with AES-256-GCM before storage. Data in transit uses TLS 1.2+. Your cached health data is only accessible to your authenticated account.",
+        a: "Yes. All Medicare API tokens are encrypted with AES-256-GCM before storage. Data in transit uses TLS 1.2+. Your cached health data is only accessible to your authenticated account.",
       },
       {
         q: "Who can see my data?",
-        a: "Only you. Our AI processes your conversations to provide guidance, but we don't share individual data with third parties. Anonymized, de-identified patterns may be used to improve our recommendations.",
+        a: "We share data only with the service providers needed to run the app (Anthropic for AI, Stripe for payments, Supabase for data storage) — never for marketing or advertising. See our Privacy Policy for details.",
+      },
+      {
+        q: "What happens if there's a data breach?",
+        a: "We will notify affected users within 60 days via email, explaining what happened, what data was involved, and what steps to take. For breaches affecting 500 or more users, we also notify the FTC and HHS as required by law.",
       },
     ],
   },
@@ -23,7 +27,7 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "What happens when I connect Medicare?",
-        a: "We use CMS Blue Button 2.0 to fetch your coverage status, recent claims, and any denied claims. This lets our AI personalize guidance — for example, referencing your actual coverage instead of asking you to look it up.",
+        a: "We use the official Medicare claims API to fetch your coverage status, recent claims, and any denied claims. This lets our AI personalize guidance — for example, referencing your actual coverage instead of asking you to look it up.",
       },
       {
         q: "Can I control how my health data is used?",
@@ -45,11 +49,11 @@ const FAQ_SECTIONS = [
     ],
   },
   {
-    title: "Medicare.gov Connection",
+    title: "Medicare Connection",
     items: [
       {
-        q: "Is this connected to Medicare.gov?",
-        a: "We use CMS Blue Button 2.0, the official Medicare API, to access your claims and coverage data with your permission. We're working toward deeper Medicare.gov integration as part of the CMS Health Technology Ecosystem.",
+        q: "Is this connected to Medicare?",
+        a: "We use the official Medicare claims API to access your claims and coverage data with your permission. We're working toward deeper Medicare integration as part of the CMS Health Technology Ecosystem.",
       },
     ],
   },

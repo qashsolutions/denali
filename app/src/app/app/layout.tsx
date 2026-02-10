@@ -22,7 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </span>
             </Link>
             <p className="text-xs text-[var(--text-muted)] mb-1">
-              Coverage guidance only, not medical advice
+              Coverage guidance only, not medical advice. This product is not endorsed or certified by CMS or HHS.
             </p>
             <p className="text-xs text-[var(--text-muted)]">
               {BRAND.COPYRIGHT_TEXT}
@@ -42,6 +42,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               className="text-xs text-[var(--text-muted)] hover:text-[var(--accent-secondary)] transition-colors"
             >
               Privacy Policy
+            </Link>
+            <Link
+              href="/terms"
+              className="text-xs text-[var(--text-muted)] hover:text-[var(--accent-secondary)] transition-colors"
+            >
+              Terms
             </Link>
             <Link
               href="/hipaa"

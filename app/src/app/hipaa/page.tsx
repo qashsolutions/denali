@@ -34,7 +34,7 @@ export default function HIPAAPage() {
       {/* PHI */}
       <Section title="Protected Health Information (PHI)">
         <P>
-          When you connect your Medicare account via CMS Blue Button 2.0, we
+          When you connect your Medicare account via the official Medicare claims API, we
           may access the following categories of PHI:
         </P>
         <UL>
@@ -42,12 +42,12 @@ export default function HIPAAPage() {
           <li>Medicare enrollment and coverage details</li>
           <li>Claims and Explanation of Benefits (EOBs)</li>
           <li>
-            Clinical data including lab results, diagnoses, and medications
+            Conditions, medications, and screenings (extracted from claims data — lab values are not directly available from Medicare)
           </li>
         </UL>
         <P>
           This data is accessed only with your explicit authorization through
-          the CMS Blue Button OAuth process. You control this connection and
+          the Medicare OAuth process. You control this connection and
           can revoke it at any time.
         </P>
       </Section>
@@ -90,7 +90,7 @@ export default function HIPAAPage() {
         <SubSection title="Technical Safeguards">
           <UL>
             <li>
-              AES-256-GCM encryption for all Blue Button OAuth tokens at rest
+              AES-256-GCM encryption for all Medicare OAuth tokens at rest
             </li>
             <li>TLS 1.2+ for all data in transit</li>
             <li>
@@ -107,7 +107,7 @@ export default function HIPAAPage() {
             </li>
             <li>
               Automatic token refresh with encrypted storage — we never store
-              your Medicare.gov password
+              your Medicare password
             </li>
           </UL>
         </SubSection>
@@ -198,13 +198,20 @@ export default function HIPAAPage() {
           Breaches affecting 500 or more individuals will also be reported to
           HHS and, where required, to the media.
         </P>
+        <P>
+          As a personal health record vendor, we also comply with the FTC Health
+          Breach Notification Rule (16 CFR Part 318), which requires notification
+          to affected individuals and, for breaches affecting 500 or more
+          individuals, notification to the FTC.
+        </P>
       </Section>
 
       {/* Business Associates */}
       <Section title="Business Associates">
         <P>
-          We maintain Business Associate Agreements (BAAs) with service
-          providers who may access PHI on our behalf:
+          We work with the following service providers who may process health
+          data on our behalf. We are pursuing Business Associate Agreements
+          (BAAs) where applicable:
         </P>
         <UL>
           <li>
@@ -222,8 +229,8 @@ export default function HIPAAPage() {
           </li>
         </UL>
         <P>
-          Each Business Associate is contractually obligated to protect PHI
-          in accordance with HIPAA requirements.
+          Each service provider is contractually obligated to protect health
+          data in accordance with their terms and applicable regulations.
         </P>
       </Section>
 
@@ -234,9 +241,8 @@ export default function HIPAAPage() {
         </P>
         <UL>
           <li>
-            Blue Button API requests are scoped to specific FHIR resource
-            types (Patient, Coverage, ExplanationOfBenefit, Observation,
-            Condition, MedicationRequest)
+            Medicare API requests are scoped to specific FHIR resource
+            types (Patient, Coverage, ExplanationOfBenefit)
           </li>
           <li>
             AI context injection includes only clinically relevant

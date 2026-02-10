@@ -18,7 +18,7 @@ const STEPS = [
   {
     step: 1,
     label: "Connect Medicare",
-    hint: "Link your Medicare.gov account",
+    hint: "Link your Medicare account",
     Icon: HeartPulseIcon,
     color: "var(--health-red)",
     colorLight: "var(--health-red-light)",

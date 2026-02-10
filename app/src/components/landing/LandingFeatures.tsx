@@ -18,8 +18,8 @@ const FEATURES = [
     audience: "FOR EVERYONE",
     title: "Health Records in Plain English",
     description:
-      "Connect your clinic or Medicare.gov and see your conditions, medications, and lab results explained in words you understand.",
-    tags: ["EHR Connect", "Blue Button 2.0", "Plain Language"],
+      "Connect your clinic or Medicare account and see your conditions, medications, and lab results explained in words you understand.",
+    tags: ["EHR Connect", "Medicare Connect", "Plain Language"],
     color: "health-red" as const,
     href: "/app/health",
     Illustration: HealthRecordsIllustration,

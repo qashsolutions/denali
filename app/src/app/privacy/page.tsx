@@ -26,12 +26,10 @@ const SECTIONS = [
       {
         title: "Medicare Health Data (With Your Explicit Consent)",
         items: [
-          "Patient demographics (name, date of birth, Medicare beneficiary ID — from CMS Blue Button 2.0)",
+          "Patient demographics (name, date of birth, Medicare beneficiary ID — from your Medicare account)",
           "Coverage information (Medicare Part A/B enrollment, plan details)",
           "Claims and Explanation of Benefits (EOBs) including denied claims",
-          "Lab results (A1C, glucose, BMI, blood pressure — from FHIR Observations)",
-          "Diagnoses (conditions from FHIR Condition resources)",
-          "Medications (prescriptions from FHIR MedicationRequest resources)",
+          "Conditions, medications, and screening history (extracted from your claims data)",
         ],
       },
       {
@@ -41,7 +39,7 @@ const SECTIONS = [
           "Social Security Numbers (SSN)",
           "Medicare insurance card numbers (we access data via secure OAuth, not card numbers)",
           "Bank account or financial information (payments processed by Stripe)",
-          "Medical records beyond what CMS Blue Button provides",
+          "Medical records beyond what Medicare provides",
         ],
       },
       {
@@ -60,7 +58,7 @@ const SECTIONS = [
     items: [
       "Provide personalized Medicare coverage guidance based on your situation",
       "Generate appeal letters when Medicare denies a claim",
-      "Connect to CMS Blue Button 2.0 to access your Medicare data (only with your explicit consent)",
+      "Connect to the official Medicare claims API to access your Medicare data (only with your explicit consent)",
       "Personalize AI conversations with your health context (lab results, diagnoses, medications — only if you consent)",
       "Detect and alert you to potential claim denial risks before they happen",
       "Improve our service through anonymized, de-identified learning patterns",
@@ -70,9 +68,9 @@ const SECTIONS = [
   },
   {
     id: "medicare-data",
-    title: "4. Medicare Health Data (Blue Button 2.0)",
+    title: "4. Medicare Health Data",
     paragraphs: [
-      "We access your Medicare data through CMS Blue Button 2.0, the official Medicare API. This connection uses OAuth 2.0 with PKCE (Proof Key for Code Exchange) for security — we never see or store your Medicare.gov password.",
+      "We access your Medicare data through the official Medicare claims API. This connection uses OAuth 2.0 with PKCE (Proof Key for Code Exchange) for security — we never see or store your Medicare password.",
       "When you connect your Medicare account, you authorize CMS to share specific data with us. You can revoke this connection at any time in Settings.",
     ],
     subsections: [
@@ -106,10 +104,11 @@ const SECTIONS = [
     items: [
       "Anthropic (Claude AI): Your conversation content is sent to Anthropic's API to generate responses. Anthropic's usage policies apply to this processing. We do not send your health data to Anthropic unless you have enabled the 'Health Data in AI' consent toggle.",
       "Stripe: Payment processing for subscriptions and per-appeal purchases. We never see or store your credit card number — Stripe handles this directly.",
-      "CMS (Blue Button): We exchange data with CMS Blue Button 2.0 only when you explicitly authorize the connection.",
+      "CMS (Medicare API): We exchange data with the Medicare claims API only when you explicitly authorize the connection.",
       "Supabase: Our database provider hosts your account data, conversation history, and cached health data with encryption at rest.",
       "Vercel: Our hosting provider processes web requests. Server-side logs may contain request metadata.",
       "Legal Requirements: We may disclose information if required by law, court order, or government regulation.",
+      "Business Transfers: In the event of a merger, acquisition, or sale of assets, your personal information may be transferred. We will notify you via email at least 30 days before your data is transferred and becomes subject to a different privacy policy.",
     ],
   },
   {
@@ -123,6 +122,7 @@ const SECTIONS = [
       "OAuth tokens: Encrypted; deleted when you disconnect Medicare or delete your account",
       "Audit logs: Retained for compliance purposes (minimum 6 years per HIPAA requirements)",
       "Anonymized learning data: Retained indefinitely (contains no personally identifiable information)",
+      "Inactive accounts: Accounts with no sign-in activity for 24 months will receive a 30-day email notice before data is archived. You can reactivate by signing in during the notice period.",
     ],
   },
   {
@@ -132,7 +132,7 @@ const SECTIONS = [
       "You can delete your account at any time through Settings > Danger Zone. When you delete your account, we permanently and irreversibly delete:",
     ],
     items: [
-      "Your Blue Button connection and all cached health data",
+      "Your Medicare connection and all cached health data",
       "All conversations and messages",
       "All appeal letters",
       "Your consent preferences",
@@ -152,7 +152,7 @@ const SECTIONS = [
       "Row-Level Security (RLS) in our database — users can only access their own data",
       "Email-based one-time passcode (OTP) authentication",
       "Optional TOTP multi-factor authentication (authenticator app)",
-      "PKCE (Proof Key for Code Exchange) for Blue Button OAuth to prevent authorization code interception",
+      "PKCE (Proof Key for Code Exchange) for Medicare OAuth to prevent authorization code interception",
       "Comprehensive audit logging of all sensitive data access",
       "Automatic session management and token refresh",
     ],
@@ -167,20 +167,33 @@ const SECTIONS = [
       "Technical safeguards: encryption, access controls, audit logging",
       "Administrative safeguards: workforce training, security policies, incident response procedures",
       "Physical safeguards: secure hosting through SOC 2 compliant providers (Supabase, Vercel)",
-      "Business Associate Agreements (BAAs) with service providers who access protected health information",
+      "Business Associate Agreements (BAAs) in progress with service providers who access protected health information",
     ],
     afterItems:
       "For detailed information about our HIPAA practices, see our HIPAA Compliance page.",
     afterLink: { href: "/hipaa", text: "View HIPAA Compliance" },
   },
   {
+    id: "breach-notification",
+    title: "10. Breach Notification",
+    paragraphs: [
+      "As a personal health record vendor, we comply with the FTC Health Breach Notification Rule (16 CFR Part 318) and the HITECH Act breach notification requirements. In the event of a breach of unsecured health data:",
+    ],
+    items: [
+      "We will notify affected individuals within 60 days of discovery via email, explaining what happened, what data was involved, and what steps to take",
+      "Notification will include a description of the breach, the types of data involved, steps we have taken to investigate and mitigate, and recommended actions for affected users",
+      "For breaches affecting 500 or more individuals, we will also notify the FTC and HHS as required by law",
+      "We maintain incident response procedures to detect, investigate, and contain potential breaches promptly",
+    ],
+  },
+  {
     id: "cms-framework",
-    title: "10. CMS Interoperability Framework",
+    title: "11. CMS Interoperability Framework",
     paragraphs: [
       "We participate in the CMS Health Technology Ecosystem as a Patient-Facing App under two categories: Conversational AI Assistants and Diabetes & Obesity Prevention. As part of this framework, we commit to:",
     ],
     items: [
-      "Supporting patient identity verification through CMS-approved services (Blue Button OAuth with IAL2/AAL2 via Medicare.gov)",
+      "Supporting patient identity verification through CMS-approved services (Medicare OAuth with IAL2/AAL2)",
       "Maintaining transparent audit logs of all data access",
       "Honoring patient consent preferences across all data operations",
       "Including request purpose codes on all health data queries",
@@ -191,10 +204,10 @@ const SECTIONS = [
   },
   {
     id: "cookies",
-    title: "11. Cookies & Local Storage",
+    title: "12. Cookies & Local Storage",
     items: [
       "Authentication cookies: Secure, httpOnly session cookies for login state",
-      "PKCE cookies: Temporary httpOnly cookies during Blue Button OAuth (cleared after authorization)",
+      "PKCE cookies: Temporary httpOnly cookies during Medicare OAuth (cleared after authorization)",
       "Theme preference: Stored in localStorage (dark/light/system)",
       "We do not use tracking cookies or third-party advertising cookies",
       "We do not participate in cross-site tracking or ad networks",
@@ -202,7 +215,7 @@ const SECTIONS = [
   },
   {
     id: "your-rights",
-    title: "12. Your Rights",
+    title: "13. Your Rights",
     paragraphs: ["Depending on your jurisdiction, you may have the right to:"],
     items: [
       "Access: View all data we hold about you (conversation history, appeals, health data cache)",
@@ -217,21 +230,21 @@ const SECTIONS = [
   },
   {
     id: "children",
-    title: "13. Children's Privacy",
+    title: "14. Children's Privacy",
     paragraphs: [
       "Our Service is designed for Medicare beneficiaries (generally age 65+) and their caregivers. We do not knowingly collect information from children under 13. If you believe we have inadvertently collected such information, please contact us and we will delete it promptly.",
     ],
   },
   {
     id: "changes",
-    title: "14. Changes to This Policy",
+    title: "15. Changes to This Policy",
     paragraphs: [
-      "We may update this Privacy Policy from time to time. We will notify you of material changes by posting the updated policy with a new effective date. Your continued use of the Service after changes constitutes acceptance of the updated policy.",
+      "We may update this Privacy Policy from time to time. For material changes, we will notify registered users via email at least 30 days before the new policy takes effect, with a summary of what changed. If you disagree with the changes, you may delete your account before the effective date. Continued use of the Service after the effective date constitutes acceptance of the updated policy.",
     ],
   },
   {
     id: "contact",
-    title: "15. Contact Us",
+    title: "16. Contact Us",
     paragraphs: [
       "If you have questions about this Privacy Policy, your data, or your rights, you can:",
     ],

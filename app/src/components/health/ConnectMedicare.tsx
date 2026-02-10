@@ -15,7 +15,7 @@ export function ConnectMedicare({ onConnect }: ConnectMedicareProps) {
       </div>
 
       <h2 className="text-xl font-bold text-[var(--text-primary)] text-center mb-2">
-        Connect to Medicare.gov
+        Connect Your Medicare
       </h2>
       <p className="text-[var(--text-secondary)] text-center mb-6 text-sm">
         See your claims, coverage, and health info in plain English.
@@ -24,7 +24,7 @@ export function ConnectMedicare({ onConnect }: ConnectMedicareProps) {
 
       <div className="flex flex-col gap-3 mb-6">
         {[
-          { step: "1", text: "Sign in with your Medicare.gov account" },
+          { step: "1", text: "Sign in with your Medicare account" },
           { step: "2", text: "Approve read-only access to your data" },
           { step: "3", text: "See your claims and coverage here" },
         ].map(({ step, text }) => (
@@ -50,7 +50,7 @@ export function ConnectMedicare({ onConnect }: ConnectMedicareProps) {
       </Button>
 
       <p className="text-xs text-[var(--text-muted)] text-center mt-4">
-        Powered by CMS Blue Button 2.0. We only read your data — we never modify it.
+        Powered by the official Medicare API. We only read your data — we never modify it.
       </p>
     </div>
   );
