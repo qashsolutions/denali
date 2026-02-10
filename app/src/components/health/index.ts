@@ -8,6 +8,7 @@ export { AIDisclaimer } from "./AIDisclaimer";
 export { StatusBanner } from "./StatusBanner";
 export { FinancialSummary } from "./FinancialSummary";
 export { AlertsSection } from "./AlertsSection";
+export { HealthAlertsBanner } from "./HealthAlertsBanner";
 export { ClaimsTimeline } from "./ClaimsTimeline";
 export { DiagnosisSummaryCard } from "./DiagnosisSummaryCard";
 export { ProviderSummary } from "./ProviderSummary";

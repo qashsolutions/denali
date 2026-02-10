@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { HeartPulseIcon } from "@/components/icons";
+import Link from "next/link";
+import { HeartPulseIcon, DiabetesIcon } from "@/components/icons";
 import { useHealthData } from "@/hooks/useHealthData";
 import {
   ConnectMedicare,
@@ -10,6 +11,7 @@ import {
   StatusBanner,
   FinancialSummary,
   AlertsSection,
+  HealthAlertsBanner,
   CoverageCards,
   ClaimsTimeline,
   DiagnosisSummaryCard,
@@ -30,6 +32,11 @@ function HealthPageInner() {
   const {
     patient,
     coverage,
+    conditions,
+    medications,
+    screenings,
+    providers,
+    hospitalizations,
     metrics,
     isConnected,
     isLoading,
@@ -129,25 +136,37 @@ function HealthPageInner() {
         {/* 1. Status Banner */}
         <StatusBanner metrics={metrics} onRefresh={refresh} />
 
-        {/* 2. Financial Summary */}
+        {/* 2. Health Alerts (screenings, meds, hospitalizations, specialty) */}
+        <HealthAlertsBanner
+          screenings={screenings}
+          medications={medications}
+          conditions={conditions}
+          providers={providers}
+          hospitalizations={hospitalizations}
+        />
+
+        {/* 3. Financial Summary */}
         {metrics.claimCount > 0 && <FinancialSummary metrics={metrics} />}
 
-        {/* 3. Issues & Alerts */}
+        {/* 4. Claims Issues (denied, high cost, partial) */}
         <AlertsSection metrics={metrics} />
 
-        {/* 4. Coverage */}
+        {/* 5. Diabetes Care navigation */}
+        <DiabetesCareCard />
+
+        {/* 6. Coverage */}
         <CoverageCards coverage={coverage} />
 
-        {/* 5. Claims Timeline */}
+        {/* 7. Claims Timeline */}
         <ClaimsTimeline claimsByMonth={metrics.claimsByMonth} />
 
-        {/* 6. Conditions from Claims */}
-        <DiagnosisSummaryCard diagnoses={metrics.topDiagnoses} />
+        {/* 8. Conditions from Claims (color-coded) */}
+        <DiagnosisSummaryCard diagnoses={metrics.topDiagnoses} conditions={conditions} />
 
-        {/* 7. Providers */}
-        <ProviderSummary providers={metrics.topProviders} />
+        {/* 9. Providers (with specialty) */}
+        <ProviderSummary providers={metrics.topProviders} providerDetails={providers} />
 
-        {/* 8. Medicare Account (collapsible) */}
+        {/* 10. Medicare Account (collapsible) */}
         <AccountSection
           patient={patient}
           lastSynced={lastSynced}
@@ -174,5 +193,31 @@ function PageHeader() {
       </div>
       <h1 className="text-xl font-bold text-[var(--text-primary)]">My Health</h1>
     </div>
+  );
+}
+
+function DiabetesCareCard() {
+  return (
+    <Link
+      href="/app/diabetes"
+      className="block bg-violet-500/5 border border-violet-500/20 rounded-xl p-4 hover:bg-violet-500/10 transition-colors"
+    >
+      <div className="flex items-center gap-4">
+        <div className="w-10 h-10 rounded-xl bg-violet-500/15 flex items-center justify-center shrink-0">
+          <DiabetesIcon className="w-5 h-5 text-violet-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-[var(--text-primary)]">
+            Diabetes Care
+          </p>
+          <p className="text-xs text-[var(--text-secondary)]">
+            A1C tracking, screening reminders, and prevention
+          </p>
+        </div>
+        <span className="text-xs font-medium text-violet-500 shrink-0">
+          View &rarr;
+        </span>
+      </div>
+    </Link>
   );
 }
