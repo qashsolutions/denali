@@ -557,18 +557,16 @@ function extractSuggestionsAndClean(content: string, sessionState: SessionState)
   return { cleanContent: content, suggestions };
 }
 
-// Process tool calls and execute them
+// Process tool calls and execute them in parallel
 async function processToolCalls(
   toolBlocks: ToolUseBlock[],
   toolExecutors: Map<string, ToolExecutor>
 ): Promise<ToolResultBlockParam[]> {
-  const results: ToolResultBlockParam[] = [];
-
-  for (const block of toolBlocks) {
+  const promises = toolBlocks.map(async (block): Promise<ToolResultBlockParam> => {
     const executor = toolExecutors.get(block.name);
 
     if (!executor) {
-      results.push({
+      return {
         type: "tool_result",
         tool_use_id: block.id,
         content: JSON.stringify({
@@ -576,20 +574,19 @@ async function processToolCalls(
           error: `Unknown tool: ${block.name}`,
         }),
         is_error: true,
-      });
-      continue;
+      };
     }
 
     try {
       const result = await executor(block.input as Record<string, unknown>);
-      results.push({
+      return {
         type: "tool_result",
         tool_use_id: block.id,
         content: JSON.stringify(result),
         is_error: !result.success,
-      });
+      };
     } catch (error) {
-      results.push({
+      return {
         type: "tool_result",
         tool_use_id: block.id,
         content: JSON.stringify({
@@ -597,11 +594,11 @@ async function processToolCalls(
           error: error instanceof Error ? error.message : "Unknown error",
         }),
         is_error: true,
-      });
+      };
     }
-  }
+  });
 
-  return results;
+  return Promise.all(promises);
 }
 
 // Timeout wrapper for API calls — uses AbortController to actually cancel the request
@@ -625,10 +622,15 @@ function withTimeout<T>(
 
 // Main chat function with tool calling loop
 // Uses beta API to access MCP servers for real LCD/NCD data
+// Optional callbacks enable SSE streaming to the client
 export async function chat(
   request: ChatRequest,
   toolExecutors: Map<string, ToolExecutor>,
-  maxIterations: number = API_CONFIG.claude.maxToolIterations
+  maxIterations: number = API_CONFIG.claude.maxToolIterations,
+  callbacks?: {
+    onDelta?: (text: string) => void;
+    onToolProgress?: (toolName: string) => void;
+  }
 ): Promise<ChatResult> {
   const claude = getClaudeClient();
   const sessionState = request.sessionState ?? createDefaultSessionState();
@@ -675,20 +677,112 @@ export async function chat(
     console.log("========================================");
 
     // Call Claude Beta API with MCP servers for direct LCD/NCD access
-    // Wrapped in timeout with AbortController to actually cancel hung requests
-    const response: BetaMessage = await withTimeout(
-      (signal) => claude.beta.messages.create({
-        model,
-        max_tokens: API_CONFIG.claude.maxTokens,
-        system: request.systemPrompt,
-        messages,
-        tools: anthropicTools.length > 0 ? anthropicTools : undefined,
-        mcp_servers: MCP_SERVERS,
-        betas: ["mcp-client-2025-04-04"],
-      }, { signal }),
-      timeoutMs,
-      `Claude API iteration ${iterations}`
-    );
+    // When streaming callbacks are provided, use stream:true for real-time text delivery
+    let response: BetaMessage;
+
+    if (callbacks?.onDelta) {
+      try {
+        // Streaming path: forward text deltas to client in real-time
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+        const streamResult = await claude.beta.messages.create({
+          model,
+          max_tokens: API_CONFIG.claude.maxTokens,
+          system: request.systemPrompt,
+          messages,
+          tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+          mcp_servers: MCP_SERVERS,
+          betas: ["mcp-client-2025-04-04"],
+          stream: true,
+        }, { signal: controller.signal });
+
+        // Collect response from stream events (same shape as non-streaming BetaMessage)
+        const contentBlocks: Array<Record<string, unknown>> = [];
+        let stopReason = "";
+        let hasLocalToolUse = false;
+
+        for await (const event of streamResult) {
+          if (event.type === "content_block_start") {
+            contentBlocks[event.index] = { ...(event.content_block as unknown as Record<string, unknown>) };
+            if ((event.content_block as { type: string }).type === "tool_use") {
+              hasLocalToolUse = true;
+            }
+          } else if (event.type === "content_block_delta") {
+            const delta = event.delta as unknown as Record<string, unknown>;
+            if (delta.type === "text_delta" && typeof delta.text === "string") {
+              // Forward text to client only if no local tool_use seen yet
+              if (!hasLocalToolUse) {
+                callbacks.onDelta!(delta.text);
+              }
+              // Accumulate text in content block
+              const block = contentBlocks[event.index];
+              if (block && block.type === "text") {
+                block.text = ((block.text as string) || "") + delta.text;
+              }
+            } else if (delta.type === "input_json_delta" && typeof delta.partial_json === "string") {
+              // Accumulate tool input JSON
+              const block = contentBlocks[event.index];
+              if (block && block.type === "tool_use") {
+                block._inputJson = ((block._inputJson as string) || "") + delta.partial_json;
+              }
+            }
+          } else if (event.type === "content_block_stop") {
+            const block = contentBlocks[event.index];
+            if (block?.type === "tool_use" && block._inputJson) {
+              try {
+                block.input = JSON.parse(block._inputJson as string);
+              } catch {
+                block.input = {};
+              }
+              delete block._inputJson;
+            }
+          } else if (event.type === "message_delta") {
+            const delta = event.delta as unknown as Record<string, unknown>;
+            stopReason = (delta.stop_reason as string) || "";
+          }
+        }
+        clearTimeout(timer);
+
+        response = {
+          content: contentBlocks.filter(Boolean),
+          stop_reason: stopReason,
+        } as unknown as BetaMessage;
+
+        console.log("[CLAUDE API] Streaming iteration complete, stop_reason:", stopReason);
+      } catch (streamErr) {
+        // Streaming failed (e.g., not supported with MCP beta) — fall back
+        console.warn("[CLAUDE API] Streaming failed, falling back to non-streaming:", streamErr);
+        response = await withTimeout(
+          (signal) => claude.beta.messages.create({
+            model,
+            max_tokens: API_CONFIG.claude.maxTokens,
+            system: request.systemPrompt,
+            messages,
+            tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+            mcp_servers: MCP_SERVERS,
+            betas: ["mcp-client-2025-04-04"],
+          }, { signal }),
+          timeoutMs,
+          `Claude API iteration ${iterations} (fallback)`
+        );
+      }
+    } else {
+      // Non-streaming path (original behavior)
+      response = await withTimeout(
+        (signal) => claude.beta.messages.create({
+          model,
+          max_tokens: API_CONFIG.claude.maxTokens,
+          system: request.systemPrompt,
+          messages,
+          tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+          mcp_servers: MCP_SERVERS,
+          betas: ["mcp-client-2025-04-04"],
+        }, { signal }),
+        timeoutMs,
+        `Claude API iteration ${iterations}`
+      );
+    }
 
     // DEBUG: Log response content block types
     console.log("[CLAUDE API] Response stop_reason:", response.stop_reason);
@@ -753,6 +847,8 @@ export async function chat(
         if (!toolsUsed.includes(block.name)) {
           toolsUsed.push(block.name);
         }
+        // Notify client about tool execution (for streaming progress)
+        callbacks?.onToolProgress?.(block.name);
       });
 
       // Execute LOCAL tools only (MCP tools are handled by API)

@@ -108,16 +108,18 @@ export async function POST(request: NextRequest) {
 
     let chatLimit: number = PRICING.CHAT_LIMITS.ANON; // 3/day for unauthenticated
     let chatIdentifier: string;
+    let userProfile: { plan: string | null; is_admin: boolean | null } | null = null;
 
     if (authUser) {
       chatIdentifier = authUser.id;
 
-      // Check if paid subscriber (unlimited)
+      // Fetch profile once — reused for rate limiting AND attachment validation
       const { data: profile } = await authSupabase
         .from("users")
         .select("plan, is_admin")
         .eq("id", authUser.id)
         .single();
+      userProfile = profile;
 
       if (profile?.is_admin) {
         chatLimit = 0; // Admin: unlimited
@@ -191,14 +193,9 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Check size against plan limit
-      const profile2 = await authSupabase
-        .from("users")
-        .select("plan, is_admin")
-        .eq("id", authUser.id)
-        .single();
-      const userPlan = profile2?.data?.plan || "free";
-      const userIsAdmin = profile2?.data?.is_admin || false;
+      // Check size against plan limit (reuse profile fetched for rate limiting)
+      const userPlan = userProfile?.plan || "free";
+      const userIsAdmin = userProfile?.is_admin || false;
       const uploadLimit = getUploadLimitForPlan(userPlan, userIsAdmin, true);
 
       // uploadLimit 0 for admin = unlimited
@@ -326,193 +323,168 @@ export async function POST(request: NextRequest) {
       : body.messages;
     const formattedMessages = formatMessages(claudeMessages, attachment);
 
-    // Call Claude with tools
-    // Use Opus for appeals (higher quality), Sonnet for chat (faster)
+    // --- Streaming SSE response ---
+    // Create SSE stream for real-time text delivery to client.
+    // Claude's tool iterations happen server-side; only the final text response streams.
+    const encoder = new TextEncoder();
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+
+    const writeSSE = (event: string, data: unknown) => {
+      writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)).catch(() => {});
+    };
+
+    // Start async chat processing (runs after Response is returned)
     const modelOverride = sessionState.isAppeal
       ? API_CONFIG.claude.appealModel
       : undefined;
-    console.log("[Chat API] Calling Claude API...", modelOverride ? `(appeal mode: ${modelOverride})` : "");
-    const result = await chat(
-      {
-        messages: formattedMessages,
-        systemPrompt,
-        tools: toolDefinitions,
-        sessionState,
-        modelOverride,
-      },
-      toolExecutors
-    );
-    console.log("[Chat API] Claude response received:");
-    console.log("[Chat API] - Tools used:", result.toolsUsed);
-    console.log("[Chat API] - Suggestions:", result.suggestions);
-    console.log("[Chat API] - Content preview:", result.content.substring(0, 200) + "...");
-    console.log("[Chat API] - Session state:", {
-      userName: result.sessionState.userName,
-      userZip: result.sessionState.userZip,
-      symptoms: result.sessionState.symptoms,
-      duration: result.sessionState.duration,
-      priorTreatments: result.sessionState.priorTreatments,
-      procedureNeeded: result.sessionState.procedureNeeded,
-      providerName: result.sessionState.providerName,
-      provider: result.sessionState.provider,
-      guidanceGenerated: result.sessionState.guidanceGenerated,
-      isAppeal: result.sessionState.isAppeal,
-    });
+    console.log("[Chat API] Starting streaming response...", modelOverride ? `(appeal mode: ${modelOverride})` : "");
 
-    // Get or create conversation ID
-    let conversationId = body.conversationId;
-    let isNewConversation = false;
-
-    if (!conversationId) {
-      isNewConversation = true;
-      // Create conversation using the authenticated server client (authSupabase).
-      // This sets user_id directly at creation time — no client-side claiming needed.
-      // The browser client (getClient) has no auth context on the server, so it can
-      // only create with user_id=NULL, requiring a separate claim step that often fails.
-      const firstUserMsg = body.messages.find((m) => m.role === "user");
-      const title = firstUserMsg
-        ? firstUserMsg.content.slice(0, 60) + (firstUserMsg.content.length > 60 ? "..." : "")
-        : null;
-      console.log("[Chat API] Creating new conversation...");
-
-      const { data: newConv, error: convError } = await authSupabase
-        .from("conversations")
-        .insert({
-          user_id: authUser?.id || null,
-          is_appeal: result.sessionState.isAppeal || false,
-          title: title || null,
-          status: "active",
-          started_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-
-      if (convError || !newConv) {
-        // Fallback: generate UUID but log warning (tracking won't work)
-        conversationId = crypto.randomUUID();
-        console.warn("[Chat API] Failed to create conversation in DB:", convError?.message);
-      } else {
-        conversationId = newConv.id;
-        console.log("[Chat API] Created conversation:", conversationId, authUser ? "(owned)" : "(anon)");
-      }
-    }
-
-    // Save messages server-side using authSupabase (has proper auth context).
-    // Client-side saveMessage via getClient() fails because the browser Supabase
-    // client's RLS auth context is unreliable for INSERT + RETURNING queries.
-    if (conversationId && isNewConversation) {
-      const lastUserMsg = body.messages[body.messages.length - 1];
-      if (lastUserMsg) {
-        authSupabase
-          .from("messages")
-          .insert([
-            { conversation_id: conversationId, role: lastUserMsg.role, content: lastUserMsg.content },
-            { conversation_id: conversationId, role: "assistant", content: result.content },
-          ])
-          .then(({ error: msgErr }) => {
-            if (msgErr) console.warn("[Chat API] Failed to save messages:", msgErr.message);
-            else console.log("[Chat API] Messages saved for conversation:", conversationId);
-          });
-      }
-    } else if (conversationId && !isNewConversation) {
-      // Existing conversation: save the latest exchange
-      const lastUserMsg = body.messages[body.messages.length - 1];
-      if (lastUserMsg) {
-        authSupabase
-          .from("messages")
-          .insert([
-            { conversation_id: conversationId, role: lastUserMsg.role, content: lastUserMsg.content },
-            { conversation_id: conversationId, role: "assistant", content: result.content },
-          ])
-          .then(({ error: msgErr }) => {
-            if (msgErr) console.warn("[Chat API] Failed to save messages:", msgErr.message);
-          });
-      }
-    }
-
-    // Persist learning from successful tool use (non-blocking)
-    if (result.toolsUsed.length > 0) {
-      persistLearning(entities, result.sessionState, result.toolsUsed).catch(
-        (err) => console.warn("Failed to persist learning:", err)
-      );
-    }
-
-    // Persist appeal if generate_appeal_letter was used
-    let appealId: string | undefined;
-    if (result.toolsUsed.includes("generate_appeal_letter") && conversationId) {
-      const ss = result.sessionState;
-      // Separate LCD and NCD policy references
-      const lcdRefs = ss.policyReferences.filter((r) => r.startsWith("L"));
-      const ncdRefs = ss.policyReferences.filter((r) => r.startsWith("NCD"));
+    (async () => {
       try {
-        const savedAppealId = await saveAppeal(conversationId, "", {
-          appealLetter: result.appealLetter || result.content,
-          denialReason: ss.denialCodes.length > 0 ? `CARC ${ss.denialCodes.join(", ")}` : undefined,
-          denialDate: ss.denialDate || undefined,
-          icd10Codes: ss.diagnosisCodes.length > 0 ? ss.diagnosisCodes : undefined,
-          cptCodes: ss.procedureCodes.length > 0 ? ss.procedureCodes : undefined,
-          lcdRefs: lcdRefs.length > 0 ? lcdRefs : undefined,
-          ncdRefs: ncdRefs.length > 0 ? ncdRefs : undefined,
-        });
-        if (savedAppealId) {
-          appealId = savedAppealId;
-          console.log("[Chat API] Appeal saved:", appealId);
-          logAudit("APPEAL_GENERATED", {
-            userId: authUser?.id,
-            resourceType: "appeal",
-            resourceId: savedAppealId,
-            metadata: { conversationId, denialCodes: ss.denialCodes },
-            request,
-          }).catch(() => {});
+        const result = await chat(
+          {
+            messages: formattedMessages,
+            systemPrompt,
+            tools: toolDefinitions,
+            sessionState,
+            modelOverride,
+          },
+          toolExecutors,
+          undefined, // maxIterations (use default)
+          {
+            onDelta: (text) => writeSSE("delta", { text }),
+            onToolProgress: (name) => writeSSE("tool", { name }),
+          }
+        );
+        console.log("[Chat API] Claude response received:");
+        console.log("[Chat API] - Tools used:", result.toolsUsed);
+        console.log("[Chat API] - Content preview:", result.content.substring(0, 200) + "...");
+
+        // Get or create conversation ID
+        let conversationId = body.conversationId;
+        let isNewConversation = false;
+
+        if (!conversationId) {
+          isNewConversation = true;
+          const firstUserMsg = body.messages.find((m) => m.role === "user");
+          const title = firstUserMsg
+            ? firstUserMsg.content.slice(0, 60) + (firstUserMsg.content.length > 60 ? "..." : "")
+            : null;
+
+          const { data: newConv, error: convError } = await authSupabase
+            .from("conversations")
+            .insert({
+              user_id: authUser?.id || null,
+              is_appeal: result.sessionState.isAppeal || false,
+              title: title || null,
+              status: "active",
+              started_at: new Date().toISOString(),
+            })
+            .select("id")
+            .single();
+
+          if (convError || !newConv) {
+            conversationId = crypto.randomUUID();
+            console.warn("[Chat API] Failed to create conversation in DB:", convError?.message);
+          } else {
+            conversationId = newConv.id;
+            console.log("[Chat API] Created conversation:", conversationId, authUser ? "(owned)" : "(anon)");
+          }
         }
-      } catch (err) {
-        console.warn("Failed to save appeal:", err);
+
+        // Save messages (fire-and-forget)
+        const lastUserMsg = body.messages[body.messages.length - 1];
+        if (conversationId && lastUserMsg) {
+          authSupabase
+            .from("messages")
+            .insert([
+              { conversation_id: conversationId, role: lastUserMsg.role, content: lastUserMsg.content },
+              { conversation_id: conversationId, role: "assistant", content: result.content },
+            ])
+            .then(({ error: msgErr }) => {
+              if (msgErr) console.warn("[Chat API] Failed to save messages:", msgErr.message);
+              else if (isNewConversation) console.log("[Chat API] Messages saved for conversation:", conversationId);
+            });
+        }
+
+        // Persist learning (non-blocking)
+        if (result.toolsUsed.length > 0) {
+          persistLearning(entities, result.sessionState, result.toolsUsed).catch(
+            (err) => console.warn("Failed to persist learning:", err)
+          );
+        }
+
+        // Persist appeal if generate_appeal_letter was used
+        let appealId: string | undefined;
+        if (result.toolsUsed.includes("generate_appeal_letter") && conversationId) {
+          const ss = result.sessionState;
+          const lcdRefs = ss.policyReferences.filter((r) => r.startsWith("L"));
+          const ncdRefs = ss.policyReferences.filter((r) => r.startsWith("NCD"));
+          try {
+            const savedAppealId = await saveAppeal(conversationId, "", {
+              appealLetter: result.appealLetter || result.content,
+              denialReason: ss.denialCodes.length > 0 ? `CARC ${ss.denialCodes.join(", ")}` : undefined,
+              denialDate: ss.denialDate || undefined,
+              icd10Codes: ss.diagnosisCodes.length > 0 ? ss.diagnosisCodes : undefined,
+              cptCodes: ss.procedureCodes.length > 0 ? ss.procedureCodes : undefined,
+              lcdRefs: lcdRefs.length > 0 ? lcdRefs : undefined,
+              ncdRefs: ncdRefs.length > 0 ? ncdRefs : undefined,
+            });
+            if (savedAppealId) {
+              appealId = savedAppealId;
+              console.log("[Chat API] Appeal saved:", appealId);
+              logAudit("APPEAL_GENERATED", {
+                userId: authUser?.id,
+                resourceType: "appeal",
+                resourceId: savedAppealId,
+                metadata: { conversationId, denialCodes: ss.denialCodes },
+                request,
+              }).catch(() => {});
+            }
+          } catch (err) {
+            console.warn("Failed to save appeal:", err);
+          }
+        }
+
+        // Send metadata as final SSE event (client replaces streaming text with clean content)
+        writeSSE("done", {
+          content: result.content,
+          suggestions: result.suggestions,
+          conversationId,
+          sessionState: result.sessionState,
+          toolsUsed: result.toolsUsed,
+          appealId,
+          appealLetter: result.appealLetter,
+        } satisfies ChatResponseBody);
+
+        console.log("[Chat API] Stream complete with", result.suggestions.length, "suggestions");
+        await writer.close();
+      } catch (error) {
+        console.error("[Chat API] Stream error:", error);
+        const message = error instanceof Error ? error.message : "An error occurred";
+        writeSSE("error", { error: message });
+        await writer.close();
       }
-    }
+    })();
 
-    // Build response
-    const response: ChatResponseBody = {
-      content: result.content,
-      suggestions: result.suggestions,
-      conversationId,
-      sessionState: result.sessionState,
-      toolsUsed: result.toolsUsed,
-      appealId,
-      appealLetter: result.appealLetter,
-    };
-
-    console.log("[Chat API] Sending response with", response.suggestions.length, "suggestions");
-    return NextResponse.json(response);
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no", // Disable nginx buffering
+      },
+    });
   } catch (error) {
-    console.error("Chat API error:", error);
+    console.error("Chat API error (pre-stream):", error);
 
-    // Handle specific error types
+    // Pre-stream errors (validation, rate limiting) return JSON with proper status codes
     if (error instanceof Error) {
       if (error.message.includes("API key")) {
         return NextResponse.json(
           { error: "API configuration error" },
           { status: 500 }
-        );
-      }
-
-      if (error.message.includes("rate limit")) {
-        return NextResponse.json(
-          { error: "Service is temporarily busy. Please try again in a moment." },
-          { status: 429 }
-        );
-      }
-
-      if (error.message.includes("Max tool calling iterations")) {
-        return NextResponse.json(
-          { error: "Request took too long to process. Please try again." },
-          { status: 500 }
-        );
-      }
-
-      if (error.message.includes("timed out")) {
-        return NextResponse.json(
-          { error: "This is taking longer than usual. Please try again — it usually works on the second try." },
-          { status: 504 }
         );
       }
     }

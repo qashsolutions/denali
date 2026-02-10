@@ -197,7 +197,15 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
     lines.push("");
   }
 
-  return lines.join("\n");
+  const result = lines.join("\n");
+
+  // Safety cap: truncate if health context exceeds 4KB to limit prompt size
+  const MAX_HEALTH_CONTEXT_CHARS = 4096;
+  if (result.length > MAX_HEALTH_CONTEXT_CHARS) {
+    return result.slice(0, MAX_HEALTH_CONTEXT_CHARS) + "\n\n[Health data truncated for brevity]";
+  }
+
+  return result;
 }
 
 /**

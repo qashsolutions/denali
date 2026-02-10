@@ -333,26 +333,126 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         throw new Error(errorData.error || `API error: ${response.status}`);
       }
 
-      const data = await response.json();
+      // Check if response is SSE stream or JSON
+      const contentType = response.headers.get("Content-Type") || "";
+      const isStream = contentType.includes("text/event-stream");
+
+      let data: {
+        content: string;
+        suggestions: string[];
+        conversationId: string;
+        sessionState: SessionState;
+        toolsUsed: string[];
+        appealId?: string;
+        appealLetter?: string;
+      };
+
+      if (isStream && response.body) {
+        // SSE streaming: read events incrementally for real-time text display
+        const streamingMsgId = generateId();
+        const streamingMessage: Message = {
+          id: streamingMsgId,
+          role: "assistant",
+          content: "",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, streamingMessage]);
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let streamedText = "";
+        data = { content: "", suggestions: [], conversationId: "", sessionState: {} as SessionState, toolsUsed: [] };
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // Parse SSE events (separated by double newlines)
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() || "";
+
+          for (const part of parts) {
+            if (!part.trim()) continue;
+            const lines = part.split("\n");
+            let eventType = "";
+            let eventData = "";
+
+            for (const line of lines) {
+              if (line.startsWith("event: ")) {
+                eventType = line.slice(7);
+              } else if (line.startsWith("data: ")) {
+                eventData = line.slice(6);
+              }
+            }
+            if (!eventData) continue;
+
+            try {
+              const parsed = JSON.parse(eventData);
+
+              if (eventType === "delta") {
+                // Append streaming text to the assistant message
+                streamedText += parsed.text;
+                setMessages((prev) => {
+                  const last = prev[prev.length - 1];
+                  if (last?.id === streamingMsgId) {
+                    return [...prev.slice(0, -1), { ...last, content: streamedText }];
+                  }
+                  return prev;
+                });
+              } else if (eventType === "tool") {
+                // Tool being executed — clear streamed text, show in console
+                streamedText = "";
+                setMessages((prev) => {
+                  const last = prev[prev.length - 1];
+                  if (last?.id === streamingMsgId) {
+                    return [...prev.slice(0, -1), { ...last, content: "" }];
+                  }
+                  return prev;
+                });
+                console.log("[useChat] Tool executing:", parsed.name);
+              } else if (eventType === "done") {
+                // Final metadata — replace streamed text with clean content
+                data = parsed;
+                setMessages((prev) => {
+                  const last = prev[prev.length - 1];
+                  if (last?.id === streamingMsgId) {
+                    return [...prev.slice(0, -1), { ...last, content: data.content }];
+                  }
+                  return prev;
+                });
+              } else if (eventType === "error") {
+                throw new Error(parsed.error || "Stream error");
+              }
+            } catch (parseErr) {
+              if (parseErr instanceof Error && parseErr.message !== "Stream error") {
+                console.warn("[useChat] Failed to parse SSE event:", parseErr);
+              } else {
+                throw parseErr;
+              }
+            }
+          }
+        }
+      } else {
+        // JSON fallback (non-streaming response)
+        data = await response.json();
+
+        const assistantMessage: Message = {
+          id: generateId(),
+          role: "assistant",
+          content: data.content,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      }
 
       // Update session state
       if (data.sessionState) {
         setSessionState(data.sessionState);
       }
 
-      // Create assistant message and render IMMEDIATELY (don't block on DB save)
-      const assistantMessage: Message = {
-        id: generateId(),
-        role: "assistant",
-        content: data.content,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-
       // Messages are saved server-side by route.ts using authSupabase.
-      // Client-side saveMessage was unreliable due to browser Supabase client
-      // RLS auth issues. Just update the conversation ID for UI tracking.
       if (data.conversationId && !currentConversationId) {
         currentConversationId = data.conversationId;
         setConversationId(data.conversationId);
@@ -382,7 +482,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           conversationId: currentConversationId || null,
         };
         setAppealData(appeal);
-        // Don't auto-open modal — inline AppealCard will render instead
         trackEvent("appeal_completed", {
           conversationId: currentConversationId || undefined,
           appealId: data.appealId || undefined,

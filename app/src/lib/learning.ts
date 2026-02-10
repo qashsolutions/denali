@@ -830,9 +830,11 @@ export function buildFlywheelPromptInjection(
 ): string {
   if (!context.length) return "";
 
-  const totalCases = context.reduce((s, c) => s + c.total_cases, 0);
+  // Cap at 20 entries to prevent unbounded prompt growth
+  const capped = context.slice(0, 20);
+  const totalCases = capped.reduce((s, c) => s + c.total_cases, 0);
 
-  const lines = context.map((c) => {
+  const lines = capped.map((c) => {
     let line = `- CARC ${c.carc_code}: ${c.total_cases} cases, ${c.success_rate}% success rate`;
     if (c.avg_days !== null) {
       line += `, avg ${c.avg_days} days to resolution`;
