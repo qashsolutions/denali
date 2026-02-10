@@ -71,6 +71,29 @@ export default function AppSettingsPage() {
                   Sign Out
                 </button>
               </div>
+
+              {/* Authenticator status — inline in Account section */}
+              <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
+                <div>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">Authenticator App</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    {totpEnrolled || authState.isMfaEnrolled
+                      ? "Enrolled — adds extra protection to your account"
+                      : "Recommended if you connect Medicare"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowTOTPEnroll(true)}
+                  disabled={totpEnrolled || authState.isMfaEnrolled}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    totpEnrolled || authState.isMfaEnrolled
+                      ? "bg-green-500/10 text-green-600 cursor-default"
+                      : "bg-[var(--accent-primary)] text-white hover:opacity-90"
+                  }`}
+                >
+                  {totpEnrolled || authState.isMfaEnrolled ? "Enrolled" : "Set Up"}
+                </button>
+              </div>
             </>
           ) : (
             <div>
@@ -251,36 +274,6 @@ export default function AppSettingsPage() {
           >
             Preview: The quick brown fox jumps over the lazy dog.
           </p>
-        </div>
-      </section>
-
-      {/* Security */}
-      <section className="mb-8">
-        <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
-          Security
-        </h2>
-        <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-[var(--text-primary)]">Authenticator App</p>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                {totpEnrolled || authState.isMfaEnrolled
-                  ? "Authenticator enrolled — adds extra protection to your account"
-                  : "Add two-factor authentication, recommended if you connect Medicare"}
-              </p>
-            </div>
-            <button
-              onClick={() => setShowTOTPEnroll(true)}
-              disabled={totpEnrolled || authState.isMfaEnrolled}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                totpEnrolled || authState.isMfaEnrolled
-                  ? "bg-green-500/10 text-green-600 cursor-default"
-                  : "bg-[var(--accent-primary)] text-white hover:opacity-90"
-              }`}
-            >
-              {totpEnrolled || authState.isMfaEnrolled ? "Enrolled" : "Set Up"}
-            </button>
-          </div>
         </div>
       </section>
 
