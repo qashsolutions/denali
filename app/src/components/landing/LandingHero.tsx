@@ -29,7 +29,7 @@ export function LandingHero({ section }: LandingHeroProps) {
           </h1>
 
           {/* Brand Tagline */}
-          <p className="text-[1.175rem] sm:text-[1.3rem] font-bold text-[var(--text-primary)] mb-4">
+          <p className="text-[20px] sm:text-[22px] font-bold text-[var(--text-primary)] mb-4">
             {BRAND.TAGLINE}
           </p>
 
