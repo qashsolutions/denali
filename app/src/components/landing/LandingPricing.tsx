@@ -19,7 +19,7 @@ export function LandingPricing({ plans }: LandingPricingProps) {
             Simple, Transparent Pricing
           </h2>
           <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-            Coverage guidance is always free. Only pay when you need appeal
+            Start with a free 14-day trial. Only pay when you need more appeal
             letters.
           </p>
         </div>
@@ -38,7 +38,7 @@ export function LandingPricing({ plans }: LandingPricingProps) {
               {/* Popular Badge */}
               {plan.is_popular && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white text-sm font-semibold">
-                  Most Popular
+                  Best Value
                 </div>
               )}
 
@@ -80,7 +80,7 @@ export function LandingPricing({ plans }: LandingPricingProps) {
                 }`}
               >
                 {plan.price_cents === 0
-                  ? "Start Free"
+                  ? "Start Free Trial"
                   : plan.billing_period === "monthly"
                     ? "Subscribe"
                     : "Get Started"}
@@ -92,8 +92,8 @@ export function LandingPricing({ plans }: LandingPricingProps) {
 
         {/* Note */}
         <p className="text-center text-sm text-[var(--text-muted)] mt-8">
-          All plans include unlimited coverage guidance and Medicare policy
-          lookups.
+          All plans include coverage guidance and Medicare policy lookups. No
+          credit card required for trial.
         </p>
       </div>
     </section>
