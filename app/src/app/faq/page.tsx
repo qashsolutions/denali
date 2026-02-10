@@ -58,11 +58,11 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "Is Denali free?",
-        a: "Coverage guidance is always free, unlimited, and requires no account. Your first 3 appeal letters are free (email verification required). After that, it's $10 per appeal or $25/month for unlimited appeals.",
+        a: "Coverage guidance is free for trial users (14 days, 3 messages/day). Appeal letters: 1 free with trial, then $10 each or $20/month for 3 appeals + unlimited messages.",
       },
       {
         q: "Is there a free trial?",
-        a: "Yes. Medicare beneficiaries can start a 14-day free trial with full access to all features including unlimited appeals.",
+        a: "Yes. Every new account gets a 14-day trial with 3 messages/day and 1 appeal letter. After the trial, choose Pay Per Appeal ($10) or Monthly ($20).",
       },
     ],
   },

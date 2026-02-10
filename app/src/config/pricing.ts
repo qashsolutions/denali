@@ -6,20 +6,25 @@
  */
 
 export const PRICING = {
-  /** Number of free appeals before paywall */
-  FREE_APPEAL_LIMIT: 3,
-
   /** Trial duration in days (CMS criteria A4) */
   TRIAL_DURATION_DAYS: 14,
+
+  /** Appeal credits granted with trial */
+  TRIAL_APPEAL_CREDITS: 1 as number,
+
+  /** Appeal credits reset monthly for subscribers */
+  MONTHLY_APPEAL_CREDITS: 3 as number,
 
   /** Daily chat message limits */
   CHAT_LIMITS: {
     /** Unauthenticated users */
-    ANON: 3,
-    /** Authenticated users (free / trial) */
-    AUTH_FREE: 10,
-    /** Paid subscribers (0 = unlimited) */
-    PAID: 0,
+    ANON: 1 as number,
+    /** Trial users (active trial) */
+    TRIAL: 3 as number,
+    /** Per-appeal purchasers */
+    PER_APPEAL: 5 as number,
+    /** Monthly subscribers (0 = unlimited) */
+    PAID: 0 as number,
   },
 
   /** Single appeal one-time payment */
@@ -30,12 +35,12 @@ export const PRICING = {
     stripePriceId: process.env.STRIPE_PRICE_PAY_PER_CLAIM || "price_single_appeal",
   },
 
-  /** Monthly subscription (unlimited appeals) */
+  /** Monthly subscription (3 appeals/month + unlimited chat) */
   MONTHLY: {
-    amount: parseInt(process.env.NEXT_PUBLIC_PRICE_UNLIMITED_MONTHLY || "25", 10),
+    amount: parseInt(process.env.NEXT_PUBLIC_PRICE_UNLIMITED_MONTHLY || "20", 10),
     currency: "USD",
     label: "per month",
-    appealLimit: 0, // 0 = unlimited
+    appealLimit: 3 as number,
     stripePriceId: process.env.STRIPE_PRICE_UNLIMITED_MONTHLY || "price_unlimited_monthly",
   },
   /** File upload size limits (bytes). 0 = disabled (anon), -1 = unlimited (admin). */

@@ -380,12 +380,17 @@ export async function saveAppeal(
     return null;
   }
 
-  // Increment appeal count (only if we have an email)
+  // Increment appeal count + decrement credit (only if we have an email)
   if (resolvedEmail) {
     await supabase.rpc("increment_appeal_count", {
       p_email: resolvedEmail,
       p_user_id: appealData.userId,
     });
+    // Decrement appeal credit (credit-based gating)
+    supabase.rpc("decrement_appeal_credit", { p_email: resolvedEmail })
+      .then(({ error: creditErr }) => {
+        if (creditErr) console.warn("[saveAppeal] Failed to decrement appeal credit:", creditErr);
+      });
 
     // Schedule outcome followups (non-blocking)
     scheduleOutcomeFollowups(data.id, resolvedEmail).catch((err) =>

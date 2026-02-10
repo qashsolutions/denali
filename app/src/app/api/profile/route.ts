@@ -28,13 +28,15 @@ export async function GET() {
     .single();
 
   let appealCount = 0;
+  let appealCredits = 0;
   if (user.email) {
     const { data: usage } = await supabase
       .from("usage")
-      .select("appeal_count")
+      .select("appeal_count, appeal_credits")
       .eq("email", user.email)
       .single();
     appealCount = usage?.appeal_count || 0;
+    appealCredits = usage?.appeal_credits || 0;
   }
 
   return NextResponse.json({
@@ -43,5 +45,6 @@ export async function GET() {
     role: profile?.role || "patient",
     isAdmin: profile?.is_admin || false,
     appealCount,
+    appealCredits,
   });
 }

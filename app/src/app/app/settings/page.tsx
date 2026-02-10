@@ -196,12 +196,14 @@ export default function AppSettingsPage() {
                   {authState.isAdmin
                     ? "Unlimited access"
                     : authState.plan === "monthly"
-                    ? `${formatPrice(PRICING.MONTHLY.amount)}/month \u00b7 Unlimited appeals`
+                    ? `${formatPrice(PRICING.MONTHLY.amount)}/month \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""} \u00b7 Unlimited messages`
+                    : authState.plan === "per_appeal"
+                    ? `${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""} \u00b7 5 messages/day`
                     : authState.plan === "trial" && authState.trialStatus === "active"
-                    ? `${authState.trialDaysRemaining} days remaining`
+                    ? `${authState.trialDaysRemaining} days remaining \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""}`
                     : authState.plan === "trial" && authState.trialStatus === "expired"
-                    ? "Trial expired"
-                    : `${authState.appealCount} of ${PRICING.FREE_APPEAL_LIMIT} free appeals used`}
+                    ? "Trial ended \u2014 upgrade to continue"
+                    : "No active plan"}
                 </p>
               </div>
               {authState.plan !== "monthly" && !authState.isAdmin && (

@@ -309,6 +309,21 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
 
+        // Handle trial expired / locked out (403)
+        if (response.status === 403 && errorData.code === "TRIAL_EXPIRED") {
+          const expiredMsg: Message = {
+            id: generateId(),
+            role: "assistant",
+            content: "Your free trial has ended. **Upgrade** to keep chatting with Denali and generating appeal letters.",
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, expiredMsg]);
+          setSuggestions(["Upgrade plan"]);
+          setIsLoading(false);
+          clearTimeout(timeoutId);
+          return;
+        }
+
         // Handle rate limiting (429)
         if (response.status === 429 && errorData.code === "RATE_LIMITED") {
           const rateLimitMsg: Message = {
@@ -316,14 +331,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             role: "assistant",
             content: errorData.isAuthenticated
               ? `You've reached your daily limit of ${errorData.limit} messages. You can continue tomorrow, or upgrade for unlimited access.`
-              : `You've used your ${errorData.limit} free messages for today. **Sign in** for up to 10 messages per day — it's free.`,
+              : `You've used your free message for today. **Sign up** for a 14-day trial with 3 messages per day.`,
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, rateLimitMsg]);
           setSuggestions(
             errorData.isAuthenticated
               ? ["Upgrade plan"]
-              : ["Sign in"]
+              : ["Sign up"]
           );
           setIsLoading(false);
           clearTimeout(timeoutId);

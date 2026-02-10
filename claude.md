@@ -44,9 +44,9 @@
 | **Target User** | Original Medicare patients & caregivers |
 | **NOT for** | Commercial payers, Medicaid, billers, coders |
 | **Tone** | Warm, simple, no jargon, empathetic, 8th grade reading level |
-| **Coverage guidance** | Always free, unlimited, no signup |
-| **First 3 appeals** | Free (email OTP required) |
-| **More appeals** | $10 each OR $25/month unlimited |
+| **Anonymous** | 1 message/day, no signup |
+| **Trial** | 14-day free trial, 3 msgs/day, 1 appeal credit (email OTP) |
+| **Paid** | $10/appeal (5 msgs/day) or $20/month (3 appeals, unlimited msgs) |
 | **Tech Stack** | Next.js PWA, Supabase (auth + DB), Claude API (agentic), Stripe |
 | **AI Model** | Claude via Beta API with MCP servers |
 | **Deploy** | Vercel |
@@ -420,25 +420,24 @@ Reuses existing `sessionState` (ICD-10, CPT, policy refs from earlier coverage f
 
 | Plan | Price | Appeals | Chat Messages/Day | Auth Required |
 |------|-------|---------|-------------------|---------------|
-| Anonymous | $0 | — | 3 | None |
-| Free | $0 | 3 (lifetime) | 10 | Email OTP |
-| Trial | $0 (14 days, CMS A4) | Unlimited | 10 | Email OTP |
-| Pay Per Appeal | $10/appeal | Unlimited | Unlimited | Mobile + Email OTP |
-| Unlimited | $25/month | Unlimited | Unlimited | Mobile + Email OTP |
+| Anonymous | $0 | — | 1 | None |
+| Trial (14 days) | $0 | 1 credit | 3 | Email OTP |
+| Expired (post-trial) | — | — | 0 (locked) | Email OTP |
+| Pay Per Appeal | $10/appeal | 1 credit per purchase | 5 | Email OTP |
+| Monthly | $20/month | 3 credits/month | Unlimited | Email OTP |
 | **Admin** | — | Unlimited | Unlimited | `is_admin = TRUE` on `users` row |
 
-Coverage guidance is **always free** (unlimited, no signup). Paywall only appears for appeal letters. Chat rate limiting enforced via `check_and_increment_chat` RPC (identifier = user_id for authenticated, IP for anonymous). Returns 429 when limit exceeded. **Admin users** (`users.is_admin`) bypass all rate limits and appeal paywalls.
+Every signup = automatic 14-day trial. After trial expires → locked (0 chats, must pay). No standalone "free" tier. Appeal access is credit-based via `usage.appeal_credits` column. Chat rate limiting enforced via `check_and_increment_chat` RPC (identifier = user_id for authenticated, IP for anonymous). Returns 429 when limit exceeded; returns 403 `TRIAL_EXPIRED` when trial/free users are locked out. **Admin users** (`users.is_admin`) bypass all rate limits and appeal paywalls.
 
 ### Auth Gating
 
 | Feature | Auth Required |
 |---------|---------------|
-| Coverage guidance (3 msgs/day) | None |
-| Coverage guidance (10 msgs/day) | Email OTP |
-| First 3 appeals | Email OTP only |
-| 14-day trial | Email OTP only |
-| Additional appeals | Mobile OTP + Payment |
-| $25/month subscription (unlimited chat + appeals) | Mobile OTP + Email OTP |
+| Anonymous chat (1 msg/day) | None |
+| 14-day trial (3 msgs/day, 1 appeal credit) | Email OTP |
+| Post-trial (locked) | Email OTP + Payment to continue |
+| Per-appeal (5 msgs/day, 1 credit per $10) | Email OTP + Payment |
+| Monthly (unlimited chat, 3 appeals/month) | Email OTP + $20/month |
 | Medicare health data | Email OTP + Blue Button OAuth (+ TOTP challenge if user has opted in) |
 
 ### AAL2 Compliance Strategy (CMS A1 / NIST 800-63B)
@@ -450,12 +449,10 @@ Coverage guidance is **always free** (unlimited, no signup). Paywall only appear
 ```
 1. User requests appeal letter
 2. Check email:
-   - Not found -> Signup wall (email OTP)
-   - Found, appeal_count<3 -> Generate letter (FREE), increment count
-   - Found, appeal_count>=3 -> Check subscription:
-     - Active (monthly or active trial) -> Allow
-     - None -> Show paywall ($10 or $25/month)
-3. After payment -> Reveal letter, increment count
+   - Not verified -> Signup wall (email OTP → auto-trial with 1 credit)
+   - Verified, appeal_credits > 0 -> Generate letter, decrement credit, increment count
+   - Verified, appeal_credits = 0 -> Show paywall ($10 single or $20/month)
+3. After payment -> Credit added, reveal letter
 ```
 
 ### Stripe Payment Architecture

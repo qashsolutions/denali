@@ -57,9 +57,21 @@ export async function fulfillCheckoutSession(sessionId: string) {
       console.error("[STRIPE] fulfill_checkout RPC error:", error);
       throw error;
     }
+
+    // Reset monthly appeal credits
+    if (email) {
+      const { error: creditError } = await admin.rpc("reset_monthly_appeal_credits", {
+        p_email: email,
+        p_credits: 3,
+      });
+      if (creditError) {
+        console.error("[STRIPE] reset_monthly_appeal_credits error:", creditError);
+      }
+    }
+
     console.log(`[STRIPE] Fulfilled monthly subscription for user ${userId}`);
   } else {
-    // One-time payment — just upgrade plan
+    // One-time payment — upgrade plan + add 1 appeal credit
     const { error } = await admin
       .from("users")
       .update({ plan: "per_appeal", updated_at: new Date().toISOString() })
@@ -68,6 +80,18 @@ export async function fulfillCheckoutSession(sessionId: string) {
       console.error("[STRIPE] Error updating user plan:", error);
       throw error;
     }
+
+    // Add 1 appeal credit for single payment
+    if (email) {
+      const { error: creditError } = await admin.rpc("add_appeal_credits", {
+        p_email: email,
+        p_credits: 1,
+      });
+      if (creditError) {
+        console.error("[STRIPE] add_appeal_credits error:", creditError);
+      }
+    }
+
     console.log(`[STRIPE] Fulfilled single payment for user ${userId}`);
   }
 }
@@ -106,6 +130,32 @@ export async function handleSubscriptionEvent(
   if (error) {
     console.error("[STRIPE] handle_subscription_change RPC error:", error);
     throw error;
+  }
+
+  // Reset monthly appeal credits on renewal (active status with new period)
+  if (status === "active") {
+    // Look up email from subscription metadata or linked user
+    const { data: subRecord } = await admin
+      .from("subscriptions")
+      .select("user_id")
+      .eq("stripe_subscription_id", subscription.id)
+      .single();
+    if (subRecord?.user_id) {
+      const { data: userRecord } = await admin
+        .from("users")
+        .select("email")
+        .eq("id", subRecord.user_id)
+        .single();
+      if (userRecord?.email) {
+        const { error: creditError } = await admin.rpc("reset_monthly_appeal_credits", {
+          p_email: userRecord.email,
+          p_credits: 3,
+        });
+        if (creditError) {
+          console.error("[STRIPE] reset_monthly_appeal_credits error:", creditError);
+        }
+      }
+    }
   }
 
   console.log(

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useAuth, type AppealAccessStatus } from "@/hooks/useAuth";
-import { PRICING } from "@/config";
 import { EmailOTPModal } from "@/components/auth/EmailOTPModal";
 import { TOTPChallengeModal } from "@/components/auth/TOTPChallengeModal";
 import { TOTPEnrollModal } from "@/components/auth/TOTPEnrollModal";
@@ -185,13 +184,17 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
 
             <h3 className="text-xl font-semibold text-slate-100 mb-2">
               {!authState.isEmailVerified
-                ? "Verify Your Email"
+                ? "Sign Up to Get Started"
+                : authState.trialStatus === "expired"
+                ? "Your Trial Has Ended"
                 : "Unlock Your Appeal Letter"}
             </h3>
 
             <p className="text-slate-400 mb-6">
               {!authState.isEmailVerified
-                ? "Quick email verification keeps your appeal letters secure."
+                ? "Create a free account to get your first appeal letter."
+                : authState.trialStatus === "expired"
+                ? "Upgrade to continue generating appeal letters."
                 : "Get access to this appeal letter and help fight your denial."}
             </p>
 
@@ -199,12 +202,12 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
               onClick={requestAccess}
               className="w-full py-3 px-6 rounded-xl font-medium transition-all bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white"
             >
-              {!authState.isEmailVerified ? "Verify Email" : "View Pricing"}
+              {!authState.isEmailVerified ? "Sign Up Free" : "View Pricing"}
             </button>
 
             {!authState.isEmailVerified && (
               <p className="mt-3 text-sm text-slate-500">
-                Your first {PRICING.FREE_APPEAL_LIMIT} appeal letters are free!
+                Includes a 14-day trial with 1 free appeal letter.
               </p>
             )}
           </div>
@@ -241,6 +244,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
         onClose={() => setShowPaywallModal(false)}
         onSuccess={handlePaymentSuccess}
         appealCount={authState.appealCount}
+        trialExpired={authState.trialStatus === "expired"}
       />
     </>
   );

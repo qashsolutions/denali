@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
     const authSupabase = await createServerSupabaseClient();
     const { data: { user: authUser } } = await authSupabase.auth.getUser();
 
-    let chatLimit: number = PRICING.CHAT_LIMITS.ANON; // 3/day for unauthenticated
+    let chatLimit: number = PRICING.CHAT_LIMITS.ANON; // 1/day for unauthenticated
     let chatIdentifier: string;
     let userProfile: { plan: string | null; is_admin: boolean | null } | null = null;
 
@@ -125,10 +125,41 @@ export async function POST(request: NextRequest) {
         chatLimit = 0; // Admin: unlimited
       } else {
         const plan = profile?.plan || "free";
-        if (plan === "monthly" || plan === "per_appeal") {
+        if (plan === "monthly") {
           chatLimit = PRICING.CHAT_LIMITS.PAID; // 0 = unlimited
+        } else if (plan === "per_appeal") {
+          chatLimit = PRICING.CHAT_LIMITS.PER_APPEAL; // 5/day
+        } else if (plan === "trial") {
+          // Check trial expiry
+          const { data: sub } = await authSupabase
+            .from("subscriptions")
+            .select("trial_end")
+            .eq("user_id", authUser.id)
+            .single();
+          const trialEnd = sub?.trial_end ? new Date(sub.trial_end) : null;
+          if (trialEnd && trialEnd > new Date()) {
+            chatLimit = PRICING.CHAT_LIMITS.TRIAL; // 3/day
+          } else {
+            // Trial expired or no trial — locked out
+            return NextResponse.json(
+              {
+                error: "Your free trial has ended. Upgrade to keep using Denali.",
+                code: "TRIAL_EXPIRED",
+                upsell: true,
+              },
+              { status: 403 }
+            );
+          }
         } else {
-          chatLimit = PRICING.CHAT_LIMITS.AUTH_FREE; // 10/day
+          // "free" or no plan — no standalone free tier anymore
+          return NextResponse.json(
+            {
+              error: "Your free trial has ended. Upgrade to keep using Denali.",
+              code: "TRIAL_EXPIRED",
+              upsell: true,
+            },
+            { status: 403 }
+          );
         }
       }
     } else {

@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { getClient } from "@/lib/supabase";
-import { PRICING } from "@/config";
 import { cacheSet, cacheGetIfFresh, STORES, TTL } from "@/lib/offline-cache";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
@@ -16,6 +15,7 @@ export interface AuthState {
   plan: "free" | "per_appeal" | "monthly" | "trial";
   role: "patient" | "counselor" | "provider";
   appealCount: number;
+  appealCredits: number;
   trialStatus: "none" | "active" | "expired" | "converted";
   trialDaysRemaining: number;
   isAdmin: boolean;
@@ -46,6 +46,7 @@ const DEFAULT_AUTH_STATE: AuthState = {
   plan: "free",
   role: "patient",
   appealCount: 0,
+  appealCredits: 0,
   trialStatus: "none",
   trialDaysRemaining: 0,
   isAdmin: false,
@@ -119,6 +120,7 @@ export function useAuth(): UseAuthReturn {
           : "patient";
 
         const appealCount = profileData?.appealCount || 0;
+        const appealCredits = profileData?.appealCredits || 0;
         const isAdmin = profileData?.isAdmin || false;
 
         // Trial status
@@ -154,6 +156,7 @@ export function useAuth(): UseAuthReturn {
           plan: userPlan,
           role: userRole,
           appealCount,
+          appealCredits,
           trialStatus,
           trialDaysRemaining,
           isAdmin,
@@ -164,6 +167,7 @@ export function useAuth(): UseAuthReturn {
           plan: userPlan,
           role: userRole,
           appealCount,
+          appealCredits,
           isAdmin,
           trialStatus,
           trialDaysRemaining,
@@ -175,6 +179,7 @@ export function useAuth(): UseAuthReturn {
           plan: string;
           role: string;
           appealCount: number;
+          appealCredits: number;
           isAdmin: boolean;
           trialStatus: string;
           trialDaysRemaining: number;
@@ -186,6 +191,7 @@ export function useAuth(): UseAuthReturn {
             plan: d.plan as AuthState["plan"],
             role: d.role as AuthState["role"],
             appealCount: d.appealCount,
+            appealCredits: d.appealCredits || 0,
             isAdmin: d.isAdmin,
             trialStatus: d.trialStatus as AuthState["trialStatus"],
             trialDaysRemaining: d.trialDaysRemaining,
@@ -286,12 +292,12 @@ export function useAuth(): UseAuthReturn {
         }
 
         if (data.user) {
-          // Create or update user in database
+          // Create or update user in database — new signups get "trial" plan
           const { error: upsertError } = await supabase.from("users").upsert(
             {
               id: data.user.id,
               email,
-              plan: "free",
+              plan: "trial",
             },
             { onConflict: "id" }
           );
@@ -300,11 +306,17 @@ export function useAuth(): UseAuthReturn {
             console.error("Error upserting user:", upsertError);
           }
 
-          // Initialize usage record if not exists
+          // Start trial via API (creates subscription record with trial dates)
+          fetch("/api/trial", { method: "POST" }).catch((err) =>
+            console.warn("Failed to start trial:", err)
+          );
+
+          // Initialize usage record with 1 appeal credit (ignoreDuplicates: true = skip if exists)
           const { error: usageError } = await supabase.from("usage").upsert(
             {
               email,
               appeal_count: 0,
+              appeal_credits: 1,
             },
             { onConflict: "email", ignoreDuplicates: true }
           );
@@ -473,7 +485,7 @@ export function useAuth(): UseAuthReturn {
     [supabase]
   );
 
-  // Check appeal access based on email and plan
+  // Check appeal access based on credits and plan
   const checkAppealAccess =
     useCallback(async (): Promise<AppealAccessStatus> => {
       // Admins always get unlimited access
@@ -491,36 +503,40 @@ export function useAuth(): UseAuthReturn {
       }
 
       try {
-        const { data: usage, error: usageError } = await supabase
+        // Fetch current credits from DB (freshest data)
+        const { data: usage } = await supabase
           .from("usage")
-          .select("appeal_count")
+          .select("appeal_credits")
           .eq("email", authState.email)
           .single();
 
-        // No usage record yet = new user = free
-        if (usageError || !usage) {
-          return "free";
+        const credits = usage?.appeal_credits ?? authState.appealCredits;
+
+        // Trial: active + has credits
+        if (authState.plan === "trial") {
+          if (authState.trialStatus === "active" && credits > 0) {
+            return "allowed";
+          }
+          return "paywall";
         }
 
-        const appealCount = usage.appeal_count || 0;
-
-        if (appealCount < PRICING.FREE_APPEAL_LIMIT) {
-          return "free";
+        // Per-appeal or monthly: has credits
+        if (authState.plan === "per_appeal" || authState.plan === "monthly") {
+          if (credits > 0) {
+            return "allowed";
+          }
+          return "paywall";
         }
 
-        if (authState.plan === "monthly" || authState.plan === "per_appeal") {
-          return "allowed";
-        }
-
-        // Trial plan: allowed if trial is still active
-        if (authState.plan === "trial" && authState.trialStatus === "active") {
-          return "allowed";
-        }
-
+        // Free / no plan — must upgrade
         return "paywall";
       } catch (error) {
         console.error("Error checking appeal access:", error);
-        return "free";
+        // Fallback to cached state
+        if (authState.appealCredits > 0) {
+          return "allowed";
+        }
+        return "paywall";
       }
     }, [authState, supabase]);
 

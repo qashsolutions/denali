@@ -4,13 +4,12 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRICING, formatPrice } from "@/config";
 
-const FREE_LIMIT = PRICING.FREE_APPEAL_LIMIT;
-
 interface PaywallModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   appealCount: number;
+  trialExpired?: boolean;
 }
 
 type PlanType = "single" | "monthly";
@@ -26,6 +25,7 @@ export function PaywallModal({
   onClose,
   onSuccess,
   appealCount,
+  trialExpired,
 }: PaywallModalProps) {
   const [selectedPlan, setSelectedPlan] = useState<PlanType>("single");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -104,35 +104,15 @@ export function PaywallModal({
 
         {/* Content */}
         <div className="p-6 space-y-4">
-          {/* Free tier info */}
-          {appealCount < FREE_LIMIT && (
-            <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 text-green-500"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-medium text-green-600 dark:text-green-400">
-                    {FREE_LIMIT - appealCount} Free Appeal{FREE_LIMIT - appealCount !== 1 ? "s" : ""} Left
-                  </p>
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    Your first {FREE_LIMIT} appeal letters are on us
-                  </p>
-                </div>
-              </div>
+          {/* Trial expired banner */}
+          {trialExpired && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+              <p className="font-medium text-amber-600 dark:text-amber-400">
+                Your free trial has ended
+              </p>
+              <p className="text-sm text-[var(--text-secondary)] mt-1">
+                Choose a plan to continue using Denali.
+              </p>
             </div>
           )}
 
@@ -161,7 +141,7 @@ export function PaywallModal({
                     )}
                   </div>
                   <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                    One appeal letter, no commitment
+                    1 appeal + 5 messages/day
                   </p>
                 </div>
                 <div className="text-right">
@@ -189,14 +169,12 @@ export function PaywallModal({
                     <span className="font-semibold text-[var(--text-primary)]">
                       Monthly
                     </span>
-                    {selectedPlan === "monthly" && (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-violet-500/20 text-violet-500 rounded-full">
-                        Selected
-                      </span>
-                    )}
+                    <span className="px-2 py-0.5 text-xs font-medium bg-violet-500/20 text-violet-500 rounded-full">
+                      {selectedPlan === "monthly" ? "Selected" : "Best value"}
+                    </span>
                   </div>
                   <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                    Unlimited appeals, cancel anytime
+                    3 appeals/month, unlimited messages
                   </p>
                   <ul className="mt-2 space-y-1">
                     <li className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
@@ -211,7 +189,7 @@ export function PaywallModal({
                           clipRule="evenodd"
                         />
                       </svg>
-                      Unlimited appeal letters
+                      {PRICING.MONTHLY.appealLimit} appeal letters per month
                     </li>
                     <li className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                       <svg

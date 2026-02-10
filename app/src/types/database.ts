@@ -1498,6 +1498,7 @@ export type Database = {
       usage: {
         Row: {
           appeal_count: number
+          appeal_credits: number
           created_at: string
           device_fingerprint: string | null
           email: string | null
@@ -1509,6 +1510,7 @@ export type Database = {
         }
         Insert: {
           appeal_count?: number
+          appeal_credits?: number
           created_at?: string
           device_fingerprint?: string | null
           email?: string | null
@@ -1520,6 +1522,7 @@ export type Database = {
         }
         Update: {
           appeal_count?: number
+          appeal_credits?: number
           created_at?: string
           device_fingerprint?: string | null
           email?: string | null
@@ -1747,28 +1750,6 @@ export type Database = {
           success_rate: string | null
           time_limit: string | null
         }
-        Insert: {
-          created_at?: string | null
-          decision_timeframe?: string | null
-          description?: string | null
-          effective_date?: string | null
-          id?: string | null
-          level?: number | null
-          name?: string | null
-          success_rate?: string | null
-          time_limit?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          decision_timeframe?: string | null
-          description?: string | null
-          effective_date?: string | null
-          id?: string | null
-          level?: number | null
-          name?: string | null
-          success_rate?: string | null
-          time_limit?: string | null
-        }
         Relationships: []
       }
       carc_codes_latest: {
@@ -1781,26 +1762,6 @@ export type Database = {
           group_code: string | null
           is_active: boolean | null
           plain_english: string | null
-        }
-        Insert: {
-          category?: string | null
-          code?: string | null
-          created_at?: string | null
-          description?: string | null
-          effective_date?: string | null
-          group_code?: string | null
-          is_active?: boolean | null
-          plain_english?: string | null
-        }
-        Update: {
-          category?: string | null
-          code?: string | null
-          created_at?: string | null
-          description?: string | null
-          effective_date?: string | null
-          group_code?: string | null
-          is_active?: boolean | null
-          plain_english?: string | null
         }
         Relationships: []
       }
@@ -1820,36 +1781,6 @@ export type Database = {
           reason: string | null
           reason_codes: string[] | null
         }
-        Insert: {
-          appeal_deadline_days?: number | null
-          appeal_strategy?: string | null
-          category?: string | null
-          common_cpts?: string[] | null
-          common_diagnoses?: string[] | null
-          created_at?: string | null
-          documentation_checklist?: string[] | null
-          effective_date?: string | null
-          estimated_success_rate?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          reason?: string | null
-          reason_codes?: string[] | null
-        }
-        Update: {
-          appeal_deadline_days?: number | null
-          appeal_strategy?: string | null
-          category?: string | null
-          common_cpts?: string[] | null
-          common_diagnoses?: string[] | null
-          created_at?: string | null
-          documentation_checklist?: string[] | null
-          effective_date?: string | null
-          estimated_success_rate?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          reason?: string | null
-          reason_codes?: string[] | null
-        }
         Relationships: []
       }
       eob_denial_mappings_latest: {
@@ -1862,54 +1793,7 @@ export type Database = {
           id: string | null
           rarc_code: string | null
         }
-        Insert: {
-          carc_code?: string | null
-          created_at?: string | null
-          effective_date?: string | null
-          eob_code?: string | null
-          eob_description?: string | null
-          id?: string | null
-          rarc_code?: string | null
-        }
-        Update: {
-          carc_code?: string | null
-          created_at?: string | null
-          effective_date?: string | null
-          eob_code?: string | null
-          eob_description?: string | null
-          id?: string | null
-          rarc_code?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "eob_denial_mappings_carc_code_effective_date_fkey"
-            columns: ["carc_code", "effective_date"]
-            isOneToOne: false
-            referencedRelation: "carc_codes"
-            referencedColumns: ["code", "effective_date"]
-          },
-          {
-            foreignKeyName: "eob_denial_mappings_carc_code_effective_date_fkey"
-            columns: ["carc_code", "effective_date"]
-            isOneToOne: false
-            referencedRelation: "carc_codes_latest"
-            referencedColumns: ["code", "effective_date"]
-          },
-          {
-            foreignKeyName: "eob_denial_mappings_rarc_code_effective_date_fkey"
-            columns: ["rarc_code", "effective_date"]
-            isOneToOne: false
-            referencedRelation: "rarc_codes"
-            referencedColumns: ["code", "effective_date"]
-          },
-          {
-            foreignKeyName: "eob_denial_mappings_rarc_code_effective_date_fkey"
-            columns: ["rarc_code", "effective_date"]
-            isOneToOne: false
-            referencedRelation: "rarc_codes_latest"
-            referencedColumns: ["code", "effective_date"]
-          },
-        ]
+        Relationships: []
       }
       flywheel_metrics: {
         Row: {
@@ -1936,28 +1820,14 @@ export type Database = {
           is_active: boolean | null
           plain_english: string | null
         }
-        Insert: {
-          category?: string | null
-          code?: string | null
-          created_at?: string | null
-          description?: string | null
-          effective_date?: string | null
-          is_active?: boolean | null
-          plain_english?: string | null
-        }
-        Update: {
-          category?: string | null
-          code?: string | null
-          created_at?: string | null
-          description?: string | null
-          effective_date?: string | null
-          is_active?: boolean | null
-          plain_english?: string | null
-        }
         Relationships: []
       }
     }
     Functions: {
+      add_appeal_credits: {
+        Args: { p_credits: number; p_email: string }
+        Returns: undefined
+      }
       apply_outcome_incentive: { Args: { p_email: string }; Returns: boolean }
       check_and_increment_chat: {
         Args: { p_daily_limit: number; p_identifier: string }
@@ -1981,6 +1851,7 @@ export type Database = {
         Returns: undefined
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      decrement_appeal_credit: { Args: { p_email: string }; Returns: number }
       delete_user_cascade: {
         Args: { target_user_id: string }
         Returns: undefined
@@ -2137,6 +2008,10 @@ export type Database = {
         Returns: string
       }
       refresh_flywheel_metrics: { Args: never; Returns: undefined }
+      reset_monthly_appeal_credits: {
+        Args: { p_credits: number; p_email: string }
+        Returns: undefined
+      }
       search_denial_codes: {
         Args: { search_text: string }
         Returns: {
