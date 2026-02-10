@@ -25,25 +25,14 @@ export function LandingPricing({ plans }: LandingPricingProps) {
         </div>
 
         {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto items-stretch">
           {plans.map((plan) => (
             <div
               key={plan.id}
-              className={`relative bg-[var(--bg-primary)] rounded-2xl p-6 sm:p-8 border transition-all ${
-                plan.is_popular
-                  ? "border-[var(--accent-primary)] shadow-xl shadow-[var(--accent-primary)]/10 scale-[1.02] md:scale-105"
-                  : "border-[var(--border)] hover:border-[var(--accent-primary)]/50"
-              }`}
+              className="flex flex-col bg-[var(--bg-primary)] rounded-2xl p-6 sm:p-8 border border-[var(--border)] hover:border-[var(--accent-primary)]/50 transition-all"
             >
-              {/* Popular Badge */}
-              {plan.is_popular && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white text-sm font-semibold">
-                  Best Value
-                </div>
-              )}
-
               {/* Plan Name */}
-              <h3 className="text-xl font-semibold text-[var(--text-primary)] mb-2 mt-2">
+              <h3 className="text-xl font-semibold text-[var(--text-primary)] mb-2">
                 {plan.name}
               </h3>
 
@@ -58,7 +47,7 @@ export function LandingPricing({ plans }: LandingPricingProps) {
               </div>
 
               {/* Features */}
-              <ul className="space-y-3 mb-8">
+              <ul className="space-y-3 flex-1">
                 {Array.isArray(plan.features) &&
                   plan.features.map((feature, index) => (
                     <li key={index} className="flex items-start gap-3">
@@ -70,14 +59,10 @@ export function LandingPricing({ plans }: LandingPricingProps) {
                   ))}
               </ul>
 
-              {/* CTA Button */}
+              {/* CTA Button — pinned to bottom */}
               <Link
                 href="/app"
-                className={`group w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition-all ${
-                  plan.is_popular
-                    ? "bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white hover:shadow-lg hover:shadow-[var(--accent-primary)]/25"
-                    : "bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)]"
-                }`}
+                className="group w-full flex items-center justify-center gap-2 py-3 mt-8 rounded-xl font-semibold transition-all bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)]"
               >
                 {plan.price_cents === 0
                   ? "Start Free Trial"
