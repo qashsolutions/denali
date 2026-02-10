@@ -611,6 +611,13 @@ Blue Button connects patients to their Medicare claims data via FHIR APIs.
 **BottomTabs** (`src/components/layout/BottomTabs.tsx`) — mobile only, `/app/*` pages:
 - Tabs: Home, Health, Ask Denali, Settings (4 tabs, fixed bottom)
 
+**Health Hub** (`src/app/app/health/page.tsx`) — 6 collapsible accordion cards replacing 11-section scroll:
+- Each card: `HealthHubCard` — status dot (red/amber/green) + title + one-line summary + chevron toggle
+- Cards: Needs Attention (auto-expanded, conditional), Coverage Status, Diabetes Care (conditional), Health Conditions (conditional), Claims & Providers, Medicare Account
+- Status dots computed via `computeCardStatuses()` (useMemo) — checks denied claims, overdue screenings, med refill gaps, severity classification, sync age
+- Multiple cards can be open simultaneously. `expandedCards` as `Set<string>` state
+- Existing child components (`CoverageCards`, `ClaimsTimeline`, `DiagnosisSummaryCard`, etc.) reused as-is inside card bodies
+
 **Icons** (`src/components/icons/index.tsx`):
 - `DiabetesIcon`: chart/monitoring icon (trend line + dot) — NOT blood drop
 - `HeartPulseIcon`, `ChatBubbleIcon`, `DocumentTextIcon`, `GearIcon`, `HomeIcon`, `MountainIcon`
@@ -740,7 +747,7 @@ src/
     appeal/         # Appeal-specific (AppealLetter, StatusBadge)
     auth/           # Auth components (EmailOTPModal, TOTPEnrollModal, TOTPChallengeModal). Passkey modals exist but non-functional (Supabase has no WebAuthn)
     layout/         # Layout (AppHeader, BottomTabs, Container)
-    health/         # Health page (ConnectMedicare, PatientCard, CoverageCards, LabResultsCard, ConditionsCard, DiagnosisSummaryCard, MedicationsCard, ClaimsList, PreDiabetesRiskCard, DiabetesConsentCard)
+    health/         # Health page (ConnectMedicare, CoverageCards, DiagnosisSummaryCard, ClaimsTimeline, ProviderSummary, AlertsSection, HealthAlertsBanner, AccountSection, FinancialSummary, AIDisclaimer, StatusBanner, ConditionsAlertBanner, PreDiabetesRiskCard)
     diabetes/       # Diabetes dashboard (A1CTrendChart, ScreeningReminders, RiskAlerts, QuickLog, InsightsCard)
   hooks/            # Custom hooks (useAuth, useChat, useConsent, useHealthData, useDiabetesSnapshots, useDiabetesLog, useDiabetesInsights, useOnlineStatus, useSettings, etc.)
   lib/              # Core libraries (claude.ts, supabase.ts, audit.ts, tools/, skills-loader.ts, denial-patterns.ts, diabetes-insights.ts, offline-cache.ts, offline-sync.ts)
