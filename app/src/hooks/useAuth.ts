@@ -28,8 +28,8 @@ interface UseAuthReturn {
   authState: AuthState;
   sendEmailOTP: (email: string) => Promise<boolean>;
   verifyEmailOTP: (email: string, code: string) => Promise<boolean>;
-  enrollTOTP: () => Promise<{ qrCode: string; secret: string } | null>;
-  challengeAndVerifyTOTP: (code: string) => Promise<boolean>;
+  enrollTOTP: () => Promise<{ qrCode: string; secret: string; factorId: string } | null>;
+  challengeAndVerifyTOTP: (code: string, factorId?: string) => Promise<boolean>;
   checkAppealAccess: () => Promise<AppealAccessStatus>;
   signOut: () => Promise<void>;
   clearError: () => void;
@@ -318,6 +318,7 @@ export function useAuth(): UseAuthReturn {
   const enrollTOTP = useCallback(async (): Promise<{
     qrCode: string;
     secret: string;
+    factorId: string;
   } | null> => {
     setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
 
@@ -339,6 +340,7 @@ export function useAuth(): UseAuthReturn {
       return {
         qrCode: data.totp.qr_code,
         secret: data.totp.secret,
+        factorId: data.id,
       };
     } catch (error) {
       setAuthState((prev) => ({
@@ -354,72 +356,45 @@ export function useAuth(): UseAuthReturn {
   }, [supabase]);
 
   // Challenge and verify TOTP
+  // factorId: pass from enrollTOTP() during enrollment; omit during login (discovered via listFactors)
   const challengeAndVerifyTOTP = useCallback(
-    async (code: string): Promise<boolean> => {
+    async (code: string, factorId?: string): Promise<boolean> => {
       setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       try {
-        const { data: factorsData } =
-          await supabase.auth.mfa.listFactors();
-        const totpFactor = factorsData?.totp?.find(
-          (f) => f.status === "verified"
-        );
+        // During enrollment, use the factorId directly from enroll()
+        // During login, discover the verified factor via listFactors()
+        let targetFactorId = factorId;
 
-        if (!totpFactor) {
-          // If no verified factor, this is enrollment verification
-          // NOTE: listFactors().totp only contains verified factors.
-          // Unverified factors are only in .all — filter by factor_type.
-          const unverified = factorsData?.all?.find(
-            (f) => f.factor_type === "totp" && (f.status as string) === "unverified"
+        if (!targetFactorId) {
+          const { data: factorsData } =
+            await supabase.auth.mfa.listFactors();
+          const totpFactor = factorsData?.totp?.find(
+            (f) => f.status === "verified"
           );
-          if (!unverified) {
-            setAuthState((prev) => ({
-              ...prev,
-              isLoading: false,
-              error: "No authenticator found. Please set up again.",
-            }));
-            return false;
+
+          if (!totpFactor) {
+            // Fallback: search .all for unverified factors
+            const unverified = factorsData?.all?.find(
+              (f) => f.factor_type === "totp" && (f.status as string) === "unverified"
+            );
+            if (!unverified) {
+              setAuthState((prev) => ({
+                ...prev,
+                isLoading: false,
+                error: "No authenticator found. Please set up again.",
+              }));
+              return false;
+            }
+            targetFactorId = unverified.id;
+          } else {
+            targetFactorId = totpFactor.id;
           }
-
-          const { data: challengeData, error: challengeError } =
-            await supabase.auth.mfa.challenge({ factorId: unverified.id });
-
-          if (challengeError) {
-            setAuthState((prev) => ({
-              ...prev,
-              isLoading: false,
-              error: challengeError.message,
-            }));
-            return false;
-          }
-
-          const { error: verifyError } = await supabase.auth.mfa.verify({
-            factorId: unverified.id,
-            challengeId: challengeData.id,
-            code,
-          });
-
-          if (verifyError) {
-            setAuthState((prev) => ({
-              ...prev,
-              isLoading: false,
-              error: verifyError.message,
-            }));
-            return false;
-          }
-
-          setAuthState((prev) => ({
-            ...prev,
-            isMfaEnrolled: true,
-            isMfaVerified: true,
-            isLoading: false,
-          }));
-          return true;
         }
 
-        // Challenge existing verified factor
+        // Challenge and verify the factor
         const { data: challengeData, error: challengeError } =
-          await supabase.auth.mfa.challenge({ factorId: totpFactor.id });
+          await supabase.auth.mfa.challenge({ factorId: targetFactorId });
 
         if (challengeError) {
           setAuthState((prev) => ({
@@ -431,7 +406,7 @@ export function useAuth(): UseAuthReturn {
         }
 
         const { error: verifyError } = await supabase.auth.mfa.verify({
-          factorId: totpFactor.id,
+          factorId: targetFactorId,
           challengeId: challengeData.id,
           code,
         });
@@ -447,6 +422,7 @@ export function useAuth(): UseAuthReturn {
 
         setAuthState((prev) => ({
           ...prev,
+          isMfaEnrolled: true,
           isMfaVerified: true,
           isLoading: false,
         }));
