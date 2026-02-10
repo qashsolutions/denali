@@ -79,7 +79,6 @@ export async function GET(request: NextRequest) {
     // Must match EXACTLY what was sent in authorize — use same env var
     const redirectUri = process.env.BLUEBUTTON_CALLBACK_URL
       || `${getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin).replace("://www.", "://")}${blueButton.callbackPath}`;
-    console.log("[FHIR callback] redirect_uri:", redirectUri);
 
     const tokenUrl = `${blueButton.baseUrl}/${blueButton.version}/o/token/`;
     const body = new URLSearchParams({
@@ -107,7 +106,7 @@ export async function GET(request: NextRequest) {
     }
 
     const tokens = await tokenRes.json();
-    console.log("[FHIR callback] Token response keys:", Object.keys(tokens), "patient:", tokens.patient, "expires_in:", tokens.expires_in, "token_type:", tokens.token_type, "access_token_length:", tokens.access_token?.length, "scope:", tokens.scope);
+    console.log("[FHIR callback] Token exchange succeeded, patient:", tokens.patient);
 
     // Extract FHIR patient ID from token response
     // Blue Button includes patient ID in the token response

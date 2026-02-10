@@ -66,7 +66,6 @@ export async function GET(request: NextRequest) {
     // Use explicit env var to avoid origin-detection issues on Vercel
     const redirectUri = process.env.BLUEBUTTON_CALLBACK_URL
       || `${getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin).replace("://www.", "://")}${blueButton.callbackPath}`;
-    console.log("[FHIR authorize] redirect_uri:", redirectUri);
 
     // Build authorization URL
     const params = new URLSearchParams({

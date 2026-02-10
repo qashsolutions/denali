@@ -1,11 +1,14 @@
 export { ConnectMedicare } from "./ConnectMedicare";
-export { PatientCard } from "./PatientCard";
 export { CoverageCards } from "./CoverageCards";
-export { ClaimsList } from "./ClaimsList";
 export { ClaimDetail } from "./ClaimDetail";
-export { ConnectionStatus } from "./ConnectionStatus";
-export { LabResultsCard } from "./LabResultsCard";
-export { ConditionsCard } from "./ConditionsCard";
-export { MedicationsCard } from "./MedicationsCard";
 export { PreDiabetesRiskCard } from "./PreDiabetesRiskCard";
-export { DiabetesConsentCard } from "./DiabetesConsentCard";
+
+// Health Dashboard v2
+export { AIDisclaimer } from "./AIDisclaimer";
+export { StatusBanner } from "./StatusBanner";
+export { FinancialSummary } from "./FinancialSummary";
+export { AlertsSection } from "./AlertsSection";
+export { ClaimsTimeline } from "./ClaimsTimeline";
+export { DiagnosisSummaryCard } from "./DiagnosisSummaryCard";
+export { ProviderSummary } from "./ProviderSummary";
+export { AccountSection } from "./AccountSection";

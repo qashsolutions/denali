@@ -31,7 +31,9 @@ export interface ClaimSummary {
   serviceDate: string;
   provider: string;
   diagnosis: string[];
+  diagnosisCodes?: string[];  // ICD-10 codes parallel to diagnosis[] (for clinical extraction)
   procedures: string[];
+  procedureCodes?: string[];  // CPT/HCPCS/NDC codes parallel to procedures[] (for clinical extraction)
   totalCharged: string;
   medicarePaid: string;
   youOwe: string;
@@ -164,21 +166,33 @@ export function transformEOB(eob: FhirEOB): ClaimSummary {
   // Provider
   const provider = eob.provider?.display ?? eob.facility?.display ?? "Unknown provider";
 
-  // Diagnoses
-  const diagnosis = (eob.diagnosis ?? [])
+  // Diagnoses (display names + ICD-10 codes, kept parallel)
+  const diagnosisEntries = (eob.diagnosis ?? [])
     .map((d) => {
       const coding = d.diagnosisCodeableConcept?.coding?.[0];
-      return coding?.display ?? coding?.code ?? null;
+      return {
+        display: coding?.display ?? coding?.code ?? null,
+        code: coding?.code ?? null,
+      };
     })
-    .filter((d): d is string => d !== null);
+    .filter((d) => d.display !== null);
+  const diagnosis = diagnosisEntries.map((d) => d.display as string);
+  // Parallel to diagnosis[] — "" where ICD-10 code is unavailable
+  const diagnosisCodes = diagnosisEntries.map((d) => d.code ?? "");
 
-  // Procedures from line items
-  const procedures = (eob.item ?? [])
+  // Procedures from line items (display names + CPT/HCPCS/NDC codes, kept parallel)
+  const procedureEntries = (eob.item ?? [])
     .map((item) => {
       const coding = item.productOrService?.coding?.[0];
-      return coding?.display ?? coding?.code ?? null;
+      return {
+        display: coding?.display ?? coding?.code ?? null,
+        code: coding?.code ?? null,
+      };
     })
-    .filter((p): p is string => p !== null);
+    .filter((p) => p.display !== null);
+  const procedures = procedureEntries.map((p) => p.display as string);
+  // Parallel to procedures[] — "" where CPT/NDC code is unavailable
+  const procedureCodes = procedureEntries.map((p) => p.code ?? "");
 
   // Amounts
   const totals = extractAmounts(eob);
@@ -195,7 +209,9 @@ export function transformEOB(eob: FhirEOB): ClaimSummary {
     serviceDate,
     provider,
     diagnosis,
+    diagnosisCodes: diagnosis.length > 0 ? diagnosisCodes : undefined,
     procedures,
+    procedureCodes: procedures.length > 0 ? procedureCodes : undefined,
     totalCharged: formatCurrency(totals.charged),
     medicarePaid: formatCurrency(totals.paid),
     youOwe: formatCurrency(totals.patientOwes),
@@ -207,7 +223,7 @@ export function transformEOB(eob: FhirEOB): ClaimSummary {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Diabetes Lab Extraction (CMS Diabetes & Obesity criteria)
+// Clinical Types (used by eob-clinical.ts, diabetes page, chat context)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface LabResult {
@@ -217,31 +233,6 @@ export interface LabResult {
   date: string;
   loincCode: string;
 }
-
-interface FhirObservation {
-  resourceType: "Observation";
-  code?: { coding?: Array<{ system?: string; code?: string; display?: string }> };
-  valueQuantity?: { value?: number; unit?: string };
-  effectiveDateTime?: string;
-  status?: string;
-}
-
-/** LOINC codes for diabetes-relevant labs */
-const DIABETES_LOINC: Record<string, string> = {
-  "4548-4": "Hemoglobin A1C",
-  "2345-7": "Glucose (Fasting)",
-  "2339-0": "Glucose (Random)",
-  "14771-0": "Fasting Glucose",
-  "59261-8": "Hemoglobin A1C (IFCC)",
-  "39156-5": "BMI",
-  "55284-4": "Blood Pressure (Systolic)",
-  "8462-4": "Blood Pressure (Diastolic)",
-  "1558-6": "Fasting Glucose (Alt)",
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Condition & Medication Types (CMS Diabetes & Obesity)
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface DiagnosisSummary {
   code: string;        // ICD-10 (e.g., "E11.9")
@@ -258,140 +249,7 @@ export interface MedicationSummary {
   isDiabetesMed: boolean;
 }
 
-interface FhirCondition {
-  resourceType: "Condition";
-  code?: { coding?: Array<{ system?: string; code?: string; display?: string }> };
-  clinicalStatus?: { coding?: Array<{ code?: string }> };
-  onsetDateTime?: string;
-  recordedDate?: string;
-}
-
-interface FhirMedicationRequest {
-  resourceType: "MedicationRequest";
-  medicationCodeableConcept?: { coding?: Array<{ system?: string; code?: string; display?: string }>; text?: string };
-  status?: string;
-  dosageInstruction?: Array<{ text?: string }>;
-  authoredOn?: string;
-}
-
 export type DiabetesClassification = "diabetic" | "pre-diabetic" | "at-risk" | "none";
-
-export function extractDiabetesLabs(observations: FhirObservation[]): LabResult[] {
-  const results: LabResult[] = [];
-
-  for (const obs of observations) {
-    if (obs.status === "cancelled" || obs.status === "entered-in-error") continue;
-
-    for (const coding of obs.code?.coding ?? []) {
-      const code = coding.code ?? "";
-      if (code in DIABETES_LOINC && obs.valueQuantity?.value != null) {
-        results.push({
-          name: DIABETES_LOINC[code],
-          value: obs.valueQuantity.value,
-          unit: obs.valueQuantity.unit ?? "%",
-          date: obs.effectiveDateTime ? formatDate(obs.effectiveDateTime) : "Unknown",
-          loincCode: code,
-        });
-        break; // Only count each observation once
-      }
-    }
-  }
-
-  // Sort by date descending (most recent first)
-  // Parse formatted dates back to Date objects for correct chronological ordering
-  return results.sort((a, b) => {
-    const da = new Date(a.date).getTime();
-    const db = new Date(b.date).getTime();
-    if (isNaN(da) || isNaN(db)) return 0;
-    return db - da;
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Condition Extraction (Diabetes / Obesity diagnoses)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** ICD-10 prefix → category mapping for diabetes-related conditions */
-const DIABETES_ICD10_PREFIXES: Array<[string, DiagnosisSummary["category"]]> = [
-  ["E10", "type1"],
-  ["E11", "type2"],
-  ["E13", "other-diabetes"],
-  ["R73.03", "pre-diabetic"],
-  ["R73.09", "pre-diabetic"],
-  ["E66", "obesity"],
-];
-
-export function extractDiabetesConditions(conditions: FhirCondition[]): DiagnosisSummary[] {
-  const results: DiagnosisSummary[] = [];
-
-  for (const cond of conditions) {
-    // Skip resolved/inactive
-    const clinicalStatus = cond.clinicalStatus?.coding?.[0]?.code;
-    if (clinicalStatus === "resolved" || clinicalStatus === "inactive") continue;
-
-    for (const coding of cond.code?.coding ?? []) {
-      const code = coding.code ?? "";
-      const display = coding.display ?? code;
-
-      // Match diabetes-related ICD-10 codes
-      const match = DIABETES_ICD10_PREFIXES.find(([prefix]) => code.startsWith(prefix));
-      if (match) {
-        results.push({
-          code,
-          name: display,
-          category: match[1],
-          recordedDate: cond.recordedDate
-            ? formatDate(cond.recordedDate)
-            : cond.onsetDateTime
-            ? formatDate(cond.onsetDateTime)
-            : "Unknown",
-        });
-        break; // One match per condition
-      }
-    }
-  }
-
-  return results;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Medication Extraction (Diabetes drugs)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Drug class keywords for diabetes medications */
-const DIABETES_DRUG_PATTERNS = /metformin|insulin|glipizide|glyburide|glimepiride|pioglitazone|rosiglitazone|sitagliptin|saxagliptin|linagliptin|alogliptin|canagliflozin|dapagliflozin|empagliflozin|ertugliflozin|liraglutide|semaglutide|dulaglutide|exenatide|tirzepatide|acarbose|miglitol|nateglinide|repaglinide|colesevelam|bromocriptine|pramlintide/i;
-
-export function extractDiabetesMedications(medRequests: FhirMedicationRequest[]): MedicationSummary[] {
-  const results: MedicationSummary[] = [];
-
-  for (const med of medRequests) {
-    const display = med.medicationCodeableConcept?.text
-      ?? med.medicationCodeableConcept?.coding?.[0]?.display
-      ?? med.medicationCodeableConcept?.coding?.[0]?.code
-      ?? "";
-
-    if (!display) continue;
-
-    const isDiabetesMed = DIABETES_DRUG_PATTERNS.test(display);
-    const status = med.status === "active" ? "Active"
-      : med.status === "completed" ? "Completed"
-      : capitalize(med.status ?? "Unknown");
-
-    results.push({
-      name: display,
-      status,
-      dosage: med.dosageInstruction?.[0]?.text ?? "",
-      startDate: med.authoredOn ? formatDate(med.authoredOn) : "Unknown",
-      isDiabetesMed,
-    });
-  }
-
-  // Diabetes meds first, then alphabetical
-  return results.sort((a, b) => {
-    if (a.isDiabetesMed !== b.isDiabetesMed) return a.isDiabetesMed ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Diabetes Classification

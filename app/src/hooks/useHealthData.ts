@@ -7,7 +7,7 @@
  * Reads from /api/fhir/data (which reads from fhir_cache).
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type {
   PatientSummary,
   CoverageSummary,
@@ -16,6 +16,7 @@ import type {
   DiagnosisSummary,
   MedicationSummary,
 } from "@/lib/fhir/transforms";
+import { computeDashboardMetrics, type HealthDashboardMetrics } from "@/lib/health-analytics";
 
 interface UseHealthDataReturn {
   patient: PatientSummary | null;
@@ -24,6 +25,7 @@ interface UseHealthDataReturn {
   labs: LabResult[];
   conditions: DiagnosisSummary[];
   medications: MedicationSummary[];
+  metrics: HealthDashboardMetrics;
   isConnected: boolean;
   isLoading: boolean;
   lastSynced: Date | null;
@@ -104,6 +106,11 @@ export function useHealthData(): UseHealthDataReturn {
     await fetchData();
   }, [fetchData]);
 
+  const metrics = useMemo(
+    () => computeDashboardMetrics(claims, coverage),
+    [claims, coverage]
+  );
+
   return {
     patient,
     coverage,
@@ -111,6 +118,7 @@ export function useHealthData(): UseHealthDataReturn {
     labs,
     conditions,
     medications,
+    metrics,
     isConnected,
     isLoading,
     lastSynced,

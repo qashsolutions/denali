@@ -6,16 +6,16 @@ import { HeartPulseIcon } from "@/components/icons";
 import { useHealthData } from "@/hooks/useHealthData";
 import {
   ConnectMedicare,
-  PatientCard,
+  AIDisclaimer,
+  StatusBanner,
+  FinancialSummary,
+  AlertsSection,
   CoverageCards,
-  ClaimsList,
-  ConnectionStatus,
-  LabResultsCard,
-  ConditionsCard,
-  MedicationsCard,
-  DiabetesConsentCard,
+  ClaimsTimeline,
+  DiagnosisSummaryCard,
+  ProviderSummary,
+  AccountSection,
 } from "@/components/health";
-import { useConsent } from "@/hooks/useConsent";
 
 export default function HealthPage() {
   return (
@@ -30,10 +30,7 @@ function HealthPageInner() {
   const {
     patient,
     coverage,
-    claims,
-    labs,
-    conditions,
-    medications,
+    metrics,
     isConnected,
     isLoading,
     lastSynced,
@@ -42,13 +39,6 @@ function HealthPageInner() {
     disconnect,
     refresh,
   } = useHealthData();
-  const { consent, isLoading: consentLoading, updateConsent } = useConsent();
-
-  // Show consent card when connected + has diabetes data + hasn't enabled AI consent
-  const hasDiabetesData = labs.length > 0 || conditions.some(c =>
-    ["type1", "type2", "pre-diabetic", "other-diabetes"].includes(c.category)
-  );
-  const showConsentCard = isConnected && hasDiabetesData && !consent.health_data_ai && !consentLoading;
 
   // Handle OAuth callback params
   const oauthError = searchParams.get("error");
@@ -73,12 +63,7 @@ function HealthPageInner() {
   if (isLoading) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-[var(--health-red)]/15 flex items-center justify-center">
-            <HeartPulseIcon className="w-5 h-5 text-[var(--health-red)]" />
-          </div>
-          <h1 className="text-xl font-bold text-[var(--text-primary)]">My Health</h1>
-        </div>
+        <PageHeader />
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div
@@ -94,16 +79,11 @@ function HealthPageInner() {
     );
   }
 
-  // Error state
+  // Error state (not connected)
   if (error && !isConnected) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-[var(--health-red)]/15 flex items-center justify-center">
-            <HeartPulseIcon className="w-5 h-5 text-[var(--health-red)]" />
-          </div>
-          <h1 className="text-xl font-bold text-[var(--text-primary)]">My Health</h1>
-        </div>
+        <PageHeader />
         <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-6 text-center">
           <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
           <button
@@ -137,45 +117,62 @@ function HealthPageInner() {
     );
   }
 
-  // Connected — show health data
+  // Connected — new health dashboard
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-[var(--health-red)]/15 flex items-center justify-center">
-          <HeartPulseIcon className="w-5 h-5 text-[var(--health-red)]" />
-        </div>
-        <h1 className="text-xl font-bold text-[var(--text-primary)]">My Health</h1>
-      </div>
+      <PageHeader />
 
       <div className="space-y-6">
-        <ConnectionStatus
+        {/* 0. AI Disclaimer */}
+        <AIDisclaimer />
+
+        {/* 1. Status Banner */}
+        <StatusBanner metrics={metrics} onRefresh={refresh} />
+
+        {/* 2. Financial Summary */}
+        {metrics.claimCount > 0 && <FinancialSummary metrics={metrics} />}
+
+        {/* 3. Issues & Alerts */}
+        <AlertsSection metrics={metrics} />
+
+        {/* 4. Coverage */}
+        <CoverageCards coverage={coverage} />
+
+        {/* 5. Claims Timeline */}
+        <ClaimsTimeline claimsByMonth={metrics.claimsByMonth} />
+
+        {/* 6. Conditions from Claims */}
+        <DiagnosisSummaryCard diagnoses={metrics.topDiagnoses} />
+
+        {/* 7. Providers */}
+        <ProviderSummary providers={metrics.topProviders} />
+
+        {/* 8. Medicare Account (collapsible) */}
+        <AccountSection
+          patient={patient}
           lastSynced={lastSynced}
           onRefresh={refresh}
           onDisconnect={disconnect}
         />
 
-        {showConsentCard && (
-          <DiabetesConsentCard consent={consent} onUpdateConsent={updateConsent} />
-        )}
-
-        {patient && <PatientCard patient={patient} />}
-
-        <CoverageCards coverage={coverage} />
-
-        <LabResultsCard labs={labs} />
-
-        <ConditionsCard conditions={conditions} />
-
-        <MedicationsCard medications={medications} />
-
-        <ClaimsList claims={claims} />
-
+        {/* Inline error */}
         {error && (
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
             <p className="text-xs text-amber-600 dark:text-amber-400">{error}</p>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function PageHeader() {
+  return (
+    <div className="flex items-center gap-3 mb-6">
+      <div className="w-10 h-10 rounded-xl bg-[var(--health-red)]/15 flex items-center justify-center">
+        <HeartPulseIcon className="w-5 h-5 text-[var(--health-red)]" />
+      </div>
+      <h1 className="text-xl font-bold text-[var(--text-primary)]">My Health</h1>
     </div>
   );
 }

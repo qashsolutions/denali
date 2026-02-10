@@ -48,12 +48,9 @@ export async function fhirGet<T>(
     "X-Request-Purpose": purpose,
   };
 
-  console.log("[FHIR client] Request:", url, "Authorization:", `Bearer ${accessToken.substring(0, 6)}...`);
-
   // Follow up to 5 redirects manually to preserve Authorization header
   for (let i = 0; i < 5; i++) {
     const res = await fetch(url, { headers, redirect: "manual" });
-    console.log("[FHIR client] Response status:", res.status, "url:", url, "redirected:", res.redirected);
 
     // Handle redirects — re-send with Authorization header preserved
     if (res.status >= 300 && res.status < 400) {
@@ -63,13 +60,11 @@ export async function fhirGet<T>(
       }
       // Resolve relative redirects
       url = location.startsWith("http") ? location : new URL(location, url).toString();
-      console.log("[FHIR client] Following redirect to:", url);
       continue;
     }
 
     if (res.status === 401) {
       const body401 = await res.text();
-      console.error("[FHIR client] 401 response from:", url, "body:", body401);
       throw new FhirError("Token expired or invalid", 401, body401);
     }
 

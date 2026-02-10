@@ -14,9 +14,6 @@ import {
   transformPatient,
   transformCoverage,
   transformEOB,
-  extractDiabetesLabs,
-  extractDiabetesConditions,
-  extractDiabetesMedications,
   type PatientSummary,
   type CoverageSummary,
   type ClaimSummary,
@@ -24,7 +21,10 @@ import {
   type DiagnosisSummary,
   type MedicationSummary,
 } from "./transforms";
-import { appendDiabetesSnapshots } from "./snapshots";
+import {
+  extractConditionsFromClaims,
+  extractMedicationsFromClaims,
+} from "./eob-clinical";
 
 export interface HealthData {
   patient: PatientSummary | null;
@@ -49,20 +49,10 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
-  // Debug: test token validity via userinfo endpoint first
-  const { blueButton } = await import("@/config").then(m => m.API_CONFIG);
-  try {
-    const userinfoRes = await fetch(`${blueButton.baseUrl}/${blueButton.version}/connect/userinfo`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const userinfoBody = await userinfoRes.text();
-    console.log("[FHIR sync] userinfo test:", userinfoRes.status, userinfoBody.substring(0, 200));
-  } catch (e) {
-    console.error("[FHIR sync] userinfo test failed:", e);
-  }
-
-  // Fetch Patient, Coverage, EOBs, Observations, Conditions, Medications in parallel
-  const [patientRaw, coverageRaw, eobsRaw, observationsRaw, conditionsRaw, medsRaw] = await Promise.all([
+  // Blue Button 2.0 only provides Patient, Coverage, and ExplanationOfBenefit.
+  // Observation, Condition, and MedicationRequest are NOT part of the Blue Button API.
+  // Clinical intelligence is extracted from EOB claims data instead.
+  const [patientRaw, coverageRaw, eobsRaw] = await Promise.all([
     fhirPatientId
       ? fhirGet<Record<string, unknown>>(`Patient/${fhirPatientId}`, accessToken)
       : fhirGet<Record<string, unknown>>("Patient", accessToken),
@@ -72,21 +62,6 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
       accessToken,
       3 // max 3 pages = ~150 EOBs
     ),
-    fhirGetBundle<Record<string, unknown>>(
-      "Observation?category=laboratory&_sort=-date&_count=50",
-      accessToken,
-      1 // 1 page — lab results are typically small
-    ).catch(() => [] as Record<string, unknown>[]), // Graceful: labs are optional
-    fhirGetBundle<Record<string, unknown>>(
-      "Condition?category=encounter-diagnosis",
-      accessToken,
-      1
-    ).catch(() => [] as Record<string, unknown>[]), // Graceful: conditions are optional
-    fhirGetBundle<Record<string, unknown>>(
-      "MedicationRequest?_sort=-date&_count=50",
-      accessToken,
-      1
-    ).catch(() => [] as Record<string, unknown>[]), // Graceful: medications are optional
   ]);
 
   // Transform
@@ -96,16 +71,16 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
   const coverage = coverageRaw.map((c) => transformCoverage(c as any));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const claims = eobsRaw.map((e) => transformEOB(e as any));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const labs = extractDiabetesLabs(observationsRaw as any[]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const conditions = extractDiabetesConditions(conditionsRaw as any[]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const medications = extractDiabetesMedications(medsRaw as any[]);
 
-  // Cache transformed data (upsert per resource type)
+  // Extract clinical intelligence from EOB claims
+  // Blue Button doesn't provide Observation/Condition/MedicationRequest,
+  // but EOB claims contain ICD-10 diagnoses and Part D drug names.
+  const labs: LabResult[] = []; // No lab values available from EOBs
+  const conditions = extractConditionsFromClaims(claims);
+  const medications = extractMedicationsFromClaims(claims);
+
+  // Cache transformed data
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
   await Promise.all([
     admin.from("fhir_cache").upsert(
       { user_id: userId, resource_type: "patient", data: patient as unknown as Json, cached_at: now, expires_at: expires },
@@ -120,10 +95,6 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
       { onConflict: "user_id,resource_type" }
     ),
     admin.from("fhir_cache").upsert(
-      { user_id: userId, resource_type: "labs", data: labs as unknown as Json, cached_at: now, expires_at: expires },
-      { onConflict: "user_id,resource_type" }
-    ),
-    admin.from("fhir_cache").upsert(
       { user_id: userId, resource_type: "conditions", data: conditions as unknown as Json, cached_at: now, expires_at: expires },
       { onConflict: "user_id,resource_type" }
     ),
@@ -132,11 +103,6 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
       { onConflict: "user_id,resource_type" }
     ),
   ]);
-
-  // Append labs to longitudinal snapshot history (fire-and-forget)
-  appendDiabetesSnapshots(userId, labs).catch((err) =>
-    console.warn("[Sync] Snapshot append failed:", err)
-  );
 
   // Update last_synced_at on the connection
   await admin
