@@ -104,8 +104,9 @@ function parseTable(headerRow: string, bodyRows: string): string {
   // Header
   html += `<thead><tr style="border-bottom: 2px solid var(--border);">`;
   headers.forEach((header) => {
-    // Process bold in header
-    const processedHeader = header.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    // Escape HTML entities before processing bold (XSS prevention)
+    const escaped = header.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const processedHeader = escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
     html += `<th style="padding: 0.5rem 0.75rem; text-align: left; font-weight: 600; color: var(--text-secondary);">${processedHeader}</th>`;
   });
   html += `</tr></thead>`;
@@ -116,8 +117,9 @@ function parseTable(headerRow: string, bodyRows: string): string {
     const bgColor = rowIndex % 2 === 0 ? "transparent" : "rgba(255,255,255,0.03)";
     html += `<tr style="border-bottom: 1px solid var(--border); background: ${bgColor};">`;
     row.forEach((cell, cellIndex) => {
-      // Process bold in cells
-      let processedCell = cell.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      // Escape HTML entities before processing bold (XSS prevention)
+      const escapedCell = cell.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      let processedCell = escapedCell.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
       // First column (usually doctor name) - make it stand out
       const fontWeight = cellIndex === 0 ? "500" : "400";
       html += `<td style="padding: 0.5rem 0.75rem; color: var(--text-primary); font-weight: ${fontWeight};">${processedCell}</td>`;
