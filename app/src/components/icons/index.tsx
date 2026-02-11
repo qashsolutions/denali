@@ -20,8 +20,8 @@ export function MountainIcon({ className }: IconProps) {
       <path d="M32 4 C16 4 6 14 6 14 L6 32 C6 48 32 60 32 60 C32 60 58 48 58 32 L58 14 C58 14 48 4 32 4Z" fill="#38a3d1" stroke="#2a8ab8" strokeWidth="1.5"/>
       {/* Shield inner border */}
       <path d="M32 9 C19 9 11 17 11 17 L11 32 C11 45 32 55 32 55 C32 55 53 45 53 32 L53 17 C53 17 45 9 32 9Z" fill="#38a3d1" stroke="white" strokeWidth="2.5"/>
-      {/* Mountain peaks */}
-      <path d="M18 42 L27 26 L32 32 L37 26 L46 42Z" fill="none" stroke="white" strokeWidth="3" strokeLinejoin="round"/>
+      {/* Mountain: sharp apex left-center, ridge left, secondary peak right */}
+      <path d="M16 42 L24 34 L30 22 L35 30 L39 26 L48 42" fill="none" stroke="white" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>
     </svg>
   );
 }
