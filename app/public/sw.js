@@ -1,6 +1,6 @@
 // Denali Health — Service Worker
 // BUMP ON DEPLOY: change version suffix to bust caches
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const STATIC_CACHE = `denali-static-${CACHE_VERSION}`;
 const API_CACHE = `denali-api-${CACHE_VERSION}`;
 const OFFLINE_URL = "/offline";
@@ -177,8 +177,9 @@ async function staleWhileRevalidate(request, cacheName) {
   const fetchPromise = fetch(request)
     .then((response) => {
       if (response.ok) {
+        const cloned = response.clone();
         caches.open(cacheName).then((cache) => {
-          cache.put(request, response.clone());
+          cache.put(request, cloned);
         });
       }
       return response;
