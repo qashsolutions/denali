@@ -31,6 +31,7 @@
 - [UI/UX Guidelines](#uiux-guidelines) — [Layout Architecture](#layout-architecture) · [Theme](#theme) · [Accessibility](#accessibility)
 - [PWA Offline & Low-Bandwidth](#pwa-offline--low-bandwidth) — [Service Worker](#service-worker-strategies) · [IndexedDB Cache](#indexeddb-cache) · [Offline Write Queue](#offline-write-queue) · [Hook Integration](#hook-integration-pattern)
 - [Coding Standards](#coding-standards) — [Project Structure](#project-structure)
+- [Testing](#testing) — [Unit Tests (Vitest)](#unit-tests-vitest) · [E2E Tests (Playwright)](#e2e-tests-playwright) · [Security Tests](#security-tests)
 - [MCP Integration](#mcp-integration)
 - [Learning System](#learning-system)
 - [CMS Interoperability Framework](#cms-interoperability-framework)
@@ -768,6 +769,57 @@ supabase/functions/
   process-learning-queue/   # Background learning job processor
   _shared/                  # Shared utilities (cors.ts, auth.ts)
 ```
+
+---
+
+## Testing
+
+### Commands
+
+```bash
+cd app
+npx vitest run          # 35 unit tests
+npx playwright test     # 12 E2E tests (requires dev server or auto-starts)
+npx tsc --noEmit        # Type check
+```
+
+### Unit Tests (Vitest)
+
+**Config**: `app/vitest.config.ts` — `@/` alias, includes `src/**/*.test.ts`, excludes `e2e/**`.
+
+| Test File | Tests | What It Covers |
+|-----------|-------|----------------|
+| `src/lib/fhir/__tests__/eob-clinical.test.ts` | 35 | All 5 EOB extraction functions: conditions, medications (PDE enrichment), screenings (CPT mapping), providers (careTeam aggregation), hospitalizations (LOS, follow-up) |
+
+**Fixtures**: `src/lib/fhir/__tests__/fixtures/synthetic-claims.ts` — 7 synthetic `ClaimSummary` objects exercising all extractors (carrier, outpatient, Part D with PDE, inpatient).
+
+### E2E Tests (Playwright)
+
+**Config**: `app/playwright.config.ts` — Chromium only, `baseURL: localhost:3000`, auto-starts dev server.
+
+| Test File | Tests | What It Covers |
+|-----------|-------|----------------|
+| `e2e/coverage-check.spec.ts` | 1 | Full chat flow: send message → SSE response renders → suggestions appear |
+| `e2e/xss-security.spec.ts` | 7 | XSS prevention in paragraphs (4), tables (2), URL params (1) |
+| `e2e/spoofing-security.spec.ts` | 4 | API access control: unauthenticated requests return empty/401 |
+
+**SSE Mock Pattern**: All chat E2E tests mock `/api/chat` with `page.route()`, returning `text/event-stream` with `buildSSEResponse()` helper. Also mock `/api/profile` and `/api/conversations`. Trailing `\n\n` required to flush last SSE event from browser parser.
+
+### Security Tests
+
+**XSS Prevention** (`xss-security.spec.ts`):
+- Detection: Sets `window.xssTriggered = false` before test, asserts still `false` after render
+- Paragraph tests: `<script>`, `<img onerror>`, `<div onmouseover>`, `javascript:` URI — all escaped by `parseMarkdown()` (lines 51-54)
+- Table tests: `<script>` in cell, `<img onerror>` in header — escaped by `parseTable()` HTML entity escaping
+- URL param: `?message=<script>...` rendered as plain text in user bubble (React text nodes)
+
+**Spoofing Prevention** (`spoofing-security.spec.ts`):
+- `/api/conversations` without auth → `{ authenticated: false, conversations: [] }`
+- `/api/profile` without auth → `{ authenticated: false }`, no plan/role/admin/credits leaked
+- `/api/consent` without auth → 401
+- `/api/diabetes/log` without auth → 401
+
+**XSS Fix Applied**: `MarkdownContent.tsx` `parseTable()` now escapes `&`, `<`, `>` in both header and body cells before bold processing — same defense as paragraph path. Without this fix, table cells were a live XSS vector via `dangerouslySetInnerHTML`.
 
 ---
 
