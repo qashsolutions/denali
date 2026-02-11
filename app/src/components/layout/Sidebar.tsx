@@ -84,7 +84,7 @@ export function Sidebar({
         {/* Header with logo */}
         <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
           <Link href="/" className="flex items-center gap-2">
-            <MountainIcon className="w-8 h-6" />
+            <MountainIcon className="w-7 h-7" />
             <span className="font-bold text-[var(--text-primary)]">
               {BRAND.NAME}
             </span>

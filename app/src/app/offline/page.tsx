@@ -6,7 +6,7 @@ import Link from "next/link";
 export default function OfflinePage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg-primary)] px-4 text-center">
-      <MountainIcon className="w-16 h-14 mb-6 opacity-50" />
+      <MountainIcon className="w-14 h-14 mb-6 opacity-50" />
 
       <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-3">
         You&apos;re offline

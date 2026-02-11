@@ -50,7 +50,7 @@ export function LandingHeader({ settings }: LandingHeaderProps) {
         <div className="flex items-center justify-between h-16 sm:h-20">
           {/* Logo + Brand */}
           <Link href="/" className="flex items-center gap-3 group">
-            <MountainIcon className="w-10 h-8 sm:w-12 sm:h-10 transition-transform group-hover:scale-105" />
+            <MountainIcon className="w-8 h-8 sm:w-10 sm:h-10 transition-transform group-hover:scale-105" />
             <div className="flex flex-col">
               <span className="text-lg sm:text-xl font-bold text-[var(--text-primary)]">
                 {prefix}

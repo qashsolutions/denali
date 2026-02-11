@@ -16,7 +16,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Left: Logo + Disclaimer + Copyright */}
           <div>
             <Link href="/" className="flex items-center gap-2 mb-1">
-              <MountainIcon className="w-7 h-5" />
+              <MountainIcon className="w-6 h-6" />
               <span className="text-lg font-bold text-[var(--text-primary)]">
                 Denali<span className="text-[var(--accent-secondary)]">Health</span>
               </span>

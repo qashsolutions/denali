@@ -11,13 +11,17 @@ interface IconProps {
 }
 
 /**
- * Mountain Logo - Denali Brand
+ * Mountain Logo - Denali Brand (shield + mountain)
  */
 export function MountainIcon({ className }: IconProps) {
   return (
-    <svg viewBox="0 0 48 40" className={cn("w-12 h-10", className)}>
-      <path d="M12 35 L24 10 L36 35 Z" fill="#3b82f6" opacity="0.9" />
-      <path d="M24 35 L36 15 L48 35 Z" fill="#8b5cf6" opacity="0.9" />
+    <svg viewBox="0 0 64 64" className={cn("w-10 h-10", className)}>
+      {/* Shield outer */}
+      <path d="M32 4 C16 4 6 14 6 14 L6 32 C6 48 32 60 32 60 C32 60 58 48 58 32 L58 14 C58 14 48 4 32 4Z" fill="#38a3d1" stroke="#2a8ab8" strokeWidth="1.5"/>
+      {/* Shield inner border */}
+      <path d="M32 9 C19 9 11 17 11 17 L11 32 C11 45 32 55 32 55 C32 55 53 45 53 32 L53 17 C53 17 45 9 32 9Z" fill="#38a3d1" stroke="white" strokeWidth="2.5"/>
+      {/* Mountain peaks */}
+      <path d="M18 42 L27 26 L32 32 L37 26 L46 42Z" fill="none" stroke="white" strokeWidth="3" strokeLinejoin="round"/>
     </svg>
   );
 }
