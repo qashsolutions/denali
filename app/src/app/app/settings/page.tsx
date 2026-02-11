@@ -7,6 +7,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { useConsent, type ConsentState } from "@/hooks/useConsent";
 import { useAuth } from "@/hooks/useAuth";
 import { TOTPEnrollModal } from "@/components/auth";
+import { PaywallModal } from "@/components/payment/PaywallModal";
 import { PRICING, formatPrice } from "@/config/pricing";
 
 export default function AppSettingsPage() {
@@ -23,6 +24,7 @@ export default function AppSettingsPage() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const textScaleOptions = [
@@ -212,7 +214,7 @@ export default function AppSettingsPage() {
               </div>
               {authState.plan !== "monthly" && !authState.isAdmin && (
                 <button
-                  onClick={() => router.push("/app/chat")}
+                  onClick={() => setShowPaywall(true)}
                   className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
                 >
                   Upgrade
@@ -282,6 +284,17 @@ export default function AppSettingsPage() {
           </p>
         </div>
       </section>
+
+      <PaywallModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        onSuccess={() => {
+          setShowPaywall(false);
+          router.push("/app/chat?payment=success");
+        }}
+        appealCount={authState.appealCount}
+        trialExpired={authState.trialStatus === "expired"}
+      />
 
       <TOTPEnrollModal
         isOpen={showTOTPEnroll}
