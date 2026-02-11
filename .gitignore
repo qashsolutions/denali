@@ -25,6 +25,10 @@ secrets/
 supabase/.env
 .supabase/
 
+# Source assets (exported sizes live in app/public/)
+Images/
+denali.png
+
 # Node
 node_modules/
 npm-debug.log*
