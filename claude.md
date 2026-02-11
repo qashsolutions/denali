@@ -266,9 +266,9 @@ User-facing (plain English):        Internal (codes, never shown):
 
 | Table | Purpose |
 |-------|---------|
-| `users` | Auth, phone (primary), email, plan, `is_admin` (bypass all limits), theme, accessibility settings |
+| `users` | Auth, phone (primary), email, plan (`trial`/`per_appeal`/`monthly` — CHECK constraint), `is_admin` (bypass all limits), theme, accessibility settings |
 | `user_verification` | Email + mobile OTP status |
-| `subscriptions` | Plan type, Stripe customer ID, billing status, `trial_start`/`trial_end`/`trial_converted` |
+| `subscriptions` | Plan type (`trial`/`per_appeal`/`monthly` — CHECK constraint), Stripe customer ID, billing status, `trial_start`/`trial_end`/`trial_converted`. RLS: users SELECT/INSERT/UPDATE own rows |
 | `usage` | Appeal count (lifetime) + appeal credits (available) per email. Credits decremented on appeal save, added by Stripe fulfillment |
 | `conversations` | Chat history per user |
 | `messages` | Individual messages (role: user/assistant) |
@@ -434,7 +434,7 @@ Reuses existing `sessionState` (ICD-10, CPT, policy refs from earlier coverage f
 | Monthly | $20/month | 3 credits/month | Unlimited | Email OTP |
 | **Admin** | — | Unlimited | Unlimited | `is_admin = TRUE` on `users` row |
 
-Every signup = automatic 14-day trial. After trial expires → locked (0 chats, must pay). No standalone "free" tier. Appeal access is credit-based via `usage.appeal_credits` column. Chat rate limiting enforced via `check_and_increment_chat` RPC (identifier = user_id for authenticated, IP for anonymous). Returns 429 when limit exceeded; returns 403 `TRIAL_EXPIRED` when trial/free users are locked out. **Admin users** (`users.is_admin`) bypass all rate limits and appeal paywalls.
+Every signup = automatic 14-day trial. After trial expires → locked (0 chats, must pay). Plan values are `trial`, `per_appeal`, `monthly` only (no `free` — unified into `trial`). Appeal access is credit-based via `usage.appeal_credits` column. `AppealAccessStatus` returns `"available"` (has credits), `"paywall"` (no credits), or `"allowed"` (admin/counselor). Chat rate limiting enforced via `check_and_increment_chat` RPC (identifier = user_id for authenticated, IP for anonymous). Returns 429 when limit exceeded; returns 403 `TRIAL_EXPIRED` when expired trial users try to chat. **Admin users** (`users.is_admin`) bypass all rate limits and appeal paywalls.
 
 ### Auth Gating
 
@@ -476,9 +476,11 @@ PaywallModal (client) → POST /api/checkout → Stripe Checkout Session
                                         └── handleSubscriptionEvent() → sync status
 ```
 
-Currently in **sandbox mode** — switch to live keys for production.
+**Sandbox tested** (2026-02-11): Both plans verified end-to-end on denali.health — $10 single appeal checkout and $20/month subscription checkout complete successfully via Stripe sandbox. Switch to live keys for production.
 
-Key webhook events: `checkout.session.completed` → `fulfillCheckoutSession()` (reads metadata → plan upgrade). `customer.subscription.updated/deleted` → `handleSubscriptionEvent()` (syncs status). `invoice.payment_failed` → marks `past_due`.
+**Checkout route** (`checkout/route.ts`): Expects `plan: "single" | "monthly"` (not `"per_appeal"`). Maps to Stripe Price IDs via `PRICING.SINGLE_APPEAL.stripePriceId` / `PRICING.MONTHLY.stripePriceId`.
+
+Key webhook events: `checkout.session.completed` → `fulfillCheckoutSession()` (reads metadata → plan upgrade to `per_appeal` or `monthly` + credit add). `customer.subscription.updated/deleted` → `handleSubscriptionEvent()` (syncs status). `invoice.payment_failed` → marks `past_due`.
 
 Subscription states: `active` (full access) → `past_due` (retry) → `cancelled` (reverts to expired/locked).
 
@@ -488,6 +490,7 @@ Subscription states: `active` (full access) → `past_due` (retry) → `cancelle
 - **CRITICAL: Never return `{ url: null }` from checkout** — grants free access. Returns 503 error when Stripe not configured.
 - **Stripe SDK v20**: `current_period_end` lives on `subscription.items.data[0]`, NOT directly on `subscription`.
 - **Idempotent fulfillment**: `fulfillCheckoutSession()` is safe to call multiple times.
+- **Settings page PaywallModal**: Upgrade button in Settings opens `PaywallModal` inline (not redirect to `/app/chat`). Settings displays "Monthly Plan" (not "Unlimited Plan") with subtitle showing credits/month + unlimited messages.
 
 ### Environment Variables
 
