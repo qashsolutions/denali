@@ -191,7 +191,7 @@ export default function AppSettingsPage() {
                   {authState.isAdmin
                     ? "Admin"
                     : authState.plan === "monthly"
-                    ? "Unlimited Plan"
+                    ? "Monthly Plan"
                     : authState.plan === "trial"
                     ? "Free Trial"
                     : authState.plan === "per_appeal"
@@ -202,7 +202,7 @@ export default function AppSettingsPage() {
                   {authState.isAdmin
                     ? "Unlimited access"
                     : authState.plan === "monthly"
-                    ? `${formatPrice(PRICING.MONTHLY.amount)}/month \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""} \u00b7 Unlimited messages`
+                    ? `${formatPrice(PRICING.MONTHLY.amount)}/month \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""}/month \u00b7 Unlimited messages`
                     : authState.plan === "per_appeal"
                     ? `${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""} \u00b7 5 messages/day`
                     : authState.plan === "trial" && authState.trialStatus === "active"
