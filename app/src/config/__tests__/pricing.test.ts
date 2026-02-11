@@ -26,7 +26,7 @@ describe("getUploadLimitForPlan", () => {
     expect(getUploadLimitForPlan(null, true, true)).toBe(-1);
   });
 
-  it("falls back to FREE limit for unknown plan", () => {
+  it("falls back to trial limit for unknown plan", () => {
     expect(getUploadLimitForPlan("unknown_plan", false, true)).toBe(
       2 * 1024 * 1024
     );

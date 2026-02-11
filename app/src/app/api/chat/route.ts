@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
       if (profile?.is_admin) {
         chatLimit = 0; // Admin: unlimited
       } else {
-        const plan = profile?.plan || "free";
+        const plan = profile?.plan || "trial";
         if (plan === "monthly") {
           chatLimit = PRICING.CHAT_LIMITS.PAID; // 0 = unlimited
         } else if (plan === "per_appeal") {
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
           if (trialEnd && trialEnd > new Date()) {
             chatLimit = PRICING.CHAT_LIMITS.TRIAL; // 3/day
           } else {
-            // Trial expired or no trial — locked out
+            // Trial expired — locked out
             return NextResponse.json(
               {
                 error: "Your free trial has ended. Upgrade to keep using Denali.",
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
             );
           }
         } else {
-          // "free" or no plan — no standalone free tier anymore
+          // Unknown plan — locked out
           return NextResponse.json(
             {
               error: "Your free trial has ended. Upgrade to keep using Denali.",
@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Check size against plan limit (reuse profile fetched for rate limiting)
-      const userPlan = userProfile?.plan || "free";
+      const userPlan = userProfile?.plan || "trial";
       const userIsAdmin = userProfile?.is_admin || false;
       const uploadLimit = getUploadLimitForPlan(userPlan, userIsAdmin, true);
 

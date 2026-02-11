@@ -46,7 +46,6 @@ export const PRICING = {
   /** File upload size limits (bytes). 0 = disabled (anon), -1 = unlimited (admin). */
   UPLOAD_LIMITS: {
     ANON: 0 as number,
-    FREE: 2 * 1024 * 1024 as number,
     TRIAL: 2 * 1024 * 1024 as number,
     PER_APPEAL: 6 * 1024 * 1024 as number,
     MONTHLY: 10 * 1024 * 1024 as number,
@@ -74,7 +73,7 @@ export function getUploadLimitForPlan(
     case "trial":
       return PRICING.UPLOAD_LIMITS.TRIAL;
     default:
-      return PRICING.UPLOAD_LIMITS.FREE;
+      return PRICING.UPLOAD_LIMITS.TRIAL;
   }
 }
 

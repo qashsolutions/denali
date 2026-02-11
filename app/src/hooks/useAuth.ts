@@ -12,7 +12,7 @@ export interface AuthState {
   isMfaEnrolled: boolean;
   isMfaVerified: boolean;
   currentAAL: string | null;
-  plan: "free" | "per_appeal" | "monthly" | "trial";
+  plan: "trial" | "per_appeal" | "monthly";
   role: "patient" | "counselor" | "provider";
   appealCount: number;
   appealCredits: number;
@@ -23,7 +23,7 @@ export interface AuthState {
   error: string | null;
 }
 
-export type AppealAccessStatus = "free" | "paywall" | "allowed";
+export type AppealAccessStatus = "available" | "paywall" | "allowed";
 
 interface UseAuthReturn {
   authState: AuthState;
@@ -43,7 +43,7 @@ const DEFAULT_AUTH_STATE: AuthState = {
   isMfaEnrolled: false,
   isMfaVerified: false,
   currentAAL: null,
-  plan: "free",
+  plan: "trial",
   role: "patient",
   appealCount: 0,
   appealCredits: 0,
@@ -106,11 +106,11 @@ export function useAuth(): UseAuthReturn {
         const profileData = res.ok ? await res.json() : null;
 
         // Validate plan type
-        const validPlans = ["free", "per_appeal", "monthly", "trial"] as const;
-        const rawPlan = profileData?.plan || "free";
+        const validPlans = ["trial", "per_appeal", "monthly"] as const;
+        const rawPlan = profileData?.plan || "trial";
         const userPlan = validPlans.includes(rawPlan as (typeof validPlans)[number])
-          ? (rawPlan as "free" | "per_appeal" | "monthly" | "trial")
-          : "free";
+          ? (rawPlan as "trial" | "per_appeal" | "monthly")
+          : "trial";
 
         // Validate role
         const validRoles = ["patient", "counselor", "provider"] as const;
@@ -493,7 +493,7 @@ export function useAuth(): UseAuthReturn {
         return "allowed";
       }
 
-      // Counselors and providers always get free access
+      // Counselors and providers always get access
       if (authState.role === "counselor" || authState.role === "provider") {
         return "allowed";
       }
@@ -528,7 +528,7 @@ export function useAuth(): UseAuthReturn {
           return "paywall";
         }
 
-        // Free / no plan — must upgrade
+        // No recognized plan — must upgrade
         return "paywall";
       } catch (error) {
         console.error("Error checking appeal access:", error);

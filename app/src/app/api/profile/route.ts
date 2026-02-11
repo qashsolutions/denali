@@ -41,7 +41,7 @@ export async function GET() {
 
   return NextResponse.json({
     authenticated: true,
-    plan: profile?.plan || "free",
+    plan: profile?.plan || "trial",
     role: profile?.role || "patient",
     isAdmin: profile?.is_admin || false,
     appealCount,

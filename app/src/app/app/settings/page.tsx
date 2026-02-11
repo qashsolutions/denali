@@ -58,7 +58,7 @@ export default function AppSettingsPage() {
                   </p>
                   <p className="text-xs text-[var(--text-muted)] mt-0.5">
                     Signed in
-                    {authState.plan !== "free" && ` \u00b7 ${authState.plan} plan`}
+                    {` \u00b7 ${authState.plan} plan`}
                   </p>
                 </div>
                 <button
@@ -194,7 +194,7 @@ export default function AppSettingsPage() {
                     ? "Free Trial"
                     : authState.plan === "per_appeal"
                     ? "Pay Per Appeal"
-                    : "Free Plan"}
+                    : "Trial"}
                 </p>
                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
                   {authState.isAdmin

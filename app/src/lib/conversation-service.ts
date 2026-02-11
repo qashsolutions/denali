@@ -401,60 +401,6 @@ export async function saveAppeal(
   return data.id;
 }
 
-// DEAD CODE — No external consumers. Client-side version lives in useAuth.ts.
-// Commented out 2026-02-06.
-// export async function checkAppealAccess(
-//   email: string,
-//   userId?: string
-// ): Promise<{
-//   access: "free" | "paywall" | "allowed";
-//   appealCount: number;
-//   hasSubscription: boolean;
-// }> {
-//   const supabase = getClient();
-//   try {
-//     const { data: rpcResult, error: rpcError } = await supabase.rpc(
-//       "check_appeal_access",
-//       { p_email: email }
-//     );
-//     if (!rpcError && rpcResult) {
-//       return {
-//         access: rpcResult as "free" | "paywall" | "allowed",
-//         appealCount: 0,
-//         hasSubscription: rpcResult === "allowed",
-//       };
-//     }
-//     const { data: usageData } = await supabase
-//       .from("usage")
-//       .select("appeal_count")
-//       .eq("email", email)
-//       .single();
-//     const appealCount = usageData?.appeal_count ?? 0;
-//     let hasSubscription = false;
-//     if (userId) {
-//       const { data: subData } = await supabase
-//         .from("subscriptions")
-//         .select("status, plan_type")
-//         .eq("user_id", userId)
-//         .eq("status", "active")
-//         .single();
-//       hasSubscription = !!subData;
-//     }
-//     let access: "free" | "paywall" | "allowed";
-//     if (hasSubscription) {
-//       access = "allowed";
-//     } else if (appealCount < PRICING.FREE_APPEAL_LIMIT) {
-//       access = "free";
-//     } else {
-//       access = "paywall";
-//     }
-//     return { access, appealCount, hasSubscription };
-//   } catch (error) {
-//     console.error("Failed to check appeal access:", error);
-//     return { access: "free", appealCount: 0, hasSubscription: false };
-//   }
-// }
-
 /**
  * Summary of an appeal record for inline display
  */

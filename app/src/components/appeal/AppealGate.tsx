@@ -20,8 +20,8 @@ interface AppealGateProps {
  * Flow:
  * 1. If MFA enrolled → Show TOTPChallengeModal (with email fallback)
  * 2. If not authenticated → Show EmailOTPModal
- * 3. If authenticated, first appeal → Allow access (free) + offer TOTP enrollment
- * 4. If authenticated and used free appeal → Show PaywallModal
+ * 3. If authenticated + has credits → Allow access + offer TOTP enrollment
+ * 4. If authenticated + no credits → Show PaywallModal
  * 5. If has monthly subscription → Allow access
  */
 export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
@@ -59,7 +59,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
       setAccessStatus(status);
       setIsChecking(false);
 
-      if (status === "free" || status === "allowed") {
+      if (status === "available" || status === "allowed") {
         onAccessGranted?.();
       }
     };
@@ -74,10 +74,10 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
     const status = await checkAppealAccess();
     setAccessStatus(status);
 
-    if (status === "free" || status === "allowed") {
+    if (status === "available" || status === "allowed") {
       onAccessGranted?.();
-      // Offer TOTP enrollment after first free appeal (skippable)
-      if (status === "free" && !authState.isMfaEnrolled) {
+      // Offer TOTP enrollment after first appeal (skippable)
+      if (status === "available" && !authState.isMfaEnrolled) {
         setShowTOTPEnroll(true);
       }
     } else if (status === "paywall") {
@@ -91,7 +91,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
     const status = await checkAppealAccess();
     setAccessStatus(status);
 
-    if (status === "free" || status === "allowed") {
+    if (status === "available" || status === "allowed") {
       onAccessGranted?.();
     } else if (status === "paywall") {
       setShowPaywallModal(true);
@@ -133,13 +133,13 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
     }
   };
 
-  // If access granted (free first appeal or subscription), show children
-  if (accessStatus === "free" || accessStatus === "allowed") {
+  // If access granted (has credits or subscription), show children
+  if (accessStatus === "available" || accessStatus === "allowed") {
     return (
       <>
         {children}
 
-        {/* TOTP enrollment modal (shown after first free appeal) */}
+        {/* TOTP enrollment modal (shown after first appeal) */}
         <TOTPEnrollModal
           isOpen={showTOTPEnroll}
           onClose={() => setShowTOTPEnroll(false)}
