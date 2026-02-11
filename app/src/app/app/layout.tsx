@@ -44,6 +44,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               Privacy Policy
             </Link>
             <Link
+              href="/privacy-notice"
+              className="text-xs text-[var(--text-muted)] hover:text-[var(--accent-secondary)] transition-colors"
+            >
+              Privacy Notice
+            </Link>
+            <Link
               href="/terms"
               className="text-xs text-[var(--text-muted)] hover:text-[var(--accent-secondary)] transition-colors"
             >

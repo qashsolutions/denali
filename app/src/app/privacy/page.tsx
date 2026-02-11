@@ -102,13 +102,24 @@ const SECTIONS = [
       "We do not sell your personal information. We share data only in limited circumstances:",
     ],
     items: [
-      "Anthropic (Claude AI): Your conversation content is sent to Anthropic's API to generate responses. Anthropic's usage policies apply to this processing. We do not send your health data to Anthropic unless you have enabled the 'Health Data in AI' consent toggle.",
       "Stripe: Payment processing for subscriptions and per-appeal purchases. We never see or store your credit card number — Stripe handles this directly.",
       "CMS (Medicare API): We exchange data with the Medicare claims API only when you explicitly authorize the connection.",
       "Supabase: Our database provider hosts your account data, conversation history, and cached health data with encryption at rest.",
       "Vercel: Our hosting provider processes web requests. Server-side logs may contain request metadata.",
       "Legal Requirements: We may disclose information if required by law, court order, or government regulation.",
       "Business Transfers: In the event of a merger, acquisition, or sale of assets, your personal information may be transferred. We will notify you via email at least 30 days before your data is transferred and becomes subject to a different privacy policy.",
+    ],
+    subsections: [
+      {
+        title: "Anthropic (Claude AI) Data Handling",
+        items: [
+          "Your conversation content (questions and context) is sent to Anthropic's Claude API to generate responses. Health data is only included if you have enabled the 'Health Data in AI' consent toggle.",
+          "Anthropic does not train its models on data submitted through the API. Your conversations are not used to improve Claude or any other Anthropic product.",
+          "Anthropic may retain API inputs and outputs for up to 30 days for safety and abuse monitoring purposes, after which they are automatically deleted.",
+          "All data sent to Anthropic is encrypted in transit via TLS 1.2+. Anthropic is SOC 2 Type II certified.",
+          "For full details, see Anthropic's API Data Usage Policy at anthropic.com/policies.",
+        ],
+      },
     ],
   },
   {
@@ -167,7 +178,7 @@ const SECTIONS = [
       "Technical safeguards: encryption, access controls, audit logging",
       "Administrative safeguards: workforce training, security policies, incident response procedures",
       "Physical safeguards: secure hosting through SOC 2 compliant providers (Supabase, Vercel)",
-      "Business Associate Agreements (BAAs) in progress with service providers who access protected health information",
+      "Business Associate Agreements (BAAs) are maintained with all service providers who access, process, or store protected health information on our behalf",
     ],
     afterItems:
       "For detailed information about our HIPAA practices, see our HIPAA Compliance page.",
@@ -183,7 +194,7 @@ const SECTIONS = [
       "We will notify affected individuals within 60 days of discovery via email, explaining what happened, what data was involved, and what steps to take",
       "Notification will include a description of the breach, the types of data involved, steps we have taken to investigate and mitigate, and recommended actions for affected users",
       "For breaches affecting 500 or more individuals, we will also notify the FTC and HHS as required by law",
-      "We maintain incident response procedures to detect, investigate, and contain potential breaches promptly",
+      "We maintain incident response procedures to detect, investigate, and contain potential breaches promptly (see our HIPAA Compliance page for the full Incident Response Plan)",
     ],
   },
   {
@@ -200,7 +211,9 @@ const SECTIONS = [
       "Providing a 14-day free trial for Medicare beneficiaries",
       "Making our application available for CMS review and directory listing",
       "Clearly marking all AI-generated content and distinguishing it from clinical guidance",
+      "Publishing a Model Privacy Notice (ONC format) for plain-language data handling transparency",
     ],
+    afterLink: { href: "/privacy-notice", text: "View Model Privacy Notice" },
   },
   {
     id: "cookies",
@@ -239,7 +252,9 @@ const SECTIONS = [
     id: "changes",
     title: "15. Changes to This Policy",
     paragraphs: [
-      "We may update this Privacy Policy from time to time. For material changes, we will notify registered users via email at least 30 days before the new policy takes effect, with a summary of what changed. If you disagree with the changes, you may delete your account before the effective date. Continued use of the Service after the effective date constitutes acceptance of the updated policy.",
+      "We may update this Privacy Policy from time to time. For material changes, we will notify registered users via email at least 30 days before the new policy takes effect, with a summary of what changed.",
+      "If changes are driven by CMS regulatory updates or modifications to the CMS Interoperability Framework, we will specifically identify those changes and explain how they affect your Medicare data handling.",
+      "If you disagree with the changes, you may delete your account and all associated data before the effective date (Settings > Danger Zone). Continued use of the Service after the effective date constitutes acceptance of the updated policy.",
     ],
   },
   {
@@ -252,7 +267,9 @@ const SECTIONS = [
       "Ask Denali directly in the chat for privacy-related questions",
       "Email us at admin@denali.health",
       `Write to: ${BRAND.COMPANY_NAME}, Privacy Inquiries`,
+      "Review our Model Privacy Notice for a plain-language summary of our data practices",
     ],
+    afterLink: { href: "/privacy-notice", text: "View Model Privacy Notice" },
   },
 ];
 

@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     if (!clientId) {
       console.error("[FHIR authorize] Missing BLUEBUTTON_CLIENT_ID");
       return NextResponse.json(
-        { error: "Blue Button not configured" },
+        { error: "Medicare data connection not configured" },
         { status: 500 }
       );
     }

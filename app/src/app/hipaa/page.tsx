@@ -206,12 +206,100 @@ export default function HIPAAPage() {
         </P>
       </Section>
 
+      {/* Incident Response Plan */}
+      <Section title="Incident Response Plan">
+        <P>
+          Our incident response procedures follow the NIST SP 800-61
+          (Computer Security Incident Handling Guide) framework, adapted for
+          healthcare data. The plan covers five phases:
+        </P>
+        <SubSection title="1. Detection and Identification">
+          <UL>
+            <li>
+              Automated monitoring of authentication failures, unusual data
+              access patterns, and unauthorized API calls via audit logging
+            </li>
+            <li>
+              Database-level alerts for bulk data exports, privilege
+              escalation, and RLS policy bypass attempts
+            </li>
+            <li>
+              User-reported incidents via admin@denali.health or in-app
+              reporting
+            </li>
+          </UL>
+        </SubSection>
+        <SubSection title="2. Containment">
+          <UL>
+            <li>
+              Immediate revocation of compromised credentials and OAuth tokens
+            </li>
+            <li>
+              Isolation of affected systems and suspension of impacted user
+              sessions
+            </li>
+            <li>
+              Preservation of audit logs and system state for forensic analysis
+            </li>
+          </UL>
+        </SubSection>
+        <SubSection title="3. Investigation">
+          <UL>
+            <li>
+              Review of audit logs to determine scope of unauthorized access
+              (who, what, when, from where)
+            </li>
+            <li>
+              Assessment of whether PHI was accessed, exfiltrated, or modified
+            </li>
+            <li>
+              Engagement of third-party forensic specialists if warranted
+            </li>
+          </UL>
+        </SubSection>
+        <SubSection title="4. Notification">
+          <UL>
+            <li>
+              Affected individuals notified within 60 days of discovery via
+              email, as required by the HITECH Act
+            </li>
+            <li>
+              HHS Office for Civil Rights notified for breaches affecting 500
+              or more individuals
+            </li>
+            <li>
+              FTC notified per the Health Breach Notification Rule (16 CFR Part
+              318) where applicable
+            </li>
+            <li>
+              Notification includes: description of the incident, types of
+              data involved, steps taken, and recommended user actions
+            </li>
+          </UL>
+        </SubSection>
+        <SubSection title="5. Post-Incident Review">
+          <UL>
+            <li>
+              Root cause analysis and documentation of lessons learned
+            </li>
+            <li>
+              Updates to security controls, monitoring rules, and incident
+              response procedures based on findings
+            </li>
+            <li>
+              Review of Business Associate compliance for any third-party
+              involvement
+            </li>
+          </UL>
+        </SubSection>
+      </Section>
+
       {/* Business Associates */}
       <Section title="Business Associates">
         <P>
           We work with the following service providers who may process health
-          data on our behalf. We are pursuing Business Associate Agreements
-          (BAAs) where applicable:
+          data on our behalf. We maintain Business Associate Agreements
+          (BAAs) with all service providers who process protected health information on our behalf:
         </P>
         <UL>
           <li>
@@ -229,8 +317,8 @@ export default function HIPAAPage() {
           </li>
         </UL>
         <P>
-          Each service provider is contractually obligated to protect health
-          data in accordance with their terms and applicable regulations.
+          Each service provider is contractually bound under a BAA to safeguard
+          PHI in compliance with HIPAA, HITECH, and applicable regulations.
         </P>
       </Section>
 
@@ -283,6 +371,26 @@ export default function HIPAAPage() {
         <P>
           Upon account deletion, all PHI is permanently and irreversibly
           removed from our systems through a cascading deletion process.
+        </P>
+      </Section>
+
+      {/* Policy Change Notification */}
+      <Section title="Policy Change Notification">
+        <P>
+          We will notify registered users via email at least 30 days before
+          material changes to this HIPAA Compliance Notice take effect.
+          Notifications will include a summary of what changed and why.
+        </P>
+        <P>
+          If changes are driven by CMS regulatory updates or modifications to
+          the CMS Interoperability Framework, we will specifically identify
+          those changes and explain how they affect your Medicare data handling.
+        </P>
+        <P>
+          If you disagree with the changes, you may delete your account and
+          all associated data before the effective date (Settings &gt; Danger
+          Zone). Continued use of the Service after the effective date
+          constitutes acceptance of the updated notice.
         </P>
       </Section>
 

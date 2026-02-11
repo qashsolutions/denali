@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
 import { useSettings } from "@/hooks/useSettings";
@@ -26,6 +26,28 @@ export default function AppSettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<Array<{ id: string; description: string; createdAt: string | null }>>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authState.email) return;
+    setAuditLoading(true);
+    fetch("/api/audit-log?limit=10")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authenticated && data.logs) {
+          setAuditLogs(
+            data.logs.map((l: { id: string; description: string; createdAt: string | null; created_at?: string | null }) => ({
+              id: l.id,
+              description: l.description,
+              createdAt: l.createdAt || l.created_at || null,
+            }))
+          );
+        }
+      })
+      .catch(() => {})
+      .finally(() => setAuditLoading(false));
+  }, [authState.email]);
 
   const textScaleOptions = [
     { value: 0.9, label: "Small" },
@@ -338,6 +360,36 @@ export default function AppSettingsPage() {
         </div>
       </section>
 
+      {/* Activity Log */}
+      {authState.email && (
+        <section className="mb-8">
+          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
+            Activity Log
+          </h2>
+          <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
+            {auditLoading ? (
+              <div className="flex items-center gap-3 py-2">
+                <div className="w-5 h-5 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-[var(--text-muted)]">Loading activity...</p>
+              </div>
+            ) : auditLogs.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)] py-2">No activity recorded yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {auditLogs.map((log) => (
+                  <div key={log.id} className="flex items-center justify-between gap-4">
+                    <p className="text-sm text-[var(--text-primary)]">{log.description}</p>
+                    <p className="text-xs text-[var(--text-muted)] shrink-0">
+                      {formatRelativeTime(log.createdAt)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Delete Account */}
       {authState.email && (
         <section className="mb-8">
@@ -472,6 +524,21 @@ function MoonIcon({ className }: { className?: string }) {
       <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
     </svg>
   );
+}
+
+function formatRelativeTime(dateStr: string | null): string {
+  if (!dateStr) return "";
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 30) return `${diffDay}d ago`;
+  return new Date(dateStr).toLocaleDateString();
 }
 
 function ConsentToggle({

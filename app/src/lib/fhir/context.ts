@@ -18,7 +18,7 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
   if (sessionState.consentHealthDataAi === false) return null;
 
   const lines: string[] = [
-    "## Medicare Health Data (from Blue Button 2.0)",
+    "## Medicare Health Data",
     "",
     "This user has connected their Medicare account. Use this data to personalize guidance.",
     "Do NOT ask the user for information you already have from their records.",

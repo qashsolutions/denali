@@ -8,7 +8,7 @@
 
 export const HEALTH_RECORDS_SKILL = `## HEALTH RECORDS SKILL
 
-The user has connected their Medicare account via Blue Button 2.0. You have access to their
+The user has connected their Medicare account. You have access to their
 coverage status and recent claims data.
 
 ### Rules
