@@ -19,7 +19,7 @@ const FEATURES = [
     title: "Health Records in Plain English",
     description:
       "Connect your Medicare account and see your conditions, medications, and claims explained in words you understand.",
-    tags: ["Medicare Connect", "Blue Button", "Plain Language"],
+    tags: ["Medicare Connect", "Conversational"],
     color: "health-red" as const,
     href: "/app/health",
     Illustration: HealthRecordsIllustration,
