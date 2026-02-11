@@ -157,7 +157,7 @@ const SECTIONS = [
       "If you have questions about these Terms of Service:",
     ],
     items: [
-      `Email: legal@${BRAND.DOMAIN.replace("www.", "")}`,
+      "Email: admin@denali.health",
       `Organization: ${BRAND.COMPANY_NAME}`,
       "You can also ask Denali directly in the chat for general questions about our terms",
     ],

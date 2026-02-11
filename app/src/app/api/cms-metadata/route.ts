@@ -19,7 +19,7 @@ export async function GET() {
         "Medicare coverage guidance and appeal letter generation powered by AI. Helps Original Medicare beneficiaries understand coverage, prevent claim denials, and appeal denied claims.",
       url: BRAND.SITE_URL,
       privacyPolicyUrl: `${BRAND.SITE_URL}/privacy`,
-      contactEmail: `support@${BRAND.DOMAIN}`,
+      contactEmail: "admin@denali.health",
     },
     cms: {
       categories: [

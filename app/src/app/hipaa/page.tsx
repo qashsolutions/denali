@@ -293,7 +293,7 @@ export default function HIPAAPage() {
           to file a complaint:
         </P>
         <UL>
-          <li>Email: privacy@{BRAND.DOMAIN.replace("www.", "")}</li>
+          <li>Email: admin@denali.health</li>
           <li>
             Organization: {BRAND.COMPANY_NAME}, HIPAA Privacy Officer
           </li>

@@ -250,7 +250,7 @@ const SECTIONS = [
     ],
     items: [
       "Ask Denali directly in the chat for privacy-related questions",
-      `Email us at privacy@${BRAND.DOMAIN.replace("www.", "")}`,
+      "Email us at admin@denali.health",
       `Write to: ${BRAND.COMPANY_NAME}, Privacy Inquiries`,
     ],
   },
