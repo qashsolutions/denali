@@ -1,5 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 40">
-  <path d="M12 35 L24 10 L36 35 Z" fill="#3b82f6" opacity="0.9"/>
-  <path d="M24 35 L36 15 L48 35 Z" fill="#8b5cf6" opacity="0.9"/>
-  <path d="M24 10 L20 18 L24 16 L28 18 Z" fill="white" opacity="0.9"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56">
+  <defs>
+    <filter id="s" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#00000030"/>
+    </filter>
+  </defs>
+  <circle cx="28" cy="28" r="26" fill="#e5e5e5" stroke="#333" stroke-width="1.5" filter="url(#s)"/>
+  <path d="M14 42 L26 17 L38 42 Z" fill="#3b82f6" opacity="0.9"/>
+  <path d="M26 42 L38 22 L50 42 Z" fill="#8b5cf6" opacity="0.9"/>
 </svg>

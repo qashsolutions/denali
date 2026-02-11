@@ -18,12 +18,6 @@ export function MountainIcon({ className }: IconProps) {
     <svg viewBox="0 0 48 40" className={cn("w-12 h-10", className)}>
       <path d="M12 35 L24 10 L36 35 Z" fill="#3b82f6" opacity="0.9" />
       <path d="M24 35 L36 15 L48 35 Z" fill="#8b5cf6" opacity="0.9" />
-      {/* Snow cap */}
-      <path
-        d="M24 10 L20 18 L24 16 L28 18 Z"
-        fill="white"
-        opacity="0.9"
-      />
     </svg>
   );
 }
