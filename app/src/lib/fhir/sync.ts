@@ -51,7 +51,7 @@ export interface HealthData {
 export async function syncHealthData(userId: string): Promise<HealthData> {
   const tokenPair = await getValidToken(userId);
   if (!tokenPair) {
-    throw new Error("No active Blue Button connection or token expired");
+    throw new Error("No active Medicare connection or token expired");
   }
 
   const { accessToken, fhirPatientId } = tokenPair;
