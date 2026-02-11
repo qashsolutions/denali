@@ -1,10 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56">
-  <defs>
-    <filter id="s" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#00000030"/>
-    </filter>
-  </defs>
-  <circle cx="28" cy="28" r="26" fill="#e5e5e5" stroke="#333" stroke-width="1.5" filter="url(#s)"/>
-  <path d="M14 42 L26 17 L38 42 Z" fill="#3b82f6" opacity="0.9"/>
-  <path d="M26 42 L38 22 L50 42 Z" fill="#8b5cf6" opacity="0.9"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Shield outline -->
+  <path d="M32 4 C16 4 6 14 6 14 L6 32 C6 48 32 60 32 60 C32 60 58 48 58 32 L58 14 C58 14 48 4 32 4Z" fill="#38a3d1" stroke="#2a8ab8" stroke-width="2"/>
+  <!-- Shield inner border -->
+  <path d="M32 9 C19 9 11 17 11 17 L11 32 C11 45 32 55 32 55 C32 55 53 45 53 32 L53 17 C53 17 45 9 32 9Z" fill="#38a3d1" stroke="white" stroke-width="2.5"/>
+  <!-- Mountain -->
+  <path d="M18 40 L28 24 L32 29 L36 24 L46 40 Z" fill="none" stroke="white" stroke-width="3" stroke-linejoin="round"/>
 </svg>
