@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-10
+     Last updated: 2026-02-11
      Maintainer: @cvr
 -->
 
@@ -99,6 +99,7 @@ These cause bugs or bad UX if violated. Read before every coding session.
 - **CRITICAL: Supabase SSR middleware is required.** `src/middleware.ts` refreshes auth tokens on every request, preventing the refresh token race condition between browser and server Supabase clients. Without it, both clients independently try to refresh the same expired token — one wins (`token_refreshed`), the other gets `token_revoked` and loses its session permanently. The middleware refreshes ONCE via `supabase.auth.getUser()` and writes updated cookies to the response.
 - **CRITICAL: Never use browser Supabase client for data fetching.** Browser `getClient()` + `.from("table").select()` fails when tokens are stale (even with middleware, there are edge cases). Always fetch data via server API routes using `createServerSupabaseClient()` (cookie-authenticated). Pattern: client calls `fetch("/api/route")` → server route uses `createServerSupabaseClient()` → returns JSON. Examples: `useConversationHistory` → `/api/conversations`, `useHealthData` → `/api/fhir/data`, `useAuth`/`AppHeader` → `/api/profile`.
 - **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
+- **CRITICAL: SSR-safe hooks must initialize with server-matching values.** `useOnlineStatus` must use `useState(true)` — NOT `useState(typeof navigator !== "undefined" ? navigator.onLine : true)`. The latter reads `navigator.onLine` on the client during hydration, which may return `false` (flaky connection, SW cached page), causing React hydration mismatch (#418) because the server rendered `null` but the client renders a div.
 - **MCP servers are NOT testable via curl/HTTP.** MCP protocol is handled internally by the Anthropic API. Use Claude.ai to verify MCP server health.
 
 ---
@@ -136,8 +137,10 @@ Where to find specific logic in the codebase.
 | `src/middleware.ts` | Supabase SSR middleware. Refreshes auth tokens on every request to prevent browser/server refresh token race. MUST run before any Supabase client call |
 | `src/lib/offline-cache.ts` | IndexedDB wrapper via `idb`. 6 stores (conversations, health-data, diabetes-log, diabetes-insights, profile, offline-queue). Exports `cacheSet()`, `cacheGet()`, `cacheGetIfFresh()`, `queueOfflineRequest()`, `getOfflineQueue()`, `removeFromQueue()`. TTL constants: profile=4h, everything else=24h |
 | `src/lib/offline-sync.ts` | Client-side offline queue processor. `processQueue()` replays failed POSTs, removes on success, drops after 3 retries. `getQueueCount()` for pending item count |
-| `src/hooks/useOnlineStatus.ts` | SSR-safe hook: `navigator.onLine` + `online`/`offline` events. Returns `{ isOnline, wasOffline }` |
+| `src/hooks/useOnlineStatus.ts` | SSR-safe hook: always inits `true` (matches SSR), syncs `navigator.onLine` in `useEffect`. Returns `{ isOnline, wasOffline }` |
 | `src/components/ui/OfflineBanner.tsx` | Fixed amber-accent banner below AppHeader when offline. Auto-dismisses on reconnect |
+| `src/hooks/useIdleTimeout.ts` | HIPAA inactivity timeout. Tracks mouse/key/touch/scroll (1s throttle), warns at 13 min, signs out at 15 min. Auth-gated (no-op for anon). Returns `{ showWarning, secondsRemaining, staySignedIn, isAuthenticated }` |
+| `src/components/ui/InactivityWarning.tsx` | Fixed amber-accent banner with countdown + "Stay signed in" button. Same positioning as OfflineBanner. Rendered in root `layout.tsx` |
 | `src/hooks/useConversationHistory.ts` | Chat sidebar history. Fetches from `/api/conversations` (server route, cookie-authenticated) — NOT browser Supabase client. Subscribes to `onAuthStateChange` for re-fetch on sign-in/out. Groups conversations by date. IndexedDB write-through + offline fallback |
 | `src/lib/conversation-service.ts` | Conversation persistence: create, load, claim, save messages, appeals (+ credit decrement), feedback, events. Uses `getClient()` singleton for auth context |
 | `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date with timestamps. Refreshes on both new conversation creation AND new chat click (via `useRef` tracking previous conversationId). No sign-in prompt — anon users see "No conversations yet" |
@@ -665,7 +668,9 @@ Designed for rural Medicare patients on spotty connections. Caches API responses
 | Navigation (`mode=navigate`) | Network-first → cached page → `/offline` | `denali-static-v2` |
 | Everything else | Stale-while-revalidate | `denali-static-v2` |
 
-**Precached**: `/offline`, `/manifest.json`, `/icon-192.png`, `/icon-512.png`. **Cache versioning**: `CACHE_VERSION = "v2"` — bump on deploy. Old caches deleted on activate. **Update detection**: SW registration checks for updates every 60 min; auto-activates waiting worker.
+**Precached**: `/offline`, `/manifest.json`, `/icon-192.png`, `/icon-512.png`. **Cache versioning**: `CACHE_VERSION = "v3"` — bump on deploy. Old caches deleted on activate. **Update detection**: SW registration checks for updates every 60 min; auto-activates waiting worker.
+
+**CRITICAL: Clone responses synchronously in SW caching strategies.** In `staleWhileRevalidate`, `response.clone()` must happen BEFORE any async `caches.open().then()` — the original response may be consumed by the client before the nested `.then()` runs, causing "Response body is already used" TypeError. Pattern: `const cloned = response.clone(); caches.open(name).then(c => c.put(req, cloned));`
 
 **Middleware**: `sw.js` excluded from Supabase SSR middleware matcher (`sw\\.js` in regex).
 
@@ -714,8 +719,20 @@ fetch failure → cacheGetIfFresh() → setState() from cache (if within TTL)
 ### Network-Aware UI
 
 - **`OfflineBanner`** — fixed below AppHeader (`top-14 sm:top-16 z-30`), amber-left-border accent, auto-dismisses on reconnect. Rendered in root `layout.tsx`.
+- **`InactivityWarning`** — fixed below AppHeader (same position as OfflineBanner), amber-left-border accent, shows countdown timer + "Stay signed in" button. Auth-gated: renders nothing for anonymous users. Rendered in root `layout.tsx` below OfflineBanner.
 - **Chat page** — `ChatInput` disabled when offline with placeholder "Chat requires an internet connection". Uses `useOnlineStatus()` hook.
 - **Offline page** (`/offline`) — shown when navigation fails. Links to cached health records and past conversations.
+
+### Session Inactivity Timeout (HIPAA)
+
+`SESSION_TIMEOUT` constants in `config/ui.ts`. `useIdleTimeout` hook in `hooks/useIdleTimeout.ts`. `InactivityWarning` component in `components/ui/InactivityWarning.tsx`.
+
+- **Warning at 13 min**, **sign out at 15 min** of inactivity (mouse/key/touch/scroll)
+- Activity tracking throttled to 1s updates to avoid thrashing
+- Check interval: 30s normally, 1s during warning countdown
+- Auth-gated via `onAuthStateChange` — no timers for anonymous users
+- Sign out calls `getClient().auth.signOut()` — redirect handled by auth state listeners
+- "Stay signed in" resets `lastActivity` timestamp and clears warning
 
 ### What's NOT Offline
 
