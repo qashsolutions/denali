@@ -7,7 +7,7 @@ const SECTIONS = [
   {
     id: "overview",
     title: "1. Overview",
-    content: `${BRAND.NAME} ("we," "us," or "our") is a Medicare claims intelligence application operated by ${BRAND.COMPANY_NAME}. This Privacy Policy explains how we collect, use, disclose, and protect your personal information when you use our website at ${BRAND.DOMAIN} and related services (collectively, the "Service"). By using the Service, you agree to the practices described in this policy.`,
+    content: `${BRAND.NAME} ("we," "us," or "our") is a Medicare claims intelligence application operated by ${BRAND.COMPANY_NAME}. This Privacy Policy explains how we collect, use, disclose, and protect your personal information when you use our website at ${BRAND.DOMAIN} and related services (collectively, the "Service"). By creating an account, you actively acknowledge and accept the practices described in this policy. You may review this policy before signing up, and you may delete your account at any time if you no longer agree.`,
   },
   {
     id: "information-we-collect",
@@ -99,13 +99,13 @@ const SECTIONS = [
     id: "data-sharing",
     title: "5. How We Share Your Information",
     paragraphs: [
-      "We do not sell your personal information. We share data only in limited circumstances:",
+      "We do not sell your personal information. We share data only in limited circumstances, described below with the scope and duration of each sharing relationship:",
     ],
     items: [
-      "Stripe: Payment processing for subscriptions and per-appeal purchases. We never see or store your credit card number — Stripe handles this directly.",
-      "CMS (Medicare API): We exchange data with the Medicare claims API only when you explicitly authorize the connection.",
-      "Supabase: Our database provider hosts your account data, conversation history, and cached health data with encryption at rest.",
-      "Vercel: Our hosting provider processes web requests. Server-side logs may contain request metadata.",
+      "Stripe: Payment processing for subscriptions and per-appeal purchases. Sharing is transactional (one-time per payment event) — we never see or store your credit card number.",
+      "CMS (Medicare API): We exchange data with the Medicare claims API only when you explicitly authorize the connection. Sharing is persistent while your connection is active and ceases immediately when you disconnect.",
+      "Supabase: Our database provider hosts your account data, conversation history, and cached health data with encryption at rest. Sharing is persistent for the lifetime of your account.",
+      "Vercel: Our hosting provider processes web requests. Sharing is transactional (per-request) — server-side logs are retained for up to 30 days.",
       "Legal Requirements: We may disclose information if required by law, court order, or government regulation.",
       "Business Transfers: In the event of a merger, acquisition, or sale of assets, your personal information may be transferred. We will notify you via email at least 30 days before your data is transferred and becomes subject to a different privacy policy.",
     ],
@@ -113,7 +113,7 @@ const SECTIONS = [
       {
         title: "Anthropic (Claude AI) Data Handling",
         items: [
-          "Your conversation content (questions and context) is sent to Anthropic's Claude API to generate responses. Health data is only included if you have enabled the 'Health Data in AI' consent toggle.",
+          "Your conversation content (questions and context) is sent to Anthropic's Claude API to generate responses. Sharing is transactional (per-message) — each request is independent. Health data is only included if you have enabled the 'Health Data in AI' consent toggle.",
           "Anthropic does not train its models on data submitted through the API. Your conversations are not used to improve Claude or any other Anthropic product.",
           "Anthropic may retain API inputs and outputs for up to 30 days for safety and abuse monitoring purposes, after which they are automatically deleted.",
           "All data sent to Anthropic is encrypted in transit via TLS 1.2+. Anthropic is SOC 2 Type II certified.",

@@ -51,12 +51,6 @@ export function LandingFooter({ settings }: LandingFooterProps) {
               Privacy Policy
             </Link>
             <Link
-              href="/privacy-notice"
-              className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-            >
-              Privacy Notice
-            </Link>
-            <Link
               href="/terms"
               className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
             >
