@@ -795,8 +795,8 @@ supabase/functions/
 
 ```bash
 cd app
-npx vitest run          # 35 unit tests
-npx playwright test     # 12 E2E tests (requires dev server or auto-starts)
+npx vitest run          # 56 unit tests
+npx playwright test     # 31 E2E tests (requires dev server or auto-starts)
 npx tsc --noEmit        # Type check
 ```
 
@@ -807,8 +807,12 @@ npx tsc --noEmit        # Type check
 | Test File | Tests | What It Covers |
 |-----------|-------|----------------|
 | `src/lib/fhir/__tests__/eob-clinical.test.ts` | 35 | All 5 EOB extraction functions: conditions, medications (PDE enrichment), screenings (CPT mapping), providers (careTeam aggregation), hospitalizations (LOS, follow-up) |
+| `src/config/__tests__/pricing.test.ts` | 12 | `getUploadLimitForPlan` (6 plan types), `formatPrice` (2), `formatFileSize` (4) |
+| `src/app/api/consent/__tests__/route.test.ts` | 9 | Consent route handler: auth checks (GET/PUT 401), type validation (400), boolean validation (400), upsert with correct `granted_at`/`revoked_at` timestamps, 500 on DB error |
 
 **Fixtures**: `src/lib/fhir/__tests__/fixtures/synthetic-claims.ts` — 7 synthetic `ClaimSummary` objects exercising all extractors (carrier, outpatient, Part D with PDE, inpatient).
+
+**Route Handler Testing Pattern**: `consent/__tests__/route.test.ts` demonstrates how to unit-test Next.js App Router handlers with Vitest by mocking `createServerSupabaseClient` via `vi.mock()`. The mock returns a fake Supabase client with controllable `getUser()`, `from().select().eq()`, and `from().upsert()` methods. Route functions are imported and called directly with `new Request()` objects.
 
 ### E2E Tests (Playwright)
 
@@ -819,6 +823,9 @@ npx tsc --noEmit        # Type check
 | `e2e/coverage-check.spec.ts` | 1 | Full chat flow: send message → SSE response renders → suggestions appear |
 | `e2e/xss-security.spec.ts` | 7 | XSS prevention in paragraphs (4), tables (2), URL params (1) |
 | `e2e/spoofing-security.spec.ts` | 4 | API access control: unauthenticated requests return empty/401 |
+| `e2e/payment-trial.spec.ts` | 6 | Trial GET/POST 401, checkout auth/validation, webhook secret/signature checks |
+| `e2e/rate-limiting.spec.ts` | 5 | Chat 429 rate limit (auth + anon), 403 trial expired, 503 checkout error, suggestion buttons |
+| `e2e/consent-toggles.spec.ts` | 8 | Consent API access control (2) + UI toggle behavior: rendering, initial state, PUT payloads, optimistic revert on failure, toggle OFF sends `granted: false` (6) |
 
 **SSE Mock Pattern**: All chat E2E tests mock `/api/chat` with `page.route()`, returning `text/event-stream` with `buildSSEResponse()` helper. Also mock `/api/profile` and `/api/conversations`. Trailing `\n\n` required to flush last SSE event from browser parser.
 
@@ -835,6 +842,19 @@ npx tsc --noEmit        # Type check
 - `/api/profile` without auth → `{ authenticated: false }`, no plan/role/admin/credits leaked
 - `/api/consent` without auth → 401
 - `/api/diabetes/log` without auth → 401
+
+**Payment & Trial Access Control** (`payment-trial.spec.ts`):
+- `/api/trial` GET/POST without auth → 401
+- `/api/checkout` POST without auth or Stripe key → 400/401/503
+- `/api/checkout` POST with invalid plan → 400 `"Invalid plan type"`
+- `/api/webhooks/stripe` POST without secret → 500; without signature → 400
+
+**Consent Toggle Behavior** (`consent-toggles.spec.ts`):
+- PUT `/api/consent` without auth → 401
+- All 3 toggles render as `role="switch"` with correct `aria-checked` from GET response
+- Clicking toggle sends PUT with correct `{ consentType, granted }` payload
+- Toggle reverts to previous state when API returns 500 (optimistic revert)
+- Toggling OFF sends `granted: false`
 
 **XSS Fix Applied**: `MarkdownContent.tsx` `parseTable()` now escapes `&`, `<`, `>` in both header and body cells before bold processing — same defense as paragraph path. Without this fix, table cells were a live XSS vector via `dangerouslySetInnerHTML`.
 
