@@ -97,20 +97,22 @@ export default function AppSettingsPage() {
             </>
           ) : (
             <div>
-              <p className="text-sm font-medium text-[var(--text-primary)] mb-2">
+              <label htmlFor="email-input" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                 Sign in with email
-              </p>
+              </label>
               <p className="text-xs text-[var(--text-muted)] mb-3">
                 Sign in to save conversations, generate appeal letters, and connect Medicare.
               </p>
               {!otpSent ? (
                 <div className="flex gap-2">
                   <input
+                    id="email-input"
                     type="email"
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
                     placeholder="you@example.com"
-                    className="flex-1 px-3 py-2 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                    autoFocus
+                    className="flex-1 px-3 py-3 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-transparent transition-colors"
                   />
                   <button
                     onClick={async () => {
@@ -135,12 +137,14 @@ export default function AppSettingsPage() {
               ) : (
                 <div className="flex gap-2">
                   <input
+                    id="otp-input"
                     type="text"
                     value={otpInput}
                     onChange={(e) => setOtpInput(e.target.value)}
                     placeholder="Enter 6-digit code"
                     maxLength={6}
-                    className="flex-1 px-3 py-2 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                    autoFocus
+                    className="flex-1 px-3 py-3 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-transparent transition-colors"
                   />
                   <button
                     onClick={async () => {

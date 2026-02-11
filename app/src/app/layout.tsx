@@ -4,6 +4,7 @@ import { BRAND } from "@/config";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
+import { InactivityWarning } from "@/components/ui/InactivityWarning";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -118,6 +119,7 @@ export default function RootLayout({
         <ThemeProvider>
           <AppHeader />
           <OfflineBanner />
+          <InactivityWarning />
           {children}
         </ThemeProvider>
       </body>
