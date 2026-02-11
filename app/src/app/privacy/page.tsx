@@ -211,9 +211,7 @@ const SECTIONS = [
       "Providing a 14-day free trial for Medicare beneficiaries",
       "Making our application available for CMS review and directory listing",
       "Clearly marking all AI-generated content and distinguishing it from clinical guidance",
-      "Publishing a Model Privacy Notice (ONC format) for plain-language data handling transparency",
     ],
-    afterLink: { href: "/privacy-notice", text: "View Model Privacy Notice" },
   },
   {
     id: "cookies",
@@ -267,9 +265,7 @@ const SECTIONS = [
       "Ask Denali directly in the chat for privacy-related questions",
       "Email us at admin@denali.health",
       `Write to: ${BRAND.COMPANY_NAME}, Privacy Inquiries`,
-      "Review our Model Privacy Notice for a plain-language summary of our data practices",
     ],
-    afterLink: { href: "/privacy-notice", text: "View Model Privacy Notice" },
   },
 ];
 
