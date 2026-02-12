@@ -58,6 +58,7 @@ export interface SessionState {
 
   // Medicare type
   medicareType: "original" | "advantage" | "supplement" | null;
+  maPlanName?: string;  // Medicare Advantage plan name (from Blue Button)
 
   // Symptoms
   symptoms: string[];
@@ -187,6 +188,7 @@ export interface SessionState {
     medicarePaid: string;
     youOwe: string;
     status: string;        // "Paid", "Denied", "Partially Paid"
+    denialReasons?: string[];   // Plain English denial reasons (from EOB)
   }>;
 
   // Lab trends (longitudinal, from diabetes_snapshots)

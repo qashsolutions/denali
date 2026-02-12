@@ -25,7 +25,7 @@
 - [Tools & Data Sources](#tools--data-sources) — [MCP Tools](#mcp-tools-external-auto-handled-by-api) · [Local Tools](#local-tools-defined-in-srclibtools) · [Data Inventory](#data-inventory)
 - [Database Schema](#database-schema) — [Core Tables](#core-tables) · [Denial Code Tables](#denial-code-tables) · [Learning Tables](#learning-tables-no-user-link) · [Key Functions](#key-functions)
 - [Skills & Prompt System](#skills--prompt-system) — [Skill Loading Order](#skill-loading-order--gates) · [Base Prompt](#base-prompt-always-loaded) · [Additional Skills](#additional-skills-loaded-contextually)
-- [Orchestration Flows](#orchestration-flows) — [Coverage Guidance](#flow-1-coverage-guidance-proactive-denial-prevention) · [Appeal](#flow-2-appeal-reactive-denial-response) · [Denial Code Lookup](#flow-3-quick-denial-code-lookup) · [Coverage-to-Appeal Bridge](#flow-4-coverage-to-appeal-bridge)
+- [Orchestration Flows](#orchestration-flows) — [Coverage Guidance](#flow-1-coverage-guidance-proactive-denial-prevention) · [Appeal](#flow-2-appeal-reactive-denial-response) · [Denial Code Lookup](#flow-3-quick-denial-code-lookup) · [Coverage-to-Appeal Bridge](#flow-4-coverage-to-appeal-bridge) · [EOB Explainer](#flow-5-eob-explainer-bill-understanding)
 - [Business Model, Auth & Payments](#business-model-auth--payments) — [Pricing](#pricing) · [Auth Gating](#auth-gating) · [Appeal Gating](#appeal-gating-logic) · [Stripe](#stripe-payment-architecture)
 - [Blue Button 2.0](#blue-button-20-medicare-fhir-api) — [OAuth Flow](#oauth-flow-pkce) · [EOB Extraction Pipeline](#eob-extraction-pipeline) · [Condition Severity Classification](#condition-severity-classification)
 - [UI/UX Guidelines](#uiux-guidelines) — [Layout Architecture](#layout-architecture) · [Theme](#theme) · [Accessibility](#accessibility)
@@ -42,7 +42,7 @@
 
 | Attribute | Value |
 |-----------|-------|
-| **Target User** | Original Medicare patients & caregivers |
+| **Target User** | Original Medicare & Medicare Advantage patients & caregivers |
 | **NOT for** | Commercial payers, Medicaid, billers, coders |
 | **Tone** | Warm, simple, no jargon, empathetic, 8th grade reading level |
 | **Anonymous** | 1 message/day, no signup |
@@ -203,7 +203,7 @@ User-facing (plain English):        Internal (codes, never shown):
   priorTreatments, provider            procedureCodes (CPT)
   requirementAnswers                   denialCodes (CARC/RARC)
   redFlags                             coverageCriteria, policyReferences
-                                       denialDate, priorAuthRequired
+  maPlanName (from Blue Button)        denialDate, priorAuthRequired
 ```
 
 **Population sources** — how fields get populated during the chat loop:
@@ -217,6 +217,7 @@ User-facing (plain English):        Internal (codes, never shown):
 | `priorAuthRequired` | Local `check_prior_auth` | `updateSessionFromToolResults()` |
 | `denialDate` | User message | `extractUserInfo()` regex |
 | `isAppeal` | User message | `extractUserInfo()` keyword detection |
+| `maPlanName` | Blue Button coverage / User message | Auto-detected from Part C coverage in `chat/page.tsx` / `extractUserInfo()` |
 
 ---
 
@@ -240,7 +241,7 @@ User-facing (plain English):        Internal (codes, never shown):
 | `check_prior_auth` | Check if CPT requires prior auth (CMS PA Model + expanded list) | Local rules + CMS PA Model categories |
 | `check_preventive` | Check if service is preventive (no cost-sharing) | Local rules |
 | `search_pubmed` | Clinical evidence search (rate-limited) | NCBI E-utilities |
-| `generate_appeal_letter` | Build Level 1 appeal with inline codes + policy refs + PubMed citations | Combines multiple sources + policy_references + pubmed_citations inputs |
+| `generate_appeal_letter` | Build appeal letter (Level 1 Redetermination for Original Medicare, Organization Determination Appeal for MA) with inline codes + policy refs + PubMed citations. Accepts `medicare_type` and `plan_name` params for MA branching | Combines multiple sources + policy_references + pubmed_citations inputs |
 | `check_sad_list` | Part B (physician) vs Part D (self-administered) drug routing | CMS SAD list |
 | `lookup_denial_code` | CARC/RARC code lookup + appeal strategy | Supabase `carc_codes`, `rarc_codes`, `eob_denial_mappings` |
 | `get_common_denials` | Top denial reasons for a procedure + prevention tips | Supabase (`denial_patterns` + `carc_codes`) |
@@ -349,7 +350,8 @@ The system uses gates that return early and prevent later skills from loading pr
 | 7 | Has coverage but not all requirements verified | REQUIREMENT_VERIFICATION | Ask 1 requirement at a time |
 | 8 | Provider confirmed + specialty mismatch | SPECIALTY_VALIDATION | Warn about ordering specialty risk |
 | 9 | Has coverage and `verificationComplete === true` | GUIDANCE_DELIVERY | Proactive checklist + denial warnings + prior auth status. **NOTE**: Guidance no longer loads when requirements are simply empty (vacuous truth fix) — Claude must emit `[REQUIREMENTS]` block and user must verify or skip |
-| 10 | Appeal detected | APPEAL_SKILL | Denial code lookup + strategy + PubMed evidence + letter generation |
+| 10 | Appeal detected | APPEAL_SKILL | Denial code lookup + strategy + PubMed evidence + letter generation (MA-aware: Organization Determination Appeal for Advantage plans) |
+| 11 | User asks about bills/claims + has health data | EOB_EXPLAINER_SKILL | Explains claims, charges, Medicare payment rules, denial reasons in plain English |
 
 **TOOL_RESTRAINT**: During onboarding and symptom gathering, the prompt explicitly forbids all tool calls. This prevents Claude from jumping ahead to code lookups before gathering enough context.
 
@@ -368,6 +370,7 @@ The system uses gates that return early and prevent later skills from loading pr
 | `HEALTH_RECORDS_SKILL` | `src/lib/skills/health-records.ts` | `hasHealthData` or `hasRecentDenials` |
 | `MEDICARE_NOTIFICATIONS_SKILL` | `src/lib/skills/medicare-notifications.ts` | `hasHealthData && hasRecentChanges` |
 | `DIABETES_PREVENTION_SKILL` | `src/lib/skills/diabetes-prevention.ts` | `hasDiabetesContext` |
+| `EOB_EXPLAINER_SKILL` | `src/skills/domain/eob-explainer.ts` | `hasEOBQuestion && hasHealthData` — user asks about bills/claims with Blue Button connected |
 | `OUTCOME_PROMPTING_SKILL` | `src/skills/domain/outcome-prompting.ts` | Returning user with pending appeal (`hasUnreportedOutcome`). Outcome reported via `/api/appeal-outcome` → `recordAppealOutcome()` + `applyOutcomeIncentive()` (free appeal credit) |
 | `COUNSELOR_SKILL` | `src/skills/channel/counselor.ts` | `role === "counselor"` |
 | `PROVIDER_PILOT_SKILL` | `src/skills/channel/provider.ts` | `role === "provider"` |
@@ -407,6 +410,8 @@ How ICD-10, CMS coverage, CARC/RARC, and NPI data come together in end-to-end to
 
 **Key rule**: `lookup_denial_code` is the FIRST tool called. It immediately gives Claude enough context to explain the denial before gathering additional details for the letter.
 
+**MA branching**: When `sessionState.medicareType === "advantage"`, `generate_appeal_letter` is called with `medicare_type: "advantage"` and `plan_name` from `sessionState.maPlanName`. The letter uses "Organization Determination Appeal" (not "Level 1 Redetermination"), addresses the plan (not MAC), and cites 42 CFR §422.101. Appeal levels differ for MA: Level 1 → plan, Level 2 → IRE (not QIC), Levels 3-5 same as Original Medicare.
+
 ### Flow 3: Quick Denial Code Lookup
 
 **Trigger**: User asks what a denial code means (no full appeal).
@@ -418,6 +423,12 @@ Single tool call: `lookup_denial_code` (checks CARC + `eob_denial_mappings` + ap
 **Trigger**: User returns saying a previously discussed procedure was denied.
 
 Reuses existing `sessionState` (ICD-10, CPT, policy refs from earlier coverage flow) → `lookup_denial_code` → `generate_appeal_letter` with minimal additional questions.
+
+### Flow 5: EOB Explainer (Bill Understanding)
+
+**Trigger**: User asks about a bill, charge, EOB, or what they owe (regex: `explain.*bill|understand.*claim|what do i owe|why.*charged|show.*claim|breakdown.*bill|recent.*claim`). Requires `hasHealthData` (Blue Button connected).
+
+**Tool chain**: No tools needed — Claude uses `recentClaims` data already injected into the system prompt (top 5 claims with amounts, procedures, providers, denial reasons). `EOB_EXPLAINER_SKILL` teaches Claude to structure the explanation: identify claim → what happened → what was charged → what Medicare paid → what patient owes → next step. Denied claims include `denialReasons` in plain English and offer appeal help.
 
 ---
 
@@ -547,9 +558,10 @@ Blue Button connects patients to their Medicare claims data via FHIR APIs.
 ### Health Data in AI
 
 - Client-side `useHealthData()` fetches from `/api/fhir/data` → populates sessionState fields (`healthDataAvailable`, `activeCoverage`, `recentDenials`, `labs`, `conditions`, `medications`, `screenings`, `providers`, `hospitalizations`, `diabetesClassification`)
-- Chat page bridges health data into `useChat` via `initialSessionState` (built with `useMemo`, synced via `useEffect` for async loading)
-- Server-side `buildHealthContextForPrompt()` injects health context into Claude system prompt: active coverage, lab results (with clinical interpretations), diabetes diagnoses, active medications (with PDE supply/gap data), screenings (with overdue alerts), care team providers, recent hospitalizations (with follow-up flags), diabetes classification with action directives, recent denials (gated by `health_data_ai` consent)
+- Chat page bridges health data into `useChat` via `initialSessionState` (built with `useMemo`, synced via `useEffect` for async loading). Also auto-detects Medicare type from Blue Button coverage: Part C → `medicareType: "advantage"` + `maPlanName`; Part A/B → `medicareType: "original"`. `recentClaims` includes `denialReasons` for denied claims.
+- Server-side `buildHealthContextForPrompt()` injects health context into Claude system prompt: active coverage (+ MA plan name if present), lab results (with clinical interpretations), diabetes diagnoses, active medications (with PDE supply/gap data), screenings (with overdue alerts), care team providers, recent hospitalizations (with follow-up flags), diabetes classification with action directives, recent denials (gated by `health_data_ai` consent), denial reasons on individual claims
 - `HEALTH_RECORDS_SKILL` loaded when `hasHealthData` or `hasRecentDenials` triggers fire
+- `EOB_EXPLAINER_SKILL` loaded when `hasEOBQuestion && hasHealthData` — user asks about bills/claims with Blue Button connected
 - `DIABETES_PREVENTION_SKILL` loaded when `hasDiabetesContext` triggers (from conditions, labs, or user keywords)
 
 ### EOB Extraction Pipeline

@@ -19,6 +19,7 @@ export { RED_FLAG_SKILL } from "./domain/red-flag";
 export { SPECIALTY_VALIDATION_SKILL } from "./domain/specialty-validation";
 export { APPEAL_SKILL } from "./domain/appeal";
 export { OUTCOME_PROMPTING_SKILL } from "./domain/outcome-prompting";
+export { EOB_EXPLAINER_SKILL } from "./domain/eob-explainer";
 
 // Health records skill
 export { HEALTH_RECORDS_SKILL } from "@/lib/skills/health-records";

@@ -66,6 +66,16 @@ After gathering denial details and before generating the letter, search for clin
 - CO-97: Bundled with another service
 - CO-119: Frequency limit reached
 
+### Medicare Advantage Appeals
+When the user has Medicare Advantage (sessionState.medicareType === "advantage"):
+- **Level 1**: Organization Determination Appeal (sent to the PLAN, not MAC)
+- **Level 2**: Independent Review Entity (IRE), not QIC
+- **Levels 3-5**: Same as Original Medicare (ALJ, Appeals Council, Federal Court)
+- The plan must cover everything Original Medicare covers (42 CFR §422.101)
+- Pass \`medicare_type: "advantage"\` and \`plan_name\` (from sessionState.maPlanName) to generate_appeal_letter
+- Tell the user to mail the appeal to the address on their plan card or denial letter
+- Time limit is the same: 60 days from the plan's initial decision (not 120 days from MAC)
+
 ### Session State
 Track denial codes mentioned in conversation via sessionState.denialCodes.
 Include them in the appeal letter generation.

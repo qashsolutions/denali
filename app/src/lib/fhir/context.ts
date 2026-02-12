@@ -31,6 +31,9 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
     for (const cov of sessionState.activeCoverage) {
       lines.push(`- ${cov}`);
     }
+    if (sessionState.maPlanName) {
+      lines.push(`- **Medicare Advantage Plan:** ${sessionState.maPlanName}`);
+    }
     lines.push("");
   }
 
@@ -45,6 +48,9 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
       lines.push(`  Services: ${procedures}`);
       lines.push(`  Diagnoses: ${diagnoses}`);
       lines.push(`  Charged: ${claim.totalCharged} | Medicare paid: ${claim.medicarePaid} | You owe: ${claim.youOwe}`);
+      if (claim.status === "Denied" && claim.denialReasons?.length) {
+        lines.push(`  Denial reason: ${claim.denialReasons[0]}`);
+      }
     }
     lines.push("");
     lines.push("**ACTION:** When a user asks about their bill or EOB, reference this claim data directly. Summarize the most recent claim proactively instead of asking which one. Explain charges, what Medicare paid, and what the user owes in plain English.");

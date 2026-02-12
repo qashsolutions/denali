@@ -61,6 +61,7 @@ import {
   HEALTH_RECORDS_SKILL,
   MEDICARE_NOTIFICATIONS_SKILL,
   DIABETES_PREVENTION_SKILL,
+  EOB_EXPLAINER_SKILL,
 } from "@/skills";
 import { buildHealthContextForPrompt } from "@/lib/fhir/context";
 
@@ -126,6 +127,8 @@ export interface SkillTriggers {
   hasRecentChanges: boolean;
   // Diabetes context (P2)
   hasDiabetesContext: boolean;
+  // EOB explainer
+  hasEOBQuestion: boolean;
 }
 
 // Emergency symptom patterns
@@ -224,6 +227,9 @@ export function detectTriggers(
     hasRecentChanges: false, // Set externally by route.ts
     // Diabetes context (set externally by route.ts)
     hasDiabetesContext: false,
+
+    // EOB explainer
+    hasEOBQuestion: /explain.*(bill|charge|eob|claim)|understand.*(bill|charge|eob|claim)|my (eob|bill)|what do i owe|why.*(charged|owe)|show.*(claim|bill)|breakdown.*(bill|charge)|recent.*(claim|bill)/i.test(userContent),
   };
 }
 
@@ -451,6 +457,11 @@ Coverage tools come AFTER the provider is confirmed.
     sections.push(APPEAL_SKILL);
   }
 
+  // EOB explainer - when user asks about bills/claims and has health data
+  if (triggers.hasEOBQuestion && triggers.hasHealthData) {
+    sections.push(EOB_EXPLAINER_SKILL);
+  }
+
   // Prior auth quick check (standalone query before full coverage)
   if (triggers.isPriorAuthQuery && !triggers.hasCoverage) {
     sections.push(PRIOR_AUTH_SKILL);
@@ -516,6 +527,9 @@ function buildSessionContext(state: SessionState): string {
       : state.medicareType === "advantage" ? "Medicare Advantage (Part C)"
       : "Original Medicare with Supplement";
     context.push(`**Medicare type:** ${typeLabel}`);
+    if (state.maPlanName) {
+      context.push(`**MA Plan Name:** ${state.maPlanName}`);
+    }
   }
 
   // Symptoms — MUST use in checklist

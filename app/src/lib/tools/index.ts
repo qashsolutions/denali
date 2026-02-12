@@ -236,6 +236,14 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           items: { type: "string" },
           description: "PubMed citations supporting medical necessity (from search_pubmed results)",
         },
+        medicare_type: {
+          type: "string",
+          description: "Medicare type: 'original' or 'advantage'. If advantage, letter addresses the plan.",
+        },
+        plan_name: {
+          type: "string",
+          description: "Medicare Advantage plan name (e.g., 'Humana Gold Plus'). Used when medicare_type is 'advantage'.",
+        },
       },
       required: ["denial_reason", "procedure_description", "diagnosis_description"],
     },
@@ -669,6 +677,9 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
     const denialDate = (input.denial_date as string) || new Date().toISOString().split("T")[0];
     const policyReferences = (input.policy_references as string[]) || [];
     const pubmedCitations = (input.pubmed_citations as string[]) || [];
+    const medicareType = (input.medicare_type as string) || "original";
+    const planName = (input.plan_name as string) || "";
+    const isMA = medicareType === "advantage";
 
     // Calculate appeal deadline and days remaining
     const denialDateObj = new Date(denialDate);
@@ -704,13 +715,18 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
       ? `Beneficiary Name: ${patientName} _______________`
       : "Beneficiary Name: _______________";
 
+    const letterTitle = isMA ? "Organization Determination Appeal" : "Level 1 Redetermination";
+    const addressee = isMA
+      ? `${planName || "Medicare Advantage Plan"} Appeals Department`
+      : "Medicare Administrative Contractor";
+
     const letter = `
 MEDICARE APPEAL REQUEST
-Level 1 Redetermination
+${letterTitle}
 
 Date: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
 
-To: Medicare Administrative Contractor
+To: ${addressee}
 Re: Appeal of Denied Claim
 
 ${beneficiaryLine}
@@ -718,7 +734,7 @@ Medicare Number: _______________
 Date of Service: _______________
 Claim Number: _______________
 
-Dear Medicare Appeals Department,
+Dear ${addressee},
 
 I am writing to formally appeal the denial of coverage for ${procedureDescription} that was denied on ${new Date(denialDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}.
 
@@ -736,7 +752,9 @@ ${priorTreatments.length > 0 ? `Prior conservative treatments attempted include:
 ${priorTreatments.map((t) => `• ${t}`).join("\n")}
 
 Despite these treatments, the patient's condition has not adequately improved, necessitating ${procedureDescription}.` : ""}
-
+${isMA ? `
+Under federal law (42 CFR §422.101), Medicare Advantage plans must cover all services that Original Medicare covers when medically necessary. This plan is obligated to provide coverage for medically necessary services.
+` : ""}
 2. CLINICAL EVIDENCE
 
 The requested ${procedureDescription} is supported by:
@@ -801,7 +819,9 @@ ${patientName || "_______________"}
           "Add your phone number and mailing address below your signature",
           "Attach a copy of the denial notice",
           "Include relevant medical records and physician's notes",
-          `Mail to the address on your denial notice by ${deadlineStr}`,
+          isMA
+            ? `Mail to the appeals address on your denial notice or the back of your ${planName || "plan"} card`
+            : `Mail to the address on your denial notice by ${deadlineStr}`,
         ],
       },
     };

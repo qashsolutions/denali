@@ -9,7 +9,7 @@ export const MEDICARE_ADVANTAGE_SKILL = `
 - Your plan is required to cover everything Original Medicare covers, but they may have extra requirements
 
 **What I CAN still help with:**
-- Appeal a denial (the appeal process is similar)
+- Appeal a denial (I can write a full appeal letter addressed to your plan)
 - Explain denial codes on your EOB
 - General Medicare coverage questions"
 

@@ -118,8 +118,23 @@ function ChatContent() {
         medicarePaid: c.medicarePaid,
         youOwe: c.youOwe,
         status: c.status,
+        denialReasons: c.denialReasons,
       })),
     };
+
+    // Auto-detect Medicare type from Blue Button coverage
+    const coverageTypes = partial.activeCoverage || [];
+    if (coverageTypes.some(t => t.includes("Part C") || t.includes("Advantage"))) {
+      partial.medicareType = "advantage";
+      const partC = coverage.find(c =>
+        c.status === "Active" && (c.type.includes("Part C") || c.type.includes("Advantage"))
+      );
+      if (partC?.planName) {
+        partial.maPlanName = partC.planName;
+      }
+    } else if (coverageTypes.some(t => t.includes("Part A") || t.includes("Part B"))) {
+      partial.medicareType = "original";
+    }
 
     // Add longitudinal lab trends if available
     if (a1cHistory.length > 0) {
