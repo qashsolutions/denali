@@ -63,7 +63,7 @@ export function Message({
     >
       <div
         className={cn(
-          "max-w-[85%] rounded-2xl px-4 py-3",
+          "max-w-[85%] rounded-2xl px-4 py-3 overflow-hidden",
           isUser
             ? "bg-gradient-to-r from-[var(--user-bubble-from)] to-[var(--user-bubble-to)] text-white rounded-br-md"
             : "bg-[var(--assistant-bubble)] text-[var(--text-primary)] rounded-bl-md border border-[var(--border)]"
