@@ -17,6 +17,7 @@ export function MarkdownContent({ content, className = "" }: MarkdownContentProp
   return (
     <div
       className={`prose-chat ${className}`}
+      style={{ overflowWrap: "break-word", wordBreak: "break-word", minWidth: 0 }}
       dangerouslySetInnerHTML={{ __html: rendered }}
     />
   );
