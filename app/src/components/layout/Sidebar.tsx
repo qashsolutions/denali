@@ -1,15 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useConversationHistory,
   groupConversationsByDate,
   type ConversationHistoryItem,
 } from "@/hooks/useConversationHistory";
-import { MountainIcon } from "@/components/icons";
-import { BRAND } from "@/config";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -81,19 +78,11 @@ export function Sidebar({
         `}
         aria-label="Sidebar"
       >
-        {/* Header with logo */}
-        <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-          <Link href="/" className="flex items-center gap-2">
-            <MountainIcon className="w-7 h-7" />
-            <span className="font-bold text-[var(--text-primary)]">
-              {BRAND.NAME}
-            </span>
-          </Link>
-
-          {/* Close button (mobile only) */}
+        {/* Close button (mobile only) */}
+        <div className="flex items-center justify-end p-4 border-b border-[var(--border)] md:hidden">
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors md:hidden"
+            className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors"
             aria-label="Close sidebar"
           >
             <CloseIcon className="w-5 h-5 text-[var(--text-secondary)]" />
