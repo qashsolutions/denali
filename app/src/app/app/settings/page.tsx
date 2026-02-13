@@ -15,8 +15,10 @@ export default function AppSettingsPage() {
   const { isDark, setTheme } = useTheme();
   const { settings, setTextScale, resetSettings } = useSettings();
   const { consent, isLoading: consentLoading, updateConsent } = useConsent();
-  const { authState, sendEmailOTP, verifyEmailOTP, enrollTOTP, challengeAndVerifyTOTP, signOut, clearError } = useAuth();
+  const { authState, sendEmailOTP, verifyEmailOTP, enrollTOTP, unenrollTOTP, challengeAndVerifyTOTP, signOut, clearError } = useAuth();
   const [showTOTPEnroll, setShowTOTPEnroll] = useState(false);
+  const [showTOTPRemoveConfirm, setShowTOTPRemoveConfirm] = useState(false);
+  const [unenrollLoading, setUnenrollLoading] = useState(false);
   const [totpEnrolled, setTotpEnrolled] = useState(authState.isMfaEnrolled);
   const [emailInput, setEmailInput] = useState("");
   const [otpInput, setOtpInput] = useState("");
@@ -83,7 +85,7 @@ export default function AppSettingsPage() {
                   </p>
                   <p className="text-xs text-[var(--text-muted)] mt-0.5">
                     Signed in
-                    {` \u00b7 ${authState.plan} plan`}
+                    {authState.isAdmin ? " \u00b7 Admin" : ` \u00b7 ${authState.plan} plan`}
                   </p>
                 </div>
                 <button
@@ -98,26 +100,67 @@ export default function AppSettingsPage() {
               </div>
 
               {/* Authenticator status — inline in Account section */}
-              <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
-                <div>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">Authenticator App</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                    {totpEnrolled || authState.isMfaEnrolled
-                      ? "Enrolled — adds extra protection to your account"
-                      : "Recommended if you connect Medicare"}
-                  </p>
+              <div className="pt-3 border-t border-[var(--border)]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">Authenticator App</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                      {totpEnrolled || authState.isMfaEnrolled
+                        ? "Enrolled — adds extra protection to your account"
+                        : "Recommended if you connect Medicare"}
+                    </p>
+                  </div>
+                  {totpEnrolled || authState.isMfaEnrolled ? (
+                    <button
+                      onClick={() => setShowTOTPRemoveConfirm(true)}
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-green-500/10 text-green-600 hover:bg-red-500/10 hover:text-red-600 transition-colors"
+                    >
+                      Enrolled
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setShowTOTPEnroll(true)}
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
+                    >
+                      Set Up
+                    </button>
+                  )}
                 </div>
-                <button
-                  onClick={() => setShowTOTPEnroll(true)}
-                  disabled={totpEnrolled || authState.isMfaEnrolled}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    totpEnrolled || authState.isMfaEnrolled
-                      ? "bg-green-500/10 text-green-600 cursor-default"
-                      : "bg-[var(--accent-primary)] text-white hover:opacity-90"
-                  }`}
-                >
-                  {totpEnrolled || authState.isMfaEnrolled ? "Enrolled" : "Set Up"}
-                </button>
+
+                {/* TOTP removal confirmation */}
+                {showTOTPRemoveConfirm && (
+                  <div className="mt-3 p-3 rounded-lg bg-red-500/5 border border-red-500/20">
+                    <p className="text-sm text-[var(--text-primary)] mb-1 font-medium">
+                      Remove authenticator?
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)] mb-3">
+                      Your authenticator app helps protect your Medicare health data. Removing it makes your account less secure.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowTOTPRemoveConfirm(false)}
+                        className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
+                      >
+                        Keep It
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setUnenrollLoading(true);
+                          const ok = await unenrollTOTP();
+                          setUnenrollLoading(false);
+                          if (ok) {
+                            setTotpEnrolled(false);
+                            setShowTOTPRemoveConfirm(false);
+                          }
+                        }}
+                        disabled={unenrollLoading}
+                        className="flex-1 px-3 py-2 rounded-lg text-sm font-medium text-red-600 bg-red-500/10 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                      >
+                        {unenrollLoading ? "Removing..." : "Yes, Remove"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           ) : (

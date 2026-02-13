@@ -30,6 +30,7 @@ interface UseAuthReturn {
   sendEmailOTP: (email: string) => Promise<boolean>;
   verifyEmailOTP: (email: string, code: string) => Promise<boolean>;
   enrollTOTP: () => Promise<{ qrCode: string; secret: string; factorId: string } | null>;
+  unenrollTOTP: () => Promise<boolean>;
   challengeAndVerifyTOTP: (code: string, factorId?: string) => Promise<boolean>;
   checkAppealAccess: () => Promise<AppealAccessStatus>;
   signOut: () => Promise<void>;
@@ -398,6 +399,58 @@ export function useAuth(): UseAuthReturn {
     }
   }, [supabase]);
 
+  // Unenroll (remove) TOTP factor
+  const unenrollTOTP = useCallback(async (): Promise<boolean> => {
+    setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+    try {
+      const { data: factorsData } = await supabase.auth.mfa.listFactors();
+      const totpFactor = factorsData?.totp?.find(
+        (f) => f.status === "verified"
+      );
+
+      if (!totpFactor) {
+        setAuthState((prev) => ({
+          ...prev,
+          isLoading: false,
+          isMfaEnrolled: false,
+        }));
+        return true;
+      }
+
+      const { error } = await supabase.auth.mfa.unenroll({
+        factorId: totpFactor.id,
+      });
+
+      if (error) {
+        setAuthState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error: error.message,
+        }));
+        return false;
+      }
+
+      setAuthState((prev) => ({
+        ...prev,
+        isMfaEnrolled: false,
+        isMfaVerified: false,
+        isLoading: false,
+      }));
+      return true;
+    } catch (error) {
+      setAuthState((prev) => ({
+        ...prev,
+        isLoading: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to remove authenticator",
+      }));
+      return false;
+    }
+  }, [supabase]);
+
   // Challenge and verify TOTP
   // factorId: pass from enrollTOTP() during enrollment; omit during login (discovered via listFactors)
   const challengeAndVerifyTOTP = useCallback(
@@ -556,6 +609,7 @@ export function useAuth(): UseAuthReturn {
     sendEmailOTP,
     verifyEmailOTP,
     enrollTOTP,
+    unenrollTOTP,
     challengeAndVerifyTOTP,
     checkAppealAccess,
     signOut,
