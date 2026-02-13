@@ -39,6 +39,13 @@ type ResourceType =
  * Log an auditable action. Uses the admin client to bypass RLS.
  * Non-blocking — callers should fire-and-forget with .catch().
  */
+// Actions with a dedup window (ms). Same user+action within this window → skip insert.
+// Only high-frequency, low-value actions belong here. Sensitive actions (appeals, consent, etc.)
+// must always log every occurrence for audit compliance.
+const DEDUP_WINDOWS: Partial<Record<AuditAction, number>> = {
+  FHIR_DATA_ACCESS: 2 * 60 * 60 * 1000, // 2 hours
+};
+
 export async function logAudit(
   action: AuditAction,
   options: {
@@ -51,6 +58,20 @@ export async function logAudit(
 ): Promise<void> {
   try {
     const admin = createAdminClient();
+
+    // Dedup check: skip if same user+action logged recently
+    const dedupMs = DEDUP_WINDOWS[action];
+    if (dedupMs && options.userId) {
+      const cutoff = new Date(Date.now() - dedupMs).toISOString();
+      const { data: recent } = await admin
+        .from("audit_logs")
+        .select("id")
+        .eq("user_id", options.userId)
+        .eq("action", action)
+        .gte("created_at", cutoff)
+        .limit(1);
+      if (recent && recent.length > 0) return;
+    }
 
     // Extract IP and User-Agent from request if provided
     let ipAddress: string | null = null;

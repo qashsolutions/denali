@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { createAdminClient } from "@/lib/supabase-admin";
 
 const ACTION_LABELS: Record<string, string> = {
   FHIR_CONNECT: "Connected Medicare account",
@@ -61,41 +62,66 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
 
-  // Get total count
-  const { count } = await supabase
-    .from("audit_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
-  const total = count || 0;
-
-  // Get paginated logs
-  const { data: logs, error } = await supabase
-    .from("audit_logs")
-    .select("id, action, resource_type, ip_address, created_at")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
+  // Grouped query: collapse same action+resource_type per day into one row with count
+  // Uses admin client because generated types don't include this RPC yet
+  const admin = createAdminClient();
+  const { data: rows, error } = await admin.rpc("get_grouped_audit_logs" as never, {
+    p_user_id: user.id,
+    p_limit: limit,
+    p_offset: offset,
+  } as never);
 
   if (error) {
-    console.error("[Audit Log API] Error fetching logs:", error.message);
-    return NextResponse.json({ authenticated: true, logs: [], total: 0, page, hasMore: false });
+    // Fallback: try ungrouped query if RPC doesn't exist yet
+    const { data: logs, error: fallbackError } = await supabase
+      .from("audit_logs")
+      .select("id, action, resource_type, ip_address, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (fallbackError) {
+      console.error("[Audit Log API] Error fetching logs:", fallbackError.message);
+      return NextResponse.json({ authenticated: true, logs: [], total: 0, page, hasMore: false });
+    }
+
+    const result = (logs || []).map((log) => ({
+      id: log.id,
+      action: log.action,
+      description: getActionLabel(log.action),
+      resourceType: log.resource_type,
+      createdAt: log.created_at,
+      ipAddress: maskIp(log.ip_address),
+      count: 1,
+    }));
+
+    return NextResponse.json({ authenticated: true, logs: result, total: result.length, page, hasMore: false });
   }
 
-  const result = (logs || []).map((log) => ({
-    id: log.id,
-    action: log.action,
-    description: getActionLabel(log.action),
-    resourceType: log.resource_type,
-    createdAt: log.created_at,
-    ipAddress: maskIp(log.ip_address),
+  type GroupedRow = {
+    action: string;
+    resource_type: string | null;
+    ip_address: string | null;
+    latest_at: string;
+    log_date: string;
+    entry_count: number;
+  };
+
+  const grouped = ((rows as unknown as GroupedRow[]) || []).map((row) => ({
+    id: `${row.action}-${row.log_date}`,
+    action: row.action,
+    description: getActionLabel(row.action),
+    resourceType: row.resource_type,
+    createdAt: row.latest_at,
+    ipAddress: maskIp(row.ip_address),
+    count: row.entry_count,
   }));
 
   return NextResponse.json({
     authenticated: true,
-    logs: result,
-    total,
+    logs: grouped,
+    total: grouped.length,
     page,
-    hasMore: offset + limit < total,
+    hasMore: grouped.length === limit,
   });
 }

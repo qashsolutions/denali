@@ -26,7 +26,7 @@ export default function AppSettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [auditLogs, setAuditLogs] = useState<Array<{ id: string; description: string; createdAt: string | null }>>([]);
+  const [auditLogs, setAuditLogs] = useState<Array<{ id: string; description: string; createdAt: string | null; count: number }>>([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
   useEffect(() => {
@@ -37,10 +37,11 @@ export default function AppSettingsPage() {
       .then((data) => {
         if (data.authenticated && data.logs) {
           setAuditLogs(
-            data.logs.map((l: { id: string; description: string; createdAt: string | null; created_at?: string | null }) => ({
+            data.logs.map((l: { id: string; description: string; createdAt: string | null; created_at?: string | null; count?: number }) => ({
               id: l.id,
               description: l.description,
               createdAt: l.createdAt || l.created_at || null,
+              count: l.count ?? 1,
             }))
           );
         }
@@ -378,7 +379,14 @@ export default function AppSettingsPage() {
               <div className="space-y-3">
                 {auditLogs.map((log) => (
                   <div key={log.id} className="flex items-center justify-between gap-4">
-                    <p className="text-sm text-[var(--text-primary)]">{log.description}</p>
+                    <p className="text-sm text-[var(--text-primary)]">
+                      {log.description}
+                      {log.count > 1 && (
+                        <span className="text-xs text-[var(--text-muted)] ml-1">
+                          ({"\u00d7"}{log.count})
+                        </span>
+                      )}
+                    </p>
                     <p className="text-xs text-[var(--text-muted)] shrink-0">
                       {formatRelativeTime(log.createdAt)}
                     </p>
