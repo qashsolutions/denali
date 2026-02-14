@@ -16,24 +16,24 @@ const FEATURES = [
   {
     step: "01",
     audience: "FOR EVERYONE",
-    title: "Health Records in Plain English",
-    description:
-      "Connect your Medicare account and see your conditions, medications, and claims explained in words you understand.",
-    tags: ["Medicare Connect", "Conversational"],
-    color: "health-red" as const,
-    href: "/app/health",
-    Illustration: HealthRecordsIllustration,
-  },
-  {
-    step: "02",
-    audience: "FOR EVERYONE",
     title: "Ask Denali",
     description:
-      "Ask anything about Medicare coverage or diabetes care. Get a clear checklist of what your doctor needs to document so your claim gets approved.",
+      "Ask anything about Medicare coverage or diabetes care. Get a checklist of what your doctor needs to document so your claim gets approved.",
     tags: ["Coverage Rules", "Part A & B", "Coverage Check"],
     color: "check-teal" as const,
     href: "/app/chat",
     Illustration: CoverageCheckIllustration,
+  },
+  {
+    step: "02",
+    audience: "FOR EVERYONE",
+    title: "Your Medicare Dashboard",
+    description:
+      "Connect your Medicare account and see every claim, condition, medication, and provider visit — organized and explained for you.",
+    tags: ["Blue Button", "Claims & EOBs"],
+    color: "health-red" as const,
+    href: "/app/health",
+    Illustration: HealthRecordsIllustration,
   },
   {
     step: "03",

@@ -612,7 +612,7 @@ Blue Button connects patients to their Medicare claims data via FHIR APIs.
 
 | Viewport | Left | Center | Right |
 |----------|------|--------|-------|
-| **Desktop** | Logo + tagline → `/` | Nav: Health (rose), Ask Denali (blue), Blog (violet) | Sign In button (not auth) / Gear icon (auth) |
+| **Desktop** | Logo → `/` | Nav: Health (rose), Ask Denali (blue), Blog (violet) | Sign In button (not auth) / Gear icon (auth) |
 | **Mobile** | Logo → `/` | — | Sign In / Gear + Hamburger menu |
 
 - Auth-aware via `createClient().auth.getSession()` + `onAuthStateChange`
