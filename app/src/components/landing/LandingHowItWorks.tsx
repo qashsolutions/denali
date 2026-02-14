@@ -27,7 +27,7 @@ const STEPS = [
   {
     step: 2,
     label: "Ask Denali",
-    hint: "Coverage questions in plain English",
+    hint: "Check coverage before you go",
     Icon: ChatBubbleIcon,
     color: "var(--accent-primary)",
     colorLight: "#60a5fa",
@@ -176,9 +176,7 @@ export function LandingHowItWorks({ section: _section }: LandingHowItWorksProps)
         </div>
 
         {/* Subtle helper */}
-        <p className="text-center text-xs text-[var(--text-muted)] mt-10">
-          No medical codes. No jargon. Just plain English.
-        </p>
+        {/* Removed filler tagline — the product demonstrates this */}
       </div>
     </section>
   );
