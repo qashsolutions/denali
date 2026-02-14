@@ -132,9 +132,6 @@ export function AppHeader() {
                   <span className="text-[var(--accent-secondary)]">{suffix}</span>
                 )}
               </span>
-              <span className="hidden md:block text-[10px] text-[var(--text-muted)] leading-tight">
-                {BRAND.TAGLINE}
-              </span>
             </div>
           </Link>
 

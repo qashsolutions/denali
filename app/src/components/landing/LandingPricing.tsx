@@ -11,7 +11,7 @@ export function LandingPricing({ plans }: LandingPricingProps) {
   if (!plans || plans.length === 0) return null;
 
   return (
-    <section className="py-16 sm:py-24 bg-[var(--bg-secondary)]">
+    <section className="py-20 sm:py-32 bg-[var(--bg-secondary)]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-12 sm:mb-16">

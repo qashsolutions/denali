@@ -99,10 +99,10 @@ const COLOR_CLASSES = {
 };
 
 const SECTION_WORDS = [
-  { text: "Connect.", color: "var(--health-red)" },
-  { text: "Understand.", color: "var(--check-teal)" },
-  { text: "Prevent.", color: "var(--diabetes-violet)" },
-  { text: "Appeal.", color: "var(--appeal-coral)" },
+  { text: "Connect.", color: "var(--accent-primary)" },
+  { text: "Understand.", color: "var(--accent-primary)" },
+  { text: "Prevent.", color: "var(--accent-primary)" },
+  { text: "Appeal.", color: "var(--accent-primary)" },
 ];
 
 function FeatureCard({
@@ -175,7 +175,7 @@ function FeatureCard({
 
 export function LandingFeatures({ section: _section }: LandingFeaturesProps) {
   return (
-    <section className="py-16 sm:py-24 bg-[var(--bg-secondary)]">
+    <section className="py-20 sm:py-32 bg-[var(--bg-secondary)]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-12 sm:mb-16">

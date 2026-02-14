@@ -20,8 +20,8 @@ const STEPS = [
     label: "Connect Medicare",
     hint: "Link your Medicare account",
     Icon: HeartPulseIcon,
-    color: "var(--health-red)",
-    colorLight: "var(--health-red-light)",
+    color: "var(--accent-primary)",
+    colorLight: "#60a5fa",
     href: "/app/health",
   },
   {
@@ -29,8 +29,8 @@ const STEPS = [
     label: "Ask Denali",
     hint: "Coverage questions in plain English",
     Icon: ChatBubbleIcon,
-    color: "var(--check-teal)",
-    colorLight: "var(--check-teal-light)",
+    color: "var(--accent-primary)",
+    colorLight: "#60a5fa",
     href: "/app/chat",
   },
   {
@@ -38,8 +38,8 @@ const STEPS = [
     label: "Track Diabetes",
     hint: "A1C trends, screenings, reminders",
     Icon: DiabetesIcon,
-    color: "var(--diabetes-violet)",
-    colorLight: "var(--diabetes-violet-light)",
+    color: "var(--accent-primary)",
+    colorLight: "#60a5fa",
     href: "/app/diabetes",
   },
   {
@@ -47,8 +47,8 @@ const STEPS = [
     label: "Appeal Denials",
     hint: "Auto-built letters with citations",
     Icon: ClaimsIcon,
-    color: "var(--appeal-coral)",
-    colorLight: "var(--appeal-coral-light)",
+    color: "var(--accent-primary)",
+    colorLight: "#60a5fa",
     href: "/app/chat",
   },
 ];
@@ -130,7 +130,7 @@ function FlowArrow({ color }: { color: string }) {
 
 export function LandingHowItWorks({ section: _section }: LandingHowItWorksProps) {
   return (
-    <section id="how-it-works" className="py-16 sm:py-24">
+    <section id="how-it-works" className="py-20 sm:py-32">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-12 sm:mb-16">
