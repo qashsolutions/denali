@@ -20,6 +20,8 @@ export function LandingHero({ section }: LandingHeroProps) {
       />
       {/* Gradient overlay for text readability */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
+      {/* Bottom fade into next section */}
+      <div className="absolute bottom-0 left-0 right-0 h-24 sm:h-32 bg-gradient-to-b from-transparent to-[var(--bg-secondary)]" />
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24 sm:py-32 lg:py-44">
         <div className="max-w-3xl mx-auto text-center">
