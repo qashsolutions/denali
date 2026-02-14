@@ -15,21 +15,21 @@ interface LandingFeaturesProps {
 const FEATURES = [
   {
     step: "01",
-    audience: "FOR EVERYONE",
-    title: "Ask Denali",
+    audience: "BEFORE YOU GO",
+    title: "Coverage Check",
     description:
-      "Ask anything about Medicare coverage or diabetes care. Get a checklist of what your doctor needs to document so your claim gets approved.",
-    tags: ["Coverage Rules", "Part A & B", "Coverage Check"],
+      "Find out if Medicare covers it — before you go.",
+    tags: ["Part A & B", "Prior Auth", "Coverage Rules"],
     color: "check-teal" as const,
     href: "/app/chat",
     Illustration: CoverageCheckIllustration,
   },
   {
     step: "02",
-    audience: "FOR EVERYONE",
-    title: "Your Medicare Dashboard",
+    audience: "YOUR DATA",
+    title: "Medicare Dashboard",
     description:
-      "Connect your Medicare account and see every claim, condition, medication, and provider visit — organized and explained for you.",
+      "Your claims, meds, and providers — all in one place.",
     tags: ["Blue Button", "Claims & EOBs"],
     color: "health-red" as const,
     href: "/app/health",
@@ -38,10 +38,10 @@ const FEATURES = [
   {
     step: "03",
     audience: "PREVENTION",
-    title: "Diabetes & Prevention Coaching",
+    title: "Diabetes Care",
     description:
-      "Personalized coaching from your own A1C and glucose results. Track trends, get reminders, and stay ahead of diabetes.",
-    tags: ["A1C Tracking", "Med Reminders", "Prevention Program"],
+      "Track your A1C, screenings, and medications over time.",
+    tags: ["A1C Tracking", "Screenings", "Med Reminders"],
     color: "diabetes-violet" as const,
     href: "/app/chat?topic=diabetes",
     Illustration: DiabetesCareIllustration,
@@ -49,10 +49,10 @@ const FEATURES = [
   {
     step: "04",
     audience: "WHEN DENIED",
-    title: "Claims & Appeals That Work",
+    title: "Appeals",
     description:
-      "Denied? We look up exactly why, build your appeal letter with the right codes and citations, and track your deadline so you never miss it.",
-    tags: ["5 Appeal Levels", "Auto-Templates", "Deadline Alerts"],
+      "Denied? We build the letter with the right codes and citations.",
+    tags: ["5 Levels", "Auto-Letters", "Deadline Alerts"],
     color: "appeal-coral" as const,
     href: "/app/chat",
     Illustration: AppealIllustration,
@@ -193,8 +193,7 @@ export function LandingFeatures({ section: _section }: LandingFeaturesProps) {
             ))}
           </h2>
           <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-            Your complete Medicare health companion — from records to prevention
-            to appeals.
+            Four tools, one mission — make sure Medicare works for you.
           </p>
         </div>
 
