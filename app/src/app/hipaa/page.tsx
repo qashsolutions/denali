@@ -133,8 +133,9 @@ export default function HIPAAPage() {
         <SubSection title="Physical Safeguards">
           <UL>
             <li>
-              Infrastructure hosted on SOC 2 Type II compliant providers
-              (Supabase, Vercel)
+              Infrastructure hosted on AWS (HIPAA-eligible: RDS PostgreSQL,
+              ECS/Fargate, Bedrock) — Business Associate Agreement executed
+              February 25, 2026
             </li>
             <li>
               No PHI stored on local devices — all data resides in encrypted
@@ -300,31 +301,28 @@ export default function HIPAAPage() {
         <P>
           We work with the following service providers who may process health
           data on our behalf. We require Business Associate Agreements (BAAs)
-          with all service providers who process protected health information,
-          and BAAs are being established with each provider listed below:
+          with all service providers who process protected health information.
         </P>
         <UL>
           <li>
-            <strong>Supabase:</strong> Database hosting and authentication
-            (stores encrypted health data cache) — BAA in process
+            <strong>AWS (Amazon Web Services):</strong> Database (RDS
+            PostgreSQL), application hosting (ECS/Fargate), and AI processing
+            (Bedrock — runs Claude; health data only sent when user consents
+            to Health Data in AI). AWS is HIPAA-eligible. Our BAA with AWS
+            was <strong>executed on February 25, 2026</strong>. AWS Bedrock
+            does not store or log prompts and completions by default and does
+            not train models on your data.
           </li>
           <li>
-            <strong>Vercel:</strong> Application hosting (processes API
-            requests that may contain PHI) — BAA in process
-          </li>
-          <li>
-            <strong>Anthropic:</strong> AI processing (receives conversation
-            content; health data only sent when user consents to Health Data
-            in AI) — data handling governed by Anthropic API Terms; does not
-            train models on API data; retains inputs/outputs up to 30 days
-            for safety monitoring only
+            <strong>Stripe:</strong> Payment processing only — does not
+            process or store any health information. PCI DSS certified.
           </li>
         </UL>
         <P>
-          This notice will be updated once BAAs with Supabase and Vercel are
-          fully executed. Until that time, all three providers operate under
-          contractual data protection obligations consistent with the
-          sensitivity of the data they handle.
+          All providers handling protected health information operate under a
+          fully executed Business Associate Agreement. Our AWS BAA covers all
+          services that may come into contact with PHI (database, hosting,
+          and AI processing).
         </P>
       </Section>
 

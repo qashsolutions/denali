@@ -105,21 +105,19 @@ const SECTIONS = [
     items: [
       "Stripe: Payment processing for subscriptions and per-appeal purchases. Sharing is transactional (one-time per payment event) — we never see or store your credit card number.",
       "CMS (Medicare API): We exchange data with the Medicare claims API only when you explicitly authorize the connection. Sharing is persistent while your connection is active and ceases immediately when you disconnect.",
-      "Supabase: Our database provider hosts your account data, conversation history, and cached health data with encryption at rest. Sharing is persistent for the lifetime of your account.",
-      "Vercel: Our hosting provider processes web requests. Sharing is transactional (per-request) — server-side logs are retained for up to 30 days.",
+      "AWS (Amazon Web Services): Our database (RDS PostgreSQL), application hosting (ECS/Fargate), and AI processing (Bedrock) provider. AWS is HIPAA-eligible and our Business Associate Agreement (BAA) was executed on February 25, 2026. Your account data, conversation history, and cached health data are stored in encrypted AWS RDS databases in us-east-1. Sharing is persistent for the lifetime of your account.",
       "Legal Requirements: We may disclose information if required by law, court order, or government regulation.",
       "Business Transfers: In the event of a merger, acquisition, or sale of assets, your personal information may be transferred. We will notify you via email at least 30 days before your data is transferred and becomes subject to a different privacy policy. As a holder of CMS Blue Button API production credentials, we will also notify CMS at the earliest practicable time, as production credentials are issued to a specific approved application and entity and a change of ownership requires CMS re-review.",
-      "Vendor Data Protection Commitments: Each third-party service provider we work with is contractually required to protect your information using safeguards appropriate to the sensitivity of the data they handle, consistent with applicable law. All providers handling protected health information are covered by Business Associate Agreements (BAAs). Anthropic is SOC 2 Type II certified; Supabase and Vercel are SOC 2 compliant cloud providers; Stripe is PCI DSS certified for payment data.",
+      "Vendor Data Protection Commitments: Each third-party service provider we work with is contractually required to protect your information using safeguards appropriate to the sensitivity of the data they handle, consistent with applicable law. All providers handling protected health information are covered by Business Associate Agreements (BAAs). AWS is HIPAA-eligible and SOC 2 Type II certified (BAA executed February 25, 2026); Stripe is PCI DSS certified for payment data.",
     ],
     subsections: [
       {
-        title: "Anthropic (Claude AI) Data Handling",
+        title: "AWS Bedrock (Claude AI) Data Handling",
         items: [
-          "Your conversation content (questions and context) is sent to Anthropic's Claude API to generate responses. Sharing is transactional (per-message) — each request is independent. Health data is only included if you have enabled the 'Health Data in AI' consent toggle.",
-          "Anthropic does not train its models on data submitted through the API. Your conversations are not used to improve Claude or any other Anthropic product.",
-          "Anthropic may retain API inputs and outputs for up to 30 days for safety and abuse monitoring purposes, after which they are automatically deleted.",
-          "All data sent to Anthropic is encrypted in transit via TLS 1.2+. Anthropic is SOC 2 Type II certified.",
-          "For full details, see Anthropic's API Data Usage Policy at anthropic.com/policies.",
+          "Your conversation content (questions and context) is processed through Claude on AWS Bedrock to generate responses. Sharing is transactional (per-message) — each request is independent. Health data is only included if you have enabled the 'Health Data in AI' consent toggle.",
+          "AWS Bedrock does not store or log your prompts and completions by default, and does not train models on your data.",
+          "All data sent to AWS Bedrock is encrypted in transit via TLS 1.2+ and processed within HIPAA-eligible infrastructure covered by our AWS BAA executed February 25, 2026.",
+          "AWS is SOC 2 Type II certified and HIPAA-eligible across all services we use (RDS, ECS/Fargate, Bedrock).",
         ],
       },
     ],
@@ -179,7 +177,7 @@ const SECTIONS = [
       "Technical safeguards: encryption, access controls, audit logging",
       "Administrative safeguards: workforce training, security policies, incident response procedures",
       "Physical safeguards: secure hosting through SOC 2 compliant providers (Supabase, Vercel)",
-      "Business Associate Agreements (BAAs) are required from all service providers who access, process, or store protected health information on our behalf. BAAs with Supabase and Vercel are currently being established; this notice will be updated upon execution.",
+      "Business Associate Agreements (BAAs) are required from all service providers who access, process, or store protected health information on our behalf. Our BAA with AWS (covering database, hosting, and AI services via Amazon RDS, ECS/Fargate, and Bedrock) was executed on February 25, 2026.",
     ],
     afterItems:
       "For detailed information about our HIPAA practices, see our HIPAA Compliance page.",

@@ -208,9 +208,9 @@ const checks: Check[] = [
 
   // ── Data processors ──────────────────────────────────────────────────────
   {
-    name: "All four processors (Anthropic, Stripe, Supabase, Vercel) in FAQ and Privacy",
+    name: "AWS and Stripe named as data processors in FAQ and Privacy",
     run: () => {
-      const processors = ["Anthropic", "Stripe", "Supabase", "Vercel"];
+      const processors = ["AWS", "Stripe"];
       const issues: string[] = [];
       for (const p of processors) {
         const missing = allHave(["faq", "privacy"], p);
@@ -222,16 +222,16 @@ const checks: Check[] = [
 
   // ── BAA status ───────────────────────────────────────────────────────────
   {
-    name: "BAA not falsely claimed as already 'in place' in Privacy and HIPAA",
+    name: "AWS BAA execution date stated in Privacy and HIPAA",
     run: () => {
-      // "in place" near "BAA" would be a false claim (BAAs not yet signed)
-      const falseClaim = (["privacy", "hipaa"] as DocKey[]).filter((d) =>
-        /BAA.{0,30}in place/i.test(docs[d])
+      // BAA with AWS was executed February 25, 2026 — must be stated in both docs
+      const missing = (["privacy", "hipaa"] as DocKey[]).filter(
+        (d) => !has(d, /executed.{0,40}February 25, 2026|February 25, 2026.{0,40}executed/i)
       );
       return {
-        pass: falseClaim.length === 0,
-        detail: falseClaim.length
-          ? `Premature 'BAA in place' claim found in: ${falseClaim.join(", ")}`
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `AWS BAA execution date missing in: ${missing.join(", ")}`
           : undefined,
       };
     },
@@ -280,14 +280,15 @@ const checks: Check[] = [
     },
   },
 
-  // ── Anthropic retention ──────────────────────────────────────────────────
+  // ── AWS Bedrock no-retention ─────────────────────────────────────────────
   {
-    name: "Anthropic 30-day data retention in Privacy and HIPAA",
+    name: "AWS Bedrock no-retention/no-training stated in Privacy and HIPAA",
     run: () => {
+      // AWS Bedrock does not retain prompts by default — must be stated in both docs
       const missing = (["privacy", "hipaa"] as DocKey[]).filter(
-        (d) => !has(d, "30 days") && !has(d, "30-day")
+        (d) => !has(d, /Bedrock[\s\S]{0,100}not (store|log|retain)|not (store|log|retain)[\s\S]{0,100}Bedrock/i)
       );
-      return { pass: missing.length === 0, detail: missing.length ? `30-day Anthropic retention missing in: ${missing.join(", ")}` : undefined };
+      return { pass: missing.length === 0, detail: missing.length ? `AWS Bedrock no-retention statement missing in: ${missing.join(", ")}` : undefined };
     },
   },
 
