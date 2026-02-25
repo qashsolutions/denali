@@ -30,11 +30,13 @@ export default function AppSettingsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [auditLogs, setAuditLogs] = useState<Array<{ id: string; description: string; createdAt: string | null; count: number }>>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [auditLimit, setAuditLimit] = useState(10);
+  const [auditHasMore, setAuditHasMore] = useState(false);
 
   useEffect(() => {
     if (!authState.email) return;
     setAuditLoading(true);
-    fetch("/api/audit-log?limit=10")
+    fetch(`/api/audit-log?limit=${auditLimit}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.authenticated && data.logs) {
@@ -46,11 +48,12 @@ export default function AppSettingsPage() {
               count: l.count ?? 1,
             }))
           );
+          setAuditHasMore(data.hasMore ?? false);
         }
       })
       .catch(() => {})
       .finally(() => setAuditLoading(false));
-  }, [authState.email]);
+  }, [authState.email, auditLimit]);
 
   const textScaleOptions = [
     { value: 0.9, label: "Small" },
@@ -407,9 +410,12 @@ export default function AppSettingsPage() {
       {/* Activity Log */}
       {authState.email && (
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
-            Activity Log
+          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">
+            Data Access History
           </h2>
+          <p className="text-xs text-[var(--text-muted)] mb-4">
+            A record of when your Medicare data was accessed, by whom, and for what purpose.
+          </p>
           <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
             {auditLoading ? (
               <div className="flex items-center gap-3 py-2">
@@ -435,6 +441,14 @@ export default function AppSettingsPage() {
                     </p>
                   </div>
                 ))}
+                {auditHasMore && (
+                  <button
+                    onClick={() => setAuditLimit(50)}
+                    className="mt-1 text-xs text-[var(--accent-primary)] hover:underline"
+                  >
+                    View all activity &rarr;
+                  </button>
+                )}
               </div>
             )}
           </div>
