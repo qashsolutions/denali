@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-24 (privacy policy)
+     Last updated: 2026-02-24 (consent enforcement + delta-privacy fixes)
      Maintainer: @cvr
 -->
 
@@ -997,6 +997,8 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 **Patient-Facing Data Access History** (Criterion 4, 2026-02-24): Settings page "Activity Log" renamed to "Data Access History" with subtitle explaining it records Medicare data access events. Added "View all activity →" pagination (loads up to 50 entries). 16 action types covered with human-readable labels. IP masking implemented. Fully satisfies Criterion 4.
 
 **Privacy Policy — CMS Blue Button Checklist** (2026-02-24): Full audit against CMS BB privacy policy checklist. All 16 checklist requirements now satisfied. Four gaps fixed: (1) Re-identification risk caveat added to §7 — anonymized data could theoretically re-identify individuals with uncommon conditions, as CMS explicitly requires disclosing; (2) Revocation data handling — dedicated clear statement added to §4 that disconnecting Medicare immediately and permanently deletes all cached health data; (3) Vendor data protection commitments — §5 now explicitly states all third-party providers are contractually required to protect data consistent with applicable law, with BAA/SOC2 Type II/PCI DSS certifications enumerated; (4) Breach notification user steps — §10 now lists specific protective actions users can take (monitor Medicare Summary Notices, call 1-800-MEDICARE, review credit report). Effective date updated to 2026-02-24.
+
+**Privacy Policy Code Deltas — All 4 Resolved** (2026-02-24): Full audit of gaps between privacy policy claims and code behavior (`docs/delta-privacy.md`). Two code fixes, two policy text fixes: (1) **`health_data_storage` consent** — `useHealthData.ts` `cacheSet()` now gated on `healthDataStorageRef.current === true`; uses `useRef` pattern so stable `useCallback` dep array is not disturbed; (2) **`analytics` consent** — `trackEvent()` in `conversation-service.ts` now returns early if `analyticsConsent !== true`; `useChat.ts` imports `useConsent` and passes `consent.analytics` to all 3 call sites (`appeal_completed`, `feedback_positive`/`negative`, `outcome_reported`); (3) **audit log retention conflict** — removed audit logs from §7 deletion list, added HIPAA 6-year retention note; (4) **inactive account notice** — softened "will receive" → "may receive" (feature not yet implemented). TypeScript: clean.
 
 ### Remaining Gaps
 
