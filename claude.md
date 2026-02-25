@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-11
+     Last updated: 2026-02-23
      Maintainer: @cvr
 -->
 
@@ -526,7 +526,24 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...      # Stripe publishable key (client-
 
 ## Blue Button 2.0 (Medicare FHIR API)
 
-Blue Button connects patients to their Medicare claims data via FHIR APIs.
+Blue Button connects patients to their Medicare claims data via FHIR APIs. It is the **only** external health data source — Denali does not integrate with any EHR platforms or third-party health data services.
+
+### Data Availability
+
+What Blue Button provides and what it does not:
+
+| Data | Available |
+|------|-----------|
+| Medicare claims, denials, what was billed/paid | ✅ |
+| Actual lab values (A1C, glucose, reference ranges) | ❌ — only that the lab was performed (CPT code), not the value |
+| Vitals (BP, weight, BMI) | ❌ |
+| Conditions | ⚠️ Inferred from EOB ICD-10 codes, not a formal diagnosis list |
+| Medications | ⚠️ Part D claims only — no dosing, prescriber, or full medication record |
+| Immunizations | ❌ |
+| Clinical notes | ❌ |
+| Visit history | ⚠️ Claims-derived (service dates + CPT codes), no chief complaint |
+
+Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab values are not available from Blue Button — only the dates labs were performed.
 
 ### OAuth Flow (PKCE)
 
@@ -983,7 +1000,7 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 | **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
 | **Terms of service + security checklist** | A3 | **P0** | Docs — required for CMS review participation |
 | **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct Medicare.gov communication integration |
-| **CMS credential service integration** | A1 | **P1** | Code — connect to CMS-approved identity service when available |
+| **CMS credential service integration** | A1 | **P1** | Code — CLEAR (CMS-contracted for Medicare.gov, IAL2/AAL2) identity verification. Blue Button OAuth via Medicare.gov currently satisfies AAL2 as an intermediary PHR path. |
 | **CMS review submission** | A3 | **P1** | Docs — data source inventory, security self-assessment |
 | **CMS app directory submission** | A5 | **P1** | Docs — screenshots, descriptions for Medicare.gov listing |
 | **Patient-facing audit log viewer** | Criterion 4 | **P1** | Code — let users see who accessed their data |
