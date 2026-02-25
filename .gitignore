@@ -28,6 +28,23 @@ supabase/.env
 # Source assets (exported sizes live in app/public/)
 Images/
 denali.png
+denali1.webp
+denali2.png
+denali3.jpg
+
+# Pitch materials
+denali-pitch-deck.js
+denali-pitch-deck.pptx
+
+# Legal docs (managed separately)
+DenaliHealth_Privacy_Policy.pdf
+DenaliHealth_Terms_of_Service.pdf
+
+# CMS reference data (binary, used for Supabase seeding)
+CARC-RARC-Consolidated List*
+
+# Root-level skills design specs (implemented in app/src/skills/)
+skills/
 
 # Node
 node_modules/
