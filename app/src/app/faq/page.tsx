@@ -151,13 +151,25 @@ export default function FAQPage() {
       ))}
 
       <div className="border-t border-[var(--border)] pt-6 mt-10">
-        <p className="text-sm text-[var(--text-muted)]">
+        <p className="text-sm text-[var(--text-muted)] mb-4">
           Have more questions?{" "}
           <Link href="/app/chat" className="text-[var(--accent-primary)] hover:underline">
             Ask Denali
           </Link>{" "}
           or email support.
         </p>
+        <div className="flex flex-wrap gap-5 mb-4">
+          <Link href="/privacy" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">Privacy Policy</Link>
+          <Link href="/terms" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">Terms of Service</Link>
+          <Link href="/hipaa" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">HIPAA</Link>
+        </div>
+        <div className="border-t border-[var(--border)] pt-4">
+          <p className="text-xs text-[var(--text-muted)]">
+            Coverage guidance only, not medical advice. Always consult with
+            healthcare providers for medical decisions. This product is not
+            endorsed or certified by CMS or HHS.
+          </p>
+        </div>
       </div>
     </div>
   );

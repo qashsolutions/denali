@@ -429,26 +429,39 @@ export default function HIPAAPage() {
         </P>
       </Section>
 
-      {/* Links */}
-      <div className="border-t border-[var(--border)] pt-6 mt-10 flex flex-col gap-3">
-        <div className="flex gap-4">
+      {/* Footer */}
+      <div className="border-t border-[var(--border)] pt-6 mt-10">
+        <div className="flex flex-wrap gap-5 mb-4">
+          <Link
+            href="/faq"
+            className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+          >
+            FAQ
+          </Link>
           <Link
             href="/privacy"
-            className="text-sm text-[var(--accent-primary)] hover:underline"
+            className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
           >
             Privacy Policy
           </Link>
           <Link
-            href="/faq"
-            className="text-sm text-[var(--accent-primary)] hover:underline"
+            href="/terms"
+            className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
           >
-            FAQ
+            Terms of Service
           </Link>
         </div>
-        <p className="text-xs text-[var(--text-muted)]">
-          {BRAND.NAME} is {BRAND.COMPANY_ATTRIBUTION}.{" "}
-          {BRAND.COPYRIGHT_TEXT}
-        </p>
+        <div className="border-t border-[var(--border)] pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <p className="text-xs text-[var(--text-muted)]">
+            Coverage guidance only, not medical advice. Always consult with
+            healthcare providers for medical decisions. This product is not
+            endorsed or certified by CMS or HHS.
+          </p>
+          <p className="text-xs text-[var(--text-muted)] shrink-0">
+            {BRAND.NAME} is {BRAND.COMPANY_ATTRIBUTION}.{" "}
+            {BRAND.COPYRIGHT_TEXT}
+          </p>
+        </div>
       </div>
     </div>
   );
