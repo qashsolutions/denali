@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-23
+     Last updated: 2026-02-24
      Maintainer: @cvr
 -->
 
@@ -992,18 +992,21 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 **Chat & Appeal Infrastructure**: Rate limiting, sidebar auth+refresh, conversation persistence, requirement verification pipeline (vacuous truth fix), outcome incentive wiring, denial code extraction from user text, LCD prior auth prompt strengthening.
 
+**Blue Button ToS v3 Compliance** (2026-02-24): Full audit completed against all ToS sections. Fixed two code gaps: (1) Blue Button attribution ("not endorsed or certified by CMS or HHS") added to connected health page (`health/page.tsx`) so it's visible whenever Medicare data is displayed — previously only on the pre-connect screen; (2) `context.ts` consent gate changed from `=== false` to `!== true` so `null`/`undefined` `consentHealthDataAi` never accidentally injects health data into Claude (null-safe allow-list pattern). All 7 Framework principles verified: Transparency ✅, Consent ✅, Use & Disclosure ✅, Individual Access ✅, Security ✅, Data Quality ✅, Accountability ✅.
+
+**Patient-Facing Data Access History** (Criterion 4, 2026-02-24): Settings page "Activity Log" renamed to "Data Access History" with subtitle explaining it records Medicare data access events. Added "View all activity →" pagination (loads up to 50 entries). 16 action types covered with human-readable labels. IP masking implemented. Fully satisfies Criterion 4.
+
 ### Remaining Gaps
 
 | Gap | CMS Ref | Priority | Type |
 |-----|---------|----------|------|
 | **HIPAA compliance** | A6 | **P0** | Process — BAAs with Supabase/Vercel, compliance docs, breach notification plan |
 | **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
-| **Terms of service + security checklist** | A3 | **P0** | Docs — required for CMS review participation |
+| **CMS security self-assessment** | A3 | **P0** | Docs — data source inventory + security checklist required for CMS review participation. In-app `/terms` (15 sections) and `/privacy` are complete. |
 | **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct Medicare.gov communication integration |
 | **CMS credential service integration** | A1 | **P1** | Code — CLEAR (CMS-contracted for Medicare.gov, IAL2/AAL2) identity verification. Blue Button OAuth via Medicare.gov currently satisfies AAL2 as an intermediary PHR path. |
-| **CMS review submission** | A3 | **P1** | Docs — data source inventory, security self-assessment |
+| **CMS review submission** | A3 | **P1** | Docs — submit data source inventory + security self-assessment to CMS |
 | **CMS app directory submission** | A5 | **P1** | Docs — screenshots, descriptions for Medicare.gov listing |
-| **Patient-facing audit log viewer** | Criterion 4 | **P1** | Code — let users see who accessed their data |
 | **AAL2 app auth** (if CMS tightens) | A1, Criteria 3, 23 | **P2** | Code — email+password + TOTP. Components ready; needs password migration |
 | **FHIR USCDI v3 compliance** | Criterion 13 | **P2** | Code — verify Blue Button maps to USCDI v3 by July 2026 |
 
