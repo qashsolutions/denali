@@ -1012,7 +1012,7 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 | Gap | CMS Ref | Priority | Type |
 |-----|---------|----------|------|
-| **HIPAA compliance** | A6 | **P0** | Process — BAAs with Supabase/Vercel, compliance docs, breach notification plan |
+| **HIPAA compliance** | A6 | **P0** | **Migrating to AWS** — Supabase BAA requires Team plan ($599/month) + HIPAA add-on ($399/month) = $998/month. Decision: migrate database to AWS RDS PostgreSQL + auth to AWS Cognito. AWS Artifact BAA is free. Total AWS cost ~$20/month. Vercel BAA still needed separately. |
 | **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
 | **CMS security self-assessment** | A3 | **P0** | Docs — data source inventory + security checklist required for CMS review participation. In-app `/terms` (15 sections, fully compliant) and `/privacy` (16 sections, all CMS BB checklist requirements satisfied 2026-02-24) are complete. Remaining: submit formal security self-assessment document to CMS. |
 | **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct Medicare.gov communication integration |
