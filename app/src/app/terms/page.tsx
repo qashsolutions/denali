@@ -50,9 +50,10 @@ const SECTIONS = [
       "Can be revoked at any time through your Settings page",
       "Is subject to your consent preferences for AI use, local caching, and analytics",
       "Accesses only Patient, Coverage, and Explanation of Benefits (EOB) data",
+      "We never request, access, use, or share your Medicare.gov login credentials — authorization is handled entirely by CMS through secure OAuth",
     ],
     afterItems:
-      "Clinical insights such as conditions, medications, and screening history are extracted from your claims data — they are not provided as separate data from Medicare.",
+      "Clinical insights such as conditions, medications, and screening history are extracted from your claims data — they are not provided as separate data from Medicare. Your Medicare data is used solely for: (1) displaying your health information to you; (2) providing AI-powered coverage guidance and appeal assistance; and (3) with your explicit consent, personalizing AI conversations. It is not used for any other purpose and is never sold.",
   },
   {
     id: "ai-disclaimer",
@@ -152,15 +153,30 @@ const SECTIONS = [
     ],
   },
   {
+    id: "your-data-rights",
+    title: "13. Your Medicare Data Rights",
+    paragraphs: [
+      "As a Medicare beneficiary using the Blue Button APIs through our Service, you have the following rights with respect to your data:",
+    ],
+    items: [
+      "Access: You may view all Medicare data we have stored about you at any time through the Health section of the app",
+      "Correction: If you believe data displayed is inaccurate or incomplete, you can refresh your connection to re-sync from the official Medicare source or contact us to flag discrepancies",
+      "Deletion: You may delete your account at any time through Settings > Danger Zone — all Medicare data is permanently deleted immediately",
+      "Revocation: You may disconnect your Medicare connection at any time through Settings — this immediately deletes all cached health data",
+      "Consent withdrawal: You may withdraw consent for AI use of your health data at any time through Settings > Privacy & Data",
+      "Data portability: You may request a copy of your stored data by contacting us",
+    ],
+  },
+  {
     id: "cms-disclaimer",
-    title: "13. CMS Non-Endorsement Disclaimer",
+    title: "14. CMS Non-Endorsement Disclaimer",
     paragraphs: [
       `This product is not endorsed or certified by the Centers for Medicare & Medicaid Services (CMS) or the U.S. Department of Health and Human Services (HHS). ${BRAND.NAME} is an independent application that accesses Medicare data through publicly available APIs. References to Medicare, CMS, or government programs do not imply any official affiliation, endorsement, or certification.`,
     ],
   },
   {
     id: "contact",
-    title: "14. Contact Information",
+    title: "15. Contact Information",
     paragraphs: [
       "If you have questions about these Terms of Service:",
     ],

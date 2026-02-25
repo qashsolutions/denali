@@ -72,9 +72,12 @@ export function CmsPledge({ type }: { type: PledgeType }) {
                 {pledge.text}
               </p>
 
-              <div className="mt-5 pt-4 border-t border-[var(--border)]">
+              <div className="mt-5 pt-4 border-t border-[var(--border)] flex flex-col gap-1.5">
                 <p className="text-xs text-[var(--text-muted)]">
-                  Required by the Centers for Medicare & Medicaid Services (CMS)
+                  Required by the Centers for Medicare &amp; Medicaid Services (CMS)
+                </p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  This product uses the Blue Button APIs but is not endorsed or certified by the Centers for Medicare &amp; Medicaid Services or the U.S. Department of Health and Human Services.
                 </p>
               </div>
             </div>

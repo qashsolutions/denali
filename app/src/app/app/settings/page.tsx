@@ -382,7 +382,7 @@ export default function AppSettingsPage() {
         <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)] space-y-4">
           <ConsentToggle
             label="Use health data in AI conversations"
-            description="Allow Ask Denali to reference your Medicare claims and coverage when giving guidance."
+            description="Allow Ask Denali to include your Medicare claims and coverage in AI conversations. This data is sent to Anthropic's Claude AI to generate personalized guidance."
             checked={consent.health_data_ai}
             loading={consentLoading}
             onChange={(v) => updateConsent("health_data_ai", v)}

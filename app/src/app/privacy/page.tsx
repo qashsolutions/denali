@@ -170,9 +170,9 @@ const SECTIONS = [
   },
   {
     id: "hipaa",
-    title: "9. HIPAA Compliance",
+    title: "9. HIPAA Compliance and Privacy Act",
     paragraphs: [
-      "We are committed to protecting your health information in accordance with the Health Insurance Portability and Accountability Act (HIPAA). Our compliance measures include:",
+      "Medicare data obtained through the Blue Button APIs is subject to the Privacy Act of 1974, the Health Insurance Portability and Accountability Act (HIPAA), and other applicable federal and state laws requiring special safeguarding. We comply with all applicable federal and state laws regarding the protection and disclosure of information obtained through the Blue Button APIs. Our compliance measures include:",
     ],
     items: [
       "Technical safeguards: encryption, access controls, audit logging",

@@ -52,6 +52,9 @@ export function ConnectMedicare({ onConnect }: ConnectMedicareProps) {
       <p className="text-xs text-[var(--text-muted)] text-center mt-4">
         Powered by the official Medicare API. We only read your data — we never modify it.
       </p>
+      <p className="text-xs text-[var(--text-muted)] text-center mt-2">
+        This product uses the Blue Button APIs but is not endorsed or certified by the Centers for Medicare &amp; Medicaid Services or the U.S. Department of Health and Human Services.
+      </p>
     </div>
   );
 }
