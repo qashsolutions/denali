@@ -6,7 +6,7 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "What data does Denali collect?",
-        a: "We store only what's needed: your email (for login), conversation history, and appeal letters. If you connect Medicare via the official Medicare API, we cache your claims and coverage data (encrypted, refreshed every 24 hours). We never store your full name, address, SSN, or insurance ID.",
+        a: "We store only what's needed: your email (for login), conversation history, and appeal letters. If you connect Medicare via the official Medicare API, we also cache your claims and coverage data (encrypted, refreshed every 24 hours), along with basic patient demographics (name, date of birth, Medicare ID) as provided by CMS. We never store your address, Social Security Number, Medicare card number, or bank details.",
       },
       {
         q: "Is my health data encrypted?",
@@ -14,7 +14,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "Who can see my data?",
-        a: "We share data only with the service providers needed to run the app (Anthropic for AI, Stripe for payments, Supabase for data storage) — never for marketing or advertising. See our Privacy Policy for details.",
+        a: "We share data only with the service providers needed to run the app: Anthropic (AI responses), Stripe (payments), Supabase (database), and Vercel (hosting) — never for marketing or advertising. Each provider is contractually required to protect your data. See our Privacy Policy for details on what each provider receives and for how long.",
       },
       {
         q: "What happens if there's a data breach?",
@@ -62,11 +62,11 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "Is Denali free?",
-        a: "Coverage guidance is free for trial users (14 days, 3 messages/day). Appeal letters: 1 free with trial, then $10 each or $20/month for 3 appeals + unlimited messages.",
+        a: "Every new account gets a 14-day free trial (3 messages/day, 1 appeal credit). After the trial, chat access is locked until you purchase a plan: Pay Per Appeal ($10/appeal, 5 messages/day) or Monthly ($20/month, 3 appeals + unlimited messages).",
       },
       {
         q: "Is there a free trial?",
-        a: "Yes. Every new account gets a 14-day trial with 3 messages/day and 1 appeal letter. After the trial, choose Pay Per Appeal ($10) or Monthly ($20).",
+        a: "Yes. Every new account gets a 14-day trial with 3 messages/day and 1 appeal credit. After the trial period, chat access is locked — choose Pay Per Appeal ($10/appeal) or Monthly ($20/month) to continue.",
       },
     ],
   },
@@ -101,11 +101,11 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "Can I delete my account?",
-        a: "Yes. Go to Settings and request account deletion. We permanently delete all your data: conversations, appeals, health data, payment records, and authentication. This action cannot be undone.",
+        a: "Yes. Go to Settings > Danger Zone and request account deletion. We permanently delete your conversations, appeal letters, cached health data, Medicare connection, consent preferences, and authentication credentials. Your Stripe subscription is cancelled. This action cannot be undone.",
       },
       {
         q: "What data is retained after deletion?",
-        a: "Only anonymized, de-identified learning data (like 'symptom X maps to code Y with Z% confidence'). No personally identifiable information is retained.",
+        a: "Two categories survive deletion: (1) Anonymized, de-identified learning data (e.g., 'symptom X maps to code Y with Z% confidence') — no names, Medicare IDs, or account identifiers; and (2) Audit logs, which are retained for a minimum of 6 years as required by HIPAA. Audit logs record data access events (who accessed what, when, and why) and cannot be deleted on demand due to this regulatory obligation.",
       },
     ],
   },
