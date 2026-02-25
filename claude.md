@@ -80,7 +80,7 @@ These cause bugs or bad UX if violated. Read before every coding session.
 
 - Do NOT store: Full names, addresses, SSN, insurance IDs, medical records
 - OK to store: Email, phone (for auth), anonymized phrases, conversation content
-- Account deletion: Cascade delete all user-linked data, cancel Stripe, retain anonymized learning data
+- Account deletion: Cascade delete all user-linked data, cancel Stripe, retain anonymized learning data + audit logs (6-year HIPAA). Admin accounts return 403 — cannot self-delete through the app. `auth.users` record deleted via `admin.auth.admin.deleteUser()` as final step so no login credentials remain in Supabase.
 
 ### Performance & Reliability
 
@@ -154,7 +154,7 @@ src/app/api/
   conversations/route.ts      # Conversation history (server-side, cookie-auth)
   profile/route.ts            # User profile: plan, role, is_admin, appeal count + credits (server-side, cookie-auth)
   appeal-outcome/route.ts     # Record appeal results
-  account/delete/route.ts     # GDPR/CCPA account deletion
+  account/delete/route.ts     # GDPR/CCPA account deletion. 11-step cascade: fhir_cache → ehr_connections → diabetes_* → chat_daily_usage → consent_preferences → user_feedback → messages → appeals → conversations → usage → subscriptions (+ Stripe cancel) → user_events → user_verification → public.users → auth.users. Admin users blocked (403). audit_logs intentionally survive (HIPAA 6-year retention).
   checkout/route.ts           # Stripe payment
   consent/route.ts            # Consent preferences (GET/PUT)
   trial/route.ts              # 14-day trial (GET status / POST start)
