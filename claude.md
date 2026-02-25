@@ -143,7 +143,7 @@ Where to find specific logic in the codebase.
 | `src/components/ui/InactivityWarning.tsx` | Fixed amber-accent banner with countdown + "Stay signed in" button. Same positioning as OfflineBanner. Rendered in root `layout.tsx` |
 | `src/hooks/useConversationHistory.ts` | Chat sidebar history. Fetches from `/api/conversations` (server route, cookie-authenticated) — NOT browser Supabase client. Subscribes to `onAuthStateChange` for re-fetch on sign-in/out. Groups conversations by date. IndexedDB write-through + offline fallback |
 | `src/lib/conversation-service.ts` | Conversation persistence: create, load, claim, save messages, appeals (+ credit decrement), feedback, events. Uses `getClient()` singleton for auth context |
-| `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date with timestamps. Refreshes on both new conversation creation AND new chat click (via `useRef` tracking previous conversationId). No sign-in prompt — anon users see "No conversations yet" |
+| `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date with timestamps. Groups are collapsible — Today/Yesterday/Past Week expand by default; Past Month/Older collapse by default. Click group header to toggle; chevron rotates to show state; count badge visible when collapsed. Refreshes on both new conversation creation AND new chat click (via `useRef` tracking previous conversationId). No sign-in prompt — anon users see "No conversations yet" |
 | `src/types/database.ts` | Supabase-generated TypeScript types. Regenerate with `npx supabase gen types` |
 
 ### API Routes
