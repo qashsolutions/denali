@@ -154,7 +154,7 @@ const SECTIONS = [
       "All audit log entries linked to your account",
     ],
     afterItems:
-      "The only data retained after deletion is anonymized, de-identified learning data (e.g., 'symptom phrase X maps to diagnosis code Y with Z% confidence'). This data contains no names, contact details, Medicare beneficiary IDs, or account identifiers. While we believe this data cannot be traced back to any individual, we acknowledge that in rare cases, highly specific patterns in medical data could theoretically contribute to re-identification of individuals with uncommon conditions. We deliberately minimize and aggregate this data to reduce that risk.",
+      "The only data retained after deletion is anonymized, de-identified learning data (e.g., 'symptom phrase X maps to diagnosis code Y with Z% confidence'). This data contains no names, contact details, Medicare beneficiary IDs, or account identifiers. While we believe this data cannot be traced back to any individual, we acknowledge that in rare cases, highly specific patterns in medical data could theoretically contribute to re-identification of individuals with uncommon conditions. We deliberately minimize and aggregate this data to reduce that risk. Medicare claims data may also contain information relevant to family members — for example, diagnosis codes for hereditary conditions. We do not share your personal health data with any other individuals, including relatives, without your explicit consent. We handle all such data with this sensitivity in mind.",
   },
   {
     id: "security",
