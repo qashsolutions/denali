@@ -133,9 +133,9 @@ const SECTIONS = [
       "Appeal letters: Retained until you delete your account",
       "Cached health data: Refreshed every 24 hours; deleted when you disconnect Medicare or delete your account",
       "OAuth tokens: Encrypted; deleted when you disconnect Medicare or delete your account",
-      "Audit logs: Retained for compliance purposes (minimum 6 years per HIPAA requirements)",
+      "Audit logs: Retained for a minimum of 6 years per HIPAA requirements — this retention obligation applies even after account deletion and cannot be waived",
       "Anonymized learning data: Retained indefinitely (contains no personally identifiable information)",
-      "Inactive accounts: Accounts with no sign-in activity for 24 months will receive a 30-day email notice before data is archived. You can reactivate by signing in during the notice period.",
+      "Inactive accounts: Accounts with no sign-in activity for 24 months may receive a 30-day email notice before data is archived. You can reactivate by signing in during the notice period.",
     ],
   },
   {
@@ -151,10 +151,9 @@ const SECTIONS = [
       "Your consent preferences",
       "Your authentication credentials",
       "Your Stripe subscription (if active)",
-      "All audit log entries linked to your account",
     ],
     afterItems:
-      "The only data retained after deletion is anonymized, de-identified learning data (e.g., 'symptom phrase X maps to diagnosis code Y with Z% confidence'). This data contains no names, contact details, Medicare beneficiary IDs, or account identifiers. While we believe this data cannot be traced back to any individual, we acknowledge that in rare cases, highly specific patterns in medical data could theoretically contribute to re-identification of individuals with uncommon conditions. We deliberately minimize and aggregate this data to reduce that risk. Medicare claims data may also contain information relevant to family members — for example, diagnosis codes for hereditary conditions. We do not share your personal health data with any other individuals, including relatives, without your explicit consent. We handle all such data with this sensitivity in mind.",
+      "The only data retained after deletion is anonymized, de-identified learning data (e.g., 'symptom phrase X maps to diagnosis code Y with Z% confidence'). This data contains no names, contact details, Medicare beneficiary IDs, or account identifiers. While we believe this data cannot be traced back to any individual, we acknowledge that in rare cases, highly specific patterns in medical data could theoretically contribute to re-identification of individuals with uncommon conditions. We deliberately minimize and aggregate this data to reduce that risk. Medicare claims data may also contain information relevant to family members — for example, diagnosis codes for hereditary conditions. We do not share your personal health data with any other individuals, including relatives, without your explicit consent. We handle all such data with this sensitivity in mind. Note: audit logs are subject to a minimum 6-year HIPAA retention requirement that applies even after account deletion. All other data listed above is permanently and irreversibly deleted.",
   },
   {
     id: "security",
@@ -180,7 +179,7 @@ const SECTIONS = [
       "Technical safeguards: encryption, access controls, audit logging",
       "Administrative safeguards: workforce training, security policies, incident response procedures",
       "Physical safeguards: secure hosting through SOC 2 compliant providers (Supabase, Vercel)",
-      "Business Associate Agreements (BAAs) are maintained with all service providers who access, process, or store protected health information on our behalf",
+      "Business Associate Agreements (BAAs) are required from all service providers who access, process, or store protected health information on our behalf. BAAs with Supabase and Vercel are currently being established; this notice will be updated upon execution.",
     ],
     afterItems:
       "For detailed information about our HIPAA practices, see our HIPAA Compliance page.",

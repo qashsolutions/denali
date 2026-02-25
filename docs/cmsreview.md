@@ -56,12 +56,12 @@ Informed, proactive consent is obtained through layered mechanisms before any da
 
 All third-party vendors are contractually required to protect user information using safeguards appropriate to the sensitivity of the data they handle, consistent with applicable law (Privacy Policy §5, §9):
 
-- **Supabase** — SOC 2 compliant. Business Associate Agreement (BAA) in place as our database provider handling PHI.
-- **Vercel** — SOC 2 compliant. Business Associate Agreement (BAA) in place as our hosting provider.
+- **Supabase** — SOC 2 compliant. BAA being established as our database provider handling PHI.
+- **Vercel** — SOC 2 compliant. BAA being established as our hosting provider.
 - **Anthropic** — SOC 2 Type II certified. Does not train models on API-submitted data. Retains inputs/outputs maximum 30 days for safety monitoring only.
 - **Stripe** — PCI DSS certified. Handles payment data only; never receives health information.
 
-Business Associate Agreements are maintained with all service providers who access, process, or store protected health information on our behalf, as required under HIPAA (Privacy Policy §9).
+Business Associate Agreements are required from all service providers who access, process, or store protected health information on our behalf, as required under HIPAA (Privacy Policy §9). BAAs with Supabase and Vercel are currently being finalized and will be executed prior to production launch.
 
 ---
 

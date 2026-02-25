@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BRAND } from "@/config";
 
-const EFFECTIVE_DATE = "February 8, 2026";
+const EFFECTIVE_DATE = "February 24, 2026";
 
 export default function HIPAAPage() {
   return (
@@ -62,9 +62,10 @@ export default function HIPAAPage() {
               on your health records
             </li>
             <li>
-              <strong>Healthcare operations:</strong> Improving our AI
-              models using anonymized, de-identified data that cannot be traced
-              back to any individual
+              <strong>Healthcare operations:</strong> Improving our service
+              using anonymized, de-identified learning patterns (such as
+              symptom-to-code mappings) that cannot be traced back to any
+              individual. We do not use your data to train AI models.
             </li>
             <li>
               <strong>At your request:</strong> Generating appeal letters
@@ -196,7 +197,7 @@ export default function HIPAAPage() {
         </UL>
         <P>
           Breaches affecting 500 or more individuals will also be reported to
-          HHS and, where required, to the media.
+          the FTC and HHS as required by law, and where required, to the media.
         </P>
         <P>
           As a personal health record vendor, we also comply with the FTC Health
@@ -298,27 +299,32 @@ export default function HIPAAPage() {
       <Section title="Business Associates">
         <P>
           We work with the following service providers who may process health
-          data on our behalf. We maintain Business Associate Agreements
-          (BAAs) with all service providers who process protected health information on our behalf:
+          data on our behalf. We require Business Associate Agreements (BAAs)
+          with all service providers who process protected health information,
+          and BAAs are being established with each provider listed below:
         </P>
         <UL>
           <li>
             <strong>Supabase:</strong> Database hosting and authentication
-            (stores encrypted health data cache)
+            (stores encrypted health data cache) — BAA in process
           </li>
           <li>
             <strong>Vercel:</strong> Application hosting (processes API
-            requests that may contain PHI)
+            requests that may contain PHI) — BAA in process
           </li>
           <li>
             <strong>Anthropic:</strong> AI processing (receives conversation
             content; health data only sent when user consents to Health Data
-            in AI)
+            in AI) — data handling governed by Anthropic API Terms; does not
+            train models on API data; retains inputs/outputs up to 30 days
+            for safety monitoring only
           </li>
         </UL>
         <P>
-          Each service provider is contractually bound under a BAA to safeguard
-          PHI in compliance with HIPAA, HITECH, and applicable regulations.
+          This notice will be updated once BAAs with Supabase and Vercel are
+          fully executed. Until that time, all three providers operate under
+          contractual data protection obligations consistent with the
+          sensitivity of the data they handle.
         </P>
       </Section>
 
@@ -337,8 +343,8 @@ export default function HIPAAPage() {
             information (not raw FHIR bundles)
           </li>
           <li>
-            Cached health data has a 24-hour TTL — we don&apos;t retain data
-            longer than needed for the active session
+            Cached health data has a 24-hour TTL — data is refreshed on access
+            and deleted immediately on disconnect or account deletion
           </li>
           <li>
             Consent preferences gate which categories of data reach the AI
@@ -370,7 +376,9 @@ export default function HIPAAPage() {
         </UL>
         <P>
           Upon account deletion, all PHI is permanently and irreversibly
-          removed from our systems through a cascading deletion process.
+          removed from our systems through a cascading deletion process —
+          except audit logs, which are subject to a minimum 6-year HIPAA
+          retention requirement that applies even after account deletion.
         </P>
       </Section>
 
