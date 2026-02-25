@@ -31,6 +31,20 @@ export async function DELETE(request: NextRequest) {
     // Admin client bypasses RLS for cascade deletion
     const admin = createAdminClient();
 
+    // Block admin account deletion — admin accounts must be managed directly in Supabase
+    const { data: userRecord } = await admin
+      .from("users")
+      .select("is_admin")
+      .eq("id", userId)
+      .single();
+
+    if (userRecord?.is_admin) {
+      return NextResponse.json(
+        { error: "Admin accounts cannot be deleted through the app." },
+        { status: 403 }
+      );
+    }
+
     // Log before deletion (userId will be SET NULL after delete via FK)
     logAudit("ACCOUNT_DELETED", {
       userId,
@@ -158,6 +172,14 @@ export async function DELETE(request: NextRequest) {
         .from("users")
         .delete()
         .eq("id", userId);
+    }
+
+    // 11. Delete the Supabase auth record (removes login credentials entirely)
+    try {
+      await admin.auth.admin.deleteUser(userId);
+    } catch (authDeleteError) {
+      console.error("Failed to delete auth user:", authDeleteError);
+      // Continue — public.users is already deleted; auth record is orphaned but harmless
     }
 
     // Sign out via the cookie-auth client
