@@ -14,8 +14,9 @@ import type { SessionState } from "@/lib/claude";
 export function buildHealthContextForPrompt(sessionState: SessionState): string | null {
   if (!sessionState.healthDataAvailable) return null;
 
-  // Respect consent: if user has revoked health_data_ai, skip injection
-  if (sessionState.consentHealthDataAi === false) return null;
+  // Respect consent: only inject if user has explicitly enabled health_data_ai
+  // Use !== true (not === false) so null/undefined never accidentally grants access
+  if (sessionState.consentHealthDataAi !== true) return null;
 
   const lines: string[] = [
     "## Medicare Health Data",

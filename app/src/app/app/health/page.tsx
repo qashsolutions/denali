@@ -574,6 +574,10 @@ function HealthPageInner() {
           </div>
         )}
       </div>
+
+      <p className="text-xs text-[var(--text-muted)] text-center mt-6 px-4">
+        This product uses the Blue Button APIs but is not endorsed or certified by the Centers for Medicare &amp; Medicaid Services or the U.S. Department of Health and Human Services.
+      </p>
     </div>
   );
 }
