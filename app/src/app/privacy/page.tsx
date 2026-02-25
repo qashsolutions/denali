@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BRAND } from "@/config";
 
-const EFFECTIVE_DATE = "February 8, 2026";
+const EFFECTIVE_DATE = "February 24, 2026";
 
 const SECTIONS = [
   {
@@ -72,6 +72,7 @@ const SECTIONS = [
     paragraphs: [
       "We access your Medicare data through the official Medicare claims API. This connection uses OAuth 2.0 with PKCE (Proof Key for Code Exchange) for security — we never see or store your Medicare password.",
       "When you connect your Medicare account, you authorize CMS to share specific data with us. You can revoke this connection at any time in Settings.",
+      "When you disconnect your Medicare connection, all cached health data is immediately and permanently deleted from our servers. Previously collected health data is not retained, shared, or used after you revoke access. Your right to revoke access does not affect any data already anonymized for service improvement (see Section 7).",
     ],
     subsections: [
       {
@@ -108,6 +109,7 @@ const SECTIONS = [
       "Vercel: Our hosting provider processes web requests. Sharing is transactional (per-request) — server-side logs are retained for up to 30 days.",
       "Legal Requirements: We may disclose information if required by law, court order, or government regulation.",
       "Business Transfers: In the event of a merger, acquisition, or sale of assets, your personal information may be transferred. We will notify you via email at least 30 days before your data is transferred and becomes subject to a different privacy policy.",
+      "Vendor Data Protection Commitments: Each third-party service provider we work with is contractually required to protect your information using safeguards appropriate to the sensitivity of the data they handle, consistent with applicable law. All providers handling protected health information are covered by Business Associate Agreements (BAAs). Anthropic is SOC 2 Type II certified; Supabase and Vercel are SOC 2 compliant cloud providers; Stripe is PCI DSS certified for payment data.",
     ],
     subsections: [
       {
@@ -152,7 +154,7 @@ const SECTIONS = [
       "All audit log entries linked to your account",
     ],
     afterItems:
-      "The only data retained after deletion is anonymized, de-identified learning data (e.g., 'symptom phrase X maps to diagnosis code Y with Z% confidence'). This data cannot be traced back to any individual.",
+      "The only data retained after deletion is anonymized, de-identified learning data (e.g., 'symptom phrase X maps to diagnosis code Y with Z% confidence'). This data contains no names, contact details, Medicare beneficiary IDs, or account identifiers. While we believe this data cannot be traced back to any individual, we acknowledge that in rare cases, highly specific patterns in medical data could theoretically contribute to re-identification of individuals with uncommon conditions. We deliberately minimize and aggregate this data to reduce that risk.",
   },
   {
     id: "security",
@@ -192,7 +194,7 @@ const SECTIONS = [
     ],
     items: [
       "We will notify affected individuals within 60 days of discovery via email, explaining what happened, what data was involved, and what steps to take",
-      "Notification will include a description of the breach, the types of data involved, steps we have taken to investigate and mitigate, and recommended actions for affected users",
+      "Notification will include: a description of the breach, the types of data involved, steps we have taken to investigate and mitigate, and specific steps you can take to protect yourself — such as monitoring your Medicare Summary Notices and Explanation of Benefits for unfamiliar claims, contacting 1-800-MEDICARE (1-800-633-4227) if you suspect misuse of your Medicare number, and reviewing your credit report if personal identifiers were involved",
       "For breaches affecting 500 or more individuals, we will also notify the FTC and HHS as required by law",
       "We maintain incident response procedures to detect, investigate, and contain potential breaches promptly (see our HIPAA Compliance page for the full Incident Response Plan)",
     ],
