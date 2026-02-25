@@ -13,6 +13,7 @@ import {
   submitMessageFeedback,
   trackEvent,
 } from "@/lib/conversation-service";
+import { useConsent } from "@/hooks/useConsent";
 
 export interface AppealLetterData {
   letterContent: string;
@@ -152,6 +153,7 @@ function generateId(): string {
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const { initialMessages = [], onError, userId } = options;
+  const { consent } = useConsent();
 
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
@@ -500,6 +502,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         trackEvent("appeal_completed", {
           conversationId: currentConversationId || undefined,
           appealId: data.appealId || undefined,
+          analyticsConsent: consent.analytics,
         });
       } else {
         // Check if response contains checklist data
@@ -579,6 +582,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         await trackEvent(eventType, {
           conversationId: conversationId || undefined,
           eventData: { messageId, rating },
+          analyticsConsent: consent.analytics,
         });
         console.log("[submitFeedback] trackEvent completed");
       }
@@ -736,6 +740,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         conversationId: conversationId || undefined,
         appealId,
         eventData: { outcome, daysToDecision },
+        analyticsConsent: consent.analytics,
       });
     } catch (err) {
       console.error("Failed to submit appeal outcome:", err);

@@ -533,6 +533,7 @@ export async function trackEvent(
     conversationId?: string;
     appealId?: string;
     eventData?: Record<string, unknown>;
+    analyticsConsent?: boolean;
   } = {}
 ): Promise<void> {
   const supabase = getClient();
@@ -549,6 +550,9 @@ export async function trackEvent(
     );
     return;
   }
+
+  // Respect analytics consent — only track if user has explicitly opted in
+  if (options.analyticsConsent !== true) return;
 
   // UUID validation regex
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

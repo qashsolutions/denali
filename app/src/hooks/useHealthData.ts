@@ -7,8 +7,9 @@
  * Reads from /api/fhir/data (which reads from fhir_cache).
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { cacheSet, cacheGetIfFresh, STORES, TTL } from "@/lib/offline-cache";
+import { useConsent } from "@/hooks/useConsent";
 import type {
   PatientSummary,
   CoverageSummary,
@@ -43,6 +44,14 @@ interface UseHealthDataReturn {
 }
 
 export function useHealthData(): UseHealthDataReturn {
+  const { consent } = useConsent();
+  // Store consent in a ref so fetchData (stable useCallback) can read latest value
+  // without triggering a full re-fetch every time consent state updates.
+  const healthDataStorageRef = useRef(consent.health_data_storage);
+  useEffect(() => {
+    healthDataStorageRef.current = consent.health_data_storage;
+  }, [consent.health_data_storage]);
+
   const [patient, setPatient] = useState<PatientSummary | null>(null);
   const [coverage, setCoverage] = useState<CoverageSummary[]>([]);
   const [claims, setClaims] = useState<ClaimSummary[]>([]);
@@ -82,20 +91,22 @@ export function useHealthData(): UseHealthDataReturn {
       setHospitalizations(data.hospitalizations ?? []);
       setLastSynced(data.lastSynced ? new Date(data.lastSynced) : null);
 
-      // Write-through: cache full health snapshot (fire-and-forget)
-      cacheSet(STORES.HEALTH_DATA, "snapshot", {
-        connected: data.connected,
-        patient: data.patient,
-        coverage: data.coverage,
-        claims: data.claims,
-        labs: data.labs,
-        conditions: data.conditions,
-        medications: data.medications,
-        screenings: data.screenings,
-        providers: data.providers,
-        hospitalizations: data.hospitalizations,
-        lastSynced: data.lastSynced,
-      });
+      // Write-through: cache full health snapshot only if user has consented to local storage
+      if (healthDataStorageRef.current === true) {
+        cacheSet(STORES.HEALTH_DATA, "snapshot", {
+          connected: data.connected,
+          patient: data.patient,
+          coverage: data.coverage,
+          claims: data.claims,
+          labs: data.labs,
+          conditions: data.conditions,
+          medications: data.medications,
+          screenings: data.screenings,
+          providers: data.providers,
+          hospitalizations: data.hospitalizations,
+          lastSynced: data.lastSynced,
+        });
+      }
     } catch {
       // Offline fallback: try IndexedDB cache
       const cached = await cacheGetIfFresh<{

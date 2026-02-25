@@ -2,24 +2,24 @@
 
 Gaps between what the privacy policy states and what the code currently does.
 Found during CMS production access form prep audit (2026-02-24).
-All items below must be fixed before the public launch / live CMS review.
+
+**Status as of 2026-02-24: All 4 deltas resolved.**
 
 ---
 
-## Delta 1 — `health_data_storage` consent not enforced in caching
+## Delta 1 — `health_data_storage` consent not enforced in caching ✅ FIXED
 
 **Privacy policy claim (§4):**
 > "Health Data Storage: Choose whether your Medicare data is cached for faster access."
 
-**What the code does (`src/hooks/useHealthData.ts`):**
-After a successful `/api/fhir/data` fetch, `cacheSet(STORES.HEALTH_DATA, "snapshot", {...})` is called unconditionally — no check against `health_data_storage` consent before writing to IndexedDB.
+**What the code did (`src/hooks/useHealthData.ts`):**
+After a successful `/api/fhir/data` fetch, `cacheSet(STORES.HEALTH_DATA, "snapshot", {...})` was called unconditionally — no check against `health_data_storage` consent before writing to IndexedDB.
 
-**Fix required:**
-Before the `cacheSet()` call in `useHealthData.ts`, check `consent.health_data_storage`. Only write to IndexedDB if it is `true`.
+**Fix applied:**
+Added `useConsent()` hook to `useHealthData.ts`. Consent value stored in a `useRef` (so `fetchData`'s stable `useCallback` dep array is not disturbed). `cacheSet()` is now gated:
 
 ```typescript
-// Pattern to add:
-if (consentData?.health_data_storage === true) {
+if (healthDataStorageRef.current === true) {
   cacheSet(STORES.HEALTH_DATA, "snapshot", { ... });
 }
 ```
@@ -28,75 +28,63 @@ if (consentData?.health_data_storage === true) {
 
 ---
 
-## Delta 2 — `analytics` consent not enforced in event tracking
+## Delta 2 — `analytics` consent not enforced in event tracking ✅ FIXED
 
 **Privacy policy claim (§3 + §4):**
 > "Analytics: Choose whether anonymized usage data helps us improve the service."
 
-**What the code does (`src/lib/conversation-service.ts` → `trackEvent()`):**
-`trackEvent()` calls the `track_user_event` RPC unconditionally — no consent check anywhere in the call chain. `useChat.ts` calls `trackEvent("appeal_completed")` and `trackEvent("outcome_reported")` without checking the analytics consent toggle.
+**What the code did (`src/lib/conversation-service.ts` → `trackEvent()`):**
+`trackEvent()` called the `track_user_event` RPC unconditionally — no consent check anywhere in the call chain.
 
-**Fix required:**
-Pass the user's analytics consent state into `trackEvent()` (or check it inside), and skip the RPC call if `analytics !== true`. Simplest pattern: add an optional `{ skipIfNoConsent: boolean }` guard, or check consent at call site in `useChat.ts`.
+**Fix applied:**
+Added `analyticsConsent?: boolean` parameter to `trackEvent()` options. Check added after event type validation:
 
 ```typescript
-// Pattern to add in trackEvent() or at each call site:
-if (!analyticsConsent) return;
+// Respect analytics consent — only track if user has explicitly opted in
+if (options.analyticsConsent !== true) return;
 ```
+
+In `useChat.ts`: imported `useConsent`, added `const { consent } = useConsent()`, and passed `analyticsConsent: consent.analytics` to all 3 `trackEvent` call sites (`appeal_completed`, `feedback_positive`/`feedback_negative`, `outcome_reported`).
 
 **Severity:** High — direct privacy policy violation.
 
 ---
 
-## Delta 3 — `audit_logs` not deleted on account deletion
+## Delta 3 — `audit_logs` not deleted on account deletion ✅ RESOLVED (policy fix)
 
-**Privacy policy claim (§7 Account Deletion):**
-> "All audit log entries linked to your account" — listed as one of the items permanently deleted when an account is deleted.
+**Privacy policy claim conflict:**
+- §6: "Audit logs: Retained for compliance purposes (minimum 6 years per HIPAA requirements)"
+- §7: "All audit log entries linked to your account" [were listed as deleted on account deletion]
 
-**What the code does (`src/app/api/account/delete/route.ts`):**
-The deletion cascade covers: `fhir_cache`, `ehr_connections`, `diabetes_snapshots`, `diabetes_log`, `diabetes_insights`, `chat_daily_usage`, `consent_preferences`, `messages`, `appeals`, `conversations`, `usage`, `subscriptions`, `user_events`, `user_verification`, and the `users` row. There is **no** `audit_logs` delete statement.
+**Resolution:**
+Updated privacy policy `src/app/privacy/page.tsx`:
+- Removed "All audit log entries linked to your account" from §7 deletion list
+- Added note to §7 afterItems: "Note: audit logs are subject to a minimum 6-year HIPAA retention requirement that applies even after account deletion."
+- Updated §6 audit log item to clarify HIPAA retention supersedes account deletion
 
-**Fix required:**
-Add to the deletion cascade in `account/delete/route.ts`:
-```typescript
-await admin.from("audit_logs").delete().eq("user_id", userId);
-```
-Note: audit_logs are retained for HIPAA compliance (6 years minimum per §6). The policy lists them as deleted on account deletion — these two claims are in conflict. Resolution options:
-- (a) Remove "audit log entries" from the §7 deletion list and explain in §6 that HIPAA requires 6-year retention even after account deletion, OR
-- (b) Actually delete them in the cascade (weaker HIPAA posture)
-**Recommended:** Option (a) — update §7 to exclude audit logs from the deletion list and clarify in §6 that HIPAA retention overrides.
+**No code change needed** — the account deletion cascade correctly does NOT delete audit logs (the policy was wrong, not the code).
 
-**Severity:** Medium — policy conflict, not a data safety risk.
+**Severity:** Medium — policy conflict resolved.
 
 ---
 
-## Delta 4 — Inactive account 24-month deletion not implemented
+## Delta 4 — Inactive account 24-month deletion not implemented ✅ RESOLVED (policy fix)
 
 **Privacy policy claim (§6 Data Retention):**
-> "Inactive accounts: Accounts with no sign-in activity for 24 months will receive a 30-day email notice before data is archived. You can reactivate by signing in during the notice period."
+Previously stated: "Accounts with no sign-in activity for 24 months **will receive** a 30-day email notice before data is archived."
 
 **What the code does:**
-No scheduled job, background worker, Supabase `pg_cron` task, or edge function exists that:
-- Queries for accounts with no sign-in in 24 months
-- Sends the 30-day notice email
-- Archives or deletes the account after the notice period
+No scheduled job, background worker, Supabase `pg_cron` task, or edge function exists to implement this.
 
-**Fix required:**
-Either implement via Supabase `pg_cron` (query `users` for `last_sign_in_at < NOW() - INTERVAL '24 months'`, trigger `send-checklist-email` edge function) or acknowledge this is a future process item and soften the privacy policy language from "will receive" to "may receive" until implemented.
+**Resolution:**
+Softened policy language from "will receive" to "may receive" pending full implementation:
+> "Accounts with no sign-in activity for 24 months **may receive** a 30-day email notice before data is archived."
 
-**Severity:** Low for pre-launch, Medium post-launch — dormant accounts will accumulate.
+**Future implementation** (post-launch): Supabase `pg_cron` job querying `users` for `last_sign_in_at < NOW() - INTERVAL '24 months'` → trigger `send-checklist-email` edge function.
 
----
-
-## Non-Code Delta — Audit log retention vs. deletion conflict (see Delta 3)
-
-The privacy policy makes two conflicting statements:
-- §6: "Audit logs: Retained for compliance purposes (minimum 6 years per HIPAA requirements)"
-- §7: "All audit log entries linked to your account" [are deleted on account deletion]
-
-These cannot both be true. Recommended resolution: update §7 to note that audit logs are governed by §6's HIPAA retention requirement and are not deleted on account deletion.
+**Severity:** Low pre-launch, Medium post-launch.
 
 ---
 
 *Last updated: 2026-02-24*
-*Audited by: Claude Code during CMS production access form prep*
+*All 4 deltas resolved during CMS production access form prep*
