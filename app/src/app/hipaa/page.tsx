@@ -65,7 +65,7 @@ export default function HIPAAPage() {
               <strong>Healthcare operations:</strong> Improving our service
               using anonymized, de-identified learning patterns (such as
               symptom-to-code mappings) that cannot be traced back to any
-              individual. We do not use your data to train AI models.
+              individual. We do not train AI models on your data.
             </li>
             <li>
               <strong>At your request:</strong> Generating appeal letters

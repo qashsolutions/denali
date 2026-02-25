@@ -139,7 +139,7 @@ const SECTIONS = [
     id: "termination",
     title: "11. Termination",
     items: [
-      "You may delete your account at any time through Settings — all your data will be permanently deleted",
+      "You may delete your account at any time through Settings — all your data will be permanently deleted (except audit logs, which are subject to a minimum 6-year HIPAA retention requirement)",
       "We may suspend or terminate accounts that violate these Terms, engage in fraudulent activity, or abuse the Service",
       "Upon termination, your right to use the Service ceases immediately",
       "Sections on limitation of liability, intellectual property, and dispute resolution survive termination",
@@ -161,7 +161,7 @@ const SECTIONS = [
     items: [
       "Access: You may view all Medicare data we have stored about you at any time through the Health section of the app",
       "Correction: If you believe data displayed is inaccurate or incomplete, you can refresh your connection to re-sync from the official Medicare source or contact us to flag discrepancies",
-      "Deletion: You may delete your account at any time through Settings > Danger Zone — all Medicare data is permanently deleted immediately",
+      "Deletion: You may delete your account at any time through Settings > Danger Zone — all Medicare data is permanently deleted immediately (audit logs recording data access events are retained for a minimum of 6 years per HIPAA requirements)",
       "Revocation: You may disconnect your Medicare connection at any time through Settings — this immediately deletes all cached health data",
       "Consent withdrawal: You may withdraw consent for AI use of your health data at any time through Settings > Privacy & Data",
       "Data portability: You may request a copy of your stored data by contacting us",
