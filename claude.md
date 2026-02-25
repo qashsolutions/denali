@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-24
+     Last updated: 2026-02-24 (privacy policy)
      Maintainer: @cvr
 -->
 
@@ -996,13 +996,15 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 **Patient-Facing Data Access History** (Criterion 4, 2026-02-24): Settings page "Activity Log" renamed to "Data Access History" with subtitle explaining it records Medicare data access events. Added "View all activity →" pagination (loads up to 50 entries). 16 action types covered with human-readable labels. IP masking implemented. Fully satisfies Criterion 4.
 
+**Privacy Policy — CMS Blue Button Checklist** (2026-02-24): Full audit against CMS BB privacy policy checklist. All 16 checklist requirements now satisfied. Four gaps fixed: (1) Re-identification risk caveat added to §7 — anonymized data could theoretically re-identify individuals with uncommon conditions, as CMS explicitly requires disclosing; (2) Revocation data handling — dedicated clear statement added to §4 that disconnecting Medicare immediately and permanently deletes all cached health data; (3) Vendor data protection commitments — §5 now explicitly states all third-party providers are contractually required to protect data consistent with applicable law, with BAA/SOC2 Type II/PCI DSS certifications enumerated; (4) Breach notification user steps — §10 now lists specific protective actions users can take (monitor Medicare Summary Notices, call 1-800-MEDICARE, review credit report). Effective date updated to 2026-02-24.
+
 ### Remaining Gaps
 
 | Gap | CMS Ref | Priority | Type |
 |-----|---------|----------|------|
 | **HIPAA compliance** | A6 | **P0** | Process — BAAs with Supabase/Vercel, compliance docs, breach notification plan |
 | **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
-| **CMS security self-assessment** | A3 | **P0** | Docs — data source inventory + security checklist required for CMS review participation. In-app `/terms` (15 sections) and `/privacy` are complete. |
+| **CMS security self-assessment** | A3 | **P0** | Docs — data source inventory + security checklist required for CMS review participation. In-app `/terms` (15 sections, fully compliant) and `/privacy` (16 sections, all CMS BB checklist requirements satisfied 2026-02-24) are complete. Remaining: submit formal security self-assessment document to CMS. |
 | **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct Medicare.gov communication integration |
 | **CMS credential service integration** | A1 | **P1** | Code — CLEAR (CMS-contracted for Medicare.gov, IAL2/AAL2) identity verification. Blue Button OAuth via Medicare.gov currently satisfies AAL2 as an intermediary PHR path. |
 | **CMS review submission** | A3 | **P1** | Docs — submit data source inventory + security self-assessment to CMS |
