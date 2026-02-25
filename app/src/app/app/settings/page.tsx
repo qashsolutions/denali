@@ -30,8 +30,9 @@ export default function AppSettingsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [auditLogs, setAuditLogs] = useState<Array<{ id: string; description: string; createdAt: string | null; count: number }>>([]);
   const [auditLoading, setAuditLoading] = useState(false);
-  const [auditLimit, setAuditLimit] = useState(10);
+  const [auditLimit, setAuditLimit] = useState(50);
   const [auditHasMore, setAuditHasMore] = useState(false);
+  const [auditExpanded, setAuditExpanded] = useState(false);
 
   useEffect(() => {
     if (!authState.email) return;
@@ -426,7 +427,7 @@ export default function AppSettingsPage() {
               <p className="text-sm text-[var(--text-muted)] py-2">No activity recorded yet.</p>
             ) : (
               <div className="space-y-3">
-                {auditLogs.map((log) => (
+                {(auditExpanded ? auditLogs : auditLogs.slice(0, 3)).map((log) => (
                   <div key={log.id} className="flex items-center justify-between gap-4">
                     <p className="text-sm text-[var(--text-primary)]">
                       {log.description}
@@ -441,12 +442,22 @@ export default function AppSettingsPage() {
                     </p>
                   </div>
                 ))}
-                {auditHasMore && (
+                {auditLogs.length > 3 && (
                   <button
-                    onClick={() => setAuditLimit(50)}
+                    onClick={() => setAuditExpanded(!auditExpanded)}
                     className="mt-1 text-xs text-[var(--accent-primary)] hover:underline"
                   >
-                    View all activity &rarr;
+                    {auditExpanded
+                      ? "Show less \u2191"
+                      : `Show ${auditLogs.length - 3} more \u2193`}
+                  </button>
+                )}
+                {auditHasMore && auditExpanded && (
+                  <button
+                    onClick={() => setAuditLimit(200)}
+                    className="mt-1 text-xs text-[var(--text-muted)] hover:underline"
+                  >
+                    Load all activity &rarr;
                   </button>
                 )}
               </div>
