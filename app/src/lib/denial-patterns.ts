@@ -1,12 +1,12 @@
 /**
  * Medicare Denial Patterns
  *
- * Queries Supabase for denial patterns and appeal levels.
+ * Queries RDS PostgreSQL for denial patterns and appeal levels.
  * All data is maintained in the database — no hardcoded arrays.
  */
 
 import { MEDICARE_CONSTANTS } from "@/config";
-import { createClient } from "./supabase";
+import { query } from "./db";
 
 // =============================================================================
 // TYPES
@@ -50,8 +50,7 @@ export interface AppealLevel {
 // HELPERS
 // =============================================================================
 
-/** Map a Supabase denial_patterns row to a DenialPattern */
-function rowToPattern(row: {
+type PatternRow = {
   reason: string | null;
   category: string | null;
   reason_codes: string[] | null;
@@ -61,7 +60,9 @@ function rowToPattern(row: {
   documentation_checklist: string[] | null;
   estimated_success_rate: string | null;
   appeal_deadline_days: number | null;
-}): DenialPattern {
+};
+
+function rowToPattern(row: PatternRow): DenialPattern {
   return {
     reason: row.reason ?? "",
     reasonCodes: row.reason_codes ?? [],
@@ -74,15 +75,16 @@ function rowToPattern(row: {
   };
 }
 
-/** Map a Supabase appeal_levels row to an AppealLevel */
-function rowToAppealLevel(row: {
+type AppealLevelRow = {
   level: number | null;
   name: string | null;
   description: string | null;
   time_limit: string | null;
   decision_timeframe: string | null;
   success_rate: string | null;
-}): AppealLevel {
+};
+
+function rowToAppealLevel(row: AppealLevelRow): AppealLevel {
   return {
     level: row.level ?? 0,
     name: row.name ?? "",
@@ -93,6 +95,10 @@ function rowToAppealLevel(row: {
   };
 }
 
+// Helper: latest-row filter using the same pattern as the _latest views in Supabase
+const latestFilter = (table: string) =>
+  `effective_date = (SELECT MAX(effective_date) FROM ${table})`;
+
 // =============================================================================
 // LOOKUP FUNCTIONS
 // =============================================================================
@@ -101,52 +107,38 @@ function rowToAppealLevel(row: {
  * Find denial patterns matching a reason text
  */
 export async function findDenialPattern(reasonText: string): Promise<DenialPattern[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("denial_patterns_latest")
-    .select("*")
-    .or(`reason.ilike.%${reasonText}%,appeal_strategy.ilike.%${reasonText}%`);
-
-  if (error || !data) return [];
-  return data.map(rowToPattern);
+  const like = `%${reasonText}%`;
+  const result = await query<PatternRow>(
+    `SELECT * FROM denial_patterns
+     WHERE ${latestFilter("denial_patterns")}
+       AND (reason ILIKE $1 OR appeal_strategy ILIKE $1)`,
+    [like]
+  );
+  return result.rows.map(rowToPattern);
 }
 
 /**
  * Get denial patterns for a specific CPT code
  */
 export async function getDenialPatternsForCPT(cptCode: string): Promise<DenialPattern[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .rpc("get_denial_patterns_for_cpt", { cpt_code_input: cptCode });
-
-  if (error || !data) return [];
-  return (data as Array<{
-    reason: string;
-    category: string;
-    reason_codes: string[] | null;
-    common_cpts: string[] | null;
-    common_diagnoses: string[] | null;
-    appeal_strategy: string;
-    documentation_checklist: string[] | null;
-    estimated_success_rate: string | null;
-    appeal_deadline_days: number;
-  }>).map(rowToPattern);
+  const result = await query<PatternRow>(
+    `SELECT * FROM get_denial_patterns_for_cpt($1)`,
+    [cptCode]
+  );
+  return result.rows.map(rowToPattern);
 }
 
 /**
  * Get denial patterns by category
  */
-export async function getDenialPatternsByCategory(
-  category: string
-): Promise<DenialPattern[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("denial_patterns_latest")
-    .select("*")
-    .ilike("category", category);
-
-  if (error || !data) return [];
-  return data.map(rowToPattern);
+export async function getDenialPatternsByCategory(category: string): Promise<DenialPattern[]> {
+  const result = await query<PatternRow>(
+    `SELECT * FROM denial_patterns
+     WHERE ${latestFilter("denial_patterns")}
+       AND category ILIKE $1`,
+    [`%${category}%`]
+  );
+  return result.rows.map(rowToPattern);
 }
 
 /**
@@ -155,13 +147,7 @@ export async function getDenialPatternsByCategory(
 export async function getAppealStrategy(
   denialReason: string,
   cptCode?: string
-): Promise<{
-  strategy: string;
-  checklist: string[];
-  estimatedSuccess: string;
-  deadline: number;
-} | null> {
-  // First try to match by CPT code
+): Promise<{ strategy: string; checklist: string[]; estimatedSuccess: string; deadline: number } | null> {
   if (cptCode) {
     const cptPatterns = await getDenialPatternsForCPT(cptCode);
     const match = cptPatterns.find((p) =>
@@ -177,7 +163,6 @@ export async function getAppealStrategy(
     }
   }
 
-  // Fall back to matching by denial reason
   const patterns = await findDenialPattern(denialReason);
   if (patterns.length > 0) {
     const pattern = patterns[0];
@@ -195,43 +180,37 @@ export async function getAppealStrategy(
 /**
  * Get the appropriate appeal level based on previous appeals
  */
-export async function getNextAppealLevel(
-  previousLevels: number[] = []
-): Promise<AppealLevel | null> {
+export async function getNextAppealLevel(previousLevels: number[] = []): Promise<AppealLevel | null> {
   const maxLevel = Math.max(0, ...previousLevels);
   const nextLevel = maxLevel + 1;
 
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("appeal_levels_latest")
-    .select("*")
-    .eq("level", nextLevel)
-    .single();
+  const result = await query<AppealLevelRow>(
+    `SELECT * FROM appeal_levels
+     WHERE ${latestFilter("appeal_levels")} AND level = $1
+     LIMIT 1`,
+    [nextLevel]
+  );
 
-  if (error || !data) return null;
-  return rowToAppealLevel(data);
+  if (result.rows.length === 0) return null;
+  return rowToAppealLevel(result.rows[0]);
 }
 
 /**
  * Calculate appeal deadline from denial date
  */
-export async function calculateAppealDeadline(
-  denialDate: Date,
-  appealLevel: number = 1
-): Promise<Date> {
-  const supabase = createClient();
-  const { data } = await supabase
-    .from("appeal_levels_latest")
-    .select("time_limit")
-    .eq("level", appealLevel)
-    .single();
+export async function calculateAppealDeadline(denialDate: Date, appealLevel = 1): Promise<Date> {
+  const result = await query<{ time_limit: string }>(
+    `SELECT time_limit FROM appeal_levels
+     WHERE ${latestFilter("appeal_levels")} AND level = $1
+     LIMIT 1`,
+    [appealLevel]
+  );
 
   let days: number = MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS;
-  if (data?.time_limit) {
-    const daysMatch = data.time_limit.match(/(\d+)\s*days/i);
-    if (daysMatch) {
-      days = parseInt(daysMatch[1], 10);
-    }
+  const row = result.rows[0];
+  if (row?.time_limit) {
+    const daysMatch = row.time_limit.match(/(\d+)\s*days/i);
+    if (daysMatch) days = parseInt(daysMatch[1], 10);
   }
 
   const deadline = new Date(denialDate);
@@ -240,32 +219,26 @@ export async function calculateAppealDeadline(
 }
 
 /**
- * Get denial reason details by code.
- * Queries the carc_codes_latest table (already in Supabase).
+ * Get denial reason details by code (CARC code lookup).
  */
 export async function getDenialReasonByCode(
   code: string
 ): Promise<{ code: string; description: string; category: string } | null> {
   const normalized = code.replace(/^(CO|PR|OA|CR|PI)-?/i, "").trim();
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("carc_codes_latest")
-    .select("code, description, category")
-    .eq("code", normalized)
-    .single();
+  const result = await query<{ code: string; description: string; category: string }>(
+    `SELECT code, description, category FROM carc_codes
+     WHERE ${latestFilter("carc_codes")} AND code = $1
+     LIMIT 1`,
+    [normalized]
+  );
 
-  if (error || !data) return null;
-  return {
-    code: data.code!,
-    description: data.description!,
-    category: data.category || "Unknown",
-  };
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return { code: row.code, description: row.description, category: row.category || "Unknown" };
 }
 
 /**
  * Get appeal strategy for a CARC code.
- * Maps CARC code (e.g., "50", "CO-50", "PR-50") to matching denial pattern
- * via the reason_codes field.
  */
 export async function getAppealStrategyForCARC(carcCode: string): Promise<{
   strategy: string;
@@ -274,13 +247,19 @@ export async function getAppealStrategyForCARC(carcCode: string): Promise<{
   deadline: number;
   reason: string;
 } | null> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .rpc("get_denial_pattern_for_carc", { carc_code_input: carcCode });
+  const result = await query<{
+    appeal_strategy: string;
+    documentation_checklist: string[] | null;
+    estimated_success_rate: string | null;
+    appeal_deadline_days: number;
+    reason: string;
+  }>(
+    `SELECT * FROM get_denial_pattern_for_carc($1)`,
+    [carcCode]
+  );
 
-  if (error || !data || (Array.isArray(data) && data.length === 0)) return null;
-
-  const row = Array.isArray(data) ? data[0] : data;
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
   return {
     strategy: row.appeal_strategy,
     checklist: row.documentation_checklist ?? [],

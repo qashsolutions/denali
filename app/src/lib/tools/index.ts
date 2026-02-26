@@ -32,7 +32,11 @@ import {
   getAppealStrategyForCARC,
   getDenialPatternsForCPT,
 } from "../denial-patterns";
-import { createClient } from "../supabase";
+import { query } from "../db";
+
+// Helper: latest-row filter (same pattern as the _latest views)
+const latestFilter = (table: string) =>
+  `effective_date = (SELECT MAX(effective_date) FROM ${table})`;
 
 // All tools are local — ICD-10, CMS Coverage, and NPI call public APIs directly.
 // (Replaced MCP server approach to support AWS Bedrock which doesn't support MCP.)
@@ -1173,38 +1177,34 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
       };
     }
 
-    const supabase = createClient();
-
     // If EOB code provided, look up via mapping table
     if (eobCode) {
-      const { data: mappings, error } = await supabase
-        .from("eob_denial_mappings_latest")
-        .select("*")
-        .eq("eob_code", eobCode.trim())
-        .limit(5);
+      type EobRow = { eob_code: string; eob_description: string | null; carc_code: string | null; rarc_code: string | null };
+      type CarcRow = { code: string; description: string | null; category: string | null; plain_english: string | null };
+      type RarcRow = { code: string; description: string | null; category: string | null; plain_english: string | null };
 
-      if (error) {
-        console.error("[Tool:lookup_denial_code] EOB lookup error:", error);
-      }
+      const mappingsResult = await query<EobRow>(
+        `SELECT * FROM eob_denial_mappings WHERE ${latestFilter("eob_denial_mappings")} AND eob_code = $1 LIMIT 5`,
+        [eobCode.trim()]
+      );
+      const mappings = mappingsResult.rows;
 
-      if (mappings && mappings.length > 0) {
-        // Get CARC details for each mapping
+      if (mappings.length > 0) {
         const results = [];
         for (const mapping of mappings) {
-          const { data: carc } = await supabase
-            .from("carc_codes_latest")
-            .select("*")
-            .eq("code", mapping.carc_code!)
-            .single();
+          const carcResult = await query<CarcRow>(
+            `SELECT * FROM carc_codes WHERE ${latestFilter("carc_codes")} AND code = $1 LIMIT 1`,
+            [mapping.carc_code!]
+          );
+          const carc = carcResult.rows[0] ?? null;
 
-          let rarc = null;
+          let rarc: RarcRow | null = null;
           if (mapping.rarc_code) {
-            const { data: rarcData } = await supabase
-              .from("rarc_codes_latest")
-              .select("*")
-              .eq("code", mapping.rarc_code)
-              .single();
-            rarc = rarcData;
+            const rarcResult = await query<RarcRow>(
+              `SELECT * FROM rarc_codes WHERE ${latestFilter("rarc_codes")} AND code = $1 LIMIT 1`,
+              [mapping.rarc_code]
+            );
+            rarc = rarcResult.rows[0] ?? null;
           }
 
           const appealStrategy = await getAppealStrategyForCARC(mapping.carc_code!);
@@ -1233,13 +1233,15 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
     if (code) {
       // Normalize code: strip prefix like "CO-", "PR-" for CARC lookup
       const normalized = code.replace(/^(CO|PR|OA|CR|PI)-?/i, "").trim();
+      type CarcRow = { code: string; description: string | null; category: string | null; plain_english: string | null };
+      type RarcRow = { code: string; description: string | null; category: string | null; plain_english: string | null };
 
       // Try CARC first
-      const { data: carc } = await supabase
-        .from("carc_codes_latest")
-        .select("*")
-        .eq("code", normalized)
-        .single();
+      const carcResult = await query<CarcRow>(
+        `SELECT * FROM carc_codes WHERE ${latestFilter("carc_codes")} AND code = $1 LIMIT 1`,
+        [normalized]
+      );
+      const carc = carcResult.rows[0] ?? null;
 
       if (carc) {
         const appealStrategy = await getAppealStrategyForCARC(normalized);
@@ -1257,11 +1259,11 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
       }
 
       // Try RARC
-      const { data: rarc } = await supabase
-        .from("rarc_codes_latest")
-        .select("*")
-        .eq("code", code.trim())
-        .single();
+      const rarcResult = await query<RarcRow>(
+        `SELECT * FROM rarc_codes WHERE ${latestFilter("rarc_codes")} AND code = $1 LIMIT 1`,
+        [code.trim()]
+      );
+      const rarc = rarcResult.rows[0] ?? null;
 
       if (rarc) {
         return {
@@ -1284,12 +1286,16 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
 
     // Free-text search
     if (descriptionSearch) {
-      const { data: results } = await supabase
-        .rpc("search_denial_codes", { search_text: descriptionSearch });
+      type SearchRow = { code_type: string; code: string; description: string; category: string | null; plain_english: string | null };
+      const searchResult = await query<SearchRow>(
+        `SELECT * FROM search_denial_codes($1)`,
+        [descriptionSearch]
+      );
+      const results = searchResult.rows;
 
-      if (results && results.length > 0) {
+      if (results.length > 0) {
         const enriched = await Promise.all(
-          results.slice(0, 10).map(async (r: { code_type: string; code: string; description: string; category: string | null; plain_english: string | null }) => ({
+          results.slice(0, 10).map(async (r) => ({
             ...r,
             appeal_strategy: r.code_type === "CARC" ? await getAppealStrategyForCARC(r.code) : null,
           }))
@@ -1350,8 +1356,8 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
       }
     }
 
-    // Enrich with CARC code descriptions from Supabase
-    const supabase = createClient();
+    // Enrich with CARC code descriptions from RDS
+    type CarcDescRow = { code: string; plain_english: string | null };
     const results = [];
 
     for (const [, { pattern }] of denialPatterns) {
@@ -1361,11 +1367,11 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
       // Fetch CARC descriptions
       let carcDescriptions: { code: string; plain_english: string | null }[] = [];
       if (carcCodes.length > 0) {
-        const { data } = await supabase
-          .from("carc_codes_latest")
-          .select("code, plain_english")
-          .in("code", carcCodes);
-        carcDescriptions = (data || []).map((d) => ({ code: d.code!, plain_english: d.plain_english }));
+        const carcResult = await query<CarcDescRow>(
+          `SELECT code, plain_english FROM carc_codes WHERE ${latestFilter("carc_codes")} AND code = ANY($1::text[])`,
+          [carcCodes]
+        );
+        carcDescriptions = carcResult.rows;
       }
 
       results.push({
@@ -1378,15 +1384,16 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
       });
     }
 
-    // If no results from CPT matching, fetch top 3 general denial patterns from Supabase
+    // If no results from CPT matching, fetch top 3 general denial patterns from RDS
     if (results.length === 0) {
-      const { data: fallbackPatterns } = await supabase
-        .from("denial_patterns_latest")
-        .select("*")
-        .in("category", ["Medical Necessity", "Documentation", "Coding"])
-        .limit(3);
+      type PatternRow = { reason: string | null; category: string | null; reason_codes: string[] | null; documentation_checklist: string[] | null; estimated_success_rate: string | null; appeal_deadline_days: number | null };
+      const fallbackResult = await query<PatternRow>(
+        `SELECT * FROM denial_patterns WHERE ${latestFilter("denial_patterns")} AND category = ANY($1::text[]) LIMIT 3`,
+        [["Medical Necessity", "Documentation", "Coding"]]
+      );
+      const fallbackPatterns = fallbackResult.rows;
 
-      if (fallbackPatterns && fallbackPatterns.length > 0) {
+      if (fallbackPatterns.length > 0) {
         // Deduplicate by category, taking the first from each
         const seen = new Set<string>();
         const generalDenials = fallbackPatterns
@@ -1408,12 +1415,11 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
         for (const denial of generalDenials) {
           const firstCarc = (denial.carc_codes[0] || "").replace(/^(CO|PR|OA)-?/i, "").trim();
           if (firstCarc) {
-            const { data: carcData } = await supabase
-              .from("carc_codes_latest")
-              .select("plain_english")
-              .eq("code", firstCarc)
-              .single();
-            denial.plain_english = carcData?.plain_english || null;
+            const carcDataResult = await query<{ plain_english: string | null }>(
+              `SELECT plain_english FROM carc_codes WHERE ${latestFilter("carc_codes")} AND code = $1 LIMIT 1`,
+              [firstCarc]
+            );
+            denial.plain_english = carcDataResult.rows[0]?.plain_english || null;
           }
         }
 
