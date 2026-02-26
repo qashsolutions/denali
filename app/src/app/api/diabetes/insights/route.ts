@@ -7,83 +7,77 @@
  * Auth + health_data_ai consent required for POST.
  */
 
-import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { createAdminClient } from "@/lib/supabase-admin";
+import { NextRequest, NextResponse } from "next/server";
+import { getAuthUser } from "@/lib/auth-server";
+import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import {
   generateDiabetesInsight,
   computeDataHash,
   type InsightInput,
 } from "@/lib/diabetes-insights";
-import type { Json } from "@/types/database";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { data: insight } = await supabase
-      .from("diabetes_insights")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
+    const result = await query(
+      `SELECT * FROM diabetes_insights WHERE user_id = $1 LIMIT 1`,
+      [user.userId]
+    );
 
-    return NextResponse.json({ insight: insight ?? null });
+    return NextResponse.json({ insight: result.rows[0] ?? null });
   } catch {
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     // Check health_data_ai consent
-    const { data: consentRows } = await supabase
-      .from("consent_preferences")
-      .select("granted")
-      .eq("user_id", user.id)
-      .eq("consent_type", "health_data_ai");
-
-    const hasConsent = consentRows?.some((r) => r.granted);
+    const consentResult = await query<{ granted: boolean }>(
+      `SELECT granted FROM consent_preferences WHERE user_id = $1 AND consent_type = 'health_data_ai'`,
+      [user.userId]
+    );
+    const hasConsent = consentResult.rows.some((r) => r.granted);
     if (!hasConsent) {
       return NextResponse.json({ error: "Health data AI consent required" }, { status: 403 });
     }
 
-    // Gather data
-    const admin = createAdminClient();
-
-    const [snapshotsRes, cacheRes, logRes] = await Promise.all([
-      supabase
-        .from("diabetes_snapshots")
-        .select("loinc_code, lab_name, value, unit, observed_date")
-        .order("observed_date", { ascending: true }),
-      supabase
-        .from("fhir_cache")
-        .select("resource_type, data")
-        .eq("user_id", user.id),
-      supabase
-        .from("diabetes_log")
-        .select("entry_type, logged_at, glucose_value, activity_minutes, note")
-        .eq("user_id", user.id)
-        .order("logged_at", { ascending: false })
-        .limit(10),
+    // Gather data in parallel
+    const [snapshotsResult, cacheResult, logResult] = await Promise.all([
+      query<{ loinc_code: string; lab_name: string; value: string; unit: string; observed_date: string }>(
+        `SELECT loinc_code, lab_name, value, unit, observed_date
+         FROM diabetes_snapshots
+         WHERE user_id = $1
+         ORDER BY observed_date ASC`,
+        [user.userId]
+      ),
+      query<{ resource_type: string; data: unknown }>(
+        `SELECT resource_type, data FROM fhir_cache WHERE user_id = $1`,
+        [user.userId]
+      ),
+      query<{ entry_type: string; logged_at: string; glucose_value: string | null; activity_minutes: number | null; note: string | null }>(
+        `SELECT entry_type, logged_at, glucose_value, activity_minutes, note
+         FROM diabetes_log
+         WHERE user_id = $1
+         ORDER BY logged_at DESC
+         LIMIT 10`,
+        [user.userId]
+      ),
     ]);
 
     // Parse FHIR cache
-    type CacheRow = { resource_type: string; data: Json };
-    const cacheMap = new Map<string, Json>();
-    for (const row of (cacheRes.data ?? []) as CacheRow[]) {
+    const cacheMap = new Map<string, unknown>();
+    for (const row of cacheResult.rows) {
       cacheMap.set(row.resource_type, row.data);
     }
 
@@ -92,7 +86,7 @@ export async function POST() {
     const medications = (cacheMap.get("medications") as Array<{ name: string; status: string; isDiabetesMed: boolean }>) ?? [];
 
     // Build a1c history from snapshots
-    const a1cHistory = (snapshotsRes.data ?? [])
+    const a1cHistory = snapshotsResult.rows
       .filter((r) => r.lab_name.toLowerCase().includes("a1c"))
       .map((r) => ({ date: r.observed_date, value: Number(r.value) }));
 
@@ -110,7 +104,7 @@ export async function POST() {
       labs,
       conditions,
       medications,
-      recentLogEntries: (logRes.data ?? []).map((e) => ({
+      recentLogEntries: logResult.rows.map((e) => ({
         entry_type: e.entry_type,
         logged_at: e.logged_at,
         glucose_value: e.glucose_value ? Number(e.glucose_value) : null,
@@ -122,11 +116,20 @@ export async function POST() {
     const dataHash = computeDataHash(inputData);
 
     // Check if existing insight has same hash (skip regeneration)
-    const { data: existing } = await supabase
-      .from("diabetes_insights")
-      .select("id, data_hash, summary, recommendations, risk_alerts, screening_reminders, generated_at")
-      .eq("user_id", user.id)
-      .single();
+    const existingResult = await query<{
+      id: string;
+      data_hash: string;
+      summary: string;
+      recommendations: unknown;
+      risk_alerts: unknown;
+      screening_reminders: unknown;
+      generated_at: string;
+    }>(
+      `SELECT id, data_hash, summary, recommendations, risk_alerts, screening_reminders, generated_at
+       FROM diabetes_insights WHERE user_id = $1 LIMIT 1`,
+      [user.userId]
+    );
+    const existing = existingResult.rows[0] ?? null;
 
     if (existing && existing.data_hash === dataHash) {
       return NextResponse.json({ insight: existing, cached: true });
@@ -136,37 +139,43 @@ export async function POST() {
     const output = await generateDiabetesInsight(inputData);
     const now = new Date().toISOString();
 
-    const insightRow = {
-      user_id: user.id,
-      classification,
-      summary: output.summary,
-      recommendations: output.recommendations as unknown as Json,
-      risk_alerts: output.riskAlerts as unknown as Json,
-      screening_reminders: output.screeningReminders as unknown as Json,
-      data_hash: dataHash,
-      generated_at: now,
-      updated_at: now,
-    };
+    const upsertResult = await query<{ id: string }>(
+      `INSERT INTO diabetes_insights
+         (user_id, classification, summary, recommendations, risk_alerts, screening_reminders, data_hash, generated_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (user_id) DO UPDATE
+         SET classification = EXCLUDED.classification,
+             summary = EXCLUDED.summary,
+             recommendations = EXCLUDED.recommendations,
+             risk_alerts = EXCLUDED.risk_alerts,
+             screening_reminders = EXCLUDED.screening_reminders,
+             data_hash = EXCLUDED.data_hash,
+             generated_at = EXCLUDED.generated_at,
+             updated_at = EXCLUDED.updated_at
+       RETURNING id`,
+      [
+        user.userId,
+        classification,
+        output.summary,
+        JSON.stringify(output.recommendations),
+        JSON.stringify(output.riskAlerts),
+        JSON.stringify(output.screeningReminders),
+        dataHash,
+        now,
+        now,
+      ]
+    );
 
-    const { data: upserted, error: upsertError } = await admin
-      .from("diabetes_insights")
-      .upsert(insightRow, { onConflict: "user_id" })
-      .select()
-      .single();
-
-    if (upsertError) {
-      console.error("[DiabetesInsights] Upsert failed:", upsertError);
-      return NextResponse.json({ error: "Failed to save insight" }, { status: 500 });
-    }
+    const upsertedId = upsertResult.rows[0]?.id;
 
     logAudit("DIABETES_INSIGHT_GENERATED", {
-      userId: user.id,
+      userId: user.userId,
       resourceType: "diabetes_insight",
-      resourceId: upserted?.id,
+      resourceId: upsertedId,
       metadata: { classification, data_hash: dataHash },
     }).catch(() => {});
 
-    return NextResponse.json({ insight: upserted, cached: false });
+    return NextResponse.json({ insight: { id: upsertedId, ...inputData, summary: output.summary }, cached: false });
   } catch (error) {
     console.error("[DiabetesInsights] Error:", error);
     return NextResponse.json({ error: "Failed to generate insight" }, { status: 500 });

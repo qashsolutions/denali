@@ -11,8 +11,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { createAdminClient } from "@/lib/supabase-admin";
+import { getAuthUser } from "@/lib/auth-server";
+import { query } from "@/lib/db";
 import { encrypt } from "@/lib/fhir/crypto";
 import { API_CONFIG, getBaseUrl } from "@/config";
 import { logAudit } from "@/lib/audit";
@@ -57,10 +57,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify user is authenticated
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const user = await getAuthUser(request);
 
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.redirect(
         new URL("/app/health?error=not_authenticated", request.url)
       );
@@ -117,36 +116,42 @@ export async function GET(request: NextRequest) {
     const refreshTokenEncrypted = encrypt(tokens.refresh_token);
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
-    // Upsert connection via admin client (bypasses RLS)
-    const admin = createAdminClient();
-    const { error: upsertError } = await admin
-      .from("ehr_connections")
-      .upsert(
-        {
-          user_id: user.id,
-          provider: "bluebutton",
-          fhir_patient_id: fhirPatientId,
-          access_token_encrypted: accessTokenEncrypted,
-          refresh_token_encrypted: refreshTokenEncrypted,
-          token_expires_at: expiresAt,
-          scopes: tokens.scope ?? blueButton.scopes,
-          status: "active",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,provider" }
+    // Upsert connection into RDS
+    try {
+      await query(
+        `INSERT INTO ehr_connections (user_id, provider, fhir_patient_id, access_token_encrypted, refresh_token_encrypted, token_expires_at, scopes, status, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (user_id, provider) DO UPDATE
+           SET fhir_patient_id = EXCLUDED.fhir_patient_id,
+               access_token_encrypted = EXCLUDED.access_token_encrypted,
+               refresh_token_encrypted = EXCLUDED.refresh_token_encrypted,
+               token_expires_at = EXCLUDED.token_expires_at,
+               scopes = EXCLUDED.scopes,
+               status = EXCLUDED.status,
+               updated_at = EXCLUDED.updated_at`,
+        [
+          user.userId,
+          "bluebutton",
+          fhirPatientId,
+          accessTokenEncrypted,
+          refreshTokenEncrypted,
+          expiresAt,
+          tokens.scope ?? blueButton.scopes,
+          "active",
+          new Date().toISOString(),
+        ]
       );
-
-    if (upsertError) {
+    } catch (upsertError) {
       console.error("[FHIR callback] Failed to save connection:", upsertError);
       return NextResponse.redirect(
         new URL("/app/health?error=save_failed", request.url)
       );
     }
 
-    console.log("[FHIR callback] Connection saved for user:", user.id);
+    console.log("[FHIR callback] Connection saved for user:", user.userId);
 
     logAudit("FHIR_CONNECT", {
-      userId: user.id,
+      userId: user.userId,
       resourceType: "ehr_connection",
       metadata: { provider: "bluebutton", fhirPatientId },
       request,

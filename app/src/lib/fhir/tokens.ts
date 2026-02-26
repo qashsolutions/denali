@@ -2,10 +2,10 @@
  * Token Management
  *
  * Retrieves, decrypts, and auto-refreshes Blue Button OAuth tokens.
- * All DB access uses admin client (bypasses RLS for token read/write).
+ * All DB access uses RDS PostgreSQL via query().
  */
 
-import { createAdminClient } from "@/lib/supabase-admin";
+import { query } from "@/lib/db";
 import { encrypt, decrypt } from "./crypto";
 import { API_CONFIG } from "@/config";
 
@@ -14,21 +14,28 @@ interface TokenPair {
   fhirPatientId: string | null;
 }
 
+type ConnRow = {
+  id: string;
+  user_id: string;
+  access_token_encrypted: string;
+  refresh_token_encrypted: string;
+  token_expires_at: string;
+  fhir_patient_id: string | null;
+  status: string;
+};
+
 /**
  * Get a valid access token for the user, auto-refreshing if expired.
  */
 export async function getValidToken(userId: string): Promise<TokenPair | null> {
-  const admin = createAdminClient();
-
-  const { data: conn, error } = await admin
-    .from("ehr_connections")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("provider", "bluebutton")
-    .eq("status", "active")
-    .single();
-
-  if (error || !conn) return null;
+  const result = await query<ConnRow>(
+    `SELECT * FROM ehr_connections
+     WHERE user_id = $1 AND provider = 'bluebutton' AND status = 'active'
+     LIMIT 1`,
+    [userId]
+  );
+  const conn = result.rows[0] ?? null;
+  if (!conn) return null;
 
   const now = new Date();
   const expiresAt = new Date(conn.token_expires_at);
@@ -82,26 +89,30 @@ async function refreshAccessToken(
   if (!res.ok) {
     console.error("[FHIR tokens] Refresh failed:", res.status, await res.text());
     // Mark connection as expired
-    const admin = createAdminClient();
-    await admin
-      .from("ehr_connections")
-      .update({ status: "expired", updated_at: new Date().toISOString() })
-      .eq("id", connectionId);
+    await query(
+      `UPDATE ehr_connections SET status = 'expired', updated_at = $1 WHERE id = $2`,
+      [new Date().toISOString(), connectionId]
+    );
     return null;
   }
 
-  const tokens = await res.json();
-  const admin = createAdminClient();
+  const tokens = await res.json() as { access_token: string; refresh_token: string; expires_in: number };
 
-  await admin
-    .from("ehr_connections")
-    .update({
-      access_token_encrypted: encrypt(tokens.access_token),
-      refresh_token_encrypted: encrypt(tokens.refresh_token),
-      token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", connectionId);
+  await query(
+    `UPDATE ehr_connections
+     SET access_token_encrypted = $1,
+         refresh_token_encrypted = $2,
+         token_expires_at = $3,
+         updated_at = $4
+     WHERE id = $5`,
+    [
+      encrypt(tokens.access_token),
+      encrypt(tokens.refresh_token),
+      new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+      new Date().toISOString(),
+      connectionId,
+    ]
+  );
 
   return tokens.access_token;
 }
@@ -110,13 +121,11 @@ async function refreshAccessToken(
  * Check if a user has an active Blue Button connection.
  */
 export async function hasActiveConnection(userId: string): Promise<boolean> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("ehr_connections")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("provider", "bluebutton")
-    .eq("status", "active")
-    .single();
-  return !!data;
+  const result = await query<{ id: string }>(
+    `SELECT id FROM ehr_connections
+     WHERE user_id = $1 AND provider = 'bluebutton' AND status = 'active'
+     LIMIT 1`,
+    [userId]
+  );
+  return result.rows.length > 0;
 }

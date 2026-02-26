@@ -7,27 +7,31 @@
  * CMS criteria A4: trial access for Medicare patients
  */
 
-import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { NextRequest, NextResponse } from "next/server";
+import { getAuthUser } from "@/lib/auth-server";
+import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { PRICING } from "@/config";
 
 const TRIAL_DURATION_DAYS = PRICING.TRIAL_DURATION_DAYS;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-
-    if (error || !user) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { data: sub } = await supabase
-      .from("subscriptions")
-      .select("trial_start, trial_end, trial_converted, status")
-      .eq("user_id", user.id)
-      .single();
+    const subResult = await query<{
+      trial_start: string | null;
+      trial_end: string | null;
+      trial_converted: boolean | null;
+      status: string | null;
+    }>(
+      `SELECT trial_start, trial_end, trial_converted, status FROM subscriptions WHERE user_id = $1 LIMIT 1`,
+      [user.userId]
+    );
+    const sub = subResult.rows[0] ?? null;
 
     if (!sub?.trial_start) {
       return NextResponse.json({ status: "none", daysRemaining: 0 });
@@ -54,21 +58,19 @@ export async function GET() {
   }
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-
-    if (error || !user) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     // Check if already has a trial or active subscription
-    const { data: existing } = await supabase
-      .from("subscriptions")
-      .select("id, trial_start, status")
-      .eq("user_id", user.id)
-      .single();
+    const existingResult = await query<{ id: string; trial_start: string | null; status: string | null }>(
+      `SELECT id, trial_start, status FROM subscriptions WHERE user_id = $1 LIMIT 1`,
+      [user.userId]
+    );
+    const existing = existingResult.rows[0] ?? null;
 
     if (existing?.trial_start) {
       return NextResponse.json(
@@ -89,33 +91,26 @@ export async function POST() {
     trialEnd.setDate(trialEnd.getDate() + TRIAL_DURATION_DAYS);
 
     // Upsert subscription with trial
-    const { error: upsertError } = await supabase
-      .from("subscriptions")
-      .upsert(
-        {
-          user_id: user.id,
-          plan: "trial",
-          status: "trialing",
-          trial_start: now.toISOString(),
-          trial_end: trialEnd.toISOString(),
-          trial_converted: false,
-        },
-        { onConflict: "user_id" }
-      );
-
-    if (upsertError) {
-      console.error("[Trial] Upsert error:", upsertError);
-      return NextResponse.json({ error: "Failed to start trial" }, { status: 500 });
-    }
+    await query(
+      `INSERT INTO subscriptions (user_id, plan, status, trial_start, trial_end, trial_converted)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (user_id) DO UPDATE
+         SET plan = EXCLUDED.plan,
+             status = EXCLUDED.status,
+             trial_start = EXCLUDED.trial_start,
+             trial_end = EXCLUDED.trial_end,
+             trial_converted = EXCLUDED.trial_converted`,
+      [user.userId, "trial", "trialing", now.toISOString(), trialEnd.toISOString(), false]
+    );
 
     // Update user plan to trial
-    await supabase
-      .from("users")
-      .update({ plan: "trial" })
-      .eq("id", user.id);
+    await query(
+      `UPDATE users SET plan = 'trial' WHERE id = $1`,
+      [user.userId]
+    );
 
     logAudit("TRIAL_STARTED", {
-      userId: user.id,
+      userId: user.userId,
       resourceType: "subscription",
       metadata: { trialEnd: trialEnd.toISOString(), durationDays: TRIAL_DURATION_DAYS },
     }).catch(() => {});

@@ -9,33 +9,43 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { getAuthUser } from "@/lib/auth-server";
+import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 
 const VALID_ENTRY_TYPES = ["glucose", "activity", "meal", "note"] as const;
 const VALID_CONTEXTS = ["fasting", "before_meal", "after_meal", "bedtime", "other"] as const;
 
-export async function GET() {
-  try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+type EntryType = (typeof VALID_ENTRY_TYPES)[number];
+type GlucoseContext = (typeof VALID_CONTEXTS)[number];
 
-    if (authError || !user) {
+export async function GET(request: NextRequest) {
+  try {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { data: entries, error } = await supabase
-      .from("diabetes_log")
-      .select("id, logged_at, entry_type, glucose_value, glucose_context, activity_minutes, activity_type, note")
-      .eq("user_id", user.id)
-      .order("logged_at", { ascending: false })
-      .limit(30);
+    const result = await query<{
+      id: string;
+      logged_at: string;
+      entry_type: string;
+      glucose_value: number | null;
+      glucose_context: string | null;
+      activity_minutes: number | null;
+      activity_type: string | null;
+      note: string | null;
+    }>(
+      `SELECT id, logged_at, entry_type, glucose_value, glucose_context,
+              activity_minutes, activity_type, note
+       FROM diabetes_log
+       WHERE user_id = $1
+       ORDER BY logged_at DESC
+       LIMIT 30`,
+      [user.userId]
+    );
 
-    if (error) {
-      return NextResponse.json({ error: "Failed to fetch entries" }, { status: 500 });
-    }
-
-    return NextResponse.json({ entries: entries ?? [] });
+    return NextResponse.json({ entries: result.rows });
   } catch {
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
@@ -43,15 +53,21 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const body = await request.json();
-    const { entry_type, logged_at, glucose_value, glucose_context, activity_minutes, activity_type, note } = body;
+    const { entry_type, logged_at, glucose_value, glucose_context, activity_minutes, activity_type, note } = body as {
+      entry_type: EntryType;
+      logged_at?: string;
+      glucose_value?: number;
+      glucose_context?: GlucoseContext;
+      activity_minutes?: number;
+      activity_type?: string;
+      note?: string;
+    };
 
     // Validate entry_type
     if (!entry_type || !VALID_ENTRY_TYPES.includes(entry_type)) {
@@ -68,30 +84,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "activity_minutes must be positive" }, { status: 400 });
     }
 
-    const { data: entry, error } = await supabase
-      .from("diabetes_log")
-      .insert({
-        user_id: user.id,
+    const result = await query<{ id: string; logged_at: string; entry_type: string }>(
+      `INSERT INTO diabetes_log
+         (user_id, entry_type, logged_at, glucose_value, glucose_context, activity_minutes, activity_type, note)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [
+        user.userId,
         entry_type,
-        logged_at: logged_at || new Date().toISOString(),
-        glucose_value: entry_type === "glucose" ? glucose_value : null,
-        glucose_context: entry_type === "glucose" ? glucose_context : null,
-        activity_minutes: entry_type === "activity" ? activity_minutes : null,
-        activity_type: entry_type === "activity" ? activity_type : null,
-        note: ["meal", "note"].includes(entry_type) ? note : null,
-      })
-      .select()
-      .single();
+        logged_at || new Date().toISOString(),
+        entry_type === "glucose" ? (glucose_value ?? null) : null,
+        entry_type === "glucose" ? (glucose_context ?? null) : null,
+        entry_type === "activity" ? (activity_minutes ?? null) : null,
+        entry_type === "activity" ? (activity_type ?? null) : null,
+        ["meal", "note"].includes(entry_type) ? (note ?? null) : null,
+      ]
+    );
 
-    if (error) {
-      console.error("[DiabetesLog] Insert failed:", error);
-      return NextResponse.json({ error: "Failed to create entry" }, { status: 500 });
-    }
+    const entry = result.rows[0];
 
     logAudit("DIABETES_LOG_ENTRY", {
-      userId: user.id,
+      userId: user.userId,
       resourceType: "diabetes_log",
-      resourceId: entry.id,
+      resourceId: entry?.id,
       metadata: { entry_type },
     }).catch(() => {});
 
@@ -103,10 +118,8 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
@@ -117,16 +130,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
 
-    // RLS ensures user can only delete own entries
-    const { error } = await supabase
-      .from("diabetes_log")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id);
-
-    if (error) {
-      return NextResponse.json({ error: "Failed to delete entry" }, { status: 500 });
-    }
+    await query(
+      `DELETE FROM diabetes_log WHERE id = $1 AND user_id = $2`,
+      [id, user.userId]
+    );
 
     return NextResponse.json({ success: true });
   } catch {

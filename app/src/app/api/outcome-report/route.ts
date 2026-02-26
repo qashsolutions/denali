@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase-admin";
+import { query } from "@/lib/db";
 import { recordAppealOutcome } from "@/lib/learning";
 
 interface OutcomeReportRequest {
@@ -33,17 +33,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Admin client — this route is token-based (no user auth), needs RLS bypass
-    const admin = createAdminClient();
-
     // Look up the followup by token
-    const { data: followup, error: lookupError } = await admin
-      .from("outcome_followups")
-      .select("id, appeal_id, email, responded_at")
-      .eq("token", body.token)
-      .single();
+    const followupResult = await query<{ id: string; appeal_id: string; email: string; responded_at: string | null }>(
+      `SELECT id, appeal_id, email, responded_at FROM outcome_followups WHERE token = $1 LIMIT 1`,
+      [body.token]
+    );
+    const followup = followupResult.rows[0] ?? null;
 
-    if (lookupError || !followup) {
+    if (!followup) {
       return NextResponse.json(
         { error: "Invalid or expired token." },
         { status: 404 }
@@ -60,43 +57,32 @@ export async function POST(request: NextRequest) {
     }
 
     // Record the outcome on the followup
-    const { error: updateError } = await admin
-      .from("outcome_followups")
-      .update({
-        outcome: body.outcome,
-        responded_at: new Date().toISOString(),
-      })
-      .eq("id", followup.id);
+    await query(
+      `UPDATE outcome_followups SET outcome = $1, responded_at = $2 WHERE id = $3`,
+      [body.outcome, new Date().toISOString(), followup.id]
+    );
 
-    if (updateError) {
-      console.error("[outcome-report] Failed to update followup:", updateError);
-      return NextResponse.json(
-        { error: "Failed to record outcome." },
-        { status: 500 }
-      );
-    }
-
-    // Record in learning system (updates appeals, coverage_paths, mappings)
+    // Record in learning system
     if (body.outcome !== "pending") {
       await recordAppealOutcome(followup.appeal_id, body.outcome as "approved" | "denied" | "partial");
     }
 
-    // Apply incentive: decrement appeal_count by 1
+    // Apply incentive
     let earnedCredit = false;
-    const { data: incentiveResult } = await admin.rpc("apply_outcome_incentive", {
-      p_email: followup.email,
-    });
-
-    if (incentiveResult) {
+    const incentiveResult = await query<{ apply_outcome_incentive: boolean }>(
+      `SELECT apply_outcome_incentive($1)`,
+      [followup.email]
+    );
+    if (incentiveResult.rows[0]?.apply_outcome_incentive) {
       earnedCredit = true;
     }
 
-    // Cancel remaining followups for this appeal (no need for day_60 if day_30 was answered)
-    await admin
-      .from("outcome_followups")
-      .update({ responded_at: new Date().toISOString(), outcome: body.outcome })
-      .eq("appeal_id", followup.appeal_id)
-      .is("responded_at", null);
+    // Cancel remaining followups for this appeal
+    await query(
+      `UPDATE outcome_followups SET responded_at = $1, outcome = $2
+       WHERE appeal_id = $3 AND responded_at IS NULL`,
+      [new Date().toISOString(), body.outcome, followup.appeal_id]
+    );
 
     return NextResponse.json({
       success: true,

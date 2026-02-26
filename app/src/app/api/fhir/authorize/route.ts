@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { getAuthUser } from "@/lib/auth-server";
 import { API_CONFIG, getBaseUrl } from "@/config";
 import { randomBytes, createHash } from "crypto";
 import { logAudit } from "@/lib/audit";
@@ -18,27 +18,12 @@ import { logAudit } from "@/lib/audit";
 export async function GET(request: NextRequest) {
   try {
     // Verify user is authenticated
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const user = await getAuthUser(request);
 
-    if (error || !user) {
+    if (!user) {
       return NextResponse.json(
         { error: "You must be logged in to connect Medicare" },
         { status: 401 }
-      );
-    }
-
-    // If user has TOTP enrolled, require AAL2 before connecting FHIR
-    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    const { data: factors } = await supabase.auth.mfa.listFactors();
-    const hasTOTP = factors?.totp?.some(
-      (f) => f.status === "verified"
-    );
-
-    if (hasTOTP && aalData?.currentLevel !== "aal2") {
-      return NextResponse.json(
-        { error: "Authenticator verification required", requiresAAL2: true },
-        { status: 403 }
       );
     }
 
@@ -82,7 +67,7 @@ export async function GET(request: NextRequest) {
     const authorizeUrl = `${blueButton.baseUrl}/${blueButton.version}/o/authorize/?${params}`;
 
     logAudit("FHIR_CONNECT", {
-      userId: user.id,
+      userId: user.userId,
       resourceType: "ehr_connection",
       metadata: { step: "authorize_initiated" },
       request,

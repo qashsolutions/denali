@@ -53,7 +53,8 @@ import { saveAppeal, getUnreportedOutcome } from "@/lib/conversation-service";
 import { FEEDBACK_CONFIG, API_CONFIG, PRICING } from "@/config";
 import { getUploadLimitForPlan, formatFileSize } from "@/config/pricing";
 import { logAudit } from "@/lib/audit";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { getAuthUser } from "@/lib/auth-server";
+import { query } from "@/lib/db";
 import { createHash } from "crypto";
 import type { FileAttachment } from "@/types/attachment";
 import { ALLOWED_MEDIA_TYPES } from "@/types/attachment";
@@ -94,49 +95,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for API key
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return NextResponse.json(
-        { error: "ANTHROPIC_API_KEY is not configured" },
-        { status: 500 }
-      );
-    }
-
     // --- Rate limiting: check daily chat usage ---
-    const authSupabase = await createServerSupabaseClient();
-    const { data: { user: authUser } } = await authSupabase.auth.getUser();
+    const authUser = await getAuthUser(request);
 
     let chatLimit: number = PRICING.CHAT_LIMITS.ANON; // 1/day for unauthenticated
     let chatIdentifier: string;
     let userProfile: { plan: string | null; is_admin: boolean | null } | null = null;
 
     if (authUser) {
-      chatIdentifier = authUser.id;
+      chatIdentifier = authUser.userId;
 
       // Fetch profile once — reused for rate limiting AND attachment validation
-      const { data: profile } = await authSupabase
-        .from("users")
-        .select("plan, is_admin")
-        .eq("id", authUser.id)
-        .single();
-      userProfile = profile;
+      const profileResult = await query<{ plan: string | null; is_admin: boolean | null }>(
+        `SELECT plan, is_admin FROM users WHERE id = $1 LIMIT 1`,
+        [authUser.userId]
+      );
+      userProfile = profileResult.rows[0] ?? null;
 
-      if (profile?.is_admin) {
+      if (userProfile?.is_admin) {
         chatLimit = 0; // Admin: unlimited
       } else {
-        const plan = profile?.plan || "trial";
+        const plan = userProfile?.plan || "trial";
         if (plan === "monthly") {
           chatLimit = PRICING.CHAT_LIMITS.PAID; // 0 = unlimited
         } else if (plan === "per_appeal") {
           chatLimit = PRICING.CHAT_LIMITS.PER_APPEAL; // 5/day
         } else if (plan === "trial") {
           // Check trial expiry
-          const { data: sub } = await authSupabase
-            .from("subscriptions")
-            .select("trial_end")
-            .eq("user_id", authUser.id)
-            .single();
-          const trialEnd = sub?.trial_end ? new Date(sub.trial_end) : null;
+          const subResult = await query<{ trial_end: string | null }>(
+            `SELECT trial_end FROM subscriptions WHERE user_id = $1 LIMIT 1`,
+            [authUser.userId]
+          );
+          const trialEnd = subResult.rows[0]?.trial_end ? new Date(subResult.rows[0].trial_end) : null;
           if (trialEnd && trialEnd > new Date()) {
             chatLimit = PRICING.CHAT_LIMITS.TRIAL; // 3/day
           } else {
@@ -171,29 +161,30 @@ export async function POST(request: NextRequest) {
     }
 
     if (chatLimit > 0) {
-      const { data: usageResult, error: usageError } = await authSupabase.rpc(
-        "check_and_increment_chat",
-        { p_identifier: chatIdentifier, p_daily_limit: chatLimit }
-      );
-
-      if (usageError) {
-        console.warn("[Chat API] Rate limit check failed:", usageError.message);
-        // Don't block on rate limit errors — proceed with the request
-      } else if (usageResult && !(usageResult as { allowed: boolean; count: number }).allowed) {
-        const usage = usageResult as { allowed: boolean; count: number };
-        const isAuthed = !!authUser;
-        return NextResponse.json(
-          {
-            error: isAuthed
-              ? `You've reached your daily limit of ${chatLimit} messages. Upgrade for unlimited access.`
-              : `You've used your ${chatLimit} free messages today. Sign in for more.`,
-            code: "RATE_LIMITED",
-            limit: chatLimit,
-            count: usage.count,
-            isAuthenticated: isAuthed,
-          },
-          { status: 429 }
+      try {
+        const usageResult = await query<{ allowed: boolean; count: number }>(
+          `SELECT * FROM check_and_increment_chat($1, $2)`,
+          [chatIdentifier, chatLimit]
         );
+        const usageRow = usageResult.rows[0];
+        if (usageRow && !usageRow.allowed) {
+          const isAuthed = !!authUser;
+          return NextResponse.json(
+            {
+              error: isAuthed
+                ? `You've reached your daily limit of ${chatLimit} messages. Upgrade for unlimited access.`
+                : `You've used your ${chatLimit} free messages today. Sign in for more.`,
+              code: "RATE_LIMITED",
+              limit: chatLimit,
+              count: usageRow.count,
+              isAuthenticated: isAuthed,
+            },
+            { status: 429 }
+          );
+        }
+      } catch (usageError) {
+        console.warn("[Chat API] Rate limit check failed:", usageError);
+        // Don't block on rate limit errors — proceed with the request
       }
     }
 
@@ -403,40 +394,31 @@ export async function POST(request: NextRequest) {
             ? firstUserMsg.content.slice(0, 60) + (firstUserMsg.content.length > 60 ? "..." : "")
             : null;
 
-          const { data: newConv, error: convError } = await authSupabase
-            .from("conversations")
-            .insert({
-              user_id: authUser?.id || null,
-              is_appeal: result.sessionState.isAppeal || false,
-              title: title || null,
-              status: "active",
-              started_at: new Date().toISOString(),
-            })
-            .select("id")
-            .single();
-
-          if (convError || !newConv) {
-            conversationId = crypto.randomUUID();
-            console.warn("[Chat API] Failed to create conversation in DB:", convError?.message);
-          } else {
-            conversationId = newConv.id;
+          try {
+            const newConvResult = await query<{ id: string }>(
+              `INSERT INTO conversations (user_id, is_appeal, title, status, started_at)
+               VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+              [authUser?.userId ?? null, result.sessionState.isAppeal || false, title ?? null, "active", new Date().toISOString()]
+            );
+            conversationId = newConvResult.rows[0]?.id ?? crypto.randomUUID();
             console.log("[Chat API] Created conversation:", conversationId, authUser ? "(owned)" : "(anon)");
+          } catch (convError) {
+            conversationId = crypto.randomUUID();
+            console.warn("[Chat API] Failed to create conversation in DB:", convError);
           }
         }
 
         // Save messages (fire-and-forget)
         const lastUserMsg = body.messages[body.messages.length - 1];
         if (conversationId && lastUserMsg) {
-          authSupabase
-            .from("messages")
-            .insert([
-              { conversation_id: conversationId, role: lastUserMsg.role, content: lastUserMsg.content },
-              { conversation_id: conversationId, role: "assistant", content: result.content },
-            ])
-            .then(({ error: msgErr }) => {
-              if (msgErr) console.warn("[Chat API] Failed to save messages:", msgErr.message);
-              else if (isNewConversation) console.log("[Chat API] Messages saved for conversation:", conversationId);
-            });
+          query(
+            `INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3), ($1, $4, $5)`,
+            [conversationId, lastUserMsg.role, lastUserMsg.content, "assistant", result.content]
+          ).then(() => {
+            if (isNewConversation) console.log("[Chat API] Messages saved for conversation:", conversationId);
+          }).catch((msgErr: Error) => {
+            console.warn("[Chat API] Failed to save messages:", msgErr.message);
+          });
         }
 
         // Persist learning (non-blocking)
@@ -466,7 +448,7 @@ export async function POST(request: NextRequest) {
               appealId = savedAppealId;
               console.log("[Chat API] Appeal saved:", appealId);
               logAudit("APPEAL_GENERATED", {
-                userId: authUser?.id,
+                userId: authUser?.userId,
                 resourceType: "appeal",
                 resourceId: savedAppealId,
                 metadata: { conversationId, denialCodes: ss.denialCodes },
@@ -531,7 +513,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     status: "ok",
-    hasApiKey: !!process.env.ANTHROPIC_API_KEY,
+    hasBedrockAccess: true, // IAM auth via ECS task role
     timestamp: new Date().toISOString(),
   });
 }

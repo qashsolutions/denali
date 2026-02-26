@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { PRICING, getBaseUrl } from "@/config";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { getAuthUser } from "@/lib/auth-server";
 import { logAudit } from "@/lib/audit";
 
 // Stripe is imported dynamically to avoid build errors when key is not set
@@ -51,9 +51,8 @@ export async function POST(request: NextRequest) {
     const StripeModule = await import("stripe");
     const stripe = new StripeModule.default(stripeKey);
 
-    // Get authenticated user via cookie-auth server client
-    const supabase = await createServerSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    // Get authenticated user via Cognito JWT
+    const user = await getAuthUser(request);
 
     if (!user) {
       return NextResponse.json(
@@ -62,7 +61,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userId = user.id;
+    const userId = user.userId;
     const email = user.email || "";
 
     // Get the origin for redirect URLs (uses safe fallback from config)

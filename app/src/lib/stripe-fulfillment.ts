@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { createAdminClient } from "@/lib/supabase-admin";
+import { query } from "@/lib/db";
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -31,8 +31,6 @@ export async function fulfillCheckoutSession(sessionId: string) {
     return;
   }
 
-  const admin = createAdminClient();
-
   if (plan === "monthly") {
     // Subscription checkout — create subscription record
     const sub = session.subscription as Stripe.Subscription | null;
@@ -44,52 +42,39 @@ export async function fulfillCheckoutSession(sessionId: string) {
       ? new Date(firstItem.current_period_end * 1000).toISOString()
       : undefined;
 
-    const { error } = await admin.rpc("fulfill_checkout", {
-      p_user_id: userId,
-      p_email: email || "",
-      p_plan: "monthly",
-      p_stripe_customer_id: (session.customer as string) || undefined,
-      p_stripe_subscription_id: sub?.id || undefined,
-      p_period_start: periodStart || undefined,
-      p_period_end: periodEnd,
-    });
-    if (error) {
-      console.error("[STRIPE] fulfill_checkout RPC error:", error);
-      throw error;
-    }
+    await query(
+      `SELECT fulfill_checkout($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        userId,
+        email || "",
+        "monthly",
+        (session.customer as string) || null,
+        sub?.id || null,
+        periodStart || null,
+        periodEnd || null,
+      ]
+    );
 
     // Reset monthly appeal credits
     if (email) {
-      const { error: creditError } = await admin.rpc("reset_monthly_appeal_credits", {
-        p_email: email,
-        p_credits: 3,
-      });
-      if (creditError) {
-        console.error("[STRIPE] reset_monthly_appeal_credits error:", creditError);
-      }
+      await query(`SELECT reset_monthly_appeal_credits($1, $2)`, [email, 3]).catch(
+        (err) => console.error("[STRIPE] reset_monthly_appeal_credits error:", err)
+      );
     }
 
     console.log(`[STRIPE] Fulfilled monthly subscription for user ${userId}`);
   } else {
     // One-time payment — upgrade plan + add 1 appeal credit
-    const { error } = await admin
-      .from("users")
-      .update({ plan: "per_appeal", updated_at: new Date().toISOString() })
-      .eq("id", userId);
-    if (error) {
-      console.error("[STRIPE] Error updating user plan:", error);
-      throw error;
-    }
+    await query(
+      `UPDATE users SET plan = 'per_appeal', updated_at = $1 WHERE id = $2`,
+      [new Date().toISOString(), userId]
+    );
 
     // Add 1 appeal credit for single payment
     if (email) {
-      const { error: creditError } = await admin.rpc("add_appeal_credits", {
-        p_email: email,
-        p_credits: 1,
-      });
-      if (creditError) {
-        console.error("[STRIPE] add_appeal_credits error:", creditError);
-      }
+      await query(`SELECT add_appeal_credits($1, $2)`, [email, 1]).catch(
+        (err) => console.error("[STRIPE] add_appeal_credits error:", err)
+      );
     }
 
     console.log(`[STRIPE] Fulfilled single payment for user ${userId}`);
@@ -110,7 +95,6 @@ export async function handleSubscriptionEvent(
   };
 
   const status = statusMap[subscription.status] || subscription.status;
-  const admin = createAdminClient();
 
   const firstItem = subscription.items?.data?.[0];
   const periodStart = subscription.start_date
@@ -120,40 +104,28 @@ export async function handleSubscriptionEvent(
     ? new Date(firstItem.current_period_end * 1000).toISOString()
     : undefined;
 
-  const { error } = await admin.rpc("handle_subscription_change", {
-    p_stripe_subscription_id: subscription.id,
-    p_status: status,
-    p_period_start: periodStart || undefined,
-    p_period_end: periodEnd,
-  });
-
-  if (error) {
-    console.error("[STRIPE] handle_subscription_change RPC error:", error);
-    throw error;
-  }
+  await query(
+    `SELECT handle_subscription_change($1, $2, $3, $4)`,
+    [subscription.id, status, periodStart || null, periodEnd || null]
+  );
 
   // Reset monthly appeal credits on renewal (active status with new period)
   if (status === "active") {
-    // Look up email from subscription metadata or linked user
-    const { data: subRecord } = await admin
-      .from("subscriptions")
-      .select("user_id")
-      .eq("stripe_subscription_id", subscription.id)
-      .single();
-    if (subRecord?.user_id) {
-      const { data: userRecord } = await admin
-        .from("users")
-        .select("email")
-        .eq("id", subRecord.user_id)
-        .single();
-      if (userRecord?.email) {
-        const { error: creditError } = await admin.rpc("reset_monthly_appeal_credits", {
-          p_email: userRecord.email,
-          p_credits: 3,
-        });
-        if (creditError) {
-          console.error("[STRIPE] reset_monthly_appeal_credits error:", creditError);
-        }
+    const subResult = await query<{ user_id: string }>(
+      `SELECT user_id FROM subscriptions WHERE stripe_subscription_id = $1 LIMIT 1`,
+      [subscription.id]
+    );
+    const subUserId = subResult.rows[0]?.user_id;
+    if (subUserId) {
+      const userResult = await query<{ email: string }>(
+        `SELECT email FROM users WHERE id = $1 LIMIT 1`,
+        [subUserId]
+      );
+      const userEmail = userResult.rows[0]?.email;
+      if (userEmail) {
+        await query(`SELECT reset_monthly_appeal_credits($1, $2)`, [userEmail, 3]).catch(
+          (err) => console.error("[STRIPE] reset_monthly_appeal_credits error:", err)
+        );
       }
     }
   }

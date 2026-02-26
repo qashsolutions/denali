@@ -10,6 +10,7 @@
  */
 
 import { CognitoJwtVerifier } from "aws-jwt-verify";
+import { CognitoIdentityProviderClient, AdminDeleteUserCommand, AdminGetUserCommand } from "@aws-sdk/client-cognito-identity-provider";
 import type { NextRequest } from "next/server";
 
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID!;
@@ -75,4 +76,40 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
  */
 export async function getAuthUserOptional(request: NextRequest): Promise<AuthUser | null> {
   return getAuthUser(request).catch(() => null);
+}
+
+// Singleton Cognito admin client
+let cognitoAdmin: CognitoIdentityProviderClient | null = null;
+function getCognitoAdmin() {
+  if (!cognitoAdmin) {
+    cognitoAdmin = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || "us-east-1" });
+  }
+  return cognitoAdmin;
+}
+
+/**
+ * Delete a Cognito user (account deletion).
+ * Uses IAM credentials from ECS task role — no access key needed.
+ */
+export async function deleteCognitoUser(username: string): Promise<void> {
+  await getCognitoAdmin().send(new AdminDeleteUserCommand({
+    UserPoolId: USER_POOL_ID,
+    Username: username,
+  }));
+}
+
+/**
+ * Look up the Cognito username for a given sub (UUID).
+ * Cognito AdminDeleteUser requires the username, not the sub.
+ */
+export async function getCognitoUsernameByEmail(email: string): Promise<string | null> {
+  try {
+    const result = await getCognitoAdmin().send(new AdminGetUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+    }));
+    return result.Username ?? null;
+  } catch {
+    return null;
+  }
 }

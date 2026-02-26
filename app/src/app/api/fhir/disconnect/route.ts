@@ -6,48 +6,31 @@
  * Disconnects Blue Button: deletes tokens + cache.
  */
 
-import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { createAdminClient } from "@/lib/supabase-admin";
+import { NextRequest, NextResponse } from "next/server";
+import { getAuthUser } from "@/lib/auth-server";
+import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-
-    if (error || !user) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json(
         { error: "Not authenticated" },
         { status: 401 }
       );
     }
 
-    const admin = createAdminClient();
-
     // Delete connection, cache, and diabetes data in parallel
     await Promise.all([
-      admin
-        .from("ehr_connections")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("provider", "bluebutton"),
-      admin
-        .from("fhir_cache")
-        .delete()
-        .eq("user_id", user.id),
-      admin
-        .from("diabetes_snapshots")
-        .delete()
-        .eq("user_id", user.id),
-      admin
-        .from("diabetes_insights")
-        .delete()
-        .eq("user_id", user.id),
+      query(`DELETE FROM ehr_connections WHERE user_id = $1 AND provider = 'bluebutton'`, [user.userId]),
+      query(`DELETE FROM fhir_cache WHERE user_id = $1`, [user.userId]),
+      query(`DELETE FROM diabetes_snapshots WHERE user_id = $1`, [user.userId]),
+      query(`DELETE FROM diabetes_insights WHERE user_id = $1`, [user.userId]),
     ]);
 
     logAudit("FHIR_DISCONNECT", {
-      userId: user.id,
+      userId: user.userId,
       resourceType: "ehr_connection",
       metadata: { provider: "bluebutton" },
     }).catch(() => {});

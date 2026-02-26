@@ -15,7 +15,7 @@
  * 5. User Behavior - Optimize UX (user_events)
  */
 
-import { createAdminClient } from "./supabase-admin";
+import { query } from "./db";
 import {
   CONFIDENCE_CONFIG,
   FEEDBACK_CONFIG,
@@ -262,29 +262,18 @@ export async function updateSymptomMapping(
   icd10Description: string,
   boost: number = FEEDBACK_CONFIG.positiveBoost
 ): Promise<void> {
-  const supabase = createAdminClient();
-
   try {
-    // Use RPC function if available, otherwise direct upsert
-    const { error } = await supabase.rpc("update_symptom_mapping", {
-      p_phrase: phrase.toLowerCase().trim(),
-      p_icd10_code: icd10Code,
-      p_icd10_description: icd10Description,
-      p_boost: boost,
-    });
-
-    if (error) {
-      // Fallback to direct upsert if RPC doesn't exist
-      console.warn("RPC not available, using direct upsert:", error.message);
-      await directUpdateSymptomMapping(
-        phrase,
-        icd10Code,
-        icd10Description,
-        boost
-      );
-    }
+    // Try RPC first
+    await query("SELECT update_symptom_mapping($1, $2, $3, $4)", [
+      phrase.toLowerCase().trim(),
+      icd10Code,
+      icd10Description,
+      boost,
+    ]);
   } catch (err) {
-    console.error("Failed to update symptom mapping:", err);
+    // Fallback to direct upsert if RPC doesn't exist
+    console.warn("RPC not available, using direct upsert:", err);
+    await directUpdateSymptomMapping(phrase, icd10Code, icd10Description, boost);
   }
 }
 
@@ -297,38 +286,25 @@ async function directUpdateSymptomMapping(
   icd10Description: string,
   boost: number
 ): Promise<void> {
-  const supabase = createAdminClient();
   const normalizedPhrase = phrase.toLowerCase().trim();
 
-  // Check if mapping exists
-  const { data: existing } = await supabase
-    .from("symptom_mappings")
-    .select("*")
-    .eq("phrase", normalizedPhrase)
-    .eq("icd10_code", icd10Code)
-    .single();
+  const existingResult = await query<{ id: string; confidence: number; use_count: number }>(
+    `SELECT id, confidence, use_count FROM symptom_mappings WHERE phrase = $1 AND icd10_code = $2 LIMIT 1`,
+    [normalizedPhrase, icd10Code]
+  );
+  const existing = existingResult.rows[0];
 
   if (existing) {
-    // Update existing
-    const newConfidence = Math.min(1, existing.confidence + boost);
-    await supabase
-      .from("symptom_mappings")
-      .update({
-        confidence: newConfidence,
-        use_count: existing.use_count + 1,
-        last_used_at: new Date().toISOString(),
-      })
-      .eq("id", existing.id);
+    await query(
+      `UPDATE symptom_mappings SET confidence = $1, use_count = $2, last_used_at = $3 WHERE id = $4`,
+      [Math.min(1, existing.confidence + boost), existing.use_count + 1, new Date().toISOString(), existing.id]
+    );
   } else {
-    // Insert new
-    await supabase.from("symptom_mappings").insert({
-      phrase: normalizedPhrase,
-      icd10_code: icd10Code,
-      icd10_description: icd10Description,
-      confidence: CONFIDENCE_CONFIG.initial + boost,
-      use_count: 1,
-      last_used_at: new Date().toISOString(),
-    });
+    await query(
+      `INSERT INTO symptom_mappings (phrase, icd10_code, icd10_description, confidence, use_count, last_used_at)
+       VALUES ($1, $2, $3, $4, 1, $5)`,
+      [normalizedPhrase, icd10Code, icd10Description, CONFIDENCE_CONFIG.initial + boost, new Date().toISOString()]
+    );
   }
 }
 
@@ -341,22 +317,16 @@ export async function updateProcedureMapping(
   cptDescription: string,
   boost: number = FEEDBACK_CONFIG.positiveBoost
 ): Promise<void> {
-  const supabase = createAdminClient();
-
   try {
-    const { error } = await supabase.rpc("update_procedure_mapping", {
-      p_phrase: phrase.toLowerCase().trim(),
-      p_cpt_code: cptCode,
-      p_cpt_description: cptDescription,
-      p_boost: boost,
-    });
-
-    if (error) {
-      console.warn("RPC not available, using direct upsert:", error.message);
-      await directUpdateProcedureMapping(phrase, cptCode, cptDescription, boost);
-    }
+    await query("SELECT update_procedure_mapping($1, $2, $3, $4)", [
+      phrase.toLowerCase().trim(),
+      cptCode,
+      cptDescription,
+      boost,
+    ]);
   } catch (err) {
-    console.error("Failed to update procedure mapping:", err);
+    console.warn("RPC not available, using direct upsert:", err);
+    await directUpdateProcedureMapping(phrase, cptCode, cptDescription, boost);
   }
 }
 
@@ -369,35 +339,25 @@ async function directUpdateProcedureMapping(
   cptDescription: string,
   boost: number
 ): Promise<void> {
-  const supabase = createAdminClient();
   const normalizedPhrase = phrase.toLowerCase().trim();
 
-  const { data: existing } = await supabase
-    .from("procedure_mappings")
-    .select("*")
-    .eq("phrase", normalizedPhrase)
-    .eq("cpt_code", cptCode)
-    .single();
+  const existingResult = await query<{ id: string; confidence: number; use_count: number }>(
+    `SELECT id, confidence, use_count FROM procedure_mappings WHERE phrase = $1 AND cpt_code = $2 LIMIT 1`,
+    [normalizedPhrase, cptCode]
+  );
+  const existing = existingResult.rows[0];
 
   if (existing) {
-    const newConfidence = Math.min(1, existing.confidence + boost);
-    await supabase
-      .from("procedure_mappings")
-      .update({
-        confidence: newConfidence,
-        use_count: existing.use_count + 1,
-        last_used_at: new Date().toISOString(),
-      })
-      .eq("id", existing.id);
+    await query(
+      `UPDATE procedure_mappings SET confidence = $1, use_count = $2, last_used_at = $3 WHERE id = $4`,
+      [Math.min(1, existing.confidence + boost), existing.use_count + 1, new Date().toISOString(), existing.id]
+    );
   } else {
-    await supabase.from("procedure_mappings").insert({
-      phrase: normalizedPhrase,
-      cpt_code: cptCode,
-      cpt_description: cptDescription,
-      confidence: CONFIDENCE_CONFIG.initial + boost,
-      use_count: 1,
-      last_used_at: new Date().toISOString(),
-    });
+    await query(
+      `INSERT INTO procedure_mappings (phrase, cpt_code, cpt_description, confidence, use_count, last_used_at)
+       VALUES ($1, $2, $3, $4, 1, $5)`,
+      [normalizedPhrase, cptCode, cptDescription, CONFIDENCE_CONFIG.initial + boost, new Date().toISOString()]
+    );
   }
 }
 
@@ -411,40 +371,38 @@ export async function recordCoveragePath(
   outcome: "approved" | "denied" | "pending",
   documentationRequired?: string[]
 ): Promise<void> {
-  const supabase = createAdminClient();
-
   try {
-    const { data: existing } = await supabase
-      .from("coverage_paths")
-      .select("*")
-      .eq("cpt_code", cptCode)
-      .eq("icd10_code", icd10Code)
-      .single();
+    const existingResult = await query<{ id: string; use_count: number }>(
+      `SELECT id, use_count FROM coverage_paths WHERE cpt_code = $1 AND icd10_code = $2 LIMIT 1`,
+      [cptCode, icd10Code]
+    );
+    const existing = existingResult.rows[0];
 
     if (existing) {
-      const updates: Record<string, unknown> = {
-        outcome,
-        use_count: existing.use_count + 1,
-        last_used_at: new Date().toISOString(),
-      };
-
+      const params: unknown[] = [outcome, existing.use_count + 1, new Date().toISOString(), existing.id];
+      let sql = `UPDATE coverage_paths SET outcome = $1, use_count = $2, last_used_at = $3`;
       if (documentationRequired) {
-        updates.documentation_required = documentationRequired;
+        sql += `, documentation_required = $5`;
+        params.push(JSON.stringify(documentationRequired));
       }
-
-      await supabase.from("coverage_paths").update(updates).eq("id", existing.id);
+      sql += ` WHERE id = $4`;
+      await query(sql, params);
     } else {
-      await supabase.from("coverage_paths").insert({
-        icd10_code: icd10Code,
-        cpt_code: cptCode,
-        ncd_id: policyRefs.ncdId || null,
-        lcd_id: policyRefs.lcdId || null,
-        contractor_id: policyRefs.contractorId || null,
-        documentation_required: documentationRequired || null,
-        outcome,
-        use_count: 1,
-        last_used_at: new Date().toISOString(),
-      });
+      await query(
+        `INSERT INTO coverage_paths
+           (icd10_code, cpt_code, ncd_id, lcd_id, contractor_id, documentation_required, outcome, use_count, last_used_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8)`,
+        [
+          icd10Code,
+          cptCode,
+          policyRefs.ncdId ?? null,
+          policyRefs.lcdId ?? null,
+          policyRefs.contractorId ?? null,
+          documentationRequired ? JSON.stringify(documentationRequired) : null,
+          outcome,
+          new Date().toISOString(),
+        ]
+      );
     }
   } catch (err) {
     console.error("Failed to record coverage path:", err);
@@ -489,14 +447,11 @@ export async function processFeedback(
 
   // Store the correction for manual review if provided
   if (correction && rating === "down") {
-    const supabase = createAdminClient();
-    await supabase.from("user_feedback").insert({
-      message_id: messageId,
-      rating,
-      correction,
-      context: conversationContext,
-      created_at: new Date().toISOString(),
-    });
+    await query(
+      `INSERT INTO user_feedback (message_id, rating, correction, context, created_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [messageId, rating, correction, JSON.stringify(conversationContext), new Date().toISOString()]
+    );
   }
 }
 
@@ -507,31 +462,39 @@ export async function getSymptomMappings(
   phrase: string,
   minConfidence: number = CONFIDENCE_CONFIG.minForPrompt
 ): Promise<SymptomMapping[]> {
-  const supabase = createAdminClient();
   const normalizedPhrase = phrase.toLowerCase().trim();
 
-  const { data, error } = await supabase
-    .from("symptom_mappings")
-    .select("*")
-    .ilike("phrase", `%${normalizedPhrase}%`)
-    .gte("confidence", minConfidence)
-    .order("confidence", { ascending: false })
-    .limit(5);
+  try {
+    const result = await query<{
+      id: string;
+      phrase: string;
+      icd10_code: string;
+      icd10_description: string | null;
+      confidence: number;
+      use_count: number;
+      last_used_at: string;
+    }>(
+      `SELECT id, phrase, icd10_code, icd10_description, confidence, use_count, last_used_at
+       FROM symptom_mappings
+       WHERE phrase ILIKE $1 AND confidence >= $2
+       ORDER BY confidence DESC
+       LIMIT 5`,
+      [`%${normalizedPhrase}%`, minConfidence]
+    );
 
-  if (error) {
-    console.error("Failed to get symptom mappings:", error);
+    return result.rows.map((row) => ({
+      id: row.id,
+      phrase: row.phrase,
+      icd10Code: row.icd10_code,
+      icd10Description: row.icd10_description || "",
+      confidence: row.confidence,
+      useCount: row.use_count,
+      lastUsed: new Date(row.last_used_at),
+    }));
+  } catch (err) {
+    console.error("Failed to get symptom mappings:", err);
     return [];
   }
-
-  return (data || []).map((row) => ({
-    id: row.id,
-    phrase: row.phrase,
-    icd10Code: row.icd10_code,
-    icd10Description: row.icd10_description || "",
-    confidence: row.confidence,
-    useCount: row.use_count,
-    lastUsed: new Date(row.last_used_at),
-  }));
 }
 
 /**
@@ -541,31 +504,39 @@ export async function getProcedureMappings(
   phrase: string,
   minConfidence: number = CONFIDENCE_CONFIG.minForPrompt
 ): Promise<ProcedureMapping[]> {
-  const supabase = createAdminClient();
   const normalizedPhrase = phrase.toLowerCase().trim();
 
-  const { data, error } = await supabase
-    .from("procedure_mappings")
-    .select("*")
-    .ilike("phrase", `%${normalizedPhrase}%`)
-    .gte("confidence", minConfidence)
-    .order("confidence", { ascending: false })
-    .limit(5);
+  try {
+    const result = await query<{
+      id: string;
+      phrase: string;
+      cpt_code: string;
+      cpt_description: string | null;
+      confidence: number;
+      use_count: number;
+      last_used_at: string;
+    }>(
+      `SELECT id, phrase, cpt_code, cpt_description, confidence, use_count, last_used_at
+       FROM procedure_mappings
+       WHERE phrase ILIKE $1 AND confidence >= $2
+       ORDER BY confidence DESC
+       LIMIT 5`,
+      [`%${normalizedPhrase}%`, minConfidence]
+    );
 
-  if (error) {
-    console.error("Failed to get procedure mappings:", error);
+    return result.rows.map((row) => ({
+      id: row.id,
+      phrase: row.phrase,
+      cptCode: row.cpt_code,
+      cptDescription: row.cpt_description || "",
+      confidence: row.confidence,
+      useCount: row.use_count,
+      lastUsed: new Date(row.last_used_at),
+    }));
+  } catch (err) {
+    console.error("Failed to get procedure mappings:", err);
     return [];
   }
-
-  return (data || []).map((row) => ({
-    id: row.id,
-    phrase: row.phrase,
-    cptCode: row.cpt_code,
-    cptDescription: row.cpt_description || "",
-    confidence: row.confidence,
-    useCount: row.use_count,
-    lastUsed: new Date(row.last_used_at),
-  }));
 }
 
 /**
@@ -574,33 +545,45 @@ export async function getProcedureMappings(
 export async function getSuccessfulCoveragePaths(
   cptCode: string
 ): Promise<CoveragePath[]> {
-  const supabase = createAdminClient();
+  try {
+    const result = await query<{
+      id: string;
+      icd10_code: string;
+      cpt_code: string;
+      ncd_id: string | null;
+      lcd_id: string | null;
+      contractor_id: string | null;
+      documentation_required: unknown;
+      outcome: string;
+      use_count: number;
+      last_used_at: string;
+    }>(
+      `SELECT id, icd10_code, cpt_code, ncd_id, lcd_id, contractor_id, documentation_required, outcome, use_count, last_used_at
+       FROM coverage_paths
+       WHERE cpt_code = $1 AND outcome = 'approved'
+       ORDER BY use_count DESC
+       LIMIT 10`,
+      [cptCode]
+    );
 
-  const { data, error } = await supabase
-    .from("coverage_paths")
-    .select("*")
-    .eq("cpt_code", cptCode)
-    .eq("outcome", "approved")
-    .order("use_count", { ascending: false })
-    .limit(10);
-
-  if (error) {
-    console.error("Failed to get coverage paths:", error);
+    return result.rows.map((row) => ({
+      id: row.id,
+      icd10Code: row.icd10_code,
+      cptCode: row.cpt_code,
+      ncdId: row.ncd_id,
+      lcdId: row.lcd_id,
+      contractorId: row.contractor_id,
+      documentationRequired: Array.isArray(row.documentation_required)
+        ? (row.documentation_required as string[])
+        : [],
+      outcome: row.outcome,
+      useCount: row.use_count,
+      lastUsedAt: new Date(row.last_used_at),
+    }));
+  } catch (err) {
+    console.error("Failed to get coverage paths:", err);
     return [];
   }
-
-  return (data || []).map((row) => ({
-    id: row.id,
-    icd10Code: row.icd10_code,
-    cptCode: row.cpt_code,
-    ncdId: row.ncd_id,
-    lcdId: row.lcd_id,
-    contractorId: row.contractor_id,
-    documentationRequired: row.documentation_required || [],
-    outcome: row.outcome,
-    useCount: row.use_count,
-    lastUsedAt: new Date(row.last_used_at),
-  }));
 }
 
 /**
@@ -637,18 +620,15 @@ export async function getLearningContext(
   }
 
   // Get recent denials from coverage paths
-  const supabase = createAdminClient();
-  const { data: denials } = await supabase
-    .from("coverage_paths")
-    .select("cpt_code, icd10_code")
-    .eq("outcome", "denied")
-    .order("last_used_at", { ascending: false })
-    .limit(5);
-
-  if (denials) {
-    context.recentDenials = denials.map(
+  try {
+    const denialsResult = await query<{ cpt_code: string; icd10_code: string }>(
+      `SELECT cpt_code, icd10_code FROM coverage_paths WHERE outcome = 'denied' ORDER BY last_used_at DESC LIMIT 5`
+    );
+    context.recentDenials = denialsResult.rows.map(
       (d) => `${d.cpt_code} with ${d.icd10_code}`
     );
+  } catch (err) {
+    console.error("Failed to get recent denials:", err);
   }
 
   return context;
@@ -718,14 +698,11 @@ export async function queueLearningJob(
   jobType: "extract_entities" | "update_mappings" | "analyze_patterns",
   jobData: Record<string, unknown>
 ): Promise<void> {
-  const supabase = createAdminClient();
-
   try {
-    await supabase.from("learning_queue").insert({
-      job_type: jobType,
-      job_data: jobData as unknown as Record<string, never>,
-      status: "pending",
-    });
+    await query(
+      `INSERT INTO learning_queue (job_type, job_data, status) VALUES ($1, $2, 'pending')`,
+      [jobType, JSON.stringify(jobData)]
+    );
   } catch (err) {
     console.error("Failed to queue learning job:", err);
   }
@@ -738,42 +715,33 @@ export async function pruneLowConfidenceMappings(
   minConfidence: number = CONFIDENCE_CONFIG.minBeforePrune,
   maxAge: number = PRUNING_CONFIG.maxAgeDays
 ): Promise<{ symptoms: number; procedures: number }> {
-  const supabase = createAdminClient();
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - maxAge);
+  const cutoffIso = cutoffDate.toISOString();
 
-  // Count before delete for symptoms
-  const { count: symptomCount } = await supabase
-    .from("symptom_mappings")
-    .select("*", { count: "exact", head: true })
-    .lt("confidence", minConfidence)
-    .lt("last_used_at", cutoffDate.toISOString());
+  // Count + delete symptoms
+  const symptomCountResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM symptom_mappings WHERE confidence < $1 AND last_used_at < $2`,
+    [minConfidence, cutoffIso]
+  );
+  const symptomCount = parseInt(symptomCountResult.rows[0]?.count ?? "0");
+  await query(
+    `DELETE FROM symptom_mappings WHERE confidence < $1 AND last_used_at < $2`,
+    [minConfidence, cutoffIso]
+  );
 
-  // Delete symptoms
-  await supabase
-    .from("symptom_mappings")
-    .delete()
-    .lt("confidence", minConfidence)
-    .lt("last_used_at", cutoffDate.toISOString());
+  // Count + delete procedures
+  const procedureCountResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM procedure_mappings WHERE confidence < $1 AND last_used_at < $2`,
+    [minConfidence, cutoffIso]
+  );
+  const procedureCount = parseInt(procedureCountResult.rows[0]?.count ?? "0");
+  await query(
+    `DELETE FROM procedure_mappings WHERE confidence < $1 AND last_used_at < $2`,
+    [minConfidence, cutoffIso]
+  );
 
-  // Count before delete for procedures
-  const { count: procedureCount } = await supabase
-    .from("procedure_mappings")
-    .select("*", { count: "exact", head: true })
-    .lt("confidence", minConfidence)
-    .lt("last_used_at", cutoffDate.toISOString());
-
-  // Delete procedures
-  await supabase
-    .from("procedure_mappings")
-    .delete()
-    .lt("confidence", minConfidence)
-    .lt("last_used_at", cutoffDate.toISOString());
-
-  return {
-    symptoms: symptomCount || 0,
-    procedures: procedureCount || 0,
-  };
+  return { symptoms: symptomCount, procedures: procedureCount };
 }
 
 // =============================================================================
@@ -799,26 +767,24 @@ export async function getFlywheelContext(
 ): Promise<FlywheelContext[]> {
   if (!cptCodes.length) return [];
 
-  const supabase = createAdminClient();
+  try {
+    const result = await query<Record<string, unknown>>(
+      `SELECT * FROM get_flywheel_context($1, $2)`,
+      [cptCodes, carcCodes.length > 0 ? carcCodes : []]
+    );
 
-  const { data, error } = await supabase.rpc("get_flywheel_context", {
-    p_cpt_codes: cptCodes,
-    p_carc_codes: carcCodes.length > 0 ? carcCodes : [],
-  });
-
-  if (error) {
-    console.warn("Failed to get flywheel context:", error);
+    return result.rows.map((row) => ({
+      carc_code: String(row.carc_code || ""),
+      total_cases: Number(row.total_cases) || 0,
+      success_rate: Number(row.success_rate) || 0,
+      avg_days: row.avg_days !== null ? Number(row.avg_days) : null,
+      approved: Number(row.approved) || 0,
+      denied: Number(row.denied) || 0,
+    }));
+  } catch (err) {
+    console.warn("Failed to get flywheel context:", err);
     return [];
   }
-
-  return (data || []).map((row: Record<string, unknown>) => ({
-    carc_code: String(row.carc_code || ""),
-    total_cases: Number(row.total_cases) || 0,
-    success_rate: Number(row.success_rate) || 0,
-    avg_days: row.avg_days !== null ? Number(row.avg_days) : null,
-    approved: Number(row.approved) || 0,
-    denied: Number(row.denied) || 0,
-  }));
 }
 
 /**
@@ -866,35 +832,34 @@ Use this data to:
  * Check if user has an unredeemed outcome incentive (reported outcome but no credit yet)
  */
 export async function checkOutcomeIncentive(email: string): Promise<boolean> {
-  const supabase = createAdminClient();
-
-  const { data } = await supabase
-    .from("outcome_followups")
-    .select("id")
-    .eq("email", email)
-    .not("responded_at", "is", null)
-    .eq("incentive_applied", false)
-    .limit(1);
-
-  return (data?.length ?? 0) > 0;
+  try {
+    const result = await query<{ id: string }>(
+      `SELECT id FROM outcome_followups
+       WHERE email = $1 AND responded_at IS NOT NULL AND incentive_applied = false
+       LIMIT 1`,
+      [email]
+    );
+    return result.rows.length > 0;
+  } catch (err) {
+    console.error("Failed to check outcome incentive:", err);
+    return false;
+  }
 }
 
 /**
  * Apply outcome incentive: decrement appeal_count by 1 (gives a free appeal)
  */
 export async function applyOutcomeIncentive(email: string): Promise<boolean> {
-  const supabase = createAdminClient();
-
-  const { data, error } = await supabase.rpc("apply_outcome_incentive", {
-    p_email: email,
-  });
-
-  if (error) {
-    console.error("Failed to apply outcome incentive:", error);
+  try {
+    const result = await query<{ apply_outcome_incentive: boolean }>(
+      `SELECT apply_outcome_incentive($1)`,
+      [email]
+    );
+    return !!result.rows[0]?.apply_outcome_incentive;
+  } catch (err) {
+    console.error("Failed to apply outcome incentive:", err);
     return false;
   }
-
-  return !!data;
 }
 
 /**
@@ -910,70 +875,60 @@ export async function recordAppealOutcome(
     daysToDecision?: number;
   }
 ): Promise<boolean> {
-  const supabase = createAdminClient();
-
   try {
     // Get the appeal to find associated codes
-    const { data: appeal, error: appealError } = await supabase
-      .from("appeals")
-      .select("icd10_codes, cpt_codes, ncd_refs, lcd_refs")
-      .eq("id", appealId)
-      .single();
+    const appealResult = await query<{
+      icd10_codes: string[] | null;
+      cpt_codes: string[] | null;
+      ncd_refs: string[] | null;
+      lcd_refs: string[] | null;
+    }>(
+      `SELECT icd10_codes, cpt_codes, ncd_refs, lcd_refs FROM appeals WHERE id = $1 LIMIT 1`,
+      [appealId]
+    );
+    const appeal = appealResult.rows[0];
 
-    if (appealError || !appeal) {
-      console.error("Failed to get appeal:", appealError);
+    if (!appeal) {
+      console.error("Failed to get appeal:", appealId);
       return false;
     }
 
     // Update the appeal with outcome
-    const { error: updateError } = await supabase
-      .from("appeals")
-      .update({
-        status: outcome === "approved" ? "approved" : outcome === "denied" ? "denied" : "partial",
-        outcome_reported_at: new Date().toISOString(),
-        outcome_details: details,
-      })
-      .eq("id", appealId);
-
-    if (updateError) {
-      console.error("Failed to update appeal:", updateError);
-      return false;
-    }
+    const appealStatus = outcome === "approved" ? "approved" : outcome === "denied" ? "denied" : "partial";
+    await query(
+      `UPDATE appeals SET status = $1, outcome_reported_at = $2, outcome_details = $3 WHERE id = $4`,
+      [appealStatus, new Date().toISOString(), details ? JSON.stringify(details) : null, appealId]
+    );
 
     // Update coverage paths based on outcome
     if (appeal.icd10_codes?.length && appeal.cpt_codes?.length) {
       const icd10 = appeal.icd10_codes[0];
       const cpt = appeal.cpt_codes[0];
 
-      // Find existing coverage path
-      const { data: existing } = await supabase
-        .from("coverage_paths")
-        .select("*")
-        .eq("icd10_code", icd10)
-        .eq("cpt_code", cpt)
-        .single();
+      const existingResult = await query<{ id: string; use_count: number }>(
+        `SELECT id, use_count FROM coverage_paths WHERE icd10_code = $1 AND cpt_code = $2 LIMIT 1`,
+        [icd10, cpt]
+      );
+      const existing = existingResult.rows[0];
 
       if (existing) {
-        // Update with outcome
-        await supabase
-          .from("coverage_paths")
-          .update({
-            outcome: outcome,
-            use_count: existing.use_count + 1,
-            last_used_at: new Date().toISOString(),
-          })
-          .eq("id", existing.id);
+        await query(
+          `UPDATE coverage_paths SET outcome = $1, use_count = $2, last_used_at = $3 WHERE id = $4`,
+          [outcome, existing.use_count + 1, new Date().toISOString(), existing.id]
+        );
       } else {
-        // Create new coverage path
-        await supabase.from("coverage_paths").insert({
-          icd10_code: icd10,
-          cpt_code: cpt,
-          ncd_id: appeal.ncd_refs?.[0] || null,
-          lcd_id: appeal.lcd_refs?.[0] || null,
-          outcome: outcome,
-          use_count: 1,
-          last_used_at: new Date().toISOString(),
-        });
+        await query(
+          `INSERT INTO coverage_paths (icd10_code, cpt_code, ncd_id, lcd_id, outcome, use_count, last_used_at)
+           VALUES ($1, $2, $3, $4, $5, 1, $6)`,
+          [
+            icd10,
+            cpt,
+            appeal.ncd_refs?.[0] ?? null,
+            appeal.lcd_refs?.[0] ?? null,
+            outcome,
+            new Date().toISOString(),
+          ]
+        );
       }
     }
 

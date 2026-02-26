@@ -3,10 +3,10 @@
  *
  * Appends diabetes-relevant lab results from FHIR to the
  * diabetes_snapshots table for trend tracking.
- * Uses admin client (bypasses RLS). Fire-and-forget.
+ * Uses RDS PostgreSQL via query(). Fire-and-forget.
  */
 
-import { createAdminClient } from "@/lib/supabase-admin";
+import { query } from "@/lib/db";
 import type { LabResult } from "./transforms";
 
 /**
@@ -31,7 +31,7 @@ export async function appendDiabetesSnapshots(
   labs: LabResult[]
 ): Promise<void> {
   const rows = labs
-    .filter((l) => l.loincCode) // Only labs with LOINC codes
+    .filter((l) => l.loincCode)
     .map((l) => {
       const observedDate = parseLabDate(l.date);
       if (!observedDate) return null;
@@ -49,12 +49,14 @@ export async function appendDiabetesSnapshots(
 
   if (rows.length === 0) return;
 
-  const admin = createAdminClient();
-  const { error } = await admin
-    .from("diabetes_snapshots")
-    .upsert(rows, { onConflict: "user_id,loinc_code,observed_date", ignoreDuplicates: true });
-
-  if (error) {
-    console.warn("[Snapshots] Append failed:", error.message);
-  }
+  await Promise.all(
+    rows.map((row) =>
+      query(
+        `INSERT INTO diabetes_snapshots (user_id, loinc_code, lab_name, value, unit, observed_date, source)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (user_id, loinc_code, observed_date) DO NOTHING`,
+        [row.user_id, row.loinc_code, row.lab_name, row.value, row.unit, row.observed_date, row.source]
+      ).catch((err: Error) => console.warn("[Snapshots] Insert failed:", err.message))
+    )
+  );
 }

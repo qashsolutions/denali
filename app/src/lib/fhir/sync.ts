@@ -1,15 +1,13 @@
 /**
  * Health Data Sync
  *
- * Orchestrates fetching from Blue Button → transform → cache in Supabase.
+ * Orchestrates fetching from Blue Button → transform → cache in RDS PostgreSQL.
  * Health page + chat read from fhir_cache, never call CMS API directly.
  */
 
-import { createAdminClient } from "@/lib/supabase-admin";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { query } from "@/lib/db";
 import { getValidToken } from "./tokens";
 import { fhirGet, fhirGetBundle } from "./client";
-import type { Json } from "@/types/database";
 import {
   transformPatient,
   transformCoverage,
@@ -45,6 +43,15 @@ export interface HealthData {
   lastSynced: string | null;
 }
 
+const UPSERT_FHIR_CACHE = `
+  INSERT INTO fhir_cache (user_id, resource_type, data, cached_at, expires_at)
+  VALUES ($1, $2, $3, $4, $5)
+  ON CONFLICT (user_id, resource_type) DO UPDATE
+    SET data = EXCLUDED.data,
+        cached_at = EXCLUDED.cached_at,
+        expires_at = EXCLUDED.expires_at
+`;
+
 /**
  * Fetch fresh data from Blue Button, transform, and cache.
  */
@@ -55,12 +62,9 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
   }
 
   const { accessToken, fhirPatientId } = tokenPair;
-  const admin = createAdminClient();
   const now = new Date().toISOString();
 
   // Blue Button 2.0 only provides Patient, Coverage, and ExplanationOfBenefit.
-  // Observation, Condition, and MedicationRequest are NOT part of the Blue Button API.
-  // Clinical intelligence is extracted from EOB claims data instead.
   const [patientRaw, coverageRaw, eobsRaw] = await Promise.all([
     fhirPatientId
       ? fhirGet<Record<string, unknown>>(`Patient/${fhirPatientId}`, accessToken)
@@ -82,8 +86,6 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
   const claims = eobsRaw.map((e) => transformEOB(e as any));
 
   // Extract clinical intelligence from EOB claims
-  // Blue Button doesn't provide Observation/Condition/MedicationRequest,
-  // but EOB claims contain ICD-10 diagnoses and Part D drug names.
   const labs: LabResult[] = []; // No lab values available from EOBs
   const conditions = extractConditionsFromClaims(claims);
   const medications = extractMedicationsFromClaims(claims);
@@ -94,67 +96,41 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
   // Cache transformed data
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   await Promise.all([
-    admin.from("fhir_cache").upsert(
-      { user_id: userId, resource_type: "patient", data: patient as unknown as Json, cached_at: now, expires_at: expires },
-      { onConflict: "user_id,resource_type" }
-    ),
-    admin.from("fhir_cache").upsert(
-      { user_id: userId, resource_type: "coverage", data: coverage as unknown as Json, cached_at: now, expires_at: expires },
-      { onConflict: "user_id,resource_type" }
-    ),
-    admin.from("fhir_cache").upsert(
-      { user_id: userId, resource_type: "eob", data: claims as unknown as Json, cached_at: now, expires_at: expires },
-      { onConflict: "user_id,resource_type" }
-    ),
-    admin.from("fhir_cache").upsert(
-      { user_id: userId, resource_type: "conditions", data: conditions as unknown as Json, cached_at: now, expires_at: expires },
-      { onConflict: "user_id,resource_type" }
-    ),
-    admin.from("fhir_cache").upsert(
-      { user_id: userId, resource_type: "medications", data: medications as unknown as Json, cached_at: now, expires_at: expires },
-      { onConflict: "user_id,resource_type" }
-    ),
-    admin.from("fhir_cache").upsert(
-      { user_id: userId, resource_type: "screenings", data: screenings as unknown as Json, cached_at: now, expires_at: expires },
-      { onConflict: "user_id,resource_type" }
-    ),
-    admin.from("fhir_cache").upsert(
-      { user_id: userId, resource_type: "providers", data: providers as unknown as Json, cached_at: now, expires_at: expires },
-      { onConflict: "user_id,resource_type" }
-    ),
-    admin.from("fhir_cache").upsert(
-      { user_id: userId, resource_type: "hospitalizations", data: hospitalizations as unknown as Json, cached_at: now, expires_at: expires },
-      { onConflict: "user_id,resource_type" }
-    ),
+    query(UPSERT_FHIR_CACHE, [userId, "patient", JSON.stringify(patient), now, expires]),
+    query(UPSERT_FHIR_CACHE, [userId, "coverage", JSON.stringify(coverage), now, expires]),
+    query(UPSERT_FHIR_CACHE, [userId, "eob", JSON.stringify(claims), now, expires]),
+    query(UPSERT_FHIR_CACHE, [userId, "conditions", JSON.stringify(conditions), now, expires]),
+    query(UPSERT_FHIR_CACHE, [userId, "medications", JSON.stringify(medications), now, expires]),
+    query(UPSERT_FHIR_CACHE, [userId, "screenings", JSON.stringify(screenings), now, expires]),
+    query(UPSERT_FHIR_CACHE, [userId, "providers", JSON.stringify(providers), now, expires]),
+    query(UPSERT_FHIR_CACHE, [userId, "hospitalizations", JSON.stringify(hospitalizations), now, expires]),
   ]);
 
   // Update last_synced_at on the connection
-  await admin
-    .from("ehr_connections")
-    .update({ last_synced_at: now, updated_at: now })
-    .eq("user_id", userId)
-    .eq("provider", "bluebutton");
+  await query(
+    `UPDATE ehr_connections SET last_synced_at = $1, updated_at = $1
+     WHERE user_id = $2 AND provider = 'bluebutton'`,
+    [now, userId]
+  );
 
   return { patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, lastSynced: now };
 }
 
 /**
- * Read cached health data (uses RLS — call from authenticated context).
+ * Read cached health data from RDS.
  */
 export async function getCachedHealthData(userId: string): Promise<HealthData | null> {
-  const supabase = await createServerSupabaseClient();
+  const result = await query<{ resource_type: string; data: unknown; cached_at: string | null; expires_at: string | null }>(
+    `SELECT resource_type, data, cached_at, expires_at FROM fhir_cache WHERE user_id = $1`,
+    [userId]
+  );
 
-  const { data: rows, error } = await supabase
-    .from("fhir_cache")
-    .select("resource_type, data, cached_at, expires_at")
-    .eq("user_id", userId);
-
-  if (error || !rows || rows.length === 0) return null;
+  if (result.rows.length === 0) return null;
 
   let patient: PatientSummary | null = null;
   let coverage: CoverageSummary[] = [];
   let claims: ClaimSummary[] = [];
-  let labs: LabResult[] = [];
+  const labs: LabResult[] = [];
   let conditions: DiagnosisSummary[] = [];
   let medications: MedicationSummary[] = [];
   let screenings: ScreeningHistory[] = [];
@@ -162,28 +138,30 @@ export async function getCachedHealthData(userId: string): Promise<HealthData | 
   let hospitalizations: HospitalizationSummary[] = [];
   let lastSynced: string | null = null;
 
-  for (const row of rows) {
+  for (const row of result.rows) {
     // Check if cache has expired
     if (row.expires_at && new Date(row.expires_at) < new Date()) continue;
 
+    const data = typeof row.data === "string" ? JSON.parse(row.data) : row.data;
+
     if (row.resource_type === "patient") {
-      patient = row.data as unknown as PatientSummary;
+      patient = data as PatientSummary;
     } else if (row.resource_type === "coverage") {
-      coverage = row.data as unknown as CoverageSummary[];
+      coverage = data as CoverageSummary[];
     } else if (row.resource_type === "eob") {
-      claims = row.data as unknown as ClaimSummary[];
+      claims = data as ClaimSummary[];
     } else if (row.resource_type === "labs") {
-      labs = row.data as unknown as LabResult[];
+      // labs not populated from EOBs but kept for schema compatibility
     } else if (row.resource_type === "conditions") {
-      conditions = row.data as unknown as DiagnosisSummary[];
+      conditions = data as DiagnosisSummary[];
     } else if (row.resource_type === "medications") {
-      medications = row.data as unknown as MedicationSummary[];
+      medications = data as MedicationSummary[];
     } else if (row.resource_type === "screenings") {
-      screenings = row.data as unknown as ScreeningHistory[];
+      screenings = data as ScreeningHistory[];
     } else if (row.resource_type === "providers") {
-      providers = row.data as unknown as ProviderDetail[];
+      providers = data as ProviderDetail[];
     } else if (row.resource_type === "hospitalizations") {
-      hospitalizations = row.data as unknown as HospitalizationSummary[];
+      hospitalizations = data as HospitalizationSummary[];
     }
 
     if (row.cached_at && (!lastSynced || row.cached_at > lastSynced)) {
@@ -195,4 +173,3 @@ export async function getCachedHealthData(userId: string): Promise<HealthData | 
 
   return { patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, lastSynced };
 }
-

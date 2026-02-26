@@ -4,13 +4,13 @@
  * GET /api/audit-log?page=1&limit=20
  *
  * Returns paginated audit log entries for the authenticated user.
- * Uses server-side Supabase client (cookie-authenticated).
+ * Uses Cognito JWT auth + RDS PostgreSQL.
  * IP addresses are masked for privacy (last two octets hidden).
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { createAdminClient } from "@/lib/supabase-admin";
+import { getAuthUser } from "@/lib/auth-server";
+import { query } from "@/lib/db";
 
 const ACTION_LABELS: Record<string, string> = {
   FHIR_CONNECT: "Connected Medicare account",
@@ -48,10 +48,7 @@ function getActionLabel(action: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(request);
 
   if (!user) {
     return NextResponse.json({ authenticated: false, logs: [] });
@@ -62,66 +59,66 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
 
-  // Grouped query: collapse same action+resource_type per day into one row with count
-  // Uses admin client because generated types don't include this RPC yet
-  const admin = createAdminClient();
-  const { data: rows, error } = await admin.rpc("get_grouped_audit_logs" as never, {
-    p_user_id: user.id,
-    p_limit: limit,
-    p_offset: offset,
-  } as never);
+  try {
+    // Try grouped RPC first
+    type GroupedRow = {
+      action: string;
+      resource_type: string | null;
+      ip_address: string | null;
+      latest_at: string;
+      log_date: string;
+      entry_count: number;
+    };
 
-  if (error) {
-    // Fallback: try ungrouped query if RPC doesn't exist yet
-    const { data: logs, error: fallbackError } = await supabase
-      .from("audit_logs")
-      .select("id, action, resource_type, ip_address, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
+    const rpcResult = await query<GroupedRow>(
+      `SELECT * FROM get_grouped_audit_logs($1, $2, $3)`,
+      [user.userId, limit, offset]
+    );
 
-    if (fallbackError) {
-      console.error("[Audit Log API] Error fetching logs:", fallbackError.message);
-      return NextResponse.json({ authenticated: true, logs: [], total: 0, page, hasMore: false });
-    }
-
-    const result = (logs || []).map((log) => ({
-      id: log.id,
-      action: log.action,
-      description: getActionLabel(log.action),
-      resourceType: log.resource_type,
-      createdAt: log.created_at,
-      ipAddress: maskIp(log.ip_address),
-      count: 1,
+    const grouped = rpcResult.rows.map((row) => ({
+      id: `${row.action}-${row.log_date}`,
+      action: row.action,
+      description: getActionLabel(row.action),
+      resourceType: row.resource_type,
+      createdAt: row.latest_at,
+      ipAddress: maskIp(row.ip_address),
+      count: row.entry_count,
     }));
 
-    return NextResponse.json({ authenticated: true, logs: result, total: result.length, page, hasMore: false });
+    return NextResponse.json({
+      authenticated: true,
+      logs: grouped,
+      total: grouped.length,
+      page,
+      hasMore: grouped.length === limit,
+    });
+  } catch {
+    // Fallback: ungrouped query if RPC doesn't exist yet
+    try {
+      type LogRow = { id: string; action: string; resource_type: string | null; ip_address: string | null; created_at: string };
+      const logsResult = await query<LogRow>(
+        `SELECT id, action, resource_type, ip_address, created_at
+         FROM audit_logs
+         WHERE user_id = $1
+         ORDER BY created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [user.userId, limit, offset]
+      );
+
+      const result = logsResult.rows.map((log) => ({
+        id: log.id,
+        action: log.action,
+        description: getActionLabel(log.action),
+        resourceType: log.resource_type,
+        createdAt: log.created_at,
+        ipAddress: maskIp(log.ip_address),
+        count: 1,
+      }));
+
+      return NextResponse.json({ authenticated: true, logs: result, total: result.length, page, hasMore: false });
+    } catch (fallbackError) {
+      console.error("[Audit Log API] Error fetching logs:", fallbackError);
+      return NextResponse.json({ authenticated: true, logs: [], total: 0, page, hasMore: false });
+    }
   }
-
-  type GroupedRow = {
-    action: string;
-    resource_type: string | null;
-    ip_address: string | null;
-    latest_at: string;
-    log_date: string;
-    entry_count: number;
-  };
-
-  const grouped = ((rows as unknown as GroupedRow[]) || []).map((row) => ({
-    id: `${row.action}-${row.log_date}`,
-    action: row.action,
-    description: getActionLabel(row.action),
-    resourceType: row.resource_type,
-    createdAt: row.latest_at,
-    ipAddress: maskIp(row.ip_address),
-    count: row.entry_count,
-  }));
-
-  return NextResponse.json({
-    authenticated: true,
-    logs: grouped,
-    total: grouped.length,
-    page,
-    hasMore: grouped.length === limit,
-  });
 }
