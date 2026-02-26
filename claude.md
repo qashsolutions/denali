@@ -3,24 +3,18 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-26 (AWS migration Phase 2 complete)
+     Last updated: 2026-02-26 (AWS migration Phase 2b complete — all code migrated)
      Maintainer: @cvr
 -->
 
-<!-- ⚠️ AWS MIGRATION IN PROGRESS (branch: aws-migration) — Last updated: 2026-02-26
-     Phase 1 ✅ DONE: All server-side API routes + libs → RDS (query()) + Cognito (getAuthUser())
-     Phase 2 ✅ DONE: Client-side auth → /api/auth/* routes + custom 'auth-state-change' event
-       - useAuth, AppHeader, useConversationHistory, useIdleTimeout all migrated
-       - lib/totp.ts: RFC 6238 TOTP via Node.js crypto (no external dep)
-       - user_verification gains: otp_code, otp_expires_at, totp_secret, totp_enrolled_at
-     Phase 2b ⬜ PENDING: useDiabetesSnapshots + conversation-service.ts
-     Phase 3  ⬜ PENDING: MCP tools → local (ICD-10, CMS Coverage, NPI)
-     BLOCKED (user actions required):
-       1. Cognito App Client: enable ALLOW_ADMIN_USER_PASSWORD_AUTH
-       2. Secrets Manager: add RESEND_API_KEY + RESEND_FROM_EMAIL
-       3. RDS: apply supabase/migrations/20260226_aws_auth_columns.sql
-     See memory/aws-migration.md for full status + next steps.
-     Auth pattern: query() from lib/db.ts, getAuthUser() from lib/auth-server.ts
+<!-- ✅ AWS MIGRATION COMPLETE (branch: aws-migration) — Last updated: 2026-02-26
+     Phase 1 ✅ All server-side API routes + libs → RDS (query()) + Cognito (getAuthUser())
+     Phase 2 ✅ Client-side auth → /api/auth/* routes + custom 'auth-state-change' event
+     Phase 2b ✅ conversation-service.ts + useDiabetesSnapshots → API routes + query()
+     Phase 3  ⬜ MCP tools → local (ICD-10, CMS Coverage, NPI) — post-deploy
+     NEXT: Merge aws-migration → main → GitHub Actions deploys to ECS → test staging.denali.health
+     Auth pattern: getAuthUser() from lib/auth-server.ts (reads Cognito httpOnly cookie)
+     DB pattern: query() from lib/db.ts (pg pool → RDS PostgreSQL)
 -->
 
 <!-- IMPORTANT FOR CLAUDE CODE:
@@ -96,27 +90,26 @@ These cause bugs or bad UX if violated. Read before every coding session.
 
 - Do NOT store: Full names, addresses, SSN, insurance IDs, medical records
 - OK to store: Email, phone (for auth), anonymized phrases, conversation content
-- Account deletion: Cascade delete all user-linked data, cancel Stripe, retain anonymized learning data + audit logs (6-year HIPAA). Admin accounts return 403 — cannot self-delete through the app. `auth.users` record deleted via `admin.auth.admin.deleteUser()` as final step so no login credentials remain in Supabase.
+- Account deletion: Cascade delete all user-linked data, cancel Stripe, retain anonymized learning data + audit logs (6-year HIPAA). Admin accounts return 403 — cannot self-delete through the app. Cognito user deleted via `CognitoIdentityProviderClient.AdminDeleteUser()` as final step so no login credentials remain.
 
 ### Performance & Reliability
 
-- **CRITICAL: Never block UI rendering on database operations.** In `useChat.ts`, `setMessages()` must run IMMEDIATELY after parsing the API response. Database saves (`saveMessage`, `claimConversation`) must be fire-and-forget (`.then()/.catch()`, not `await`). Blocking on Supabase causes the "Thinking..." spinner to hang indefinitely even when the API returns 200.
-- **CRITICAL: Server route creates conversations with `authSupabase`, not browser client.** `route.ts` creates conversations directly using the cookie-authenticated server client (`authSupabase` from `createServerSupabaseClient()`), setting `user_id` at creation time. Never use `getClient()`/`createClient()` (browser client) for DB writes in server route handlers — they have NO auth context server-side, so `auth.uid()` is always NULL, causing RLS to insert `user_id=NULL`. Client-side `claimConversation()` exists as a fallback but is unreliable. Message saves (`saveMessage`) are fire-and-forget after conversation creation.
-- **CRITICAL: Auth detection pattern — follow AppHeader, not ad-hoc.** The canonical pattern for detecting auth in client hooks is in `AppHeader.tsx`. Three rules MUST be followed:
-  1. **Use `onAuthStateChange` without event-type filtering.** Check `session?.user` existence, NOT the event name. Supabase fires `INITIAL_SESSION` on subscribe with the current session — filtering for only `SIGNED_IN`/`TOKEN_REFRESHED` misses this event, causing auth-dependent UI to stay stuck in "not signed in" state.
-  2. **Set UI state immediately from the session object, then fetch DB data non-blocking.** Never block on profile/plan/MFA/usage queries before showing the signed-in UI. In `useAuth.ts`, `setBasicAuth()` sets email+userId+isLoading=false instantly; `loadProfileData()` enhances with plan/trial/MFA afterward. Blocking on DB queries causes the Settings "Checking account..." spinner to hang.
-  3. **Use `getClient()` singleton, not `createClient()`.** `createClient()` may return a new reference each render, destabilizing `useEffect` dependency arrays. `getClient()` caches one instance. This applies to ALL client-side Supabase callers — hooks AND service modules (e.g., `conversation-service.ts`). Using `createClient()` in `claimConversation()` caused conversations to stay unclaimed (`user_id=NULL`) because the new client instance didn't always carry the auth session.
-  - **DO:** `(_event, session) => { if (session?.user) { handleSignedIn(session.user); } else { handleSignedOut(); } }`
-  - **DON'T:** `(event, session) => { if (event === "SIGNED_IN") { ... } }` — misses `INITIAL_SESSION`
-  - **DON'T:** `await getSession()` as the sole auth check — cookies may not be parsed yet on mount
-  - **DON'T:** `import { createClient } from "./supabase"` in client-side service modules — use `getClient()` to share the authenticated session
-- **Timeout guards on pre-Claude async calls**: `route.ts` uses `withFallback()` for non-critical Supabase queries before the Claude API call (e.g., `getUnreportedOutcome` at 5s, `buildSystemPromptWithLearning` at 10s). Falls back to defaults on timeout instead of blocking.
+- **CRITICAL: Never block UI rendering on database operations.** In `useChat.ts`, `setMessages()` must run IMMEDIATELY after parsing the API response. Database saves and `claimConversation()` must be fire-and-forget (`.then()/.catch()`, not `await`). Blocking causes the "Thinking..." spinner to hang indefinitely even when the API returns 200.
+- **CRITICAL: Server route creates conversations using `query()`, not client-side code.** `route.ts` creates conversations directly via `query()` (RDS), setting `user_id = authUser.userId` at creation time. Never do DB writes in client hooks. `claimConversation()` in `conversation-service.ts` calls `POST /api/conversations/claim` which calls the `claim_conversation()` RDS function with the explicit `p_user_id` param (no `auth.uid()` — RDS has no RLS).
+- **CRITICAL: Auth detection pattern — custom event, not Supabase.** Client auth uses a custom DOM event: `window.dispatchEvent(new CustomEvent('auth-state-change', { detail: user|null }))`. All auth-dependent hooks (`AppHeader`, `useConversationHistory`, `useIdleTimeout`) listen to this event via `addEventListener('auth-state-change', handler)`. Rules:
+  1. **`useAuth.ts` dispatches on verify success and signOut.** On mount, call `GET /api/profile` to restore session from httpOnly cookie — do NOT block UI on this.
+  2. **Set UI state immediately, then fetch DB data non-blocking.** `setBasicAuth()` sets email+userId+isLoading=false instantly; `loadProfileData()` enhances with plan/trial/MFA afterward.
+  3. **No Supabase client in browser at all.** `lib/supabase.ts` exists but is unused. All data flows through API routes. No singleton, no `getClient()`.
+  - **DO:** `window.addEventListener('auth-state-change', (e) => { const user = (e as CustomEvent).detail; ... })`
+  - **DON'T:** `supabase.auth.onAuthStateChange(...)` — Supabase is not the auth provider
+  - **DON'T:** Any direct DB calls from client components — always go through `/api/*` routes
+- **Timeout guards on pre-Claude async calls**: `route.ts` uses `withFallback()` for non-critical RDS queries before the Claude API call (e.g., `getUnreportedOutcome` at 5s, `buildSystemPromptWithLearning` at 10s). Falls back to defaults on timeout instead of blocking.
 - **AbortController for Claude API**: `withTimeout()` in `claude.ts` uses `AbortController` to truly cancel hung requests (not just `Promise.race`). 60s per iteration for Sonnet, 120s for Opus.
-- **CRITICAL: Supabase SSR middleware is required.** `src/middleware.ts` refreshes auth tokens on every request, preventing the refresh token race condition between browser and server Supabase clients. Without it, both clients independently try to refresh the same expired token — one wins (`token_refreshed`), the other gets `token_revoked` and loses its session permanently. The middleware refreshes ONCE via `supabase.auth.getUser()` and writes updated cookies to the response.
-- **CRITICAL: Never use browser Supabase client for data fetching.** Browser `getClient()` + `.from("table").select()` fails when tokens are stale (even with middleware, there are edge cases). Always fetch data via server API routes using `createServerSupabaseClient()` (cookie-authenticated). Pattern: client calls `fetch("/api/route")` → server route uses `createServerSupabaseClient()` → returns JSON. Examples: `useConversationHistory` → `/api/conversations`, `useHealthData` → `/api/fhir/data`, `useAuth`/`AppHeader` → `/api/profile`.
+- **CRITICAL: `src/middleware.ts` refreshes Cognito tokens.** On every request, middleware calls `GET /api/auth/refresh` if `access_token` cookie is expired, then sets fresh cookies. Prevents 401s mid-session. Without it, expired access tokens cause all API routes to return 401 silently.
+- **CRITICAL: Never call RDS from client-side code.** All data access goes through API routes. Pattern: client calls `fetch("/api/route", { credentials: "include" })` → server route calls `getAuthUser(request)` + `query()` → returns JSON. Examples: `useConversationHistory` → `/api/conversations`, `useHealthData` → `/api/fhir/data`, `useAuth` → `/api/profile`, `loadConversation()` → `/api/conversations/[id]`.
 - **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
 - **CRITICAL: SSR-safe hooks must initialize with server-matching values.** `useOnlineStatus` must use `useState(true)` — NOT `useState(typeof navigator !== "undefined" ? navigator.onLine : true)`. The latter reads `navigator.onLine` on the client during hydration, which may return `false` (flaky connection, SW cached page), causing React hydration mismatch (#418) because the server rendered `null` but the client renders a div.
-- **MCP servers are NOT testable via curl/HTTP.** MCP protocol is handled internally by the Anthropic API. Use Claude.ai to verify MCP server health.
+- **MCP servers run via Anthropic Beta API (direct), not Bedrock.** The app uses `ANTHROPIC_API_KEY` + `claude.beta.messages.create()` with `mcp_servers`. Bedrock does not support MCP. Do not switch the AI layer to Bedrock.
 
 ---
 
@@ -130,8 +123,8 @@ Where to find specific logic in the codebase.
 | `src/lib/claude.ts` | Claude API client. MCP server config, Beta API call, tool-use loop, SessionState type |
 | `src/lib/tools/index.ts` | All 12 local tool definitions + executors (search_cpt, lookup_denial_code, generate_appeal_letter, etc.) |
 | `src/lib/skills-loader.ts` | Conditional prompt builder. Loads skill sections based on SkillTriggers (onboarding, symptom gathering, coverage, appeal, etc.) |
-| `src/lib/denial-patterns.ts` | Async Supabase queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
-| `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via admin client (bypasses RLS). Non-blocking fire-and-forget. Write-side dedup: `FHIR_DATA_ACCESS` skips insert if same user+action logged within 2h (`DEDUP_WINDOWS` map) |
+| `src/lib/denial-patterns.ts` | Async RDS queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
+| `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via `query()` (admin DB user, bypasses no RLS — RDS has none). Non-blocking fire-and-forget. Write-side dedup: `FHIR_DATA_ACCESS` skips insert if same user+action logged within 2h (`DEDUP_WINDOWS` map) |
 | `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformEOB()` extracts PDE info/careTeam/POS/inpatient fields + `classifyDiabetesStatus()`), `eob-clinical.ts` (clinical extraction pipeline — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 8 resource types), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
 | `src/lib/diabetes-insights.ts` | Claude-powered diabetes insight generation. `generateDiabetesInsight(data)` calls Sonnet for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls |
 | `src/components/diabetes/` | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from CPT-based `ScreeningHistory[]`), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up, med refill gaps, specialty gaps, post-discharge follow-up), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display) |
@@ -142,7 +135,7 @@ Where to find specific logic in the codebase.
 | `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
 | `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
 | `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
-| `src/hooks/useAuth.ts` | Auth state: email OTP, TOTP MFA enroll/challenge, AAL tracking, plan/role/trial/admin detection, credit-based appeal access gating (`appealCredits`), auto-trial on signup. Profile data fetched from `/api/profile` (server route), NOT browser Supabase client |
+| `src/hooks/useAuth.ts` | Auth state: email OTP via `/api/auth/send-otp`+`verify-otp`, TOTP MFA via `/api/auth/mfa/*`, AAL tracking, plan/role/trial/admin detection, credit-based appeal access gating (`appealCredits`), auto-trial on signup. Dispatches `auth-state-change` custom event. Profile from `/api/profile`. |
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table, gates health data injection |
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations. IndexedDB write-through + offline fallback |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
@@ -150,38 +143,52 @@ Where to find specific logic in the codebase.
 | `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade + credit add), `handleSubscriptionEvent()` (lifecycle + monthly credit reset). Uses admin client |
 | `src/components/payment/PaywallModal.tsx` | Paywall UI: plan selection (single/monthly), Stripe checkout redirect. CSS variables for theme. No dev bypass |
 | `src/components/appeal/AppealGate.tsx` | Appeal access orchestration: email OTP → TOTP → access check → PaywallModal pipeline |
-| `src/middleware.ts` | Supabase SSR middleware. Refreshes auth tokens on every request to prevent browser/server refresh token race. MUST run before any Supabase client call |
+| `src/middleware.ts` | Cognito JWT middleware. Refreshes `access_token` cookie via `/api/auth/refresh` when expired. MUST run on every request before any `getAuthUser()` call to prevent silent 401s. |
 | `src/lib/offline-cache.ts` | IndexedDB wrapper via `idb`. 6 stores (conversations, health-data, diabetes-log, diabetes-insights, profile, offline-queue). Exports `cacheSet()`, `cacheGet()`, `cacheGetIfFresh()`, `queueOfflineRequest()`, `getOfflineQueue()`, `removeFromQueue()`. TTL constants: profile=4h, everything else=24h |
 | `src/lib/offline-sync.ts` | Client-side offline queue processor. `processQueue()` replays failed POSTs, removes on success, drops after 3 retries. `getQueueCount()` for pending item count |
 | `src/hooks/useOnlineStatus.ts` | SSR-safe hook: always inits `true` (matches SSR), syncs `navigator.onLine` in `useEffect`. Returns `{ isOnline, wasOffline }` |
 | `src/components/ui/OfflineBanner.tsx` | Fixed amber-accent banner below AppHeader when offline. Auto-dismisses on reconnect |
 | `src/hooks/useIdleTimeout.ts` | HIPAA inactivity timeout. Tracks mouse/key/touch/scroll (1s throttle), warns at 13 min, signs out at 15 min. Auth-gated (no-op for anon). Returns `{ showWarning, secondsRemaining, staySignedIn, isAuthenticated }` |
 | `src/components/ui/InactivityWarning.tsx` | Fixed amber-accent banner with countdown + "Stay signed in" button. Same positioning as OfflineBanner. Rendered in root `layout.tsx` |
-| `src/hooks/useConversationHistory.ts` | Chat sidebar history. Fetches from `/api/conversations` (server route, cookie-authenticated) — NOT browser Supabase client. Subscribes to `onAuthStateChange` for re-fetch on sign-in/out. Groups conversations by date. IndexedDB write-through + offline fallback |
-| `src/lib/conversation-service.ts` | Conversation persistence: create, load, claim, save messages, appeals (+ credit decrement), feedback, events. Uses `getClient()` singleton for auth context |
+| `src/hooks/useConversationHistory.ts` | Chat sidebar history. Fetches from `/api/conversations` (cookie-authenticated). Listens to `auth-state-change` custom event for re-fetch on sign-in/out. Groups conversations by date. IndexedDB write-through + offline fallback |
+| `src/lib/conversation-service.ts` | Client-side conversation functions using `fetch()`: `loadConversation()`, `loadAppealsForConversation()`, `claimConversation()`, `submitMessageFeedback()`, `trackEvent()`. No direct DB access. |
+| `src/lib/conversation-server.ts` | Server-side conversation functions using `query()`: `saveAppeal()` (insert + credit decrement + outcome schedule), `getUnreportedOutcome()`. Import only from API routes. |
 | `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date with timestamps. Groups are collapsible — Today/Yesterday/Past Week expand by default; Past Month/Older collapse by default. Click group header to toggle; chevron rotates to show state; count badge visible when collapsed. Refreshes on both new conversation creation AND new chat click (via `useRef` tracking previous conversationId). No sign-in prompt — anon users see "No conversations yet" |
-| `src/types/database.ts` | Supabase-generated TypeScript types. Regenerate with `npx supabase gen types` |
+| `src/types/database.ts` | TypeScript types for DB schema (originally Supabase-generated; still used for type safety on table rows). |
 
 ### API Routes
 
 ```
 src/app/api/
-  chat/route.ts               # Main chat with Claude + tools + MCP
-  conversations/route.ts      # Conversation history (server-side, cookie-auth)
-  profile/route.ts            # User profile: plan, role, is_admin, appeal count + credits (server-side, cookie-auth)
-  appeal-outcome/route.ts     # Record appeal results
-  account/delete/route.ts     # GDPR/CCPA account deletion. 11-step cascade: fhir_cache → ehr_connections → diabetes_* → chat_daily_usage → consent_preferences → user_feedback → messages → appeals → conversations → usage → subscriptions (+ Stripe cancel) → user_events → user_verification → public.users → auth.users. Admin users blocked (403). audit_logs intentionally survive (HIPAA 6-year retention).
-  checkout/route.ts           # Stripe payment
-  consent/route.ts            # Consent preferences (GET/PUT)
-  trial/route.ts              # 14-day trial (GET status / POST start)
-  cms-metadata/route.ts       # Public CMS app directory metadata
+  auth/send-otp/route.ts      # Email OTP initiation (Cognito AdminCreateUser + Resend)
+  auth/verify-otp/route.ts    # OTP verification → sets httpOnly access_token + refresh_token cookies
+  auth/signout/route.ts       # Global sign out + clear cookies
+  auth/refresh/route.ts       # Refresh access_token from refresh_token cookie
+  auth/mfa/enroll|confirm|challenge|unenroll|status  # TOTP MFA (RFC 6238 via lib/totp.ts)
+  chat/route.ts               # Main chat with Claude + tools. Rate limit → skills → Claude → stream SSE
+  conversations/route.ts      # GET conversation history (cookie-auth, RDS)
+  conversations/[id]/route.ts # GET single conversation + messages (anon or owner)
+  conversations/claim/route.ts # POST claim anon conversation for auth user
+  appeals/route.ts            # GET appeals by conversationId
+  feedback/route.ts           # POST message feedback (process_feedback RPC)
+  events/route.ts             # POST track user event (track_user_event RPC)
+  profile/route.ts            # GET user profile: plan, role, is_admin, appeal credits
+  appeal-outcome/route.ts     # POST record appeal result
+  audit-log/route.ts          # GET audit log grouped by action+day
+  account/delete/route.ts     # DELETE cascade: fhir_cache→ehr_connections→diabetes_*→messages→appeals→conversations→usage→subscriptions(+Stripe)→user_events→user_verification→users→Cognito AdminDeleteUser. Admin blocked (403). audit_logs survive (HIPAA 6yr).
+  checkout/route.ts           # POST Stripe checkout session
+  consent/route.ts            # GET/PUT consent preferences
+  trial/route.ts              # GET/POST 14-day trial
+  cms-metadata/route.ts       # GET public CMS app directory metadata
+  health/route.ts             # GET health check (ALB target, returns 200)
   fhir/authorize/route.ts     # Blue Button OAuth initiation (PKCE + state)
   fhir/callback/route.ts      # Blue Button OAuth callback (token exchange)
-  fhir/data/route.ts          # FHIR data retrieval + caching
-  fhir/disconnect/route.ts    # Revoke Blue Button connection
-  diabetes/log/route.ts       # Quick log CRUD (glucose, activity, meal, note)
-  diabetes/insights/route.ts  # AI insights GET/POST (Claude-generated diabetes analysis)
-  webhooks/stripe/route.ts    # Stripe webhook events
+  fhir/data/route.ts          # GET FHIR data (from fhir_cache RDS table)
+  fhir/disconnect/route.ts    # DELETE Blue Button connection
+  diabetes/log/route.ts       # GET/POST/DELETE daily log entries
+  diabetes/insights/route.ts  # GET/POST Claude-generated diabetes analysis
+  diabetes/snapshots/route.ts # GET longitudinal lab history from diabetes_snapshots
+  webhooks/stripe/route.ts    # POST Stripe webhook events
 ```
 
 ---
@@ -189,24 +196,26 @@ src/app/api/
 ## Architecture
 
 ```
-User (Chat UI) ──> Claude Agent (Brain) ──> Tools (APIs + Supabase)
+User (Chat UI) ──> Claude Agent (Brain) ──> Tools (APIs + RDS)
                           │
                           v
-                    Supabase (Memory)
+                    RDS PostgreSQL (Memory)
+                    Cognito (Auth/Sessions)
 ```
 
 - **Frontend is dumb** — just renders what Claude returns
 - All intelligence lives in Claude + skills + tools
 - Domain skills are implemented via Claude tool calling in `/api/chat`, NOT separate edge functions
 - Tools are interchangeable (swap APIs without frontend changes)
+- **No Supabase** — Auth = Cognito + httpOnly cookies. DB = RDS via `query()`. No browser SDK.
 
 ### Two-Tier Tool System
 
-Claude has access to two types of tools, handled differently:
+Claude has access to two types of tools. **MCP servers use the Anthropic Beta API directly** (not Bedrock — Bedrock does not support `mcp_servers`).
 
 | Type | Invoked By | Handled By | Content Block |
 |------|-----------|------------|---------------|
-| **MCP tools** (ICD-10, CMS, NPI) | Claude directly via Beta API | API auto-handles results | `mcp_tool_use` / `mcp_tool_result` |
+| **MCP tools** (ICD-10, CMS, NPI) | Claude directly via Anthropic Beta API | API auto-handles results | `mcp_tool_use` / `mcp_tool_result` |
 | **Local tools** (CPT, CARC/RARC, appeal, etc.) | Claude requests, server executes | `processToolCalls()` in chat loop | `tool_use` / `tool_result` |
 
 ### Session State
@@ -522,20 +531,33 @@ Subscription states: `active` (full access) → `past_due` (retry) → `cancelle
 
 ### Environment Variables
 
+All runtime env vars are stored in **AWS Secrets Manager** and injected by ECS at container start. Build-time vars are GitHub secrets baked into the Docker image.
+
 ```
+# Injected by ECS from Secrets Manager at runtime:
 ANTHROPIC_API_KEY=sk-ant-api03-...
 ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
 ANTHROPIC_APPEAL_MODEL=claude-opus-4-6    # No date suffix — Opus for appeals
-BLUEBUTTON_CLIENT_ID=...          # CMS Blue Button OAuth client ID
-BLUEBUTTON_CLIENT_SECRET=...      # CMS Blue Button OAuth client secret
-BLUEBUTTON_BASE_URL=https://sandbox.bluebutton.cms.gov  # or production URL
-FHIR_TOKEN_ENCRYPTION_KEY=...     # 32-byte hex key for AES-256-GCM token encryption
-STRIPE_SECRET_KEY=sk_...                       # Stripe secret key (sandbox or live)
-STRIPE_WEBHOOK_SECRET=whsec_...                # Stripe webhook signing secret
-STRIPE_PRICE_PAY_PER_CLAIM=price_...           # Stripe Price ID for $10 single appeal
-STRIPE_PRICE_UNLIMITED_MONTHLY=price_...       # Stripe Price ID for $20/month subscription
-STRIPE_PRICE_UNLIMITED_ANNUAL=price_...        # Stripe Price ID for annual plan (reserved)
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...      # Stripe publishable key (client-side, not currently used)
+DATABASE_URL=postgresql://...             # RDS connection string
+COGNITO_USER_POOL_ID=us-east-1_...
+COGNITO_CLIENT_ID=...
+COGNITO_CLIENT_SECRET=...
+AWS_REGION=us-east-1
+RESEND_API_KEY=re_...
+RESEND_FROM_EMAIL=no-reply@denali.health
+BLUEBUTTON_CLIENT_ID=...
+BLUEBUTTON_CLIENT_SECRET=...
+BLUEBUTTON_BASE_URL=https://sandbox.bluebutton.cms.gov
+FHIR_TOKEN_ENCRYPTION_KEY=...             # 32-byte hex key for AES-256-GCM token encryption
+STRIPE_SECRET_KEY=sk_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_PAY_PER_CLAIM=price_...
+STRIPE_PRICE_UNLIMITED_MONTHLY=price_...
+STRIPE_PRICE_UNLIMITED_ANNUAL=price_...
+
+# Baked into Docker image at build time (GitHub secrets):
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
+NEXT_PUBLIC_APP_URL=https://denali.health  # or https://staging.denali.health
 ```
 
 ---
@@ -1028,7 +1050,7 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 | Gap | CMS Ref | Priority | Type |
 |-----|---------|----------|------|
-| **HIPAA compliance** | A6 | **P0** | **AWS migration IN PROGRESS** — AWS BAA signed 2026-02-25 (free, instant). Branch `aws-migration`: server-side done (Phase 1 ✅), client-side auth + MCP tools pending (Phase 2-3). ALB: `denali-alb-1075324152.us-east-1.elb.amazonaws.com`. See `memory/aws-migration.md`. |
+| **HIPAA compliance** | A6 | **P0** | **AWS migration COMPLETE (code)** — All phases done. Merge `aws-migration`→`main` to deploy to ECS. AWS BAA covers RDS+Cognito+ECS (free). Vercel BAA still needed for hosting. Anthropic Enterprise BAA needed for AI layer. ALB: `denali-alb-1075324152.us-east-1.elb.amazonaws.com`. See `memory/aws-migration.md`. |
 | **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
 | **CMS security self-assessment** | A3 | **P0** | Docs — data source inventory + security checklist required for CMS review participation. In-app `/terms` (15 sections, fully compliant) and `/privacy` (16 sections, all CMS BB checklist requirements satisfied 2026-02-24) are complete. Remaining: submit formal security self-assessment document to CMS. |
 | **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct Medicare.gov communication integration |
