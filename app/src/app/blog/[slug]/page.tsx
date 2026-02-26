@@ -11,8 +11,13 @@ interface BlogPostPageProps {
 }
 
 export async function generateStaticParams() {
-  const slugs = await getBlogSlugs();
-  return slugs.map((slug) => ({ slug }));
+  try {
+    const slugs = await getBlogSlugs();
+    return slugs.map((slug) => ({ slug }));
+  } catch {
+    // DB not available at build time (Docker build) — render on-demand via ISR
+    return [];
+  }
 }
 
 export async function generateMetadata({
