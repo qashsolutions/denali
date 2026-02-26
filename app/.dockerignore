@@ -1,0 +1,15 @@
+.git
+.github
+node_modules
+.next
+.env
+.env.*
+!.env.example
+Dockerfile
+.dockerignore
+README.md
+*.test.ts
+*.spec.ts
+e2e/
+coverage/
+.turbo
