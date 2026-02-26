@@ -3,16 +3,24 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-26 (AWS migration in progress)
+     Last updated: 2026-02-26 (AWS migration Phase 2 complete)
      Maintainer: @cvr
 -->
 
-<!-- ⚠️ AWS MIGRATION IN PROGRESS (branch: aws-migration)
-     Phase 1 DONE: All server-side API routes + libs migrated to RDS (query()) + Cognito (getAuthUser())
-     Phase 2 PENDING: Client-side auth (useAuth, AppHeader, conversation-service, etc.)
-     Phase 3 PENDING: MCP tools → local tools (ICD-10, CMS Coverage, NPI)
-     See memory/aws-migration.md for full status, design decisions, and next steps.
-     When on aws-migration branch, use query() from lib/db.ts, NOT Supabase client.
+<!-- ⚠️ AWS MIGRATION IN PROGRESS (branch: aws-migration) — Last updated: 2026-02-26
+     Phase 1 ✅ DONE: All server-side API routes + libs → RDS (query()) + Cognito (getAuthUser())
+     Phase 2 ✅ DONE: Client-side auth → /api/auth/* routes + custom 'auth-state-change' event
+       - useAuth, AppHeader, useConversationHistory, useIdleTimeout all migrated
+       - lib/totp.ts: RFC 6238 TOTP via Node.js crypto (no external dep)
+       - user_verification gains: otp_code, otp_expires_at, totp_secret, totp_enrolled_at
+     Phase 2b ⬜ PENDING: useDiabetesSnapshots + conversation-service.ts
+     Phase 3  ⬜ PENDING: MCP tools → local (ICD-10, CMS Coverage, NPI)
+     BLOCKED (user actions required):
+       1. Cognito App Client: enable ALLOW_ADMIN_USER_PASSWORD_AUTH
+       2. Secrets Manager: add RESEND_API_KEY + RESEND_FROM_EMAIL
+       3. RDS: apply supabase/migrations/20260226_aws_auth_columns.sql
+     See memory/aws-migration.md for full status + next steps.
+     Auth pattern: query() from lib/db.ts, getAuthUser() from lib/auth-server.ts
 -->
 
 <!-- IMPORTANT FOR CLAUDE CODE:
