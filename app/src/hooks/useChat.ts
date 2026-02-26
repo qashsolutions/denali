@@ -635,35 +635,16 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     }
 
     try {
-      // Call Supabase Edge function to send email
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      const response = await fetch("/api/email/checklist", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, checklist: data, conversationId }),
+      });
 
-      if (supabaseUrl && supabaseKey) {
-        const response = await fetch(
-          `${supabaseUrl}/functions/v1/send-checklist-email`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${supabaseKey}`,
-            },
-            body: JSON.stringify({
-              email,
-              checklist: data,
-              conversationId,
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to send email");
-        }
-      } else {
-        // Development fallback
-        console.log(`[DEV] Would send checklist to ${email}`);
-        await new Promise((resolve) => setTimeout(resolve, 500));
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to send email");
       }
 
       setCurrentAction({ type: "email_sent", email });

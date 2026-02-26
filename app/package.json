@@ -15,8 +15,6 @@
     "@anthropic-ai/bedrock-sdk": "^0.26.4",
     "@anthropic-ai/sdk": "^0.71.2",
     "@aws-sdk/client-cognito-identity-provider": "^3.998.0",
-    "@supabase/ssr": "^0.8.0",
-    "@supabase/supabase-js": "^2.93.2",
     "aws-jwt-verify": "^5.1.1",
     "clsx": "^2.1.1",
     "idb": "^8.0.3",
