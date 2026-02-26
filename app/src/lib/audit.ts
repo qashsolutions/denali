@@ -4,10 +4,10 @@
  * CMS Interoperability compliance: Section I.4, Section V.25, HIPAA audit trail.
  * Logs sensitive operations (FHIR access, appeal generation, consent changes, etc.)
  * to the `audit_logs` table for transparency and accountability.
+ * Uses RDS PostgreSQL directly (no Supabase admin client).
  */
 
-import { createAdminClient } from "@/lib/supabase-admin";
-import type { Json } from "@/types/database";
+import { query } from "@/lib/db";
 
 export type AuditAction =
   | "FHIR_CONNECT"
@@ -35,10 +35,6 @@ type ResourceType =
   | "diabetes_insight"
   | "diabetes_log";
 
-/**
- * Log an auditable action. Uses the admin client to bypass RLS.
- * Non-blocking — callers should fire-and-forget with .catch().
- */
 // Actions with a dedup window (ms). Same user+action within this window → skip insert.
 // Only high-frequency, low-value actions belong here. Sensitive actions (appeals, consent, etc.)
 // must always log every occurrence for audit compliance.
@@ -46,31 +42,32 @@ const DEDUP_WINDOWS: Partial<Record<AuditAction, number>> = {
   FHIR_DATA_ACCESS: 2 * 60 * 60 * 1000, // 2 hours
 };
 
+/**
+ * Log an auditable action. Uses direct RDS query.
+ * Non-blocking — callers should fire-and-forget with .catch().
+ */
 export async function logAudit(
   action: AuditAction,
   options: {
     userId?: string | null;
     resourceType?: ResourceType;
     resourceId?: string;
-    metadata?: Record<string, Json>;
+    metadata?: Record<string, unknown>;
     request?: Request;
   } = {}
 ): Promise<void> {
   try {
-    const admin = createAdminClient();
-
     // Dedup check: skip if same user+action logged recently
     const dedupMs = DEDUP_WINDOWS[action];
     if (dedupMs && options.userId) {
       const cutoff = new Date(Date.now() - dedupMs).toISOString();
-      const { data: recent } = await admin
-        .from("audit_logs")
-        .select("id")
-        .eq("user_id", options.userId)
-        .eq("action", action)
-        .gte("created_at", cutoff)
-        .limit(1);
-      if (recent && recent.length > 0) return;
+      const recent = await query(
+        `SELECT id FROM audit_logs
+         WHERE user_id = $1 AND action = $2 AND created_at >= $3
+         LIMIT 1`,
+        [options.userId, action, cutoff]
+      );
+      if (recent.rows.length > 0) return;
     }
 
     // Extract IP and User-Agent from request if provided
@@ -85,15 +82,19 @@ export async function logAudit(
       userAgent = options.request.headers.get("user-agent");
     }
 
-    await admin.from("audit_logs").insert({
-      user_id: options.userId ?? null,
-      action,
-      resource_type: options.resourceType ?? null,
-      resource_id: options.resourceId ?? null,
-      metadata: (options.metadata ?? {}) as Json,
-      ip_address: ipAddress,
-      user_agent: userAgent,
-    });
+    await query(
+      `INSERT INTO audit_logs (user_id, action, resource_type, resource_id, metadata, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        options.userId ?? null,
+        action,
+        options.resourceType ?? null,
+        options.resourceId ?? null,
+        JSON.stringify(options.metadata ?? {}),
+        ipAddress,
+        userAgent,
+      ]
+    );
   } catch (error) {
     // Audit logging should never break the main flow
     console.warn("[Audit] Failed to write audit log:", error);

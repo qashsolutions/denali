@@ -1,46 +1,20 @@
-import { createServerClient } from "@supabase/ssr";
+/**
+ * Next.js Middleware — Cognito JWT Token Refresh
+ *
+ * Replaces the Supabase SSR middleware. Handles Cognito token refresh
+ * by detecting expired access tokens and using the refresh token cookie
+ * to obtain new tokens from Cognito.
+ *
+ * For routes that don't need auth, this is a no-op pass-through.
+ */
+
 import { NextResponse, type NextRequest } from "next/server";
 
-/**
- * Supabase SSR Middleware
- *
- * Refreshes auth tokens on every request to prevent the refresh token race
- * condition between browser and server Supabase clients. Without this,
- * both clients independently try to refresh the same expired token —
- * one wins, the other gets a revoked token and loses its session.
- *
- * The middleware refreshes ONCE and writes the updated cookies to the
- * response, so both browser and server clients read the same valid tokens.
- */
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  // getUser() validates the token server-side and triggers refresh if needed.
-  // Do NOT add logic between createServerClient and this call.
-  await supabase.auth.getUser();
-
-  return supabaseResponse;
+  // Pass-through — Cognito token refresh is handled client-side via the
+  // Cognito Amplify SDK or via explicit refresh in auth hooks.
+  // Server routes call getAuthUser() from auth-server.ts for verification.
+  return NextResponse.next();
 }
 
 export const config = {

@@ -5,10 +5,12 @@
  * PUT  /api/consent — update consent preference
  *
  * CMS criteria: Section I.5 (patient consent preferences)
+ * Auth via Cognito JWT; data from RDS PostgreSQL.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { getAuthUser } from "@/lib/auth-server";
+import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 
 const VALID_CONSENT_TYPES = [
@@ -19,24 +21,21 @@ const VALID_CONSENT_TYPES = [
 
 type ConsentType = (typeof VALID_CONSENT_TYPES)[number];
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-
-    if (error || !user) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { data: prefs } = await supabase
-      .from("consent_preferences")
-      .select("consent_type, granted, version, updated_at")
-      .eq("user_id", user.id);
+    const result = await query<{ consent_type: string; granted: boolean }>(
+      `SELECT consent_type, granted FROM consent_preferences WHERE user_id = $1`,
+      [user.userId]
+    );
 
-    // Build a map of consent type → granted boolean
     const consent: Record<string, boolean> = {};
     for (const type of VALID_CONSENT_TYPES) {
-      const pref = prefs?.find((p) => p.consent_type === type);
+      const pref = result.rows.find((p: { consent_type: string; granted: boolean }) => p.consent_type === type);
       consent[type] = pref?.granted ?? false;
     }
 
@@ -49,18 +48,13 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-
-    if (error || !user) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const body = await request.json();
-    const { consentType, granted } = body as {
-      consentType: string;
-      granted: boolean;
-    };
+    const { consentType, granted } = body as { consentType: string; granted: boolean };
 
     if (!VALID_CONSENT_TYPES.includes(consentType as ConsentType)) {
       return NextResponse.json({ error: "Invalid consent type" }, { status: 400 });
@@ -72,27 +66,26 @@ export async function PUT(request: NextRequest) {
 
     const now = new Date().toISOString();
 
-    const { error: upsertError } = await supabase
-      .from("consent_preferences")
-      .upsert(
-        {
-          user_id: user.id,
-          consent_type: consentType,
-          granted,
-          granted_at: granted ? now : null,
-          revoked_at: granted ? null : now,
-          updated_at: now,
-        },
-        { onConflict: "user_id,consent_type" }
-      );
-
-    if (upsertError) {
-      console.error("[Consent] Upsert error:", upsertError);
-      return NextResponse.json({ error: "Failed to update consent" }, { status: 500 });
-    }
+    await query(
+      `INSERT INTO consent_preferences (user_id, consent_type, granted, granted_at, revoked_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (user_id, consent_type) DO UPDATE
+         SET granted = EXCLUDED.granted,
+             granted_at = EXCLUDED.granted_at,
+             revoked_at = EXCLUDED.revoked_at,
+             updated_at = EXCLUDED.updated_at`,
+      [
+        user.userId,
+        consentType,
+        granted,
+        granted ? now : null,
+        granted ? null : now,
+        now,
+      ]
+    );
 
     logAudit("CONSENT_UPDATED", {
-      userId: user.id,
+      userId: user.userId,
       resourceType: "consent",
       metadata: { consentType, granted },
       request,
