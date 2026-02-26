@@ -3,8 +3,16 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-24 (legal page footer parity fix)
+     Last updated: 2026-02-26 (AWS migration in progress)
      Maintainer: @cvr
+-->
+
+<!-- ⚠️ AWS MIGRATION IN PROGRESS (branch: aws-migration)
+     Phase 1 DONE: All server-side API routes + libs migrated to RDS (query()) + Cognito (getAuthUser())
+     Phase 2 PENDING: Client-side auth (useAuth, AppHeader, conversation-service, etc.)
+     Phase 3 PENDING: MCP tools → local tools (ICD-10, CMS Coverage, NPI)
+     See memory/aws-migration.md for full status, design decisions, and next steps.
+     When on aws-migration branch, use query() from lib/db.ts, NOT Supabase client.
 -->
 
 <!-- IMPORTANT FOR CLAUDE CODE:
@@ -48,9 +56,9 @@
 | **Anonymous** | 1 message/day, no signup |
 | **Trial** | 14-day free trial, 3 msgs/day, 1 appeal credit (email OTP) |
 | **Paid** | $10/appeal (5 msgs/day) or $20/month (3 appeals, unlimited msgs) |
-| **Tech Stack** | Next.js PWA, Supabase (auth + DB), Claude API (agentic), Stripe |
-| **AI Model** | Claude via Beta API with MCP servers |
-| **Deploy** | Vercel |
+| **Tech Stack** | Next.js PWA, AWS RDS+Cognito (auth+DB), Claude via Bedrock (agentic), Stripe |
+| **AI Model** | Claude via AWS Bedrock (no MCP servers on Bedrock — local tools only) |
+| **Deploy** | AWS ECS/Fargate + ALB (migrating from Vercel) |
 
 ---
 
@@ -1012,7 +1020,7 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 | Gap | CMS Ref | Priority | Type |
 |-----|---------|----------|------|
-| **HIPAA compliance** | A6 | **P0** | **Migrating to AWS** — Supabase BAA requires Team plan ($599/month) + HIPAA add-on ($399/month) = $998/month. Decision: migrate database to AWS RDS PostgreSQL + auth to AWS Cognito. AWS Artifact BAA is free. Total AWS cost ~$20/month. Vercel BAA still needed separately. |
+| **HIPAA compliance** | A6 | **P0** | **AWS migration IN PROGRESS** — AWS BAA signed 2026-02-25 (free, instant). Branch `aws-migration`: server-side done (Phase 1 ✅), client-side auth + MCP tools pending (Phase 2-3). ALB: `denali-alb-1075324152.us-east-1.elb.amazonaws.com`. See `memory/aws-migration.md`. |
 | **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
 | **CMS security self-assessment** | A3 | **P0** | Docs — data source inventory + security checklist required for CMS review participation. In-app `/terms` (15 sections, fully compliant) and `/privacy` (16 sections, all CMS BB checklist requirements satisfied 2026-02-24) are complete. Remaining: submit formal security self-assessment document to CMS. |
 | **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct Medicare.gov communication integration |
