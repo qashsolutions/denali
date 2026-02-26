@@ -7,12 +7,12 @@
 import { BRAND } from "./brand";
 
 export const API_CONFIG = {
-  /** Claude/Anthropic configuration */
+  /** Claude via AWS Bedrock configuration */
   claude: {
-    /** Chat model: Sonnet 4.5 (fast, good for conversation + tool calls) */
-    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929",
-    /** Appeal model: Opus 4.6 (slower, more accurate for appeals + complex symptom checks) */
-    appealModel: process.env.ANTHROPIC_APPEAL_MODEL || "claude-opus-4-6",
+    /** Chat model: Sonnet 4.6 on Bedrock */
+    model: process.env.ANTHROPIC_MODEL || "anthropic.claude-sonnet-4-6",
+    /** Appeal model: Opus 4.6 on Bedrock */
+    appealModel: process.env.ANTHROPIC_APPEAL_MODEL || "anthropic.claude-opus-4-6-v1",
     maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS || "4096", 10),
     maxToolIterations: parseInt(process.env.CLAUDE_MAX_TOOL_ITERATIONS || "10", 10),
     /** Per-iteration timeout in ms (prevents single API call from hanging) */

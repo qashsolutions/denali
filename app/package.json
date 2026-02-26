@@ -12,13 +12,17 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.26.4",
     "@anthropic-ai/sdk": "^0.71.2",
+    "@aws-sdk/client-cognito-identity-provider": "^3.998.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.93.2",
+    "aws-jwt-verify": "^5.1.1",
     "clsx": "^2.1.1",
     "idb": "^8.0.3",
     "jspdf": "^4.1.0",
     "next": "16.1.6",
+    "pg": "^8.19.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "stripe": "^20.2.0",

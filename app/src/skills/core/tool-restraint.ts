@@ -1,7 +1,7 @@
 export const TOOL_RESTRAINT = `
 ## CRITICAL: Do NOT Call Tools Yet
 
-You are still gathering basic info from the user. Do NOT call any tools or MCP servers yet:
+You are still gathering basic info from the user. Do NOT call any tools yet:
 - ❌ No ICD-10 lookups
 - ❌ No NCD/LCD searches
 - ❌ No NPI searches

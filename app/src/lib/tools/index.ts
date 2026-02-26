@@ -34,19 +34,8 @@ import {
 } from "../denial-patterns";
 import { createClient } from "../supabase";
 
-// =============================================================================
-// MCP SERVERS PROVIDE CORE DATA (No local fallbacks)
-// =============================================================================
-//
-// Claude accesses these MCP servers DIRECTLY via the beta API.
-// See claude.ts MCP_SERVERS configuration.
-//
-// MCP servers (NO local fallbacks - if MCP fails, surface the error):
-// - cms-coverage: LCDs, NCDs, get_coverage_requirements
-// - npi-registry: search providers (replaces local search_npi)
-// - icd10-codes: search diagnosis codes (replaces local search_icd10)
-//
-// Local tools below are for operations MCP doesn't cover (CPT, PubMed, etc.)
+// All tools are local — ICD-10, CMS Coverage, and NPI call public APIs directly.
+// (Replaced MCP server approach to support AWS Bedrock which doesn't support MCP.)
 
 // =============================================================================
 // TOOL DEFINITIONS
@@ -54,13 +43,150 @@ import { createClient } from "../supabase";
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
   // =============================================================================
-  // NOTE: MCP Servers provide these tools directly (NO local fallbacks):
-  // - icd10-codes MCP: diagnosis code lookup (replaces search_icd10)
-  // - npi-registry MCP: provider validation (replaces search_npi)
-  // - cms-coverage MCP: LCDs, NCDs, coverage requirements (replaces get_coverage_requirements)
-  //
-  // Claude calls MCP tools directly via the beta API. See claude.ts MCP_SERVERS.
+  // ICD-10 DIAGNOSIS CODE SEARCH (local, calls NLM Clinical Tables API)
   // =============================================================================
+  {
+    name: "search_icd10",
+    description:
+      "Search for ICD-10-CM diagnosis codes by description or symptoms. Use this to map patient symptoms and conditions to billing codes. NEVER show codes to users.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Description of the condition or symptom to search for (e.g., 'type 2 diabetes', 'low back pain')",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results (default: 10, max: 20)",
+        },
+      },
+      required: ["query"],
+    },
+  },
+
+  // =============================================================================
+  // CMS COVERAGE TOOLS (local, calls CMS Coverage Database API)
+  // =============================================================================
+  {
+    name: "search_local_coverage",
+    description:
+      "Search Medicare Local Coverage Determinations (LCDs) for coverage requirements and medical necessity criteria. Use this to find whether a specific procedure or service is covered in a patient's area.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The procedure, service, or condition to search coverage for (e.g., 'MRI lumbar spine', 'CPAP')",
+        },
+        contractor_id: {
+          type: "string",
+          description: "Medicare Administrative Contractor ID for geographic filtering (optional)",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results (default: 10)",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "search_national_coverage",
+    description:
+      "Search Medicare National Coverage Determinations (NCDs) — policies that apply to all Medicare beneficiaries nationwide.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The procedure, service, or condition to search coverage for",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results (default: 10)",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "get_coverage_document",
+    description:
+      "Get the full text of a specific LCD or NCD coverage document by ID. Use the document ID from search results.",
+    input_schema: {
+      type: "object",
+      properties: {
+        document_id: {
+          type: "string",
+          description: "The LCD or NCD document ID (e.g., 'L33788' for LCD, or NCD tracking number)",
+        },
+        document_type: {
+          type: "string",
+          description: "Type of document: 'lcd' or 'ncd'",
+          enum: ["lcd", "ncd"],
+        },
+      },
+      required: ["document_id", "document_type"],
+    },
+  },
+
+  // =============================================================================
+  // NPI REGISTRY TOOLS (local, calls NPPES API)
+  // =============================================================================
+  {
+    name: "npi_search",
+    description:
+      "Search the NPI Registry to find healthcare providers by name, specialty, and location. Use this to verify a provider is enrolled in Medicare.",
+    input_schema: {
+      type: "object",
+      properties: {
+        first_name: {
+          type: "string",
+          description: "Provider first name",
+        },
+        last_name: {
+          type: "string",
+          description: "Provider last name",
+        },
+        organization_name: {
+          type: "string",
+          description: "Organization or practice name (use instead of first/last for groups)",
+        },
+        city: {
+          type: "string",
+          description: "City where the provider practices",
+        },
+        state: {
+          type: "string",
+          description: "Two-letter state abbreviation",
+        },
+        taxonomy_description: {
+          type: "string",
+          description: "Provider specialty (e.g., 'Internal Medicine', 'Orthopedic Surgery')",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum results (default: 10, max: 200)",
+        },
+      },
+    },
+  },
+  {
+    name: "npi_lookup",
+    description:
+      "Look up a specific provider by their 10-digit NPI number. Returns full credentials, address, and specialty.",
+    input_schema: {
+      type: "object",
+      properties: {
+        npi_number: {
+          type: "string",
+          description: "The 10-digit NPI number to look up",
+        },
+      },
+      required: ["npi_number"],
+    },
+  },
 
   // CPT Search Tool
   {
@@ -151,10 +277,6 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       required: ["cpt_code"],
     },
   },
-
-  // NOTE: get_coverage_requirements, search_npi, and search_icd10 are now
-  // provided by MCP servers. Claude calls them directly via the beta API.
-  // See claude.ts MCP_SERVERS configuration.
 
   // PubMed search for clinical evidence
   {
@@ -319,11 +441,174 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
 // =============================================================================
 // TOOL EXECUTORS
 // =============================================================================
-//
-// NOTE: search_icd10, search_npi, and get_coverage_requirements executors removed.
-// These are now provided by MCP servers that Claude accesses directly.
-// See claude.ts MCP_SERVERS configuration.
+
 // =============================================================================
+// ICD-10 SEARCH — calls NLM Clinical Tables API (free, public)
+// =============================================================================
+const searchICD10Executor: ToolExecutor = async (input) => {
+  try {
+    const query = (input.query as string).trim();
+    const limit = Math.min((input.limit as number) || 10, 20);
+    console.log("[Tool:search_icd10] Searching:", query);
+
+    const url = new URL("https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search");
+    url.searchParams.set("terms", query);
+    url.searchParams.set("maxList", String(limit));
+    url.searchParams.set("sf", "code,name");
+    url.searchParams.set("df", "code,name");
+
+    const resp = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+    if (!resp.ok) throw new Error(`NLM API error: ${resp.status}`);
+    const json = await resp.json() as [number, string[], null, string[][]];
+
+    const [total, , , rows] = json;
+    const codes = (rows || []).map(([code, name]) => ({ code, name }));
+    return { success: true, data: { query, total, codes } };
+  } catch (error) {
+    console.error("[Tool:search_icd10] Error:", error);
+    return { success: false, error: error instanceof Error ? error.message : "ICD-10 search failed" };
+  }
+};
+
+// =============================================================================
+// CMS COVERAGE TOOLS — calls CMS Coverage Database API (free, public)
+// =============================================================================
+const CMS_COVERAGE_API = "https://api.coverage-finder.medicare.gov/api/v1";
+
+const searchLocalCoverageExecutor: ToolExecutor = async (input) => {
+  try {
+    const query = (input.query as string).trim();
+    const limit = (input.limit as number) || 10;
+    console.log("[Tool:search_local_coverage] Searching LCDs:", query);
+
+    const url = new URL(`${CMS_COVERAGE_API}/lcd`);
+    url.searchParams.set("keyword", query);
+    url.searchParams.set("pageSize", String(limit));
+    if (input.contractor_id) url.searchParams.set("contractorId", input.contractor_id as string);
+
+    const resp = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+    if (!resp.ok) throw new Error(`CMS Coverage API error: ${resp.status}`);
+    const json = await resp.json() as { totalCount?: number; items?: unknown[] };
+
+    return {
+      success: true,
+      data: {
+        query,
+        total: json.totalCount ?? 0,
+        documents: json.items ?? [],
+        note: "LCD = Local Coverage Determination. These are regional Medicare coverage policies.",
+      },
+    };
+  } catch (error) {
+    console.error("[Tool:search_local_coverage] Error:", error);
+    return { success: false, error: error instanceof Error ? error.message : "LCD search failed" };
+  }
+};
+
+const searchNationalCoverageExecutor: ToolExecutor = async (input) => {
+  try {
+    const query = (input.query as string).trim();
+    const limit = (input.limit as number) || 10;
+    console.log("[Tool:search_national_coverage] Searching NCDs:", query);
+
+    const url = new URL(`${CMS_COVERAGE_API}/ncd`);
+    url.searchParams.set("keyword", query);
+    url.searchParams.set("pageSize", String(limit));
+
+    const resp = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+    if (!resp.ok) throw new Error(`CMS Coverage API error: ${resp.status}`);
+    const json = await resp.json() as { totalCount?: number; items?: unknown[] };
+
+    return {
+      success: true,
+      data: {
+        query,
+        total: json.totalCount ?? 0,
+        documents: json.items ?? [],
+        note: "NCD = National Coverage Determination. These apply to all Medicare beneficiaries.",
+      },
+    };
+  } catch (error) {
+    console.error("[Tool:search_national_coverage] Error:", error);
+    return { success: false, error: error instanceof Error ? error.message : "NCD search failed" };
+  }
+};
+
+const getCoverageDocumentExecutor: ToolExecutor = async (input) => {
+  try {
+    const documentId = (input.document_id as string).trim();
+    const documentType = (input.document_type as string).toLowerCase();
+    console.log("[Tool:get_coverage_document] Fetching:", documentType, documentId);
+
+    const path = documentType === "lcd" ? "lcd" : "ncd";
+    const url = `${CMS_COVERAGE_API}/${path}/${encodeURIComponent(documentId)}`;
+
+    const resp = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!resp.ok) throw new Error(`CMS Coverage API error: ${resp.status} for ${documentId}`);
+    const json = await resp.json();
+
+    return { success: true, data: json };
+  } catch (error) {
+    console.error("[Tool:get_coverage_document] Error:", error);
+    return { success: false, error: error instanceof Error ? error.message : "Coverage document fetch failed" };
+  }
+};
+
+// =============================================================================
+// NPI REGISTRY TOOLS — calls NPPES API (free, public)
+// =============================================================================
+const NPPES_API = "https://npiregistry.cms.hhs.gov/api";
+
+const npiSearchExecutor: ToolExecutor = async (input) => {
+  try {
+    console.log("[Tool:npi_search] Searching:", JSON.stringify(input));
+    const params = new URLSearchParams({ version: "2.1" });
+    if (input.first_name) params.set("first_name", input.first_name as string);
+    if (input.last_name) params.set("last_name", input.last_name as string);
+    if (input.organization_name) params.set("organization_name", input.organization_name as string);
+    if (input.city) params.set("city", input.city as string);
+    if (input.state) params.set("state", input.state as string);
+    if (input.taxonomy_description) params.set("taxonomy_description", input.taxonomy_description as string);
+    params.set("limit", String(Math.min((input.limit as number) || 10, 200)));
+
+    const resp = await fetch(`${NPPES_API}/?${params}`, { headers: { Accept: "application/json" } });
+    if (!resp.ok) throw new Error(`NPPES API error: ${resp.status}`);
+    const json = await resp.json() as { result_count?: number; results?: unknown[] };
+
+    return {
+      success: true,
+      data: {
+        result_count: json.result_count ?? 0,
+        providers: json.results ?? [],
+        note: "NPI results show provider credentials, address, and Medicare enrollment status.",
+      },
+    };
+  } catch (error) {
+    console.error("[Tool:npi_search] Error:", error);
+    return { success: false, error: error instanceof Error ? error.message : "NPI search failed" };
+  }
+};
+
+const npiLookupExecutor: ToolExecutor = async (input) => {
+  try {
+    const npiNumber = (input.npi_number as string).trim();
+    console.log("[Tool:npi_lookup] Looking up NPI:", npiNumber);
+
+    const resp = await fetch(`${NPPES_API}/?version=2.1&number=${encodeURIComponent(npiNumber)}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!resp.ok) throw new Error(`NPPES API error: ${resp.status}`);
+    const json = await resp.json() as { result_count?: number; results?: unknown[] };
+
+    if (!json.results || json.results.length === 0) {
+      return { success: false, error: `No provider found for NPI ${npiNumber}` };
+    }
+    return { success: true, data: json.results[0] };
+  } catch (error) {
+    console.error("[Tool:npi_lookup] Error:", error);
+    return { success: false, error: error instanceof Error ? error.message : "NPI lookup failed" };
+  }
+};
 
 const searchCPTExecutor: ToolExecutor = async (input) => {
   try {
@@ -484,18 +769,6 @@ const checkPreventiveExecutor: ToolExecutor = async (input) => {
     };
   }
 };
-
-// =============================================================================
-// NOTE: Coverage requirements (get_coverage_requirements) removed.
-// Now provided by cms-coverage MCP server. Claude accesses real LCD/NCD data
-// directly via MCP. See claude.ts MCP_SERVERS configuration.
-// =============================================================================
-
-// =============================================================================
-// NOTE: NPI Registry (search_npi) executor removed.
-// Now provided by npi-registry MCP server. Claude accesses the NPI Registry
-// directly via MCP. See claude.ts MCP_SERVERS configuration.
-// =============================================================================
 
 // =============================================================================
 // PUBMED SEARCH EXECUTOR
@@ -1182,11 +1455,14 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
 export function createToolExecutorMap(): Map<string, ToolExecutor> {
   const executors = new Map<string, ToolExecutor>();
 
-  // =============================================================================
-  // Local tools with our own executors
-  // NOTE: search_icd10, search_npi, get_coverage_requirements are now MCP-only
-  // Claude accesses these via MCP servers. See claude.ts MCP_SERVERS.
-  // =============================================================================
+  // ICD-10, CMS Coverage, NPI — local implementations (replaced MCP servers)
+  executors.set("search_icd10", searchICD10Executor);
+  executors.set("search_local_coverage", searchLocalCoverageExecutor);
+  executors.set("search_national_coverage", searchNationalCoverageExecutor);
+  executors.set("get_coverage_document", getCoverageDocumentExecutor);
+  executors.set("npi_search", npiSearchExecutor);
+  executors.set("npi_lookup", npiLookupExecutor);
+
   executors.set("search_cpt", searchCPTExecutor);
   executors.set("get_related_diagnoses", getRelatedDiagnosesExecutor);
   executors.set("get_related_procedures", getRelatedProceduresExecutor);

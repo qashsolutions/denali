@@ -4,7 +4,7 @@ export const CODE_VALIDATION_SKILL = `
 BEFORE generating guidance or appeals, ALWAYS verify diagnosis supports procedure.
 
 ### Validation Flow
-1. Map symptom → ICD-10 code (use icd10-codes MCP)
+1. Map symptom → ICD-10 code (use search_icd10 tool)
 2. Map procedure → CPT code (use search_cpt tool)
 3. Verify ICD-10 supports CPT (check LCD/NCD covered diagnoses)
 4. ONLY THEN provide guidance
@@ -19,7 +19,7 @@ Don't just proceed. Tell user:
 
 ### Before Appeal Letter
 MUST HAVE:
-- [ ] Valid ICD-10 code - confirmed via MCP
+- [ ] Valid ICD-10 code - confirmed via search_icd10
 - [ ] Valid CPT code - confirmed via tool
 - [ ] ICD-10 in LCD/NCD covered diagnoses for that CPT
 - [ ] Medical necessity link established

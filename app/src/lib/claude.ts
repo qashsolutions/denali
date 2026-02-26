@@ -5,31 +5,11 @@
  * Manages tool calling loop and response processing.
  */
 
+import AnthropicBedrock from "@anthropic-ai/bedrock-sdk";
 import Anthropic from "@anthropic-ai/sdk";
-import type { MessageParam, ContentBlock, ToolUseBlock, ToolResultBlockParam, ImageBlockParam, DocumentBlockParam, TextBlockParam } from "@anthropic-ai/sdk/resources/messages";
-import type { BetaMessage, BetaRequestMCPServerURLDefinition } from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import type { MessageParam, ContentBlock, ToolUseBlock, ToolResultBlockParam, ImageBlockParam, DocumentBlockParam, TextBlockParam, Message } from "@anthropic-ai/sdk/resources/messages";
 import { API_CONFIG } from "@/config";
 import type { FileAttachment } from "@/types/attachment";
-
-// MCP Server configurations for Claude to access directly
-// These give Claude direct access to real CMS coverage data (LCDs/NCDs)
-export const MCP_SERVERS: BetaRequestMCPServerURLDefinition[] = [
-  {
-    type: "url",
-    url: "https://mcp.deepsense.ai/cms_coverage/mcp",
-    name: "cms-coverage",
-  },
-  {
-    type: "url",
-    url: "https://mcp.deepsense.ai/npi_registry/mcp",
-    name: "npi-registry",
-  },
-  {
-    type: "url",
-    url: "https://mcp.deepsense.ai/icd10_codes/mcp",
-    name: "icd10-codes",
-  },
-];
 
 // Types for our tool system
 export interface ToolDefinition {
@@ -217,16 +197,14 @@ export interface ChatResult {
   appealLetter?: string;
 }
 
-// Initialize Claude client
-let client: Anthropic | null = null;
+// Initialize Claude client (AWS Bedrock — IAM auth from ECS task role, no API key needed)
+let client: AnthropicBedrock | null = null;
 
-export function getClaudeClient(): Anthropic {
+export function getClaudeClient(): AnthropicBedrock {
   if (!client) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw new Error("ANTHROPIC_API_KEY environment variable is not set");
-    }
-    client = new Anthropic({ apiKey });
+    client = new AnthropicBedrock({
+      awsRegion: process.env.AWS_REGION || "us-east-1",
+    });
   }
   return client;
 }
@@ -687,13 +665,12 @@ export async function chat(
     console.log("[CLAUDE API] Iteration:", iterations, "of", maxIterations);
     console.log("[CLAUDE API] Model:", model);
     console.log("[CLAUDE API] Timeout:", timeoutMs / 1000, "s per iteration");
-    console.log("[CLAUDE API] MCP Servers:", MCP_SERVERS.map(s => s.name).join(", "));
-    console.log("[CLAUDE API] Local tools:", anthropicTools.map(t => t.name).join(", ") || "none");
+    console.log("[CLAUDE API] Tools:", anthropicTools.map(t => t.name).join(", ") || "none");
     console.log("========================================");
 
-    // Call Claude Beta API with MCP servers for direct LCD/NCD access
+    // Call Claude via AWS Bedrock (IAM auth from ECS task role)
     // When streaming callbacks are provided, use stream:true for real-time text delivery
-    let response: BetaMessage;
+    let response: Message;
 
     if (callbacks?.onDelta) {
       try {
@@ -701,18 +678,16 @@ export async function chat(
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-        const streamResult = await claude.beta.messages.create({
+        const streamResult = await claude.messages.create({
           model,
           max_tokens: API_CONFIG.claude.maxTokens,
           system: request.systemPrompt,
           messages,
           tools: anthropicTools.length > 0 ? anthropicTools : undefined,
-          mcp_servers: MCP_SERVERS,
-          betas: ["mcp-client-2025-04-04"],
           stream: true,
         }, { signal: controller.signal });
 
-        // Collect response from stream events (same shape as non-streaming BetaMessage)
+        // Collect response from stream events
         const contentBlocks: Array<Record<string, unknown>> = [];
         let stopReason = "";
         let hasLocalToolUse = false;
@@ -762,38 +737,34 @@ export async function chat(
         response = {
           content: contentBlocks.filter(Boolean),
           stop_reason: stopReason,
-        } as unknown as BetaMessage;
+        } as unknown as Message;
 
         console.log("[CLAUDE API] Streaming iteration complete, stop_reason:", stopReason);
       } catch (streamErr) {
-        // Streaming failed (e.g., not supported with MCP beta) — fall back
+        // Streaming failed — fall back to non-streaming
         console.warn("[CLAUDE API] Streaming failed, falling back to non-streaming:", streamErr);
         response = await withTimeout(
-          (signal) => claude.beta.messages.create({
+          (signal) => claude.messages.create({
             model,
             max_tokens: API_CONFIG.claude.maxTokens,
             system: request.systemPrompt,
             messages,
             tools: anthropicTools.length > 0 ? anthropicTools : undefined,
-            mcp_servers: MCP_SERVERS,
-            betas: ["mcp-client-2025-04-04"],
-          }, { signal }),
+          }, { signal }) as Promise<Message>,
           timeoutMs,
           `Claude API iteration ${iterations} (fallback)`
         );
       }
     } else {
-      // Non-streaming path (original behavior)
+      // Non-streaming path
       response = await withTimeout(
-        (signal) => claude.beta.messages.create({
+        (signal) => claude.messages.create({
           model,
           max_tokens: API_CONFIG.claude.maxTokens,
           system: request.systemPrompt,
           messages,
           tools: anthropicTools.length > 0 ? anthropicTools : undefined,
-          mcp_servers: MCP_SERVERS,
-          betas: ["mcp-client-2025-04-04"],
-        }, { signal }),
+        }, { signal }) as Promise<Message>,
         timeoutMs,
         `Claude API iteration ${iterations}`
       );
@@ -803,57 +774,13 @@ export async function chat(
     console.log("[CLAUDE API] Response stop_reason:", response.stop_reason);
     console.log("[CLAUDE API] Response content blocks:", response.content.map(b => b.type).join(", "));
 
-    // Check if Claude wants to use LOCAL tools (not MCP tools)
-    // MCP tools (mcp_tool_use) are handled automatically by the API
+    // Check if Claude wants to use tools
     const toolUseBlocks = response.content.filter(
       (block): block is ToolUseBlock => block.type === "tool_use"
     );
 
-    // Track MCP tool usage with session context for debugging premature calls
-    const mcpBlocks = response.content.filter(b => b.type === "mcp_tool_use");
-    const mcpToolNames = mcpBlocks.map(b => {
-      const mcpBlock = b as { type: "mcp_tool_use"; name?: string; server_name?: string; input?: unknown };
-      return mcpBlock.name || "mcp_tool";
-    });
-
-    if (mcpBlocks.length > 0) {
-      // Log each MCP tool call with context
-      for (const block of mcpBlocks) {
-        const mcpBlock = block as { type: "mcp_tool_use"; name?: string; server_name?: string; input?: unknown };
-        const toolName = mcpBlock.name || "mcp_tool";
-        if (!toolsUsed.includes(toolName)) {
-          toolsUsed.push(toolName);
-        }
-        console.log("[CLAUDE API] >>> MCP TOOL CALLED:", toolName, "| server:", mcpBlock.server_name || "unknown");
-        console.log("[CLAUDE API] >>> MCP TOOL INPUT:", JSON.stringify(mcpBlock.input || {}).substring(0, 200));
-      }
-      // Log session context to detect premature MCP calls
-      console.log("[CLAUDE API] >>> MCP CALL CONTEXT:", {
-        iteration: iterations,
-        hasUserName: !!sessionState.userName,
-        hasUserZip: !!sessionState.userZip,
-        hasSymptoms: sessionState.symptoms.length > 0,
-        hasProcedure: !!sessionState.procedureNeeded,
-        hasDuration: !!sessionState.duration,
-        hasPriorTreatments: sessionState.priorTreatments.length > 0,
-        hasProvider: !!sessionState.provider,
-        mcpToolsCalled: mcpToolNames,
-      });
-      // Warn if MCP tools fired during intake (when TOOL_RESTRAINT is active)
-      const isInIntakeGate = request.systemPrompt.includes("Do NOT Call Tools Yet");
-      if (isInIntakeGate) {
-        console.warn("[CLAUDE API] ⚠️ MCP TOOLS FIRED DURING INTAKE — tool restraint active!", {
-          mcpToolsCalled: mcpToolNames,
-        });
-      } else {
-        console.log("[CLAUDE API] MCP tools called (post-gate, expected):", mcpToolNames);
-      }
-    } else {
-      console.log("[CLAUDE API] No MCP tools used in this response");
-    }
-
     if (toolUseBlocks.length > 0) {
-      console.log("[CLAUDE API] Local tools called:", toolUseBlocks.map(b => b.name).join(", "));
+      console.log("[CLAUDE API] Tools called:", toolUseBlocks.map(b => b.name).join(", "));
     }
 
     if (toolUseBlocks.length > 0) {
@@ -1091,12 +1018,11 @@ function updateSessionState(
   }
 
   // Track NPI searches - increment attempt counter
-  // MCP tool names: npi_search, npi_lookup
   if (toolsUsed.includes("npi_search") || toolsUsed.includes("npi_lookup")) {
     state.providerSearchAttempts = (state.providerSearchAttempts || 0) + 1;
   }
 
-  // Extract policy references from Claude's text (MCP tool results are summarized by Claude)
+  // Extract policy references from Claude's text
   // Match LCD numbers (L + 5 digits) and NCD numbers (NCD + digits)
   const lcdMatches = content.match(/\bL\d{5}\b/g);
   if (lcdMatches) {
@@ -1115,7 +1041,7 @@ function updateSessionState(
     }
   }
 
-  // Extract ICD-10 codes from text (MCP search_icd10 results referenced by Claude)
+  // Extract ICD-10 codes from text when search_icd10 tool was used
   // Pattern: letter + 2 digits + optional dot + up to 4 alphanumerics
   if (toolsUsed.includes("search_icd10") && state.diagnosisCodes.length === 0) {
     const icd10Matches = content.match(/\b[A-TV-Z]\d{2}(?:\.\d{1,4})?\b/g);
