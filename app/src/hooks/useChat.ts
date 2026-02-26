@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import type { Message } from "@/types";
 import type { FileAttachment } from "@/types/attachment";
 import type { ChecklistData } from "@/components/chat/PrintableChecklist";
-import { type SessionState, createDefaultSessionState } from "@/lib/claude";
+import { type SessionState, createDefaultSessionState } from "@/lib/session-state";
 import { MEDICARE_CONSTANTS } from "@/config";
 import {
   loadConversation,

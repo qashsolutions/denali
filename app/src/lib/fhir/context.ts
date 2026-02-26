@@ -5,7 +5,7 @@
  * that gets injected into the system prompt.
  */
 
-import type { SessionState } from "@/lib/claude";
+import type { SessionState } from "@/lib/session-state";
 
 /**
  * Build a concise health context string for injection into Claude's system prompt.

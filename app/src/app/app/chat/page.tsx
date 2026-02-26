@@ -29,7 +29,7 @@ import {
   ClipboardCheckIcon,
 } from "@/components/icons";
 import { getGreeting } from "@/lib/utils";
-import type { SessionState } from "@/lib/claude";
+import type { SessionState } from "@/lib/session-state";
 import { getUploadLimitForPlan } from "@/config/pricing";
 
 
