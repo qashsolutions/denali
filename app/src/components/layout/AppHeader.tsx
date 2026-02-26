@@ -12,7 +12,6 @@ import {
   GearIcon,
 } from "@/components/icons";
 import { BRAND } from "@/config";
-import { getClient } from "@/lib/supabase";
 
 const NAV_ITEMS = [
   { label: "Health", href: "/app/health", Icon: HeartPulseIcon, color: "text-rose-500" },
@@ -37,57 +36,48 @@ export function AppHeader() {
 
   // Check auth state
   useEffect(() => {
-    const supabase = getClient();
+    const planLabels: Record<string, string> = {
+      monthly: "Monthly Plan",
+      per_appeal: "Pay Per Appeal",
+      trial: "Trial",
+    };
 
-    async function updateUser(session: { user: { id: string; email?: string; user_metadata?: Record<string, string>; last_sign_in_at?: string } } | null) {
-      if (!session?.user) {
-        setUserInfo(null);
-        return;
-      }
-      const u = session.user;
-      const name = u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "User";
-
-      const planLabels: Record<string, string> = {
-        monthly: "Unlimited",
-        per_appeal: "Pay Per Appeal",
-        trial: "Trial",
-        free: "Free Plan",
-      };
-
-      // Set user info immediately so avatar appears without waiting for DB
-      setUserInfo({
-        displayName: name,
-        email: u.email || "",
-        initial: name.charAt(0).toUpperCase(),
-        lastSignIn: u.last_sign_in_at || null,
-        planLabel: "Free Plan",
-      });
-
-      // Fetch plan + admin status from server route (cookie-authenticated).
-      // Browser Supabase .from("users").select() is unreliable with stale tokens.
+    async function loadUser() {
       try {
         const res = await fetch("/api/profile");
-        if (res.ok) {
-          const profileData = await res.json();
-          if (profileData?.authenticated) {
-            const label = profileData.isAdmin
-              ? "Admin"
-              : (planLabels[profileData.plan] || "Free Plan");
-            setUserInfo((prev) =>
-              prev ? { ...prev, planLabel: label } : prev
-            );
-          }
-        }
+        if (!res.ok) { setUserInfo(null); return; }
+        const data = await res.json();
+        if (!data.authenticated || !data.email) { setUserInfo(null); return; }
+
+        const email: string = data.email;
+        const name = email.split("@")[0] || "User";
+        const label = data.isAdmin ? "Admin" : (planLabels[data.plan] || "Trial");
+        setUserInfo({
+          displayName: name,
+          email,
+          initial: name.charAt(0).toUpperCase(),
+          lastSignIn: null,
+          planLabel: label,
+        });
       } catch {
-        // Plan fetch failed — avatar already showing, just keep default
+        setUserInfo(null);
       }
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => updateUser(session));
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_, session) => updateUser(session));
-    return () => subscription.unsubscribe();
+    loadUser();
+
+    // Listen for sign-in / sign-out from useAuth
+    function handleAuthChange(e: Event) {
+      const user = (e as CustomEvent<{ email: string; userId: string } | null>).detail;
+      if (user) {
+        loadUser(); // Reload to get plan label
+      } else {
+        setUserInfo(null);
+      }
+    }
+
+    window.addEventListener("auth-state-change", handleAuthChange);
+    return () => window.removeEventListener("auth-state-change", handleAuthChange);
   }, []);
 
   // Close menus on outside click
@@ -107,8 +97,9 @@ export function AppHeader() {
 
   async function handleSignOut() {
     setAccountOpen(false);
-    const supabase = getClient();
-    await supabase.auth.signOut();
+    await fetch("/api/auth/signout", { method: "POST" });
+    setUserInfo(null);
+    window.dispatchEvent(new CustomEvent("auth-state-change", { detail: null }));
     router.push("/");
   }
 

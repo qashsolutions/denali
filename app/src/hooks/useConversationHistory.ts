@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { getClient } from "@/lib/supabase";
 import { cacheSet, cacheGetIfFresh, STORES, TTL } from "@/lib/offline-cache";
 
 export interface ConversationHistoryItem {
@@ -29,7 +28,6 @@ export function useConversationHistory(): UseConversationHistoryReturn {
   const [conversations, setConversations] = useState<ConversationHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isVerifiedUser, setIsVerifiedUser] = useState(false);
-  const supabase = getClient();
 
   const loadConversations = useCallback(async () => {
     setIsLoading(true);
@@ -104,20 +102,18 @@ export function useConversationHistory(): UseConversationHistoryReturn {
   useEffect(() => {
     loadConversations();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session?.user) {
-          loadConversations();
-        } else {
-          clearUser();
-        }
+    function handleAuthChange(e: Event) {
+      const user = (e as CustomEvent<{ email: string; userId: string } | null>).detail;
+      if (user) {
+        loadConversations();
+      } else {
+        clearUser();
       }
-    );
+    }
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [supabase, loadConversations, clearUser]);
+    window.addEventListener("auth-state-change", handleAuthChange);
+    return () => window.removeEventListener("auth-state-change", handleAuthChange);
+  }, [loadConversations, clearUser]);
 
   const refresh = useCallback(async () => {
     await loadConversations();

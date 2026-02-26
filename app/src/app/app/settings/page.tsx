@@ -223,9 +223,9 @@ export default function AppSettingsPage() {
                       if (!otpInput) return;
                       setAuthLoading(true);
                       setAuthMessage("");
-                      const ok = await verifyEmailOTP(emailInput, otpInput);
+                      const result = await verifyEmailOTP(emailInput, otpInput);
                       setAuthLoading(false);
-                      if (ok) {
+                      if (result.success) {
                         setAuthMessage("Signed in successfully!");
                         setOtpSent(false);
                         setOtpInput("");

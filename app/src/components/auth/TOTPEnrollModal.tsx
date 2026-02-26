@@ -8,8 +8,8 @@ interface TOTPEnrollModalProps {
   onClose: () => void;
   onEnrolled: () => void;
   onSkip: () => void;
-  enrollTOTP: () => Promise<{ qrCode: string; secret: string; factorId: string } | null>;
-  challengeAndVerifyTOTP: (code: string, factorId?: string) => Promise<boolean>;
+  enrollTOTP: () => Promise<{ qrCode: string; secret: string } | null>;
+  challengeAndVerifyTOTP: (code: string) => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
   clearError: () => void;
@@ -31,7 +31,6 @@ export function TOTPEnrollModal({
   const [step, setStep] = useState<Step>("intro");
   const [qrCode, setQrCode] = useState("");
   const [secret, setSecret] = useState("");
-  const [factorId, setFactorId] = useState("");
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [showSecret, setShowSecret] = useState(false);
   const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -41,7 +40,6 @@ export function TOTPEnrollModal({
       setStep("intro");
       setQrCode("");
       setSecret("");
-      setFactorId("");
       setCode(["", "", "", "", "", ""]);
       setShowSecret(false);
       clearError();
@@ -53,7 +51,6 @@ export function TOTPEnrollModal({
     if (result) {
       setQrCode(result.qrCode);
       setSecret(result.secret);
-      setFactorId(result.factorId);
       setStep("qr");
     }
   };
@@ -98,7 +95,7 @@ export function TOTPEnrollModal({
     const fullCode = code.join("");
     if (fullCode.length !== 6) return;
 
-    const success = await challengeAndVerifyTOTP(fullCode, factorId || undefined);
+    const success = await challengeAndVerifyTOTP(fullCode);
     if (success) {
       onEnrolled();
       onClose();

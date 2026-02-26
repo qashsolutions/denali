@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { getClient } from "@/lib/supabase";
 import { SESSION_TIMEOUT } from "@/config/ui";
 
 interface UseIdleTimeoutReturn {
@@ -28,18 +27,27 @@ export function useIdleTimeout(): UseIdleTimeoutReturn {
     setShowWarning(false);
   }, []);
 
-  // Auth state tracking
+  // Auth state tracking via custom event
   useEffect(() => {
-    const supabase = getClient();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setIsAuthenticated(!!session?.user);
-        if (session?.user) {
+    // Check initial auth state
+    fetch("/api/profile")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.authenticated) {
+          setIsAuthenticated(true);
           resetActivity();
         }
-      }
-    );
-    return () => subscription.unsubscribe();
+      })
+      .catch(() => {});
+
+    function handleAuthChange(e: Event) {
+      const user = (e as CustomEvent<{ email: string; userId: string } | null>).detail;
+      setIsAuthenticated(!!user);
+      if (user) resetActivity();
+    }
+
+    window.addEventListener("auth-state-change", handleAuthChange);
+    return () => window.removeEventListener("auth-state-change", handleAuthChange);
   }, [resetActivity]);
 
   // Activity listeners (throttled to 1s)
@@ -71,9 +79,11 @@ export function useIdleTimeout(): UseIdleTimeoutReturn {
       const elapsed = Date.now() - lastActivityRef.current;
 
       if (elapsed >= SESSION_TIMEOUT.INACTIVITY_MS) {
-        getClient().auth.signOut();
         setShowWarning(false);
-        // Redirect handled by auth state change in AppHeader/useAuth
+        // Sign out via API route, then dispatch auth change for other components
+        fetch("/api/auth/signout", { method: "POST" }).finally(() => {
+          window.dispatchEvent(new CustomEvent("auth-state-change", { detail: null }));
+        });
         return;
       }
 

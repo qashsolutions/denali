@@ -10,7 +10,16 @@
  */
 
 import { CognitoJwtVerifier } from "aws-jwt-verify";
-import { CognitoIdentityProviderClient, AdminDeleteUserCommand, AdminGetUserCommand } from "@aws-sdk/client-cognito-identity-provider";
+import {
+  CognitoIdentityProviderClient,
+  AdminCreateUserCommand,
+  AdminDeleteUserCommand,
+  AdminGetUserCommand,
+  AdminInitiateAuthCommand,
+  AdminSetUserPasswordCommand,
+  GlobalSignOutCommand,
+  InitiateAuthCommand,
+} from "@aws-sdk/client-cognito-identity-provider";
 import type { NextRequest } from "next/server";
 
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID!;
@@ -112,4 +121,119 @@ export async function getCognitoUsernameByEmail(email: string): Promise<string |
   } catch {
     return null;
   }
+}
+
+/**
+ * Get or create a Cognito user, returning their sub (UUID).
+ * Used by send-otp to ensure the user exists before setting a password.
+ */
+export async function createOrGetCognitoUser(email: string): Promise<string> {
+  // Try to get existing user first
+  try {
+    const result = await getCognitoAdmin().send(new AdminGetUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+    }));
+    const sub = result.UserAttributes?.find((a) => a.Name === "sub")?.Value;
+    if (sub) return sub;
+  } catch (err: unknown) {
+    // UserNotFoundException → create the user
+    if ((err as { name?: string }).name !== "UserNotFoundException") throw err;
+  }
+
+  // Create user (suppress welcome email — we send our own OTP email)
+  const created = await getCognitoAdmin().send(new AdminCreateUserCommand({
+    UserPoolId: USER_POOL_ID,
+    Username: email,
+    MessageAction: "SUPPRESS",
+    UserAttributes: [
+      { Name: "email", Value: email },
+      { Name: "email_verified", Value: "true" },
+    ],
+  }));
+  const sub = created.User?.Attributes?.find((a) => a.Name === "sub")?.Value;
+  if (!sub) throw new Error("Cognito sub missing after AdminCreateUser");
+  return sub;
+}
+
+/**
+ * Set a permanent password for a Cognito user.
+ * Using Permanent=true puts the user in CONFIRMED state (required for AdminInitiateAuth).
+ */
+export async function setCognitoPassword(email: string, password: string): Promise<void> {
+  await getCognitoAdmin().send(new AdminSetUserPasswordCommand({
+    UserPoolId: USER_POOL_ID,
+    Username: email,
+    Password: password,
+    Permanent: true,
+  }));
+}
+
+export interface CognitoTokens {
+  accessToken: string;
+  refreshToken: string;
+  idToken: string;
+  expiresIn: number;
+}
+
+/**
+ * Authenticate with email + password, returning Cognito JWT tokens.
+ * Requires ALLOW_ADMIN_USER_PASSWORD_AUTH enabled on the app client.
+ */
+export async function initiateCognitoAuth(email: string, password: string): Promise<CognitoTokens> {
+  const result = await getCognitoAdmin().send(new AdminInitiateAuthCommand({
+    UserPoolId: USER_POOL_ID,
+    ClientId: CLIENT_ID,
+    AuthFlow: "ADMIN_USER_PASSWORD_AUTH",
+    AuthParameters: {
+      USERNAME: email,
+      PASSWORD: password,
+    },
+  }));
+
+  const tokens = result.AuthenticationResult;
+  if (!tokens?.AccessToken || !tokens?.RefreshToken || !tokens?.IdToken) {
+    throw new Error("Cognito did not return tokens — check ALLOW_ADMIN_USER_PASSWORD_AUTH on app client");
+  }
+
+  return {
+    accessToken: tokens.AccessToken,
+    refreshToken: tokens.RefreshToken,
+    idToken: tokens.IdToken,
+    expiresIn: tokens.ExpiresIn ?? 3600,
+  };
+}
+
+/**
+ * Sign out a user from all devices via their access token.
+ */
+export async function cognitoGlobalSignOut(accessToken: string): Promise<void> {
+  try {
+    await getCognitoAdmin().send(new GlobalSignOutCommand({ AccessToken: accessToken }));
+  } catch {
+    // Ignore errors (expired token, already signed out, etc.)
+  }
+}
+
+/**
+ * Refresh an access token using a Cognito refresh token.
+ */
+export async function refreshCognitoTokens(refreshToken: string): Promise<{ accessToken: string; expiresIn: number }> {
+  const result = await getCognitoAdmin().send(new InitiateAuthCommand({
+    ClientId: CLIENT_ID,
+    AuthFlow: "REFRESH_TOKEN_AUTH",
+    AuthParameters: {
+      REFRESH_TOKEN: refreshToken,
+    },
+  }));
+
+  const tokens = result.AuthenticationResult;
+  if (!tokens?.AccessToken) {
+    throw new Error("Token refresh failed");
+  }
+
+  return {
+    accessToken: tokens.AccessToken,
+    expiresIn: tokens.ExpiresIn ?? 3600,
+  };
 }

@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     authenticated: true,
+    userId: user.userId,
+    email: user.email,
     plan: profile?.plan || "trial",
     role: profile?.role || "patient",
     isAdmin: profile?.is_admin || false,

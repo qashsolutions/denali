@@ -8,7 +8,7 @@ interface EmailOTPModalProps {
   onClose: () => void;
   onVerified: () => void;
   sendEmailOTP: (email: string) => Promise<boolean>;
-  verifyEmailOTP: (email: string, code: string) => Promise<boolean>;
+  verifyEmailOTP: (email: string, code: string) => Promise<{ success: boolean; mfaRequired?: boolean }>;
   isLoading: boolean;
   error: string | null;
   clearError: () => void;
@@ -92,8 +92,8 @@ export function EmailOTPModal({
     const fullCode = code.join("");
     if (fullCode.length !== 6) return;
 
-    const success = await verifyEmailOTP(email, fullCode);
-    if (success) {
+    const result = await verifyEmailOTP(email, fullCode);
+    if (result.success) {
       onVerified();
       onClose();
     }
