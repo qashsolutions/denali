@@ -49,7 +49,7 @@ import {
   recordCoveragePath,
   type ExtractedEntities,
 } from "@/lib/learning";
-import { saveAppeal, getUnreportedOutcome } from "@/lib/conversation-service";
+import { saveAppeal, getUnreportedOutcome } from "@/lib/conversation-server";
 import { FEEDBACK_CONFIG, API_CONFIG, PRICING } from "@/config";
 import { getUploadLimitForPlan, formatFileSize } from "@/config/pricing";
 import { logAudit } from "@/lib/audit";

@@ -1,17 +1,9 @@
 /**
  * Conversation Persistence Service
  *
- * Handles saving and loading conversations and messages to/from Supabase.
+ * Client-side functions for conversations, appeals, feedback, and events.
+ * All DB access goes through API routes — no direct Supabase/RDS calls here.
  */
-
-import { getClient } from "./supabase";
-import { MEDICARE_CONSTANTS } from "@/config";
-import type { Database } from "@/types/database";
-
-type Conversation = Database["public"]["Tables"]["conversations"]["Row"];
-type Message = Database["public"]["Tables"]["messages"]["Row"];
-type ConversationInsert = Database["public"]["Tables"]["conversations"]["Insert"];
-type MessageInsert = Database["public"]["Tables"]["messages"]["Insert"];
 
 export interface ConversationData {
   id: string;
@@ -35,370 +27,53 @@ export interface MessageData {
 }
 
 /**
- * Create a new conversation
- */
-export async function createConversation(
-  options: {
-    userId?: string;
-    phone?: string;
-    isAppeal?: boolean;
-    title?: string;
-  } = {}
-): Promise<string | null> {
-  const supabase = getClient();
-
-  const conversationData: ConversationInsert = {
-    user_id: options.userId || null,
-    phone: options.phone || null,
-    is_appeal: options.isAppeal || false,
-    title: options.title || null,
-    status: "active",
-    started_at: new Date().toISOString(),
-  };
-
-  const { data, error } = await supabase
-    .from("conversations")
-    .insert(conversationData)
-    .select("id")
-    .single();
-
-  if (error) {
-    console.error("Failed to create conversation:", error);
-    return null;
-  }
-
-  return data.id;
-}
-
-/**
- * Save a message to the database
- */
-export async function saveMessage(
-  conversationId: string,
-  message: {
-    role: "user" | "assistant" | "system";
-    content: string;
-    icd10Codes?: string[];
-    cptCodes?: string[];
-    npi?: string;
-    policyRefs?: string[];
-  }
-): Promise<string | null> {
-  const supabase = getClient();
-
-  const messageData: MessageInsert = {
-    conversation_id: conversationId,
-    role: message.role,
-    content: message.content,
-    icd10_codes: message.icd10Codes || null,
-    cpt_codes: message.cptCodes || null,
-    npi: message.npi || null,
-    policy_refs: message.policyRefs || null,
-  };
-
-  const { data, error } = await supabase
-    .from("messages")
-    .insert(messageData)
-    .select("id")
-    .single();
-
-  if (error) {
-    console.error("Failed to save message:", error);
-    return null;
-  }
-
-  return data.id;
-}
-
-/**
- * Load a conversation with all its messages
+ * Load a conversation with all its messages.
+ * Anonymous conversations are accessible by ID (UUID is unguessable).
+ * Authenticated users can only access their own conversations.
  */
 export async function loadConversation(
   conversationId: string
 ): Promise<ConversationData | null> {
-  const supabase = getClient();
+  try {
+    const res = await fetch(`/api/conversations/${conversationId}`, {
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.conversation) return null;
 
-  // Fetch conversation
-  const { data: conversation, error: convError } = await supabase
-    .from("conversations")
-    .select("*")
-    .eq("id", conversationId)
-    .single();
-
-  if (convError || !conversation) {
-    console.error("Failed to load conversation:", convError);
-    return null;
-  }
-
-  // Fetch messages
-  const { data: messages, error: msgError } = await supabase
-    .from("messages")
-    .select("*")
-    .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true });
-
-  if (msgError) {
-    console.error("Failed to load messages:", msgError);
-    return null;
-  }
-
-  return {
-    id: conversation.id,
-    title: conversation.title,
-    status: conversation.status,
-    isAppeal: conversation.is_appeal || false,
-    createdAt: new Date(conversation.created_at),
-    completedAt: conversation.completed_at
-      ? new Date(conversation.completed_at)
-      : null,
-    messages: (messages || []).map((msg) => ({
-      id: msg.id,
-      role: msg.role as "user" | "assistant" | "system",
-      content: msg.content,
-      timestamp: new Date(msg.created_at),
-      icd10Codes: msg.icd10_codes || undefined,
-      cptCodes: msg.cpt_codes || undefined,
-      npi: msg.npi || undefined,
-      policyRefs: msg.policy_refs || undefined,
-    })),
-  };
-}
-
-/**
- * Load recent conversations for a user
- */
-export async function loadRecentConversations(
-  options: {
-    userId?: string;
-    phone?: string;
-    limit?: number;
-  } = {}
-): Promise<ConversationData[]> {
-  const supabase = getClient();
-  const limit = options.limit || 10;
-
-  let query = supabase
-    .from("conversations")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (options.userId) {
-    query = query.eq("user_id", options.userId);
-  } else if (options.phone) {
-    query = query.eq("phone", options.phone);
-  }
-
-  const { data: conversations, error } = await query;
-
-  if (error || !conversations) {
-    console.error("Failed to load conversations:", error);
-    return [];
-  }
-
-  // Load first user message + last assistant message per conversation for previews
-  const conversationIds = conversations.map((c) => c.id);
-  let messagesByConv = new Map<string, Array<{ role: string; content: string }>>();
-
-  if (conversationIds.length > 0) {
-    const { data: msgs } = await supabase
-      .from("messages")
-      .select("conversation_id, role, content, created_at")
-      .in("conversation_id", conversationIds)
-      .order("created_at", { ascending: true });
-
-    if (msgs) {
-      // Group by conversation, keep first user + last assistant
-      for (const msg of msgs) {
-        const convId = msg.conversation_id;
-        if (!messagesByConv.has(convId)) {
-          messagesByConv.set(convId, []);
-        }
-        messagesByConv.get(convId)!.push({ role: msg.role, content: msg.content });
-      }
-    }
-  }
-
-  return conversations.map((conv) => {
-    const convMsgs = messagesByConv.get(conv.id) || [];
-    const firstUser = convMsgs.find((m) => m.role === "user");
-    const lastAssistant = [...convMsgs].reverse().find((m) => m.role === "assistant");
-    const previewMessages: MessageData[] = [];
-    if (firstUser) {
-      previewMessages.push({ id: "", role: "user", content: firstUser.content, timestamp: new Date() });
-    }
-    if (lastAssistant) {
-      previewMessages.push({ id: "", role: "assistant", content: lastAssistant.content, timestamp: new Date() });
-    }
-
+    const conv = data.conversation;
     return {
       id: conv.id,
       title: conv.title,
       status: conv.status,
-      isAppeal: conv.is_appeal || false,
-      createdAt: new Date(conv.created_at),
-      completedAt: conv.completed_at ? new Date(conv.completed_at) : null,
-      messages: previewMessages,
+      isAppeal: conv.isAppeal || false,
+      createdAt: new Date(conv.createdAt),
+      completedAt: conv.completedAt ? new Date(conv.completedAt) : null,
+      messages: (conv.messages || []).map((msg: {
+        id: string;
+        role: string;
+        content: string;
+        createdAt: string;
+        icd10Codes?: string[];
+        cptCodes?: string[];
+        npi?: string;
+        policyRefs?: string[];
+      }) => ({
+        id: msg.id,
+        role: msg.role as "user" | "assistant" | "system",
+        content: msg.content,
+        timestamp: new Date(msg.createdAt),
+        icd10Codes: msg.icd10Codes || undefined,
+        cptCodes: msg.cptCodes || undefined,
+        npi: msg.npi || undefined,
+        policyRefs: msg.policyRefs || undefined,
+      })),
     };
-  });
-}
-
-// DEAD CODE — No consumers. Commented out 2026-02-06.
-// export async function updateConversationStatus(
-//   conversationId: string,
-//   status: "active" | "completed" | "archived",
-//   title?: string
-// ): Promise<boolean> {
-//   const supabase = getClient();
-//   const updates: Record<string, unknown> = { status };
-//   if (status === "completed") {
-//     updates.completed_at = new Date().toISOString();
-//   }
-//   if (title) {
-//     updates.title = title;
-//   }
-//   const { error } = await supabase
-//     .from("conversations")
-//     .update(updates)
-//     .eq("id", conversationId);
-//   if (error) {
-//     console.error("Failed to update conversation:", error);
-//     return false;
-//   }
-//   return true;
-// }
-
-/**
- * Submit feedback for a message
- * Anonymous users can provide feedback without authentication
- */
-export async function submitMessageFeedback(
-  messageId: string,
-  rating: "up" | "down",
-  userId?: string,
-  correction?: string
-): Promise<boolean> {
-  const supabase = getClient();
-
-  const params = {
-    p_message_id: messageId,
-    p_rating: rating,
-    p_user_id: userId,
-    p_correction: correction,
-    p_feedback_type: "accuracy",
-  };
-
-  console.log("[Feedback] Submitting feedback:", JSON.stringify(params, null, 2));
-
-  // Use the database function for proper feedback processing
-  // All parameters except p_message_id are optional to support anonymous users
-  // Valid feedback_type values: 'accuracy', 'clarity', 'completeness', 'other'
-  const { data, error } = await supabase.rpc("process_feedback", params);
-
-  if (error) {
-    console.error("[Feedback] Failed to submit feedback:", error);
-    return false;
-  }
-
-  console.log("[Feedback] Success, feedback_id:", data);
-  return true;
-}
-
-/**
- * Save an appeal to the database
- */
-export async function saveAppeal(
-  conversationId: string,
-  email: string,
-  appealData: {
-    appealLetter: string;
-    denialDate?: string;
-    denialReason?: string;
-    serviceDescription?: string;
-    icd10Codes?: string[];
-    cptCodes?: string[];
-    ncdRefs?: string[];
-    lcdRefs?: string[];
-    pubmedRefs?: string[];
-    userId?: string;
-  }
-): Promise<string | null> {
-  const supabase = getClient();
-
-  // Resolve email: if empty, look up from conversation's user_id
-  let resolvedEmail = email;
-  if (!resolvedEmail) {
-    const { data: conv } = await supabase
-      .from("conversations")
-      .select("user_id")
-      .eq("id", conversationId)
-      .single();
-
-    if (conv?.user_id) {
-      const { data: user } = await supabase
-        .from("users")
-        .select("email")
-        .eq("id", conv.user_id)
-        .single();
-      resolvedEmail = user?.email || "";
-    }
-  }
-
-  // Calculate deadline
-  let deadline: string | null = null;
-  if (appealData.denialDate) {
-    const denialDate = new Date(appealData.denialDate);
-    const deadlineDate = new Date(denialDate);
-    deadlineDate.setDate(deadlineDate.getDate() + MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS);
-    deadline = deadlineDate.toISOString();
-  }
-
-  const { data, error } = await supabase
-    .from("appeals")
-    .insert({
-      conversation_id: conversationId,
-      email: resolvedEmail,
-      user_id: appealData.userId || null,
-      appeal_letter: appealData.appealLetter,
-      denial_date: appealData.denialDate || null,
-      denial_reason: appealData.denialReason || null,
-      service_description: appealData.serviceDescription || null,
-      icd10_codes: appealData.icd10Codes || null,
-      cpt_codes: appealData.cptCodes || null,
-      ncd_refs: appealData.ncdRefs || null,
-      lcd_refs: appealData.lcdRefs || null,
-      pubmed_refs: appealData.pubmedRefs || null,
-      deadline,
-      status: "draft",
-      paid: false,
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    console.error("Failed to save appeal:", error);
+  } catch (err) {
+    console.error("[loadConversation] Failed:", err);
     return null;
   }
-
-  // Increment appeal count + decrement credit (only if we have an email)
-  if (resolvedEmail) {
-    await supabase.rpc("increment_appeal_count", {
-      p_email: resolvedEmail,
-      p_user_id: appealData.userId,
-    });
-    // Decrement appeal credit (credit-based gating)
-    supabase.rpc("decrement_appeal_credit", { p_email: resolvedEmail })
-      .then(({ error: creditErr }) => {
-        if (creditErr) console.warn("[saveAppeal] Failed to decrement appeal credit:", creditErr);
-      });
-
-    // Schedule outcome followups (non-blocking)
-    scheduleOutcomeFollowups(data.id, resolvedEmail).catch((err) =>
-      console.warn("[saveAppeal] Failed to schedule outcome followups:", err)
-    );
-  }
-
-  return data.id;
 }
 
 /**
@@ -419,90 +94,89 @@ export interface AppealSummary {
 }
 
 /**
- * Load appeals associated with a conversation
+ * Load appeals associated with a conversation.
  */
 export async function loadAppealsForConversation(
   conversationId: string
 ): Promise<AppealSummary[]> {
-  const supabase = getClient();
-
-  const { data, error } = await supabase
-    .from("appeals")
-    .select("*")
-    .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: false });
-
-  if (error || !data) {
-    console.error("Failed to load appeals for conversation:", error);
+  try {
+    const res = await fetch(`/api/appeals?conversationId=${encodeURIComponent(conversationId)}`, {
+      credentials: "include",
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.appeals || []).map((a: {
+      id: string;
+      appealLetter: string;
+      denialReason: string | null;
+      denialDate: string | null;
+      deadline: string | null;
+      carcCodes: string[];
+      cptCodes: string[];
+      lcdRefs: string[];
+      ncdRefs: string[];
+      status: string;
+      createdAt: string;
+    }) => ({
+      ...a,
+      createdAt: new Date(a.createdAt),
+    }));
+  } catch (err) {
+    console.error("[loadAppealsForConversation] Failed:", err);
     return [];
   }
-
-  return data.map((appeal) => ({
-    id: appeal.id,
-    appealLetter: appeal.appeal_letter,
-    denialReason: appeal.denial_reason,
-    denialDate: appeal.denial_date,
-    deadline: appeal.deadline,
-    carcCodes: appeal.carc_codes || [],
-    cptCodes: appeal.cpt_codes || [],
-    lcdRefs: appeal.lcd_refs || [],
-    ncdRefs: appeal.ncd_refs || [],
-    status: appeal.status || "draft",
-    createdAt: new Date(appeal.created_at),
-  }));
 }
 
 /**
  * Claim an anonymous conversation for the authenticated user.
- * Uses a SECURITY DEFINER function to bypass RLS (SELECT policy
- * blocks authenticated users from seeing unclaimed rows).
- * Also creates the public.users record if needed and claims associated appeals.
  */
 export async function claimConversation(
   conversationId: string
 ): Promise<boolean> {
-  const supabase = getClient();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)("claim_conversation", {
-    p_conversation_id: conversationId,
-  });
-
-  if (error) {
-    console.error("Failed to claim conversation:", error);
+  try {
+    const res = await fetch("/api/conversations/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ conversationId }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return !!data.claimed;
+  } catch (err) {
+    console.error("[claimConversation] Failed:", err);
     return false;
   }
-
-  return !!data;
 }
 
-// DEAD CODE — No consumers. Appeal count is checked via useAuth hook or RPC.
-// Commented out 2026-02-06.
-// export async function getAppealCount(email: string): Promise<number> {
-//   const supabase = getClient();
-//   const { data, error } = await supabase
-//     .from("usage")
-//     .select("appeal_count")
-//     .eq("email", email)
-//     .single();
-//   if (error || !data) {
-//     return 0;
-//   }
-//   return data.appeal_count;
-// }
-
-// DEAD CODE — No consumers. Subscription checked via useAuth hook.
-// Commented out 2026-02-06.
-// export async function hasActiveSubscription(userId: string): Promise<boolean> {
-//   const supabase = getClient();
-//   const { data, error } = await supabase
-//     .from("subscriptions")
-//     .select("id")
-//     .eq("user_id", userId)
-//     .eq("status", "active")
-//     .single();
-//   return !error && !!data;
-// }
+/**
+ * Submit feedback for a message.
+ * Anonymous users can provide feedback.
+ */
+export async function submitMessageFeedback(
+  messageId: string,
+  rating: "up" | "down",
+  userId?: string,
+  correction?: string
+): Promise<boolean> {
+  try {
+    const res = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        messageId,
+        rating,
+        userId,
+        correction,
+      }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("[submitMessageFeedback] Failed:", err);
+    return false;
+  }
+}
 
 // Valid event types per database constraint
 const VALID_EVENT_TYPES = [
@@ -523,8 +197,8 @@ const VALID_EVENT_TYPES = [
 type ValidEventType = (typeof VALID_EVENT_TYPES)[number];
 
 /**
- * Track a user event for analytics
- * All parameters are optional to support anonymous users
+ * Track a user event for analytics.
+ * Respects analytics consent — only tracks if user has explicitly opted in.
  */
 export async function trackEvent(
   eventType: string,
@@ -536,135 +210,30 @@ export async function trackEvent(
     analyticsConsent?: boolean;
   } = {}
 ): Promise<void> {
-  const supabase = getClient();
-
-  console.log("[TrackEvent] Input:", { eventType, options });
-
   // Validate event type
   if (!VALID_EVENT_TYPES.includes(eventType as ValidEventType)) {
-    console.error(
-      "[TrackEvent] Invalid event type:",
-      eventType,
-      "| Valid types:",
-      VALID_EVENT_TYPES.join(", ")
-    );
+    console.error("[trackEvent] Invalid event type:", eventType);
     return;
   }
 
-  // Respect analytics consent — only track if user has explicitly opted in
+  // Respect analytics consent
   if (options.analyticsConsent !== true) return;
 
-  // UUID validation regex
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-  // Only pass IDs if they're valid UUIDs (database requires UUID format)
-  const conversationId = options.conversationId && uuidRegex.test(options.conversationId)
-    ? options.conversationId
-    : undefined;
-  const appealId = options.appealId && uuidRegex.test(options.appealId)
-    ? options.appealId
-    : undefined;
-
-  console.log("[TrackEvent] UUID validation:", {
-    inputConvId: options.conversationId,
-    validatedConvId: conversationId,
-    inputAppealId: options.appealId,
-    validatedAppealId: appealId,
-  });
-
-  const params = {
-    p_event_type: eventType,
-    p_phone: options.phone,
-    p_conversation_id: conversationId,
-    p_appeal_id: appealId,
-    p_event_data: options.eventData as Record<string, string | number | boolean | null> | undefined,
-  };
-
-  console.log("[TrackEvent] Calling RPC with params:", JSON.stringify(params, null, 2));
-
   try {
-    const { data, error } = await supabase.rpc("track_user_event", params);
-
-    if (error) {
-      console.error("[TrackEvent] RPC error:", {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-      });
-    } else {
-      console.log("[TrackEvent] Success, event_id:", data);
-    }
-  } catch (error) {
-    // Non-blocking - just log
-    console.error("[TrackEvent] Exception:", error);
+    await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        eventType,
+        phone: options.phone,
+        conversationId: options.conversationId,
+        appealId: options.appealId,
+        eventData: options.eventData,
+      }),
+    });
+  } catch (err) {
+    console.error("[trackEvent] Failed:", err);
   }
 }
 
-/**
- * Schedule outcome followup emails for an appeal.
- * Creates day_30 and day_60 followups that will be sent by the cron edge function.
- */
-async function scheduleOutcomeFollowups(
-  appealId: string,
-  email: string
-): Promise<void> {
-  const supabase = getClient();
-  const now = new Date();
-  const day30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-  const day60 = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
-
-  const { error } = await supabase.from("outcome_followups").insert([
-    {
-      appeal_id: appealId,
-      email,
-      followup_type: "day_30",
-      scheduled_at: day30.toISOString(),
-    },
-    {
-      appeal_id: appealId,
-      email,
-      followup_type: "day_60",
-      scheduled_at: day60.toISOString(),
-    },
-  ]);
-
-  if (error) {
-    console.error("[scheduleOutcomeFollowups] Failed:", error);
-  } else {
-    console.log("[scheduleOutcomeFollowups] Scheduled day_30 and day_60 for appeal:", appealId);
-  }
-}
-
-/**
- * Get unreported outcome for a returning user.
- * Used by chat route to prompt users about past appeal outcomes.
- */
-export async function getUnreportedOutcome(
-  email: string | null
-): Promise<{
-  appealId: string;
-  followupId: string;
-  serviceDescription: string | null;
-  denialDate: string | null;
-} | null> {
-  if (!email) return null;
-
-  const supabase = getClient();
-
-  const { data, error } = await supabase.rpc("get_unreported_outcome", {
-    p_email: email,
-  });
-
-  if (error || !data || data.length === 0) {
-    return null;
-  }
-
-  const row = data[0];
-  return {
-    appealId: row.appeal_id,
-    followupId: row.followup_id,
-    serviceDescription: row.service_description,
-    denialDate: row.denial_date,
-  };
-}

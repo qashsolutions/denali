@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { getClient } from "@/lib/supabase";
 
 export interface SnapshotPoint {
   value: number;
@@ -26,30 +25,23 @@ export function useDiabetesSnapshots(): UseDiabetesSnapshotsReturn {
 
     const fetchSnapshots = async () => {
       try {
-        const supabase = getClient();
-        const { data, error } = await supabase
-          .from("diabetes_snapshots")
-          .select("loinc_code, lab_name, value, unit, observed_date")
-          .order("observed_date", { ascending: true });
+        const res = await fetch("/api/diabetes/snapshots", {
+          credentials: "include",
+        });
 
         if (cancelled) return;
 
-        if (error) {
-          // Suppress abort errors (component unmount / strict mode double-mount)
-          if (error.message?.includes("abort")) return;
-          console.warn("[Snapshots] Fetch failed:", error.message);
+        if (!res.ok) {
+          if (res.status !== 401) {
+            console.warn("[Snapshots] Fetch failed:", res.status);
+          }
           return;
         }
 
-        setSnapshots(
-          (data ?? []).map((r) => ({
-            value: Number(r.value),
-            date: r.observed_date,
-            loincCode: r.loinc_code,
-            labName: r.lab_name,
-            unit: r.unit,
-          }))
-        );
+        const data = await res.json();
+        if (!cancelled) {
+          setSnapshots(data.snapshots || []);
+        }
       } catch (err) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
