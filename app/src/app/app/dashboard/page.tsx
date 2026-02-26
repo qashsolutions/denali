@@ -2,55 +2,24 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase";
 import { CaseList, OutcomeStats } from "@/components/dashboard";
 import type { CaseRow, CounselorStats } from "@/components/dashboard";
 
 export default function AppDashboardPage() {
   const router = useRouter();
-  const supabase = createClient();
   const [isLoading, setIsLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [stats, setStats] = useState<CounselorStats | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function init() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.user) {
-        router.push("/app");
-        return;
-      }
-
-      const uid = session.user.id;
-      setUserId(uid);
-
-      const { data: profile } = await supabase
-        .from("users")
-        .select("role")
-        .eq("id", uid)
-        .single();
-
-      if (
-        !profile ||
-        (profile.role !== "counselor" && profile.role !== "provider")
-      ) {
-        router.push("/app");
-        return;
-      }
-
-      setRole(profile.role);
-
-      const { data: statsData } = await supabase.rpc("get_counselor_stats", {
-        p_counselor_id: uid,
-      });
-
-      if (statsData && statsData.length > 0) {
-        const s = statsData[0];
+  const loadStats = useCallback(async (uid: string) => {
+    try {
+      const res = await fetch("/api/counselor/stats", { credentials: "include" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const s = data.stats;
+      if (s) {
         setStats({
           openCases: Number(s.open_cases) || 0,
           filedThisMonth: Number(s.filed_this_month) || 0,
@@ -58,22 +27,50 @@ export default function AppDashboardPage() {
           approvedCount: Number(s.approved_count) || 0,
           deniedCount: Number(s.denied_count) || 0,
           partialCount: Number(s.partial_count) || 0,
-          avgResolutionDays: s.avg_resolution_days
-            ? Number(s.avg_resolution_days)
-            : null,
+          avgResolutionDays: s.avg_resolution_days ? Number(s.avg_resolution_days) : null,
         });
       }
+    } catch (err) {
+      console.error("[dashboard] loadStats failed:", err);
+    }
+    // uid param reserved for future per-user filtering
+    void uid;
+  }, []);
 
-      const { data: casesData } = await supabase
-        .from("counselor_cases")
-        .select("*")
-        .eq("counselor_id", uid)
-        .order("created_at", { ascending: false })
-        .limit(100);
+  useEffect(() => {
+    async function init() {
+      // Auth + role check via profile API
+      const profileRes = await fetch("/api/profile", { credentials: "include" });
+      if (!profileRes.ok) { router.push("/app"); return; }
+      const profile = await profileRes.json();
 
-      if (casesData) {
+      if (!profile.authenticated) { router.push("/app"); return; }
+      if (profile.role !== "counselor" && profile.role !== "provider") {
+        router.push("/app");
+        return;
+      }
+
+      setUserId(profile.userId ?? null);
+      setRole(profile.role);
+
+      // Load cases
+      const casesRes = await fetch("/api/counselor/cases", { credentials: "include" });
+      if (casesRes.ok) {
+        const data = await casesRes.json();
         setCases(
-          casesData.map((c) => ({
+          (data.cases || []).map((c: {
+            id: string;
+            case_ref: string;
+            client_initials: string | null;
+            client_state: string | null;
+            denial_code: string | null;
+            procedure_description: string | null;
+            denial_date: string | null;
+            status: string;
+            outcome: string | null;
+            outcome_date: string | null;
+            created_at: string;
+          }) => ({
             id: c.id,
             caseRef: c.case_ref,
             clientInitials: c.client_initials,
@@ -89,61 +86,34 @@ export default function AppDashboardPage() {
         );
       }
 
+      await loadStats(profile.userId ?? "");
       setIsLoading(false);
     }
 
     init();
-  }, [supabase, router]);
+  }, [router, loadStats]);
 
   const handleReportOutcome = useCallback(
     async (caseId: string, outcome: string) => {
-      const { error } = await supabase
-        .from("counselor_cases")
-        .update({
-          outcome,
-          outcome_date: new Date().toISOString().split("T")[0],
-          status: "outcome_reported",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", caseId);
+      const res = await fetch("/api/counselor/cases", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caseId, outcome }),
+      });
 
-      if (!error) {
+      if (res.ok) {
         setCases((prev) =>
           prev.map((c) =>
             c.id === caseId
-              ? {
-                  ...c,
-                  outcome,
-                  status: "outcome_reported",
-                  outcomeDate: new Date().toISOString().split("T")[0],
-                }
+              ? { ...c, outcome, status: "outcome_reported", outcomeDate: new Date().toISOString().split("T")[0] }
               : c
           )
         );
-
-        if (userId) {
-          const { data: statsData } = await supabase.rpc(
-            "get_counselor_stats",
-            { p_counselor_id: userId }
-          );
-          if (statsData && statsData.length > 0) {
-            const s = statsData[0];
-            setStats({
-              openCases: Number(s.open_cases) || 0,
-              filedThisMonth: Number(s.filed_this_month) || 0,
-              outcomesReported: Number(s.outcomes_reported) || 0,
-              approvedCount: Number(s.approved_count) || 0,
-              deniedCount: Number(s.denied_count) || 0,
-              partialCount: Number(s.partial_count) || 0,
-              avgResolutionDays: s.avg_resolution_days
-                ? Number(s.avg_resolution_days)
-                : null,
-            });
-          }
-        }
+        if (userId) loadStats(userId);
       }
     },
-    [supabase, userId]
+    [userId, loadStats]
   );
 
   if (isLoading) {
