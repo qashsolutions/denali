@@ -61,6 +61,12 @@ jobs:
             --query taskDefinition \
             > /tmp/task-definition.json
 
+      - name: Remove task definition healthCheck (use Dockerfile HEALTHCHECK instead)
+        run: |
+          jq 'del(.containerDefinitions[0].healthCheck)' /tmp/task-definition.json \
+            > /tmp/task-definition-clean.json
+          mv /tmp/task-definition-clean.json /tmp/task-definition.json
+
       - name: Update task definition with new image
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
@@ -76,4 +82,4 @@ jobs:
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
-          wait-for-minutes: 10
+          wait-for-minutes: 15
