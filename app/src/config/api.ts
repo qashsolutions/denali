@@ -12,8 +12,9 @@ export const API_CONFIG = {
    *   ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
    *   ANTHROPIC_APPEAL_MODEL=claude-opus-4-6
    * ECS/Bedrock: no ANTHROPIC_API_KEY → IAM auth via task role
-   *   ANTHROPIC_MODEL=us.anthropic.claude-opus-4-6-v1:0  (Opus 4.6 for both — same price as Sonnet 4.5)
-   *   ANTHROPIC_APPEAL_MODEL=us.anthropic.claude-opus-4-6-v1:0
+   *   ANTHROPIC_MODEL=arn:aws:bedrock:us-east-1:ACCOUNT:inference-profile/global.anthropic.claude-opus-4-6-v1
+   *   ANTHROPIC_APPEAL_MODEL=arn:aws:bedrock:us-east-1:ACCOUNT:inference-profile/global.anthropic.claude-opus-4-6-v1
+   *   (prefix is "global." not "us.", no ":0" suffix, full ARN required)
    */
   claude: {
     /** Chat model — Sonnet 4.5 (direct API default) or Bedrock inference profile ID via ANTHROPIC_MODEL env */
