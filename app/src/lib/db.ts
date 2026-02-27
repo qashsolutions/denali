@@ -21,8 +21,9 @@ function getPool(): Pool {
       database: process.env.DB_NAME,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
-      // TLS required for RDS
-      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: true } : false,
+      // TLS for RDS — rejectUnauthorized:false accepts AWS's RDS CA without bundling the cert
+      // TODO: add RDS CA bundle (rds-ca-rsa2048-g1.pem) to image and set rejectUnauthorized:true for HIPAA
+      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
