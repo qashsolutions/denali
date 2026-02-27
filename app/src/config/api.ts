@@ -7,12 +7,19 @@
 import { BRAND } from "./brand";
 
 export const API_CONFIG = {
-  /** Claude via AWS Bedrock configuration */
+  /** Claude configuration
+   * Vercel/local: set ANTHROPIC_API_KEY → uses direct Anthropic API
+   *   ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
+   *   ANTHROPIC_APPEAL_MODEL=claude-opus-4-6
+   * ECS/Bedrock: no ANTHROPIC_API_KEY → IAM auth via task role
+   *   ANTHROPIC_MODEL=us.anthropic.claude-opus-4-6-v1:0  (Opus 4.6 for both — same price as Sonnet 4.5)
+   *   ANTHROPIC_APPEAL_MODEL=us.anthropic.claude-opus-4-6-v1:0
+   */
   claude: {
-    /** Chat model: Sonnet 4.6 on Bedrock */
-    model: process.env.ANTHROPIC_MODEL || "anthropic.claude-sonnet-4-6",
-    /** Appeal model: Opus 4.6 on Bedrock */
-    appealModel: process.env.ANTHROPIC_APPEAL_MODEL || "anthropic.claude-opus-4-6-v1",
+    /** Chat model — Sonnet 4.5 (direct API default) or Bedrock inference profile ID via ANTHROPIC_MODEL env */
+    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929",
+    /** Appeal model — Opus 4.6 (direct API default) or Bedrock inference profile ID via ANTHROPIC_APPEAL_MODEL env */
+    appealModel: process.env.ANTHROPIC_APPEAL_MODEL || "claude-opus-4-6",
     maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS || "4096", 10),
     maxToolIterations: parseInt(process.env.CLAUDE_MAX_TOOL_ITERATIONS || "10", 10),
     /** Per-iteration timeout in ms (prevents single API call from hanging) */

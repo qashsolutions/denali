@@ -50,14 +50,21 @@ export interface ChatResult {
   appealLetter?: string;
 }
 
-// Initialize Claude client (AWS Bedrock — IAM auth from ECS task role, no API key needed)
-let client: AnthropicBedrock | null = null;
+// Initialize Claude client — direct API (Vercel/local) or Bedrock (ECS)
+// If ANTHROPIC_API_KEY is set, use direct Anthropic API (model IDs: "claude-sonnet-4-5-20250929")
+// If not set, use AWS Bedrock with IAM auth from ECS task role (model IDs: "us.anthropic.claude-opus-4-6-...-v1:0")
+type ClaudeClient = Anthropic | AnthropicBedrock;
+let client: ClaudeClient | null = null;
 
-export function getClaudeClient(): AnthropicBedrock {
+export function getClaudeClient(): ClaudeClient {
   if (!client) {
-    client = new AnthropicBedrock({
-      awsRegion: process.env.AWS_REGION || "us-east-1",
-    });
+    if (process.env.ANTHROPIC_API_KEY) {
+      console.log("[CLAUDE] Using direct Anthropic API");
+      client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    } else {
+      console.log("[CLAUDE] Using AWS Bedrock (IAM auth)");
+      client = new AnthropicBedrock({ awsRegion: process.env.AWS_REGION || "us-east-1" });
+    }
   }
   return client;
 }
