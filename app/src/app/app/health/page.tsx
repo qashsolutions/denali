@@ -1,10 +1,11 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { HeartPulseIcon, DiabetesIcon } from "@/components/icons";
 import { useHealthData } from "@/hooks/useHealthData";
+import { useAuth } from "@/hooks/useAuth";
 import { getSeverityConfig } from "@/components/health/DiagnosisSummaryCard";
 import {
   ConnectMedicare,
@@ -320,6 +321,16 @@ function computeCardStatuses(
 // --- Main page ---
 function HealthPageInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const { authState } = useAuth();
+
+  // Redirect unauthenticated users to sign in
+  useEffect(() => {
+    if (!authState.isLoading && !authState.email) {
+      router.push("/app/settings");
+    }
+  }, [authState.isLoading, authState.email, router]);
+
   const {
     patient,
     coverage,

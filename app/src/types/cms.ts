@@ -91,10 +91,24 @@ export interface BlogPost {
   cta_text: string;
   cta_url: string;
   sources: string[] | null;
+  tags: string[] | null;
   meta_title: string | null;
   meta_description: string | null;
   published: boolean;
   published_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type HealthTopic = "diabetes" | "obesity" | "medicare-general";
+
+export const HEALTH_TOPICS: { value: HealthTopic; label: string; description: string }[] = [
+  { value: "diabetes", label: "Diabetes", description: "Diabetes management, prevention & Medicare coverage" },
+  { value: "obesity", label: "Obesity", description: "Weight management, bariatric surgery & Medicare coverage" },
+];
+
+export interface GroupedBlogContent {
+  topic: string;
+  label: string;
+  posts: BlogPost[];
 }

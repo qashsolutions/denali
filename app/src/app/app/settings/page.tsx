@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
 import { useSettings } from "@/hooks/useSettings";
 import { useConsent, type ConsentState } from "@/hooks/useConsent";
+import { useTopicPreferences } from "@/hooks/useTopicPreferences";
+import { HEALTH_TOPICS } from "@/types/cms";
+import type { HealthTopic } from "@/types/cms";
 import { useAuth } from "@/hooks/useAuth";
 import { TOTPEnrollModal } from "@/components/auth";
 import { PaywallModal } from "@/components/payment/PaywallModal";
@@ -15,6 +18,7 @@ export default function AppSettingsPage() {
   const { isDark, setTheme } = useTheme();
   const { settings, setTextScale, resetSettings } = useSettings();
   const { consent, isLoading: consentLoading, updateConsent } = useConsent();
+  const { topics: selectedTopics, isLoading: topicsLoading, toggleTopic } = useTopicPreferences();
   const { authState, sendEmailOTP, verifyEmailOTP, enrollTOTP, unenrollTOTP, challengeAndVerifyTOTP, signOut, clearError } = useAuth();
   const [showTOTPEnroll, setShowTOTPEnroll] = useState(false);
   const [showTOTPRemoveConfirm, setShowTOTPRemoveConfirm] = useState(false);
@@ -354,6 +358,63 @@ export default function AppSettingsPage() {
           </p>
         </div>
       </section>
+
+      {/* Content Preferences */}
+      {authState.email && (
+        <section className="mb-8">
+          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">
+            Content Preferences
+          </h2>
+          <p className="text-xs text-[var(--text-muted)] mb-4">
+            Choose up to 2 health topics. Your blog feed will show articles matching your interests.
+          </p>
+          <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
+            {topicsLoading ? (
+              <div className="flex items-center gap-3 py-2">
+                <div className="w-5 h-5 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-[var(--text-muted)]">Loading preferences...</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {HEALTH_TOPICS.map((topic) => {
+                  const isActive = selectedTopics.includes(topic.value);
+                  return (
+                    <button
+                      key={topic.value}
+                      onClick={() => toggleTopic(topic.value)}
+                      className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors text-left ${
+                        isActive
+                          ? "bg-[var(--accent-primary)]/10 border-2 border-[var(--accent-primary)]"
+                          : "bg-[var(--bg-tertiary)] border-2 border-transparent hover:border-[var(--border)]"
+                      }`}
+                      aria-pressed={isActive}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${isActive ? "text-[var(--accent-primary)]" : "text-[var(--text-primary)]"}`}>
+                          {topic.label}
+                        </p>
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5">{topic.description}</p>
+                      </div>
+                      {isActive && (
+                        <span className="ml-3 shrink-0 w-5 h-5 rounded-full bg-[var(--accent-primary)] flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+                {selectedTopics.length === 0 && (
+                  <p className="text-xs text-[var(--text-muted)] pt-1">
+                    No topics selected — you&apos;ll see a mix of all articles.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <PaywallModal
         isOpen={showPaywall}

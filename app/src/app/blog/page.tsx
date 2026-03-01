@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
-import { getBlogPosts } from "@/lib/cms";
+import { cookies } from "next/headers";
+import { getBlogPosts, getDefaultBlogPosts, getPersonalizedBlogPosts, getUserTopics } from "@/lib/cms";
 import { BlogGrid } from "@/components/blog";
 import { LandingFooter } from "@/components/landing";
 import { getSiteSettings } from "@/lib/cms";
+import { query } from "@/lib/db";
+import type { BlogPost, GroupedBlogContent } from "@/types/cms";
 
 export const revalidate = 3600;
 
@@ -13,16 +16,83 @@ export const metadata: Metadata = {
 };
 
 interface BlogPageProps {
-  searchParams: Promise<{ category?: string }>;
+  searchParams: Promise<{ category?: string; view?: string }>;
+}
+
+/**
+ * Lightweight user ID extraction from access_token cookie.
+ * Does NOT validate the JWT — just reads the sub claim for personalization.
+ * Blog is public, so worst case = no personalization (not a security issue).
+ */
+async function getUserIdFromCookie(): Promise<string | null> {
+  try {
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get("access_token")?.value;
+    if (!accessToken) return null;
+
+    // Decode JWT payload (middle segment) without verification
+    const parts = accessToken.split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+    const cognitoSub = payload.sub;
+    if (!cognitoSub) return null;
+
+    // Look up user_id from cognito sub
+    const result = await query<{ id: string }>(
+      `SELECT id FROM users WHERE id = $1 LIMIT 1`,
+      [cognitoSub]
+    );
+    return result.rows[0]?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export default async function BlogPage({ searchParams }: BlogPageProps) {
   const params = await searchParams;
   const category = params.category;
-  const [posts, settings] = await Promise.all([
+  const viewAll = params.view === "all";
+
+  // Determine display mode:
+  // 1. Category filter active or ?view=all → show all posts (with category tabs)
+  // 2. Signed-in user with topic preferences → personalized grouped view
+  // 3. Default (anonymous / no prefs) → 3 rotating posts (one per topic, weekly rotation)
+  let personalizedGroups: GroupedBlogContent[] | null = null;
+  let defaultPosts: BlogPost[] | null = null;
+
+  if (!category && !viewAll) {
+    try {
+      const userId = await getUserIdFromCookie();
+      if (userId) {
+        const topics = await getUserTopics(userId);
+        if (topics.length > 0) {
+          personalizedGroups = await getPersonalizedBlogPosts(topics);
+        }
+      }
+    } catch {
+      // Silently fall back to default blog view
+    }
+
+    // If no personalized content, get weekly-rotating defaults
+    if (!personalizedGroups || personalizedGroups.length === 0) {
+      try {
+        defaultPosts = await getDefaultBlogPosts();
+      } catch {
+        // Falls through to full post list
+      }
+    }
+  }
+
+  const [allPosts, settings] = await Promise.all([
     getBlogPosts(category),
     getSiteSettings(),
   ]);
+
+  // For the default (non-category, non-personalized, non-viewAll) view, show rotating picks
+  // with a "Browse all" link to full listing via category tabs
+  const displayPosts = (!category && !viewAll && defaultPosts && defaultPosts.length > 0)
+    ? defaultPosts
+    : allPosts;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -36,7 +106,15 @@ export default async function BlogPage({ searchParams }: BlogPageProps) {
           </p>
         </div>
 
-        <BlogGrid posts={posts} activeCategory={category} />
+        {personalizedGroups && personalizedGroups.length > 0 ? (
+          <BlogGrid posts={allPosts} activeCategory={category} groupedContent={personalizedGroups} />
+        ) : (
+          <BlogGrid
+            posts={displayPosts}
+            activeCategory={category}
+            showBrowseAll={!category && !viewAll && defaultPosts !== null && defaultPosts.length > 0}
+          />
+        )}
       </main>
 
       <LandingFooter settings={settings} />

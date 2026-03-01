@@ -52,7 +52,9 @@ export interface ChatResult {
 
 // Initialize Claude client — direct API (Vercel/local) or Bedrock (ECS)
 // If ANTHROPIC_API_KEY is set, use direct Anthropic API (model IDs: "claude-sonnet-4-5-20250929")
-// If not set, use AWS Bedrock with IAM auth from ECS task role (model IDs: "us.anthropic.claude-opus-4-6-...-v1:0")
+// If not set, use AWS Bedrock with IAM auth from ECS task role
+// Bedrock model IDs: full inference profile ARN, e.g.
+//   "arn:aws:bedrock:us-east-1:236823123138:inference-profile/global.anthropic.claude-opus-4-6-v1"
 type ClaudeClient = Anthropic | AnthropicBedrock;
 let client: ClaudeClient | null = null;
 

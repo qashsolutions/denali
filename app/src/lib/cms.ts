@@ -1,6 +1,7 @@
 import { query } from "./db";
 import type {
   BlogPost,
+  GroupedBlogContent,
   LandingPageData,
   LandingSection,
   PricingPlan,
@@ -167,6 +168,108 @@ export async function getBlogSlugs(): Promise<string[]> {
       `SELECT slug FROM blog_posts WHERE published = true`
     );
     return result.rows.map((row) => row.slug);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get user's topic preferences (server-side, for SSR blog page)
+ */
+export async function getUserTopics(userId: string): Promise<string[]> {
+  try {
+    const result = await query<{ topic: string }>(
+      `SELECT topic FROM user_topic_preferences WHERE user_id = $1 ORDER BY created_at`,
+      [userId]
+    );
+    return result.rows.map((r) => r.topic);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get the ISO week number for a date (1-53).
+ * Used for deterministic weekly rotation of default blog posts.
+ */
+function getISOWeekNumber(date: Date = new Date()): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7; // Sunday = 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum); // nearest Thursday
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+/**
+ * Get default blog posts for anonymous / no-preferences users.
+ * Returns 1 post per topic (diabetes, obesity, medicare-general),
+ * rotating weekly based on ISO week number.
+ */
+export async function getDefaultBlogPosts(): Promise<BlogPost[]> {
+  const defaultTopics = ["diabetes", "obesity", "medicare-general"];
+  const weekNum = getISOWeekNumber();
+
+  try {
+    const picks: BlogPost[] = [];
+    for (const topic of defaultTopics) {
+      const result = await query<BlogPost>(
+        `SELECT * FROM blog_posts
+         WHERE published = true AND $1 = ANY(tags)
+         ORDER BY published_at ASC`,
+        [topic]
+      );
+      if (result.rows.length > 0) {
+        // Rotate pick based on week number
+        const idx = weekNum % result.rows.length;
+        picks.push(result.rows[idx]);
+      }
+    }
+    return picks;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get personalized blog posts grouped by topic.
+ * - If topics provided: 3 posts per topic, grouped
+ * - If no topics (default): 3 most recent posts
+ */
+export async function getPersonalizedBlogPosts(
+  topics?: string[]
+): Promise<GroupedBlogContent[]> {
+  try {
+    if (topics && topics.length > 0) {
+      const topicLabels: Record<string, string> = {
+        diabetes: "Diabetes",
+        obesity: "Obesity",
+        "medicare-general": "Medicare General",
+      };
+
+      const groups: GroupedBlogContent[] = [];
+      for (const topic of topics) {
+        const result = await query<BlogPost>(
+          `SELECT * FROM blog_posts
+           WHERE published = true AND $1 = ANY(tags)
+           ORDER BY published_at DESC LIMIT 3`,
+          [topic]
+        );
+        if (result.rows.length > 0) {
+          groups.push({
+            topic,
+            label: topicLabels[topic] || topic,
+            posts: result.rows,
+          });
+        }
+      }
+      return groups;
+    }
+
+    // Default: 3 most recent posts (no grouping, returned as single group)
+    const result = await query<BlogPost>(
+      `SELECT * FROM blog_posts WHERE published = true ORDER BY published_at DESC LIMIT 3`
+    );
+    return [{ topic: "recent", label: "Latest Articles", posts: result.rows }];
   } catch {
     return [];
   }

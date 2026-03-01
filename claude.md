@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-02-26 (AWS migration Phase 2b complete — all code migrated)
+     Last updated: 2026-03-01 (blog: weekly-rotating default view for anonymous users, personalized view for signed-in users with topic prefs; AWS infra: scheduler deployed, monitor deployed, ECR/S3 lifecycles, qashai cleanup)
      Maintainer: @cvr
 -->
 
@@ -135,6 +135,14 @@ Where to find specific logic in the codebase.
 | `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
 | `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
 | `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
+| `src/lib/cms.ts` | CMS content queries via `query()`: `getBlogPosts(category?)`, `getBlogPost(slug)`, `getBlogSlugs()`, `getUserTopics(userId)`, `getPersonalizedBlogPosts(topics?)`, `getDefaultBlogPosts()` (weekly-rotating: 1 post per topic via ISO week number), `getLandingPageData()`, `getSiteSettings()`, `getPricingPlans()`, `getTestimonials()`. All have try/catch with empty defaults for build-time resilience |
+| `src/app/blog/page.tsx` | Blog listing page. SSR with `revalidate = 3600`. Three display modes: (1) `?category=` or `?view=all` → all posts with category tabs, (2) signed-in user with topic prefs → personalized grouped view, (3) default (anonymous/no prefs) → 3 weekly-rotating posts (one per topic) with "Browse all" link. Reads JWT from cookie (lightweight decode, no full auth). Falls back gracefully on any error |
+| `src/app/blog/[slug]/page.tsx` | Individual blog post page. Dynamic route, ISR. Uses `getBlogPost(slug)` + `BlogArticle`. `generateStaticParams()` via `getBlogSlugs()` |
+| `src/components/blog/` | Blog UI: `BlogCard` (card in grid), `BlogGrid` (3 modes: `groupedContent` → personalized topic sections with "Based on your interests" badge; `showBrowseAll` → curated "This Week's Picks" with "Browse all articles" link; default → category filter tabs + full grid), `BlogArticle` (full post layout) |
+| `src/hooks/useTopicPreferences.ts` | Content topic preferences (client). Returns `{ topics, isLoading, updateTopics, toggleTopic }`. Max 2 topics. Optimistic update + revert-on-failure (same pattern as `useConsent`) |
+| `src/app/api/preferences/topics/route.ts` | GET/PUT user topic preferences. Validates max 2, allowlist check. Audit-logged. Auth required |
+| `scripts/migrate-blog.js` | Blog migration script (runs inside ECS container via S3 relay). ALTER TABLE + seed 10 posts. Idempotent via ON CONFLICT (slug) DO NOTHING |
+| `scripts/migrate-blog-topics.js` | Topic preferences migration: creates `user_topic_preferences` table, tags existing 10 posts with `medicare-general`, seeds 6 new posts (3 diabetes, 3 obesity). Idempotent |
 | `src/hooks/useAuth.ts` | Auth state: email OTP via `/api/auth/send-otp`+`verify-otp`, TOTP MFA via `/api/auth/mfa/*`, AAL tracking, plan/role/trial/admin detection, credit-based appeal access gating (`appealCredits`), auto-trial on signup. Dispatches `auth-state-change` custom event. Profile from `/api/profile`. |
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table, gates health data injection |
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations. IndexedDB write-through + offline fallback |
@@ -178,6 +186,7 @@ src/app/api/
   account/delete/route.ts     # DELETE cascade: fhir_cache→ehr_connections→diabetes_*→messages→appeals→conversations→usage→subscriptions(+Stripe)→user_events→user_verification→users→Cognito AdminDeleteUser. Admin blocked (403). audit_logs survive (HIPAA 6yr).
   checkout/route.ts           # POST Stripe checkout session
   consent/route.ts            # GET/PUT consent preferences
+  preferences/topics/route.ts # GET/PUT user topic preferences (max 2: diabetes, obesity)
   trial/route.ts              # GET/POST 14-day trial
   cms-metadata/route.ts       # GET public CMS app directory metadata
   health/route.ts             # GET health check (ALB target, returns 200)
@@ -308,6 +317,8 @@ User-facing (plain English):        Internal (codes, never shown):
 | `diabetes_log` | User-entered daily entries (glucose/activity/meal/note). Any signed-in user. CHECK constraint on entry_type. RLS: users CRUD own |
 | `diabetes_insights` | Claude-generated diabetes analysis (summary, recommendations, risk_alerts, screening_reminders). Unique on user_id. Hash-based dedup avoids redundant Claude calls. RLS: users read own, service_role manages |
 | `chat_daily_usage` | Daily chat message rate limiting. Columns: `identifier` (user_id or IP), `usage_date`, `message_count`. Unique on `(identifier, usage_date)`. Managed by `check_and_increment_chat` RPC |
+| `blog_posts` | Public blog content. Columns: slug (UNIQUE), title, kicker, key_message, body, category, cta_text, cta_url, sources (TEXT[]), tags (TEXT[]), meta_title, meta_description, published (bool), published_at. 16 posts across 4 categories: denial-codes (3), coverage (3+6 topic posts), appeals (2), prior-auth (2). Tags: `medicare-general` (all 10 originals), `diabetes` (3), `obesity` (3), some dual-tagged (e.g., GLP-1 article). Seeded via `scripts/migrate-blog.js` + `scripts/migrate-blog-topics.js`. ON CONFLICT (slug) DO NOTHING for idempotency |
+| `user_topic_preferences` | User content topic selections (max 2). Columns: id (UUID PK), user_id (FK→users, CASCADE), topic (TEXT, CHECK IN diabetes/obesity/medicare-general), created_at. Unique index on `(user_id, topic)`. Used by blog page SSR for personalized content grouping |
 
 ### Denial Code Tables
 
@@ -535,9 +546,12 @@ All runtime env vars are stored in **AWS Secrets Manager** and injected by ECS a
 
 ```
 # Injected by ECS from Secrets Manager at runtime:
-ANTHROPIC_API_KEY=sk-ant-api03-...
-ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
-ANTHROPIC_APPEAL_MODEL=claude-opus-4-6    # No date suffix — Opus for appeals
+# NOTE: Do NOT set ANTHROPIC_API_KEY in ECS — its absence triggers AWS Bedrock IAM auth
+# ANTHROPIC_API_KEY=sk-ant-...          # Only for Vercel/local — omit for ECS/Bedrock
+ANTHROPIC_MODEL=arn:aws:bedrock:us-east-1:236823123138:inference-profile/global.anthropic.claude-opus-4-6-v1
+ANTHROPIC_APPEAL_MODEL=arn:aws:bedrock:us-east-1:236823123138:inference-profile/global.anthropic.claude-opus-4-6-v1
+# Bedrock: prefix is "global." NOT "us.", no ":0" suffix, full ARN required
+# Vercel/local values: claude-sonnet-4-5-20250929 (chat) / claude-opus-4-6 (appeals)
 DATABASE_URL=postgresql://...             # RDS connection string
 COGNITO_USER_POOL_ID=us-east-1_...
 COGNITO_CLIENT_ID=...
@@ -559,6 +573,72 @@ STRIPE_PRICE_UNLIMITED_ANNUAL=price_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
 NEXT_PUBLIC_APP_URL=https://denali.health  # or https://staging.denali.health
 ```
+
+### ECS Deployment Gotchas
+
+- **Execution role needs explicit Secrets Manager permissions.** `AmazonECSTaskExecutionRolePolicy` only covers ECR + CloudWatch. Add inline policy `denali-secrets-access` to `denali-ecs-execution-role` covering `denali/*` and `rds!db-...-*` secret ARNs.
+- **RDS managed secret (`rds!db-...`) only has `username` + `password`** — no `host`/`dbname`/`port`. Use `denali/prod/db` (self-managed) for all DB connection fields.
+- **Audit task def secrets before every manual deployment**: `aws ecs describe-task-definition --task-definition denali:N --query "taskDefinition.containerDefinitions[0].secrets[*].valueFrom" --region us-east-1 --output json | sort -u`
+- **DB credentials**: DB_USER/DB_PASSWORD reference `rds!db-...:username::` / `rds!db-...:password::` (auto-rotates every 7 days). DB_HOST/DB_NAME/DB_PORT are plain env vars.
+- **Current task def**: denali:13, steady state 2026-02-27. See `memory/aws-ecs.md` for full details.
+- **RDS is private-only** (2026-02-27): `PubliclyAccessible: false`. ECS→RDS connectivity via security group `sg-018b0bc1ca0f1db14` allowing port 5432 from ECS SG `sg-0c234bbde5efb2d53`. No public endpoint, no EIP on RDS.
+- **CloudWatch log retention**: `/ecs/denali` set to 3 days (was 90). Sufficient for pre-launch debugging. Increase post-launch if needed.
+
+### Infrastructure Scheduling (Cost Optimization)
+
+Pre-launch cost optimization: ECS+RDS can be shut down outside working hours to save ~35-40% on compute costs.
+
+**Shell aliases** (`infra/denali-aliases.sh`): `denali-up`, `denali-down`, `denali-status`. Source from `~/.zshrc`.
+
+**Automated scheduler** (`infra/cfn-scheduler.json`): CloudFormation stack `denali-scheduler` with 3 Lambda functions + 5 EventBridge rules. **Status: DEPLOYED** (2026-02-27). Deploy/update via `infra/deploy-scheduler.sh`.
+
+| Component | Schedule (CT) | UTC Cron |
+|-----------|---------------|----------|
+| Startup | Daily 7:45am | `cron(45 13 * * ? *)` |
+| Shutdown Mon-Thu | 11:30pm | `cron(30 5 ? * TUE-FRI *)` |
+| Shutdown Fri-Sat | 2:00am | `cron(0 8 ? * SAT-SUN *)` |
+| Shutdown Sun | 11:00pm | `cron(0 5 ? * MON *)` |
+| Safety re-stop | Every 6 days | `rate(6 days)` |
+
+**IAM role**: `denali-scheduler-lambda-role` with minimal permissions (RDS start/stop/describe on `denali-prod`, ECS update/describe on `denali-web`, CloudWatch Logs).
+
+**Safety mechanism**: `denali-safety-stop` Lambda checks ECS desired count — if 0, re-stops RDS to handle AWS's 7-day auto-restart. If user is working (desired > 0), skips.
+
+### Infrastructure Monitoring
+
+**Monitor** (`infra/cfn-monitor.json`): CloudFormation stack `denali-monitor` with Lambda + SNS + 2 EventBridge rules. **Status: DEPLOYED** (2026-02-27). Deploy/update via `infra/deploy-monitor.sh`.
+
+- **Lambda** `denali-monitor`: Checks ECS status, RDS status/public access, ALB target health, Cost Explorer (MTD + yesterday + forecast). Alerts on: ECS mismatch, RDS unexpected state, RDS public, ALB unhealthy, daily cost >$3, forecast >$60/mo.
+- **Schedule**: 8:00 AM CT + 8:00 PM CT daily
+- **SNS topic** `denali-monitor-alerts`: Email to `ramanac@gmail.com` + `admin@denali.health`. SMS not available (account in SMS sandbox — needs toll-free origination number to enable).
+- **IAM role**: `denali-monitor-lambda-role` with ECS/RDS describe, ELB target health, Cost Explorer, SNS publish, CloudWatch.
+
+### Lifecycle Policies
+
+- **ECR**: Keep last 3 images, auto-expire older (set 2026-02-27)
+- **S3 CloudTrail bucket**: Expire logs after 30 days (set 2026-02-27)
+
+### AWS Resource Inventory (2026-02-28)
+
+| Service | Resource | Spec | Est. Monthly Cost |
+|---------|----------|------|-------------------|
+| RDS | denali-prod | db.t4g.micro, PostgreSQL 16.9, 20GB gp3, private | ~$12.10 |
+| ECS Fargate | denali-web | 0.5 vCPU, 1GB RAM, task def :13 | ~$18.40 |
+| ALB | denali-alb | Application, internet-facing | ~$16.20 |
+| EIP | 3× (ALB-attached) | All associated, no idle charge | $0 |
+| Secrets Manager | 3 secrets | denali/prod/db, denali/prod/app, rds!db-... | ~$1.20 |
+| CloudWatch Logs | /ecs/denali | 3-day retention, ~8KB stored | ~$0 |
+| S3 | denali-cloudtrail-logs | CloudTrail storage, 30-day lifecycle | ~$0.05 |
+| CloudTrail | denali-audit-trail | Multi-region, management events | $0 (free tier) |
+| ECR | denali | Docker images, keep-last-3 lifecycle | $0 (free tier) |
+| Cognito | denali-users | User pool (us-east-1_bA3bcPcy2) | $0 (free tier) |
+| SNS | denali-monitor-alerts | 2 email subscriptions | $0 (free tier) |
+| IAM | 5 denali roles | ecs-execution, ecs-task, github-actions, scheduler-lambda, monitor-lambda | $0 |
+| Lambda | 4 functions | shutdown, startup, safety-stop, monitor | $0 (free tier) |
+| EventBridge | 7 rules | 5 scheduler + 2 monitor | $0 |
+| CloudFormation | 2 stacks | denali-scheduler, denali-monitor | $0 |
+| **TOTAL** | | **24/7 runtime** | **~$48/mo** |
+| **With scheduler** | | **~16hr/day weekdays** | **~$30-35/mo** |
 
 ---
 
