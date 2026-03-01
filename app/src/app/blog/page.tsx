@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 interface BlogPageProps {
-  searchParams: Promise<{ category?: string; view?: string }>;
+  searchParams: Promise<{ category?: string }>;
 }
 
 /**
@@ -51,16 +51,15 @@ async function getUserIdFromCookie(): Promise<string | null> {
 export default async function BlogPage({ searchParams }: BlogPageProps) {
   const params = await searchParams;
   const category = params.category;
-  const viewAll = params.view === "all";
 
   // Determine display mode:
-  // 1. Category filter active or ?view=all → show all posts (with category tabs)
+  // 1. Category filter active → show all posts in that category (with category tabs)
   // 2. Signed-in user with topic preferences → personalized grouped view
-  // 3. Default (anonymous / no prefs) → 3 rotating posts (one per topic, weekly rotation)
+  // 3. Default (anonymous / signed-in without prefs) → 3 rotating posts (one per topic, weekly)
   let personalizedGroups: GroupedBlogContent[] | null = null;
   let defaultPosts: BlogPost[] | null = null;
 
-  if (!category && !viewAll) {
+  if (!category) {
     try {
       const userId = await getUserIdFromCookie();
       if (userId) {
@@ -88,9 +87,8 @@ export default async function BlogPage({ searchParams }: BlogPageProps) {
     getSiteSettings(),
   ]);
 
-  // For the default (non-category, non-personalized, non-viewAll) view, show rotating picks
-  // with a "Browse all" link to full listing via category tabs
-  const displayPosts = (!category && !viewAll && defaultPosts && defaultPosts.length > 0)
+  // Default view: show rotating picks (3 posts). Category view: show all in category.
+  const displayPosts = (!category && defaultPosts && defaultPosts.length > 0)
     ? defaultPosts
     : allPosts;
 
@@ -112,7 +110,7 @@ export default async function BlogPage({ searchParams }: BlogPageProps) {
           <BlogGrid
             posts={displayPosts}
             activeCategory={category}
-            showBrowseAll={!category && !viewAll && defaultPosts !== null && defaultPosts.length > 0}
+            showBrowseAll={!category && defaultPosts !== null && defaultPosts.length > 0}
           />
         )}
       </main>

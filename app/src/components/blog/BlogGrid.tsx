@@ -85,7 +85,7 @@ export function BlogGrid({ posts, activeCategory = "", groupedContent, showBrows
     );
   }
 
-  // Curated default view — weekly rotating picks, no category tabs
+  // Curated default view — weekly rotating picks, no category tabs, no browse all
   if (showBrowseAll) {
     return (
       <div>
@@ -106,19 +106,6 @@ export function BlogGrid({ posts, activeCategory = "", groupedContent, showBrows
             No posts available.
           </p>
         )}
-
-        {/* Browse all link */}
-        <div className="mt-8 text-center">
-          <a
-            href="/blog?view=all"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent-primary)] hover:underline"
-          >
-            Browse all articles
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </a>
-        </div>
       </div>
     );
   }
