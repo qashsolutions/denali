@@ -123,10 +123,10 @@ export const MEDICARE_CONSTANTS = {
  * Session inactivity timeout (HIPAA compliance)
  */
 export const SESSION_TIMEOUT = {
-  /** Sign out after 15 minutes of inactivity */
-  INACTIVITY_MS: 15 * 60 * 1000,
-  /** Show warning banner at 13 minutes */
-  WARNING_MS: 13 * 60 * 1000,
+  /** Sign out after 30 minutes of inactivity (HIPAA-compliant, reduces re-auth friction) */
+  INACTIVITY_MS: 30 * 60 * 1000,
+  /** Show warning banner at 27 minutes */
+  WARNING_MS: 27 * 60 * 1000,
 } as const;
 
 /**

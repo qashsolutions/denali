@@ -154,7 +154,7 @@ export function TOTPChallengeModal({
                 ))}
               </div>
               {error && (
-                <p className="mt-2 text-sm text-red-400 text-center">
+                <p className="mt-3 text-base font-medium text-red-500 text-center">
                   {error}
                 </p>
               )}

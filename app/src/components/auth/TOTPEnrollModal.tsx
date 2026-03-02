@@ -215,7 +215,7 @@ export function TOTPEnrollModal({
               </button>
 
               {error && (
-                <p className="text-sm text-red-400 text-center">{error}</p>
+                <p className="text-base font-medium text-red-500 text-center">{error}</p>
               )}
 
               <button
@@ -309,7 +309,7 @@ export function TOTPEnrollModal({
                   ))}
                 </div>
                 {error && (
-                  <p className="mt-2 text-sm text-red-400 text-center">
+                  <p className="mt-2 text-base font-medium text-red-500 text-center">
                     {error}
                   </p>
                 )}

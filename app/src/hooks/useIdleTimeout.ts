@@ -80,8 +80,10 @@ export function useIdleTimeout(): UseIdleTimeoutReturn {
 
       if (elapsed >= SESSION_TIMEOUT.INACTIVITY_MS) {
         setShowWarning(false);
-        // Sign out via API route, then dispatch auth change for other components
-        fetch("/api/auth/signout", { method: "POST" }).finally(() => {
+        // Idle lock — clears access token but keeps refresh token so
+        // the middleware can silently re-authenticate when user returns.
+        // Use /signout for explicit user-initiated sign-out (revokes all tokens).
+        fetch("/api/auth/idle-lock", { method: "POST" }).finally(() => {
           window.dispatchEvent(new CustomEvent("auth-state-change", { detail: null }));
         });
         return;

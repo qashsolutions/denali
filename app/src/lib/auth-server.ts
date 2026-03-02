@@ -21,6 +21,7 @@ import {
   InitiateAuthCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import type { NextRequest } from "next/server";
+import { query } from "@/lib/db";
 
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID!;
 const CLIENT_ID = process.env.COGNITO_CLIENT_ID!;
@@ -67,7 +68,23 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
     if (!token) return null;
 
     const payload = await getVerifier().verify(token);
-    const email = (payload.email as string | undefined) ?? (payload.username as string | undefined) ?? "";
+    let email = (payload.email as string | undefined) ?? (payload.username as string | undefined) ?? "";
+
+    // Cognito access tokens may not include the email claim — username can be a UUID.
+    // Fall back to the users table when the extracted value doesn't look like an email.
+    if (email && !email.includes("@")) {
+      try {
+        const result = await query<{ email: string }>(
+          `SELECT email FROM users WHERE id = $1 LIMIT 1`,
+          [payload.sub]
+        );
+        if (result.rows[0]?.email) {
+          email = result.rows[0].email;
+        }
+      } catch {
+        // DB lookup failed — proceed with what we have
+      }
+    }
 
     return {
       userId: payload.sub,
