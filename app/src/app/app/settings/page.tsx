@@ -19,7 +19,7 @@ export default function AppSettingsPage() {
   const { settings, setTextScale, resetSettings } = useSettings();
   const { consent, isLoading: consentLoading, updateConsent } = useConsent();
   const { topics: selectedTopics, isLoading: topicsLoading, toggleTopic } = useTopicPreferences();
-  const { authState, sendEmailOTP, verifyEmailOTP, enrollTOTP, unenrollTOTP, challengeAndVerifyTOTP, signOut, clearError } = useAuth();
+  const { authState, sendEmailOTP, verifyEmailOTP, enrollTOTP, unenrollTOTP, challengeAndVerifyTOTP, confirmTOTPEnrollment, signOut, clearError } = useAuth();
   const [showTOTPEnroll, setShowTOTPEnroll] = useState(false);
   const [showTOTPRemoveConfirm, setShowTOTPRemoveConfirm] = useState(false);
   const [unenrollLoading, setUnenrollLoading] = useState(false);
@@ -433,7 +433,7 @@ export default function AppSettingsPage() {
         onEnrolled={() => setTotpEnrolled(true)}
         onSkip={() => setShowTOTPEnroll(false)}
         enrollTOTP={enrollTOTP}
-        challengeAndVerifyTOTP={challengeAndVerifyTOTP}
+        confirmTOTPEnrollment={confirmTOTPEnrollment}
         isLoading={authState.isLoading}
         error={authState.error}
         clearError={clearError}

@@ -9,7 +9,7 @@ interface TOTPEnrollModalProps {
   onEnrolled: () => void;
   onSkip: () => void;
   enrollTOTP: () => Promise<{ qrCode: string; secret: string } | null>;
-  challengeAndVerifyTOTP: (code: string) => Promise<boolean>;
+  confirmTOTPEnrollment: (code: string) => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
   clearError: () => void;
@@ -23,7 +23,7 @@ export function TOTPEnrollModal({
   onEnrolled,
   onSkip,
   enrollTOTP,
-  challengeAndVerifyTOTP,
+  confirmTOTPEnrollment,
   isLoading,
   error,
   clearError,
@@ -95,7 +95,7 @@ export function TOTPEnrollModal({
     const fullCode = code.join("");
     if (fullCode.length !== 6) return;
 
-    const success = await challengeAndVerifyTOTP(fullCode);
+    const success = await confirmTOTPEnrollment(fullCode);
     if (success) {
       onEnrolled();
       onClose();

@@ -31,6 +31,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
     verifyEmailOTP,
     enrollTOTP,
     challengeAndVerifyTOTP,
+    confirmTOTPEnrollment,
     checkAppealAccess,
     clearError,
   } = useAuth();
@@ -146,7 +147,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
           onEnrolled={handleTOTPEnrolled}
           onSkip={handleTOTPSkip}
           enrollTOTP={enrollTOTP}
-          challengeAndVerifyTOTP={challengeAndVerifyTOTP}
+          confirmTOTPEnrollment={confirmTOTPEnrollment}
           isLoading={authState.isLoading}
           error={authState.error}
           clearError={clearError}

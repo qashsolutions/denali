@@ -30,6 +30,7 @@ interface UseAuthReturn {
   enrollTOTP: () => Promise<{ qrCode: string; secret: string } | null>;
   unenrollTOTP: () => Promise<boolean>;
   challengeAndVerifyTOTP: (code: string) => Promise<boolean>;
+  confirmTOTPEnrollment: (code: string) => Promise<boolean>;
   checkAppealAccess: () => Promise<AppealAccessStatus>;
   signOut: () => Promise<void>;
   clearError: () => void;
@@ -415,6 +416,45 @@ export function useAuth(): UseAuthReturn {
     }
   }, []);
 
+  // Confirm TOTP enrollment (first code after scanning QR)
+  const confirmTOTPEnrollment = useCallback(async (code: string): Promise<boolean> => {
+    setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+    try {
+      const res = await fetch("/api/auth/mfa/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setAuthState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error: data.error || "Failed to confirm authenticator setup",
+        }));
+        return false;
+      }
+
+      setAuthState((prev) => ({
+        ...prev,
+        isMfaVerified: true,
+        isMfaEnrolled: true,
+        currentAAL: "aal2",
+        isLoading: false,
+      }));
+      return true;
+    } catch (error) {
+      setAuthState((prev) => ({
+        ...prev,
+        isLoading: false,
+        error: error instanceof Error ? error.message : "Failed to confirm authenticator setup",
+      }));
+      return false;
+    }
+  }, []);
+
   // Check appeal access
   const checkAppealAccess = useCallback(async (): Promise<AppealAccessStatus> => {
     if (authState.isAdmin) return "allowed";
@@ -457,6 +497,7 @@ export function useAuth(): UseAuthReturn {
     enrollTOTP,
     unenrollTOTP,
     challengeAndVerifyTOTP,
+    confirmTOTPEnrollment,
     checkAppealAccess,
     signOut,
     clearError,
