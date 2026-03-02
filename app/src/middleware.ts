@@ -23,6 +23,16 @@ export async function middleware(request: NextRequest) {
   let hasAccessToken = request.cookies.has("access_token");
   const hasRefreshToken = request.cookies.has("refresh_token");
 
+  // ── Skip session policy & silent refresh for API routes ──
+  // API routes handle their own auth via getAuthUser(). Running session
+  // enforcement here causes two problems:
+  //   1. Silent refresh fetch("/api/auth/refresh") re-enters middleware → infinite recursion
+  //   2. FHIR callback & other API routes get cookies cleared mid-request
+  const isApiRoute = pathname.startsWith("/api/");
+  if (isApiRoute) {
+    return NextResponse.next();
+  }
+
   // ── 7-day session lifetime enforcement ──
   // Check before silent refresh so we don't accidentally extend an expired session.
   const sessionIssuedAt = request.cookies.get("session_issued_at")?.value;
