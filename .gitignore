@@ -48,7 +48,8 @@ bluebutton_extraction_gaps.md
 denali_updates_Feb08.md
 
 # Root-level skills design specs (implemented in app/src/skills/)
-skills/
+# Use /skills/ (anchored) to avoid ignoring app/src/lib/skills/ and app/src/skills/
+/skills/
 
 # Node
 node_modules/
