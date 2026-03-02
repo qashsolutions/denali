@@ -11,7 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthUser } from "@/lib/auth-server";
+import { getAuthUser, refreshCognitoTokens } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { encrypt } from "@/lib/fhir/crypto";
 import { API_CONFIG, getBaseUrl } from "@/config";
@@ -56,10 +56,33 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Verify user is authenticated
-    const user = await getAuthUser(request);
+    // Verify user is authenticated.
+    // The access_token may have expired while the user was on Medicare.gov
+    // (Blue Button OAuth redirect takes them off-site for several minutes).
+    // Attempt a silent refresh before giving up.
+    let user = await getAuthUser(request);
+    let refreshedAccessToken: string | undefined;
 
     if (!user) {
+      const refreshToken = request.cookies.get("refresh_token")?.value;
+      if (refreshToken) {
+        try {
+          const refreshed = await refreshCognitoTokens(refreshToken);
+          refreshedAccessToken = refreshed.accessToken;
+          // Build a synthetic request with the new token for getAuthUser
+          const headers = new Headers(request.headers);
+          headers.set("Authorization", `Bearer ${refreshedAccessToken}`);
+          const refreshedRequest = new NextRequest(request.url, { headers });
+          user = await getAuthUser(refreshedRequest);
+          console.log("[FHIR callback] Token refreshed successfully for user:", user?.userId);
+        } catch (refreshErr) {
+          console.error("[FHIR callback] Token refresh failed:", refreshErr);
+        }
+      }
+    }
+
+    if (!user) {
+      console.error("[FHIR callback] User not authenticated after refresh attempt");
       return NextResponse.redirect(
         new URL("/app/health?error=not_authenticated", request.url)
       );
@@ -163,6 +186,18 @@ export async function GET(request: NextRequest) {
     );
     response.cookies.delete("bb_oauth_state");
     response.cookies.delete("bb_code_verifier");
+
+    // If we refreshed the Cognito token during this request, set the new
+    // access_token cookie so the browser session stays alive.
+    if (refreshedAccessToken) {
+      response.cookies.set("access_token", refreshedAccessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 3600, // Cognito default
+      });
+    }
 
     return response;
   } catch (error) {
