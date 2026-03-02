@@ -176,7 +176,7 @@ const SECTIONS = [
     items: [
       "Technical safeguards: encryption, access controls, audit logging",
       "Administrative safeguards: workforce training, security policies, incident response procedures",
-      "Physical safeguards: secure hosting through SOC 2 compliant providers (Supabase, Vercel)",
+      "Physical safeguards: secure hosting through AWS (RDS, ECS/Fargate, Cognito) with SOC 2 and HIPAA-eligible services",
       "Business Associate Agreements (BAAs) are required from all service providers who access, process, or store protected health information on our behalf. Our BAA with AWS (covering database, hosting, and AI services via Amazon RDS, ECS/Fargate, and Bedrock) was executed on February 25, 2026.",
     ],
     afterItems:

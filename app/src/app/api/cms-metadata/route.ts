@@ -35,7 +35,7 @@ export async function GET() {
       "A3_CMS_Review": { status: "in_progress", notes: "Data source inventory and security checklist in preparation" },
       "A4_Trial_Access": { status: "done", notes: `${PRICING.TRIAL_DURATION_DAYS}-day free trial for Medicare beneficiaries` },
       "A5_CMS_Directory": { status: "in_progress", notes: "App metadata endpoint available at /api/cms-metadata" },
-      "A6_HIPAA": { status: "done", notes: "BAAs maintained with Supabase, Vercel, and Anthropic" },
+      "A6_HIPAA": { status: "done", notes: "BAA with AWS (RDS, ECS/Fargate, Bedrock) executed 2026-02-25. Anthropic BAA in process." },
       "Audit_Logging": { status: "done", notes: "All sensitive operations logged to audit_logs table" },
       "Consent_Preferences": { status: "done", notes: "User-controlled consent for health data AI, storage, and analytics" },
       "AI_Disclosure": { status: "done", notes: "All AI responses marked with AI-generated disclaimer" },

@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { HeartPulseIcon, DiabetesIcon } from "@/components/icons";
+import { HeartPulseIcon, DiabetesIcon, WeightScaleIcon } from "@/components/icons";
 import { useHealthData } from "@/hooks/useHealthData";
 import { useAuth } from "@/hooks/useAuth";
 import { getSeverityConfig } from "@/components/health/DiagnosisSummaryCard";
@@ -180,6 +180,154 @@ function DiabetesCareExpanded({
   );
 }
 
+// --- Obesity care expanded content ---
+function ObesityCareExpanded({
+  conditions,
+  screenings,
+  medications,
+}: {
+  conditions: DiagnosisSummary[];
+  screenings: ScreeningHistory[];
+  medications: MedicationSummary[];
+}) {
+  const router = useRouter();
+  const obesityDx = conditions.find((c) => c.category === "obesity");
+  const obesityScreenings = screenings.filter(
+    (s) => s.screeningType === "obesity-counseling"
+  );
+  const overdueObesityScreenings = obesityScreenings.filter((s) => s.isOverdue);
+  const obesityMeds = medications.filter((m) => m.isObesityMed);
+  const overdueMeds = obesityMeds.filter(
+    (m) => m.gapDays != null && m.gapDays >= 14
+  );
+
+  return (
+    <div className="space-y-3">
+      {/* Classification badge */}
+      {obesityDx && (
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+            {obesityDx.name}
+          </span>
+        </div>
+      )}
+
+      {/* Active weight-management medications */}
+      {obesityMeds.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-1.5">
+            Weight-Management Medications
+          </p>
+          <ul className="space-y-1">
+            {obesityMeds.map((m) => (
+              <li
+                key={m.name}
+                className="text-sm text-[var(--text-primary)] flex items-center gap-2"
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    m.gapDays != null && m.gapDays >= 14
+                      ? "bg-red-500"
+                      : "bg-emerald-500"
+                  }`}
+                />
+                {m.name}
+                {m.gapDays != null && m.gapDays >= 14 && (
+                  <span className="text-xs text-red-500">{m.gapDays}d overdue</span>
+                )}
+                {m.gapDays != null && m.gapDays < 14 && (
+                  <span className="text-xs text-[var(--text-tertiary)]">Active</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Overdue obesity screenings */}
+      {overdueObesityScreenings.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-1.5">
+            Overdue Screenings
+          </p>
+          <ul className="space-y-1">
+            {overdueObesityScreenings.map((s) => (
+              <li
+                key={s.screeningType}
+                className="text-sm text-[var(--text-primary)] flex items-center gap-2"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                {s.displayName}
+                <span className="text-xs text-[var(--text-tertiary)]">
+                  {s.monthsSinceLast}mo ago
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Medication refill gaps */}
+      {overdueMeds.length > 0 && obesityMeds.length === 0 && (
+        <div>
+          <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-1.5">
+            Medication Refill Gaps
+          </p>
+          <ul className="space-y-1">
+            {overdueMeds.map((m) => (
+              <li
+                key={m.name}
+                className="text-sm text-[var(--text-primary)] flex items-center gap-2"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                {m.name}
+                <span className="text-xs text-[var(--text-tertiary)]">
+                  {m.gapDays}d overdue
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* All clear */}
+      {overdueObesityScreenings.length === 0 &&
+        overdueMeds.length === 0 &&
+        obesityMeds.length === 0 && (
+          <p className="text-sm text-[var(--text-secondary)]">
+            No overdue screenings or medication gaps found.
+          </p>
+        )}
+
+      {/* Medicare coverage quick info */}
+      <div className="bg-[var(--bg-tertiary)]/50 rounded-lg p-3 space-y-1">
+        <p className="text-xs font-semibold text-[var(--text-secondary)]">
+          Medicare covers weight management
+        </p>
+        <p className="text-xs text-[var(--text-tertiary)]">
+          Intensive Behavioral Therapy (IBT), nutrition counseling, and bariatric surgery evaluation may be covered at no cost.
+        </p>
+      </div>
+
+      {/* CTA */}
+      <button
+        onClick={() =>
+          router.push(
+            `/app/chat?message=${encodeURIComponent(
+              "What weight management services does Medicare cover for me?"
+            )}`
+          )
+        }
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-500 hover:underline mt-1"
+      >
+        <WeightScaleIcon className="w-3.5 h-3.5" />
+        Discuss Weight Management &rarr;
+      </button>
+    </div>
+  );
+}
+
 // --- Time ago utility ---
 function formatTimeAgo(date: Date | string | null): string {
   if (!date) return "Unknown";
@@ -214,7 +362,7 @@ function computeCardStatuses(
   const recentDischarges = hospitalizations.filter((h) => h.needsFollowUp);
   const overdueScreenings = screenings.filter((s) => s.isOverdue);
   const overdueMeds = medications.filter(
-    (m) => m.isDiabetesMed && m.gapDays != null && m.gapDays >= 14
+    (m) => (m.isDiabetesMed || m.isObesityMed) && m.gapDays != null && m.gapDays >= 14
   );
 
   const attentionParts: string[] = [];
@@ -271,6 +419,28 @@ function computeCardStatuses(
     diabetesSummary = `${diabetesOverdueScreenings.length} screening${diabetesOverdueScreenings.length !== 1 ? "s" : ""} overdue`;
   }
 
+  // --- Obesity ---
+  const hasObesity =
+    conditions.some((c) => c.category === "obesity") ||
+    medications.some((m) => m.isObesityMed);
+  const obesityScreenings = screenings.filter(
+    (s) => s.screeningType === "obesity-counseling"
+  );
+  const obesityOverdueScreenings = obesityScreenings.filter((s) => s.isOverdue);
+  const obesityOverdueMeds = medications.filter(
+    (m) => m.isObesityMed && m.gapDays != null && m.gapDays >= 14
+  );
+
+  let obesityDot: DotColor = "green";
+  let obesitySummary = "All up to date";
+  if (obesityOverdueMeds.length > 0) {
+    obesityDot = "red";
+    obesitySummary = `${obesityOverdueMeds.length} med refill${obesityOverdueMeds.length !== 1 ? "s" : ""} overdue`;
+  } else if (obesityOverdueScreenings.length > 0) {
+    obesityDot = "amber";
+    obesitySummary = `${obesityOverdueScreenings.length} screening${obesityOverdueScreenings.length !== 1 ? "s" : ""} overdue`;
+  }
+
   // --- Conditions ---
   const hasConditions = metrics.topDiagnoses.length > 0;
   let conditionsRedCount = 0;
@@ -308,6 +478,7 @@ function computeCardStatuses(
     },
     coverage: { dot: coverageDot, summary: coverageSummary, visible: true },
     diabetes: { dot: diabetesDot, summary: diabetesSummary, visible: hasDiabetes },
+    obesity: { dot: obesityDot, summary: obesitySummary, visible: hasObesity },
     conditions: {
       dot: conditionsDot,
       summary: conditionsSummary,
@@ -533,7 +704,27 @@ function HealthPageInner() {
           </HealthHubCard>
         )}
 
-        {/* 4. Health Conditions */}
+        {/* 4. Obesity / Weight Management Care */}
+        {cardStatuses.obesity.visible && (
+          <HealthHubCard
+            id="obesity"
+            title="Weight Management"
+            status={cardStatuses.obesity.dot}
+            summary={cardStatuses.obesity.summary}
+            isExpanded={expandedCards.has("obesity")}
+            onToggle={toggleCard}
+          >
+            <ObesityCareExpanded
+              conditions={conditions.filter((c) => c.category === "obesity")}
+              screenings={screenings.filter(
+                (s) => s.screeningType === "obesity-counseling"
+              )}
+              medications={medications.filter((m) => m.isObesityMed)}
+            />
+          </HealthHubCard>
+        )}
+
+        {/* 5. Health Conditions (renumbered after Obesity insert) */}
         {cardStatuses.conditions.visible && (
           <HealthHubCard
             id="conditions"
@@ -547,7 +738,7 @@ function HealthPageInner() {
           </HealthHubCard>
         )}
 
-        {/* 5. Claims & Providers */}
+        {/* 6. Claims & Providers */}
         <HealthHubCard
           id="claims-providers"
           title="Claims & Providers"
@@ -561,7 +752,7 @@ function HealthPageInner() {
           <ProviderSummary providers={metrics.topProviders} providerDetails={providers} />
         </HealthHubCard>
 
-        {/* 6. Medicare Account */}
+        {/* 7. Medicare Account */}
         <HealthHubCard
           id="account"
           title="Medicare Account"

@@ -309,6 +309,38 @@ export function DiabetesIcon({ className, strokeWidth = 1.5 }: IconProps) {
 }
 
 /**
+ * Weight Scale - Obesity / Weight Management Care
+ * Precision balance scale with circular dial and base platform
+ */
+export function WeightScaleIcon({ className, strokeWidth = 1.5 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn("w-6 h-6", className)}
+    >
+      {/* Scale platform base */}
+      <path d="M5 21h14a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
+      {/* Scale body */}
+      <rect x="6" y="10" width="12" height="8" rx="2" />
+      {/* Circular gauge face */}
+      <circle cx="12" cy="14" r="3" />
+      {/* Gauge needle */}
+      <path d="M12 14l1.5-2" />
+      {/* Gauge tick marks */}
+      <path d="M10 12.2l.3.3" />
+      <path d="M13.7 12.2l-.3.3" />
+      {/* Top handle */}
+      <path d="M9.5 10V8a2.5 2.5 0 015 0v2" />
+    </svg>
+  );
+}
+
+/**
  * Claims / File Stack - Claims & Appeals
  */
 export function ClaimsIcon({ className, strokeWidth = 1.5 }: IconProps) {
@@ -411,6 +443,7 @@ export function getIconByName(
     mountain: MountainIcon,
     heart: HeartPulseIcon,
     diabetes: DiabetesIcon,
+    weight: WeightScaleIcon,
     claims: ClaimsIcon,
     sparkle: SparkleIcon,
     home: HomeIcon,

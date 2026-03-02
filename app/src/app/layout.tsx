@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Playfair_Display } from "next/font/google";
+import { Instrument_Serif, DM_Sans } from "next/font/google";
 import { BRAND } from "@/config";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppHeader } from "@/components/layout/AppHeader";
@@ -7,11 +7,19 @@ import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import { InactivityWarning } from "@/components/ui/InactivityWarning";
 import "./globals.css";
 
-const playfair = Playfair_Display({
+const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
-  weight: ["600", "700"],
+  weight: ["400"],
+  style: ["normal", "italic"],
   display: "swap",
   variable: "--font-serif",
+});
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-sans-dm",
 });
 
 export const metadata: Metadata = {
@@ -105,7 +113,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={playfair.variable} suppressHydrationWarning>
+    <html lang="en" className={`${instrumentSerif.variable} ${dmSans.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <script dangerouslySetInnerHTML={{ __html: swScript }} />

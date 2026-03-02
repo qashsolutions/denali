@@ -31,6 +31,7 @@ const RED_KEYWORDS = [
   "stroke", "cerebrovascular",
   "heart failure", "cardiac arrest",
   "sepsis", "septicemia",
+  "morbid obesity", "severe obesity", "obesity class iii",
 ];
 
 const AMBER_KEYWORDS = [

@@ -25,6 +25,7 @@ export { EOB_EXPLAINER_SKILL } from "./domain/eob-explainer";
 export { HEALTH_RECORDS_SKILL } from "@/lib/skills/health-records";
 export { MEDICARE_NOTIFICATIONS_SKILL } from "@/lib/skills/medicare-notifications";
 export { DIABETES_PREVENTION_SKILL } from "@/lib/skills/diabetes-prevention";
+export { OBESITY_PREVENTION_SKILL } from "@/lib/skills/obesity-prevention";
 
 // Channel skills
 export { COUNSELOR_SKILL } from "./channel/counselor";

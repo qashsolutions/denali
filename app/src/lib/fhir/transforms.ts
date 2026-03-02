@@ -303,6 +303,7 @@ export interface MedicationSummary {
   dosage: string;       // "500mg twice daily"
   startDate: string;
   isDiabetesMed: boolean;
+  isObesityMed: boolean;
   // PDE enrichment (P1) — all optional, populated from Part D claims
   daysSupply?: number;
   refillNumber?: number;
@@ -317,7 +318,7 @@ export interface MedicationSummary {
 export type DiabetesClassification = "diabetic" | "pre-diabetic" | "at-risk" | "none";
 
 export interface ScreeningHistory {
-  screeningType: "a1c" | "eye-exam" | "metabolic-panel" | "kidney" | "ecg" | "office-visit" | "nutrition" | "dsmt";
+  screeningType: "a1c" | "eye-exam" | "metabolic-panel" | "kidney" | "ecg" | "office-visit" | "nutrition" | "dsmt" | "obesity-counseling";
   displayName: string;
   lastDate: string;
   monthsSinceLast: number;
@@ -422,6 +423,47 @@ export function classifyDiabetesStatus(
   }
 
   return { classification: "none", evidence: ["No diabetes indicators found"] };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Obesity Classification
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ObesityClassification = "obese" | "at-risk" | "none";
+
+/**
+ * Classify obesity status from conditions and medications.
+ * Note: Blue Button doesn't provide BMI/weight vitals — relies on E66 ICD-10 codes and Part D drug data.
+ */
+export function classifyObesityStatus(
+  conditions: DiagnosisSummary[],
+  medications: MedicationSummary[]
+): { classification: ObesityClassification; evidence: string[] } {
+  const evidence: string[] = [];
+
+  // 1. Explicit obesity diagnosis (E66.x ICD-10)
+  const obesityDx = conditions.find(c => c.category === "obesity");
+  if (obesityDx) {
+    evidence.push(`Diagnosis: ${obesityDx.name} (${obesityDx.code})`);
+    return { classification: "obese", evidence };
+  }
+
+  // 2. Active obesity/weight-loss medication → likely obese
+  const activeObesityMed = medications.find(m => m.isObesityMed && m.status === "Active");
+  if (activeObesityMed) {
+    evidence.push(`Active weight-management medication: ${activeObesityMed.name}`);
+    return { classification: "obese", evidence };
+  }
+
+  // 3. At-risk: pre-diabetic + no explicit obesity but diabetes at-risk indicators
+  // (BMI ≥ 25 is an at-risk factor, but Blue Button doesn't provide BMI values)
+  const preDiabetesDx = conditions.find(c => c.category === "pre-diabetic");
+  if (preDiabetesDx) {
+    evidence.push(`Pre-diabetes diagnosis may indicate elevated BMI: ${preDiabetesDx.name}`);
+    return { classification: "at-risk", evidence };
+  }
+
+  return { classification: "none", evidence: ["No obesity indicators found"] };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

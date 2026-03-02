@@ -19,7 +19,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useHealthData } from "@/hooks/useHealthData";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useDiabetesSnapshots } from "@/hooks/useDiabetesSnapshots";
-import { classifyDiabetesStatus } from "@/lib/fhir/transforms";
+import { classifyDiabetesStatus, classifyObesityStatus } from "@/lib/fhir/transforms";
 import {
   ShieldCheckIcon,
   ScaleIcon,
@@ -66,12 +66,14 @@ function ChatContent() {
       name: m.name,
       status: m.status,
       isDiabetesMed: m.isDiabetesMed,
+      isObesityMed: m.isObesityMed,
       daysSupply: m.daysSupply,
       isBrandName: m.isBrandName,
       gapDays: m.gapDays,
     }));
 
     const { classification: diabetesClassification } = classifyDiabetesStatus(conditions, labs, medications);
+    const { classification: obesityClassification } = classifyObesityStatus(conditions, medications);
 
     const partial: Partial<SessionState> = {
       healthDataAvailable: true,
@@ -86,6 +88,7 @@ function ChatContent() {
       conditions: conditionsForState,
       medications: medsForState,
       diabetesClassification,
+      obesityClassification,
       screenings: screenings.map(s => ({
         screeningType: s.screeningType,
         displayName: s.displayName,

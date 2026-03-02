@@ -61,6 +61,7 @@ import {
   HEALTH_RECORDS_SKILL,
   MEDICARE_NOTIFICATIONS_SKILL,
   DIABETES_PREVENTION_SKILL,
+  OBESITY_PREVENTION_SKILL,
   EOB_EXPLAINER_SKILL,
 } from "@/skills";
 import { buildHealthContextForPrompt } from "@/lib/fhir/context";
@@ -127,6 +128,8 @@ export interface SkillTriggers {
   hasRecentChanges: boolean;
   // Diabetes context (P2)
   hasDiabetesContext: boolean;
+  // Obesity context
+  hasObesityContext: boolean;
   // EOB explainer
   hasEOBQuestion: boolean;
 }
@@ -227,6 +230,8 @@ export function detectTriggers(
     hasRecentChanges: false, // Set externally by route.ts
     // Diabetes context (set externally by route.ts)
     hasDiabetesContext: false,
+    // Obesity context (set externally by route.ts)
+    hasObesityContext: false,
 
     // EOB explainer
     hasEOBQuestion: /explain.*(bill|charge|eob|claim)|understand.*(bill|charge|eob|claim)|my (eob|bill)|what do i owe|why.*(charged|owe)|show.*(claim|bill)|breakdown.*(bill|charge)|recent.*(claim|bill)/i.test(userContent),
@@ -286,6 +291,13 @@ export function buildSystemPrompt(
   // ─────────────────────────────────────────────────────────────────────────
   if (triggers.hasDiabetesContext) {
     sections.push(DIABETES_PREVENTION_SKILL);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // OBESITY PREVENTION - Personalized obesity coaching
+  // ─────────────────────────────────────────────────────────────────────────
+  if (triggers.hasObesityContext) {
+    sections.push(OBESITY_PREVENTION_SKILL);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -704,8 +716,10 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
   // Informational queries — respond helpfully without gating on name/ZIP
   const isInformationalQuery = !triggers.hasProcedure && !triggers.isAppeal && !triggers.hasCoverage;
   if (isInformationalQuery && (!triggers.hasUserName || !triggers.hasUserZip)) {
-    if (triggers.hasDiabetesContext) {
-      reminder.push("**RESPOND:** Answer their diabetes question directly");
+    if (triggers.hasDiabetesContext || triggers.hasObesityContext) {
+      const topic = triggers.hasDiabetesContext && triggers.hasObesityContext
+        ? "diabetes/obesity" : triggers.hasDiabetesContext ? "diabetes" : "obesity";
+      reminder.push(`**RESPOND:** Answer their ${topic} question directly`);
       reminder.push("**DO NOT** ask for name or ZIP — answer first");
       reminder.push("**OFFER** to check specific coverage if they want (that will need ZIP)");
     } else if (triggers.hasProblem) {

@@ -282,7 +282,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Diabetes context detection (from FHIR conditions, labs, or user keywords)
-    if (sessionState.conditions?.some(c => ["type1", "type2", "pre-diabetic", "other-diabetes", "obesity"].includes(c.category))) {
+    if (sessionState.conditions?.some(c => ["type1", "type2", "pre-diabetic", "other-diabetes"].includes(c.category))) {
       triggers.hasDiabetesContext = true;
     } else if (sessionState.labs && sessionState.labs.length > 0) {
       triggers.hasDiabetesContext = true;
@@ -293,6 +293,21 @@ export async function POST(request: NextRequest) {
         .join(" ");
       if (/diabetes|diabetic|a1c|hemoglobin a1c|blood sugar|glucose|insulin|pre-?diabetic|mdpp/i.test(userContent)) {
         triggers.hasDiabetesContext = true;
+      }
+    }
+
+    // Obesity context detection (from FHIR conditions, medications, or user keywords)
+    if (sessionState.conditions?.some(c => c.category === "obesity")) {
+      triggers.hasObesityContext = true;
+    } else if (sessionState.medications?.some(m => m.isObesityMed)) {
+      triggers.hasObesityContext = true;
+    } else {
+      const userContent = body.messages
+        .filter((m) => m.role === "user")
+        .map((m) => m.content.toLowerCase())
+        .join(" ");
+      if (/\bobes\w*|overweight|bmi|bariatric|weight\s*(loss|management)|wegovy|ozempic.*weight|zepbound|semaglutide.*weight|tirzepatide.*weight|saxenda|contrave|qsymia|glp-?1.*weight|ibt.*obes/i.test(userContent)) {
+        triggers.hasObesityContext = true;
       }
     }
 

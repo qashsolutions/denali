@@ -72,13 +72,26 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
     lines.push("");
   }
 
-  // Diabetes conditions
+  // Diabetes & obesity conditions
   if (sessionState.conditions && sessionState.conditions.length > 0) {
-    lines.push("**Diabetes Diagnoses:**");
-    for (const cond of sessionState.conditions) {
-      lines.push(`- ${cond.name} (${cond.code}) — ${cond.category}`);
+    const diabetesConds = sessionState.conditions.filter(c => c.category !== "obesity");
+    const obesityConds = sessionState.conditions.filter(c => c.category === "obesity");
+
+    if (diabetesConds.length > 0) {
+      lines.push("**Diabetes Diagnoses:**");
+      for (const cond of diabetesConds) {
+        lines.push(`- ${cond.name} (${cond.code}) — ${cond.category}`);
+      }
+      lines.push("");
     }
-    lines.push("");
+
+    if (obesityConds.length > 0) {
+      lines.push("**Obesity Diagnoses:**");
+      for (const cond of obesityConds) {
+        lines.push(`- ${cond.name} (${cond.code})`);
+      }
+      lines.push("");
+    }
   }
 
   // Active medications
@@ -102,6 +115,18 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
         lines.push("");
       }
     }
+    const obesityMeds = sessionState.medications.filter(m => m.isObesityMed && !m.isDiabetesMed);
+    if (obesityMeds.length > 0) {
+      lines.push("**Active Weight-Management Medications:**");
+      for (const med of obesityMeds) {
+        let detail = `(${med.status})`;
+        if (med.daysSupply) detail += ` — ${med.daysSupply}-day supply`;
+        if (med.gapDays != null && med.gapDays >= 14) detail += ` — REFILL OVERDUE by ${med.gapDays} days`;
+        lines.push(`- ${med.name} ${detail}`);
+      }
+      lines.push("");
+    }
+
     if (otherActiveMeds.length > 0) {
       lines.push(`**Other Active Medications:** ${otherActiveMeds.length} non-diabetes medications`);
       lines.push("");
@@ -123,6 +148,21 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
       lines.push("**ACTION:** Focus on prevention. Recommend MDPP enrollment. Lifestyle coaching.");
     } else if (sessionState.diabetesClassification === "at-risk") {
       lines.push("**ACTION:** Recommend screening. Suggest diabetes risk assessment.");
+    }
+    lines.push("");
+  }
+
+  // Obesity classification
+  if (sessionState.obesityClassification && sessionState.obesityClassification !== "none") {
+    const obesityLabel = {
+      "obese": "Obese (diagnosed or on weight-management medication)",
+      "at-risk": "At Risk for Obesity (pre-diabetes or elevated BMI indicators)",
+    }[sessionState.obesityClassification];
+    lines.push(`**Obesity Classification:** ${obesityLabel}`);
+    if (sessionState.obesityClassification === "obese") {
+      lines.push("**ACTION:** Offer obesity management guidance. Check Medicare-covered benefits: IBT (NCD 210.12), nutrition counseling, bariatric surgery evaluation (NCD 100.1). If on GLP-1, mention Part D $35/month insulin cap may also apply for dual-use drugs.");
+    } else if (sessionState.obesityClassification === "at-risk") {
+      lines.push("**ACTION:** Recommend BMI screening at next visit. Mention Medicare covers Intensive Behavioral Therapy for obesity (NCD 210.12) if BMI ≥ 30.");
     }
     lines.push("");
   }

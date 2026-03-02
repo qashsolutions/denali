@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-01 (blog: weekly-rotating default view for anonymous users, personalized view for signed-in users with topic prefs; AWS infra: scheduler deployed, monitor deployed, ECR/S3 lifecycles, qashai cleanup)
+     Last updated: 2026-03-02 (dashboard UX: 5 enhancements — personalized hero, smart badges, nudge strip, walkthrough bar, card animations; fonts: Instrument Serif + DM Sans replacing Playfair Display + SF Pro; dashboard-context.ts data architecture; obesity support: OBESITY_PREVENTION_SKILL, hasObesityContext trigger, classifyObesityStatus, obesity drug detection, obesity screening CPTs, SAD list obesity drugs, severity keywords; blog: weekly-rotating default view for anonymous users, personalized view for signed-in users with topic prefs; AWS infra: scheduler deployed, monitor deployed, ECR/S3 lifecycles, qashai cleanup)
      Maintainer: @cvr
 -->
 
@@ -128,13 +128,15 @@ Where to find specific logic in the codebase.
 | `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformEOB()` extracts PDE info/careTeam/POS/inpatient fields + `classifyDiabetesStatus()`), `eob-clinical.ts` (clinical extraction pipeline — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 8 resource types), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
 | `src/lib/diabetes-insights.ts` | Claude-powered diabetes insight generation. `generateDiabetesInsight(data)` calls Sonnet for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls |
 | `src/components/diabetes/` | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from CPT-based `ScreeningHistory[]`), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up, med refill gaps, specialty gaps, post-discharge follow-up), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display) |
-| `src/components/health/DiagnosisSummaryCard.tsx` | Renders "Conditions in Your Claims" list with severity color-coding. `getSeverityConfig()`: structured `DiagnosisSummary` category → `RED_KEYWORDS` (18 terms: neoplasm, cancer, stroke, heart failure, etc.) → `AMBER_KEYWORDS` (27 terms: hypertension, thyroid, anemia, COPD, etc.) → gray. `cleanDiagnosisName()` strips U+25CC combining mark artifacts from FHIR data |
+| `src/components/health/DiagnosisSummaryCard.tsx` | Renders "Conditions in Your Claims" list with severity color-coding. `getSeverityConfig()`: structured `DiagnosisSummary` category → `RED_KEYWORDS` (21 terms: neoplasm, cancer, stroke, heart failure, morbid obesity, severe obesity, obesity class iii, etc.) → `AMBER_KEYWORDS` (27 terms: hypertension, thyroid, anemia, COPD, etc.) → gray. `cleanDiagnosisName()` strips U+25CC combining mark artifacts from FHIR data |
 | `src/hooks/useDiabetesSnapshots.ts` | Fetches longitudinal lab data from `diabetes_snapshots`. Returns `{ snapshots, a1cHistory, isLoading }` |
 | `src/hooks/useDiabetesLog.ts` | CRUD for daily log entries via `/api/diabetes/log`. Returns `{ entries, isLoading, addEntry, deleteEntry }`. IndexedDB cache + offline queue for POST (optimistic local add) |
 | `src/hooks/useDiabetesInsights.ts` | AI insight fetch/refresh via `/api/diabetes/insights`. Returns `{ insight, isLoading, refresh }`. IndexedDB write-through + offline fallback |
 | `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
 | `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
 | `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
+| `src/lib/dashboard-context.ts` | Dashboard personalization data layer. Types: `DashboardContext`, `DashboardUser`, `DashboardCoverage`, `DashboardMedicare`, `DashboardDiabetes`, `DashboardAppeals`, `Badge`, `Nudge`. Helpers: `getTimeOfDay()`, `getPersonalizedGreeting()`, `buildStatusSummary()`, `selectNudge()` (priority-sorted), badge getters per card (`getCoverageBadge`, `getDashboardBadge`, `getDiabetesBadge`, `getAppealsBadge`). Mock factories: `getMockDashboardContext()`, `getNewUserDashboardContext()`. Swap to real API data by populating from useAuth + useHealthData |
+| `src/app/app/page.tsx` | Authenticated dashboard home page. 5 UX enhancements: (1) `HeroSection` — time-aware greeting + contextual status summary + time-of-day gradient, (2) `StatusBadge` + per-card badge logic (pill-shaped, solid/outline variants), (3) `NudgeStrip` — priority-sorted contextual message with CTA + dismiss, (4) `WalkthroughBar` — 4-step guided tour (first visit only, sessionStorage flag), (5) `AnimatedFeatureCard` — staggered fade-up + hover lift + SVG ambient animations. 4 feature cards: Coverage Check (green), Medicare Dashboard (coral), Diabetes Care (blue), Appeals (purple). Uses `DashboardContext` from `dashboard-context.ts` |
 | `src/lib/cms.ts` | CMS content queries via `query()`: `getBlogPosts(category?)`, `getBlogPost(slug)`, `getBlogSlugs()`, `getUserTopics(userId)`, `getPersonalizedBlogPosts(topics?)`, `getDefaultBlogPosts()` (weekly-rotating: 1 post per topic via ISO week number), `getLandingPageData()`, `getSiteSettings()`, `getPricingPlans()`, `getTestimonials()`. All have try/catch with empty defaults for build-time resilience |
 | `src/app/blog/page.tsx` | Blog listing page. SSR with `revalidate = 3600`. Three display modes: (1) `?category=` or `?view=all` → all posts with category tabs, (2) signed-in user with topic prefs → personalized grouped view, (3) default (anonymous/no prefs) → 3 weekly-rotating posts (one per topic) with "Browse all" link. Reads JWT from cookie (lightweight decode, no full auth). Falls back gracefully on any error |
 | `src/app/blog/[slug]/page.tsx` | Individual blog post page. Dynamic route, ISR. Uses `getBlogPost(slug)` + `BlogArticle`. `generateStaticParams()` via `getBlogSlugs()` |
@@ -407,6 +409,7 @@ The system uses gates that return early and prevent later skills from loading pr
 | `HEALTH_RECORDS_SKILL` | `src/lib/skills/health-records.ts` | `hasHealthData` or `hasRecentDenials` |
 | `MEDICARE_NOTIFICATIONS_SKILL` | `src/lib/skills/medicare-notifications.ts` | `hasHealthData && hasRecentChanges` |
 | `DIABETES_PREVENTION_SKILL` | `src/lib/skills/diabetes-prevention.ts` | `hasDiabetesContext` |
+| `OBESITY_PREVENTION_SKILL` | `src/lib/skills/obesity-prevention.ts` | `hasObesityContext` — obesity diagnosis (E66), obesity medications, or user keywords (weight loss, bariatric, BMI, Wegovy, etc.) |
 | `EOB_EXPLAINER_SKILL` | `src/skills/domain/eob-explainer.ts` | `hasEOBQuestion && hasHealthData` — user asks about bills/claims with Blue Button connected |
 | `OUTCOME_PROMPTING_SKILL` | `src/skills/domain/outcome-prompting.ts` | Returning user with pending appeal (`hasUnreportedOutcome`). Outcome reported via `/api/appeal-outcome` → `recordAppealOutcome()` + `applyOutcomeIncentive()` (free appeal credit) |
 | `COUNSELOR_SKILL` | `src/skills/channel/counselor.ts` | `role === "counselor"` |
@@ -693,12 +696,13 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 
 ### Health Data in AI
 
-- Client-side `useHealthData()` fetches from `/api/fhir/data` → populates sessionState fields (`healthDataAvailable`, `activeCoverage`, `recentDenials`, `labs`, `conditions`, `medications`, `screenings`, `providers`, `hospitalizations`, `diabetesClassification`)
+- Client-side `useHealthData()` fetches from `/api/fhir/data` → populates sessionState fields (`healthDataAvailable`, `activeCoverage`, `recentDenials`, `labs`, `conditions`, `medications`, `screenings`, `providers`, `hospitalizations`, `diabetesClassification`, `obesityClassification`)
 - Chat page bridges health data into `useChat` via `initialSessionState` (built with `useMemo`, synced via `useEffect` for async loading). Also auto-detects Medicare type from Blue Button coverage: Part C → `medicareType: "advantage"` + `maPlanName`; Part A/B → `medicareType: "original"`. `recentClaims` includes `denialReasons` for denied claims.
-- Server-side `buildHealthContextForPrompt()` injects health context into Claude system prompt: active coverage (+ MA plan name if present), lab results (with clinical interpretations), diabetes diagnoses, active medications (with PDE supply/gap data), screenings (with overdue alerts), care team providers, recent hospitalizations (with follow-up flags), diabetes classification with action directives, recent denials (gated by `health_data_ai` consent), denial reasons on individual claims
+- Server-side `buildHealthContextForPrompt()` injects health context into Claude system prompt: active coverage (+ MA plan name if present), lab results (with clinical interpretations), diabetes diagnoses, obesity conditions, active medications (with PDE supply/gap data + separate obesity medication section), screenings (with overdue alerts including obesity counseling G0447/G0473), care team providers, recent hospitalizations (with follow-up flags), diabetes classification with action directives, obesity classification with action directives, recent denials (gated by `health_data_ai` consent), denial reasons on individual claims
 - `HEALTH_RECORDS_SKILL` loaded when `hasHealthData` or `hasRecentDenials` triggers fire
 - `EOB_EXPLAINER_SKILL` loaded when `hasEOBQuestion && hasHealthData` — user asks about bills/claims with Blue Button connected
 - `DIABETES_PREVENTION_SKILL` loaded when `hasDiabetesContext` triggers (from conditions, labs, or user keywords)
+- `OBESITY_PREVENTION_SKILL` loaded when `hasObesityContext` triggers (from E66 conditions, obesity medications like Wegovy/Zepbound, or user keywords like weight loss/bariatric/BMI). `classifyObesityStatus()` provides 3-tier classification: obese/at-risk/none
 
 ### EOB Extraction Pipeline
 
@@ -707,8 +711,8 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 | Function | Input | Output | Key Logic |
 |----------|-------|--------|-----------|
 | `extractConditionsFromClaims()` | All claims | `DiagnosisSummary[]` | Scans `diagnosisCodes[]` for diabetes ICD-10 prefixes (E10, E11, E13, R73, E66). Dedupes by code, keeps most recent date |
-| `extractMedicationsFromClaims()` | Part D claims | `MedicationSummary[]` | Filters PDE claims, matches drug name patterns. Enriched with PDE data: daysSupply, refillNumber, brand/generic, estimatedRunOutDate, gapDays (positive = overdue) |
-| `extractScreeningsFromClaims()` | Carrier/Outpatient claims | `ScreeningHistory[]` | Matches `procedureCodes[]` against `SCREENING_CPT_MAP` (18 CPT codes → 8 screening types: A1C, eye-exam, kidney, ECG, office-visit, nutrition, DSMT, metabolic-panel). Dedupes by type, computes monthsSinceLast + isOverdue |
+| `extractMedicationsFromClaims()` | Part D claims | `MedicationSummary[]` | Filters PDE claims, matches drug name patterns (DIABETES_DRUG_PATTERNS + OBESITY_DRUG_PATTERNS). Dual-flagging: `isDiabetesMed` + `isObesityMed` (GLP-1s like semaglutide can be both). Enriched with PDE data: daysSupply, refillNumber, brand/generic, estimatedRunOutDate, gapDays (positive = overdue) |
+| `extractScreeningsFromClaims()` | Carrier/Outpatient claims | `ScreeningHistory[]` | Matches `procedureCodes[]` against `SCREENING_CPT_MAP` (20 CPT codes → 9 screening types: A1C, eye-exam, kidney, ECG, office-visit, nutrition, DSMT, metabolic-panel, obesity-counseling). Dedupes by type, computes monthsSinceLast + isOverdue |
 | `extractProvidersFromClaims()` | All claims with careTeam | `ProviderDetail[]` | Aggregates by NPI, tracks specialty, visit count, claim types. From `careTeam[]` extracted in `transformEOB()` |
 | `extractHospitalizationsFromClaims()` | Inpatient/SNF claims | `HospitalizationSummary[]` | Filters inpatient claims, computes LOS, daysSinceDischarge, needsFollowUp (< 30 days). Admission type + discharge status from `supportingInfo[]` |
 
@@ -725,7 +729,7 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 `DiagnosisSummaryCard.tsx` color-codes conditions in the health page. Priority chain:
 
 1. **Structured match** — `DiagnosisSummary.category` from `eob-clinical.ts` (type1/type2 → red, pre-diabetic/obesity → amber)
-2. **RED keywords** (18 terms) — neoplasm, malignant, cancer, carcinoma, lymphoma, melanoma, hemorrhage, elevated prostate, acute kidney, renal failure, pulmonary embolism, stroke, cerebrovascular, heart failure, cardiac arrest, sepsis, septicemia, tumor
+2. **RED keywords** (21 terms) — neoplasm, malignant, cancer, carcinoma, lymphoma, melanoma, hemorrhage, elevated prostate, acute kidney, renal failure, pulmonary embolism, stroke, cerebrovascular, heart failure, cardiac arrest, sepsis, septicemia, tumor, morbid obesity, severe obesity, obesity class iii
 3. **AMBER keywords** (27 terms) — hypertension, hypertensive, impaired glucose, hyperglycemia, thyroid, anemia, hyperlipidemia, cholesterol, chronic kidney, atrial fibrillation, arrhythmia, neuropathy, retinopathy, nephropathy, osteoporosis, COPD, depression, anxiety, bipolar, etc.
 4. **Gray** — everything else (routine/stable conditions)
 
@@ -766,15 +770,18 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 **BottomTabs** (`src/components/layout/BottomTabs.tsx`) — mobile only, `/app/*` pages:
 - Tabs: Home, Health, Ask Denali, Settings (4 tabs, fixed bottom)
 
-**Health Hub** (`src/app/app/health/page.tsx`) — 6 collapsible accordion cards replacing 11-section scroll:
+**Health Hub** (`src/app/app/health/page.tsx`) — 7 collapsible accordion cards replacing 11-section scroll:
 - Each card: `HealthHubCard` — status dot (red/amber/green) + title + one-line summary + chevron toggle
-- Cards: Needs Attention (auto-expanded, conditional), Coverage Status, Diabetes Care (conditional), Health Conditions (conditional), Claims & Providers, Medicare Account
-- Status dots computed via `computeCardStatuses()` (useMemo) — checks denied claims, overdue screenings, med refill gaps, severity classification, sync age
+- Cards: Needs Attention (auto-expanded, conditional), Coverage Status, Diabetes Care (conditional), Weight Management (conditional, obesity), Health Conditions (conditional), Claims & Providers, Medicare Account
+- Status dots computed via `computeCardStatuses()` (useMemo) — checks denied claims, overdue screenings, med refill gaps (diabetes + obesity), severity classification, sync age, obesity screenings/meds
+- `ObesityCareExpanded` component: classification badge, weight-management medications with refill gap indicators, overdue obesity counseling screenings (G0447/G0473), Medicare coverage info box (IBT/nutrition/bariatric), "Discuss Weight Management" CTA → chat
+- Needs Attention `overdueMeds` filter includes both `isDiabetesMed` and `isObesityMed` medications
 - Multiple cards can be open simultaneously. `expandedCards` as `Set<string>` state
 - Existing child components (`CoverageCards`, `ClaimsTimeline`, `DiagnosisSummaryCard`, etc.) reused as-is inside card bodies
 
 **Icons** (`src/components/icons/index.tsx`):
 - `DiabetesIcon`: chart/monitoring icon (trend line + dot) — NOT blood drop
+- `WeightScaleIcon`: weight scale with circular gauge, needle, tick marks, handle — used by Weight Management card
 - `HeartPulseIcon`, `ChatBubbleIcon`, `DocumentTextIcon`, `GearIcon`, `HomeIcon`, `MountainIcon`
 
 ### Typography
@@ -782,7 +789,7 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 - Greeting: 28px Bold
 - Body: 16px min Regular
 - Labels: 11-12px Semibold
-- Font: SF Pro Display, -apple-system, sans-serif
+- Font: Instrument Serif (headings, via `--font-serif`) + DM Sans (body, via `--font-sans-dm`). Loaded via `next/font/google` in root layout. Warm, trustworthy feel — not techy
 
 ### Theme
 
@@ -1104,7 +1111,7 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 **Conversational AI criteria**: Personalized AI across clinical record (coverage+denials+conditions+medications+screenings+providers+hospitalizations+classification — extracted from EOB claims via `eob-clinical.ts`). Blue Button PHR connection. AI-generated disclaimers (SparkleIcon + "Not medical advice"). "Talk to your doctor" patterns in all skills. Note: lab values (A1C etc.) not available from Blue Button — only lab procedures detected in EOB claims.
 
-**Diabetes & Obesity criteria**: Full EOB extraction pipeline (`eob-clinical.ts`: 5 extractors — conditions, medications with PDE adherence data, screenings from CPT codes, providers with specialty, hospitalizations with follow-up flags → `classifyDiabetesStatus()`). `ScreeningReminders` driven by real CPT claim dates (8 screening types, 18 CPT codes). `RiskAlerts` expanded: high A1C, missing meds, med refill gaps, A1C trending up, no endocrinologist, post-discharge follow-up. Personalized coaching via `DIABETES_PREVENTION_SKILL`. `PreDiabetesRiskCard` (CDC risk test). Diabetes dashboard (diagnoses, medications, quick actions). `diabetes_snapshots` for longitudinal tracking. `QuickLog` for daily entries. `InsightsCard` for Claude-generated analysis.
+**Diabetes & Obesity criteria**: Full EOB extraction pipeline (`eob-clinical.ts`: 5 extractors — conditions, medications with PDE adherence data + dual `isDiabetesMed`/`isObesityMed` flags, screenings from CPT codes including obesity counseling G0447/G0473, providers with specialty, hospitalizations with follow-up flags → `classifyDiabetesStatus()` + `classifyObesityStatus()`). `ScreeningReminders` driven by real CPT claim dates (9 screening types, 20 CPT codes). `RiskAlerts` expanded: high A1C, missing meds, med refill gaps, A1C trending up, no endocrinologist, post-discharge follow-up. Personalized coaching via `DIABETES_PREVENTION_SKILL` + `OBESITY_PREVENTION_SKILL` (classification-based: obese → IBT/MNT/bariatric/GLP-1 guidance, at-risk → screening/IBT recommendation). `PreDiabetesRiskCard` (CDC risk test). Diabetes dashboard (diagnoses, medications, quick actions). `diabetes_snapshots` for longitudinal tracking. `QuickLog` for daily entries. `InsightsCard` for Claude-generated analysis. SAD list includes 6 obesity drugs (Wegovy, Zepbound, Saxenda, Contrave, Qsymia, Orlistat). Severity classification: morbid/severe/class III obesity → RED in DiagnosisSummaryCard.
 
 **Medicare Notifications** (A2 partial): `MEDICARE_NOTIFICATIONS_SKILL` detects EOB/coverage changes from FHIR data.
 

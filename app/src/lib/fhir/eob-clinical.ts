@@ -35,6 +35,10 @@ const DIABETES_ICD10_PREFIXES: Array<[string, DiagnosisSummary["category"]]> = [
 const DIABETES_DRUG_PATTERNS =
   /metformin|insulin|glipizide|glyburide|glimepiride|pioglitazone|rosiglitazone|sitagliptin|saxagliptin|linagliptin|alogliptin|canagliflozin|dapagliflozin|empagliflozin|ertugliflozin|liraglutide|semaglutide|dulaglutide|exenatide|tirzepatide|acarbose|miglitol|nateglinide|repaglinide|colesevelam|bromocriptine|pramlintide/i;
 
+/** Drug class keywords for obesity/weight-loss medications (includes GLP-1 dual-use) */
+const OBESITY_DRUG_PATTERNS =
+  /wegovy|zepbound|saxenda|contrave|qsymia|xenical|orlistat|phentermine|naltrexone.*bupropion|bupropion.*naltrexone|semaglutide|tirzepatide|liraglutide/i;
+
 /** Claims older than this are considered "Completed" rather than "Active" */
 const ACTIVE_MEDICATION_MONTHS = 6;
 
@@ -106,6 +110,7 @@ export function extractMedicationsFromClaims(claims: ClaimSummary[]): Medication
       // Normalize for deduplication (lowercase, trim)
       const normalized = proc.trim().toLowerCase();
       const isDiabetesMed = DIABETES_DRUG_PATTERNS.test(normalized);
+      const isObesityMed = OBESITY_DRUG_PATTERNS.test(normalized);
 
       const claimDate = parseDate(claim.serviceDate);
       const isRecent = claimDate >= cutoffDate;
@@ -136,6 +141,7 @@ export function extractMedicationsFromClaims(claims: ClaimSummary[]): Medication
           dosage: "", // Not available from EOB
           startDate: claim.serviceDate,
           isDiabetesMed,
+          isObesityMed,
           daysSupply: pde?.daysSupply,
           refillNumber: pde?.refillNumber,
           totalRefillsAuthorized: pde?.totalRefillsAuthorized,
@@ -160,9 +166,10 @@ export function extractMedicationsFromClaims(claims: ClaimSummary[]): Medication
     }
   }
 
-  // Diabetes meds first, then alphabetical
+  // Diabetes meds first, obesity meds second, then alphabetical
   return Array.from(medMap.values()).sort((a, b) => {
     if (a.isDiabetesMed !== b.isDiabetesMed) return a.isDiabetesMed ? -1 : 1;
+    if (a.isObesityMed !== b.isObesityMed) return a.isObesityMed ? -1 : 1;
     return a.name.localeCompare(b.name);
   });
 }
@@ -197,6 +204,9 @@ const SCREENING_CPT_MAP: Record<string, ScreeningSpec> = {
   "97803": { type: "nutrition", displayName: "Nutrition Counseling", recommendedFrequency: "As recommended", overdueMonths: 18 },
   "G0108": { type: "dsmt", displayName: "Diabetes Self-Management Training", recommendedFrequency: "Yearly", overdueMonths: 15 },
   "G0109": { type: "dsmt", displayName: "Diabetes Self-Management Training", recommendedFrequency: "Yearly", overdueMonths: 15 },
+  // Obesity-specific counseling CPTs (IBT — NCD 210.12)
+  "G0447": { type: "obesity-counseling", displayName: "Obesity Behavioral Counseling (IBT)", recommendedFrequency: "Per IBT schedule", overdueMonths: 12 },
+  "G0473": { type: "obesity-counseling", displayName: "Obesity Counseling Maintenance", recommendedFrequency: "Monthly (months 7-12)", overdueMonths: 12 },
 };
 
 /**

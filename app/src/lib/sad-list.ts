@@ -85,6 +85,52 @@ const SAD_EXCLUSION_LIST: Record<string, SADExclusion> = {
     reason: "Self-administered anticoagulant injection",
   },
 
+  // Obesity/weight-management medications (Part D — self-administered)
+  "semaglutide_wegovy": {
+    genericName: "semaglutide (Wegovy)",
+    route: "subcutaneous",
+    partB: false,
+    partD: true,
+    reason: "Self-administered weekly injection for weight management",
+    exception: "Also available as Ozempic for diabetes (same drug, different indication)",
+  },
+  "tirzepatide_zepbound": {
+    genericName: "tirzepatide (Zepbound)",
+    route: "subcutaneous",
+    partB: false,
+    partD: true,
+    reason: "Self-administered weekly injection for weight management",
+    exception: "Also available as Mounjaro for diabetes (same drug, different indication)",
+  },
+  "liraglutide_saxenda": {
+    genericName: "liraglutide (Saxenda)",
+    route: "subcutaneous",
+    partB: false,
+    partD: true,
+    reason: "Self-administered daily injection for weight management",
+  },
+  "naltrexone_bupropion": {
+    genericName: "naltrexone/bupropion (Contrave)",
+    route: "oral",
+    partB: false,
+    partD: true,
+    reason: "Oral combination medication for weight management",
+  },
+  "phentermine_topiramate": {
+    genericName: "phentermine/topiramate (Qsymia)",
+    route: "oral",
+    partB: false,
+    partD: true,
+    reason: "Oral combination medication for weight management",
+  },
+  "orlistat": {
+    genericName: "orlistat (Xenical/Alli)",
+    route: "oral",
+    partB: false,
+    partD: true,
+    reason: "Oral medication - fat absorption blocker for weight management",
+  },
+
   // Growth hormones (usually Part D)
   "somatropin": {
     genericName: "somatropin",

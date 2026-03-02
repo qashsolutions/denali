@@ -98,11 +98,13 @@ export interface SessionState {
     name: string;
     status: string;
     isDiabetesMed: boolean;
+    isObesityMed: boolean;
     daysSupply?: number;
     isBrandName?: boolean;
     gapDays?: number;
   }>;
   diabetesClassification?: "diabetic" | "pre-diabetic" | "at-risk" | "none";
+  obesityClassification?: "obese" | "at-risk" | "none";
 
   // Screenings (P0 — from CPT codes in Carrier/Outpatient claims)
   screenings?: Array<{
