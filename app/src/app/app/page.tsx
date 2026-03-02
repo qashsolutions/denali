@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { useHealthData } from "@/hooks/useHealthData";
 import {
   type DashboardContext,
   type Badge,
@@ -11,12 +13,13 @@ import {
   getTimeOfDay,
   getPersonalizedGreeting,
   buildStatusSummary,
+  buildDashboardContext,
   selectNudge,
   getCoverageBadge,
   getDashboardBadge,
   getDiabetesBadge,
+  getObesityBadge,
   getAppealsBadge,
-  getMockDashboardContext,
 } from "@/lib/dashboard-context";
 
 // ---------------------------------------------------------------------------
@@ -31,6 +34,8 @@ interface FeatureConfig {
   accentColor: string;
   illustration: React.ReactNode;
   getBadge: (ctx: DashboardContext) => Badge | null;
+  /** If set, card only renders when this returns true */
+  showWhen?: (ctx: DashboardContext) => boolean;
 }
 
 // SVG Illustrations — professional, minimal, stroke-based
@@ -42,36 +47,9 @@ function CoverageIllustration() {
       className="w-12 h-12"
       aria-hidden="true"
     >
-      {/* Magnifying glass body */}
-      <circle
-        cx="22"
-        cy="22"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="2"
-        fill="none"
-      />
-      {/* Glass handle */}
-      <line
-        x1="29.5"
-        y1="29.5"
-        x2="38"
-        y2="38"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        className="animate-sway"
-        style={{ transformOrigin: "29.5px 29.5px" }}
-      />
-      {/* Check mark inside glass */}
-      <path
-        d="M17 22l3 3 6-6"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity="0.7"
-      />
+      <circle cx="22" cy="22" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+      <line x1="29.5" y1="29.5" x2="38" y2="38" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="animate-sway" style={{ transformOrigin: "29.5px 29.5px" }} />
+      <path d="M17 22l3 3 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
     </svg>
   );
 }
@@ -84,24 +62,8 @@ function DashboardIllustration() {
       className="w-12 h-12"
       aria-hidden="true"
     >
-      {/* EKG pulse line */}
-      <polyline
-        points="4,26 12,26 16,18 20,34 24,22 28,28 32,26 36,26 40,20 44,26"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-        className="animate-pulse-line"
-      />
-      {/* Small heart */}
-      <path
-        d="M24 14c-1.5-2.5-5-3-7-1s-1 5 1 7l6 5 6-5c2-2 3-5 1-7s-5.5-1.5-7 1z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        fill="none"
-        opacity="0.5"
-      />
+      <polyline points="4,26 12,26 16,18 20,34 24,22 28,28 32,26 36,26 40,20 44,26" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" className="animate-pulse-line" />
+      <path d="M24 14c-1.5-2.5-5-3-7-1s-1 5 1 7l6 5 6-5c2-2 3-5 1-7s-5.5-1.5-7 1z" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.5" />
     </svg>
   );
 }
@@ -114,13 +76,33 @@ function DiabetesIllustration() {
       className="w-12 h-12"
       aria-hidden="true"
     >
-      {/* Bar chart */}
       <rect x="8" y="28" width="6" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none" className="animate-shimmer" style={{ animationDelay: "0s" }} />
       <rect x="18" y="20" width="6" height="20" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none" className="animate-shimmer" style={{ animationDelay: "0.3s" }} />
       <rect x="28" y="14" width="6" height="26" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none" className="animate-shimmer" style={{ animationDelay: "0.6s" }} />
-      {/* Trend arrow */}
       <path d="M38 12l-2 4h4l-2-4z" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.6" />
       <line x1="38" y1="16" x2="38" y2="22" stroke="currentColor" strokeWidth="1.5" opacity="0.6" />
+    </svg>
+  );
+}
+
+function ObesityIllustration() {
+  return (
+    <svg
+      viewBox="0 0 48 48"
+      fill="none"
+      className="w-12 h-12"
+      aria-hidden="true"
+    >
+      {/* Weight scale */}
+      <circle cx="24" cy="22" r="12" stroke="currentColor" strokeWidth="1.5" fill="none" />
+      {/* Scale needle */}
+      <line x1="24" y1="22" x2="24" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-sway" style={{ transformOrigin: "24px 22px" }} />
+      {/* Tick marks */}
+      <line x1="15" y1="22" x2="17" y2="22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+      <line x1="31" y1="22" x2="33" y2="22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+      {/* Base */}
+      <rect x="16" y="36" width="16" height="3" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
+      <line x1="24" y1="34" x2="24" y2="36" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   );
 }
@@ -133,21 +115,11 @@ function AppealsIllustration() {
       className="w-12 h-12"
       aria-hidden="true"
     >
-      {/* Document */}
       <rect x="10" y="6" width="22" height="30" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
-      {/* Lines on document */}
       <line x1="16" y1="14" x2="26" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
       <line x1="16" y1="20" x2="26" y2="20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
       <line x1="16" y1="26" x2="22" y2="26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
-      {/* Arrow flowing out */}
-      <path
-        d="M34 20l6 0M37 17l3 3-3 3"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="animate-flow-move"
-      />
+      <path d="M34 20l6 0M37 17l3 3-3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-flow-move" />
     </svg>
   );
 }
@@ -179,6 +151,17 @@ const FEATURES: FeatureConfig[] = [
     accentColor: "#3B82F6",
     illustration: <DiabetesIllustration />,
     getBadge: (ctx) => getDiabetesBadge(ctx.diabetes),
+    showWhen: (ctx) => ctx.diabetes.hasContext,
+  },
+  {
+    id: "obesity",
+    href: "/app/chat?topic=obesity",
+    title: "Weight Management",
+    description: "Medicare-covered obesity counseling, nutrition therapy, and more",
+    accentColor: "#F59E0B",
+    illustration: <ObesityIllustration />,
+    getBadge: (ctx) => getObesityBadge(ctx.obesity),
+    showWhen: (ctx) => ctx.obesity.classification !== "none",
   },
   {
     id: "appeals",
@@ -318,7 +301,6 @@ function NudgeStrip({ nudge }: { nudge: Nudge }) {
         role="status"
         aria-live="polite"
       >
-        {/* Bell icon */}
         <div
           className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
           style={{ backgroundColor: "#FEF3C7" }}
@@ -329,27 +311,18 @@ function NudgeStrip({ nudge }: { nudge: Nudge }) {
           </svg>
         </div>
 
-        {/* Message text */}
-        <p
-          className="flex-1 text-[13px] leading-snug"
-          style={{ color: "#92400E" }}
-        >
+        <p className="flex-1 text-[13px] leading-snug" style={{ color: "#92400E" }}>
           {nudge.message}
         </p>
 
-        {/* CTA */}
         <Link
           href={nudge.href}
           className="flex-shrink-0 text-[13px] font-semibold whitespace-nowrap px-3 py-1.5 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-          style={{
-            color: "#92400E",
-            backgroundColor: "#FDE68A40",
-          }}
+          style={{ color: "#92400E", backgroundColor: "#FDE68A40" }}
         >
           {nudge.cta} <span aria-hidden="true">&nbsp;&rarr;</span>
         </Link>
 
-        {/* Dismiss */}
         <button
           onClick={() => setDismissed(true)}
           className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors min-w-[44px] min-h-[44px]"
@@ -381,13 +354,13 @@ const WALKTHROUGH_STEPS = [
     feature: "Medicare Dashboard",
   },
   {
-    title: "Start tracking your A1C",
-    description: "Get personalized diabetes coaching from your own lab results.",
-    feature: "Diabetes Care",
+    title: "Talk to Denali about your health",
+    description: "Ask about diabetes care, weight management, or any Medicare question.",
+    feature: "Ask Denali",
   },
   {
-    title: "Set up appeal alerts",
-    description: "Never miss a deadline to fight a denied Medicare claim.",
+    title: "Fight denied claims",
+    description: "Never miss a deadline to appeal a denied Medicare claim.",
     feature: "Appeals",
   },
 ];
@@ -406,9 +379,7 @@ function WalkthroughBar({
   return (
     <div
       className="opacity-0 mx-auto max-w-2xl mb-6"
-      style={{
-        animation: "slide-down-fade 400ms ease-out 400ms forwards",
-      }}
+      style={{ animation: "slide-down-fade 400ms ease-out 400ms forwards" }}
       role="region"
       aria-label="Getting started walkthrough"
     >
@@ -416,21 +387,15 @@ function WalkthroughBar({
         className="relative rounded-2xl px-6 py-5 overflow-hidden"
         style={{ backgroundColor: "#1A1F2E" }}
       >
-        {/* Step content */}
         <div className="flex items-start gap-4" role="group" aria-label={`Step ${step + 1} of ${WALKTHROUGH_STEPS.length}`}>
-          {/* Step number circle */}
           <div
             className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-            style={{
-              backgroundColor: "rgba(255,255,255,0.12)",
-              color: "#ffffff",
-            }}
+            style={{ backgroundColor: "rgba(255,255,255,0.12)", color: "#ffffff" }}
             aria-hidden="true"
           >
             {step + 1}
           </div>
 
-          {/* Text */}
           <div className="flex-1 min-w-0">
             <p className="text-[14px] font-semibold text-white mb-0.5" style={{ fontFamily: "var(--font-serif)" }}>
               {current.title}
@@ -440,7 +405,6 @@ function WalkthroughBar({
             </p>
           </div>
 
-          {/* Controls */}
           <div className="flex items-center gap-3 flex-shrink-0">
             <button
               onClick={onSkip}
@@ -450,17 +414,11 @@ function WalkthroughBar({
             </button>
             <button
               onClick={() => {
-                if (isLast) {
-                  onComplete();
-                } else {
-                  setStep((s) => s + 1);
-                }
+                if (isLast) onComplete();
+                else setStep((s) => s + 1);
               }}
               className="px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-              style={{
-                backgroundColor: "rgba(255,255,255,0.15)",
-                color: "#ffffff",
-              }}
+              style={{ backgroundColor: "rgba(255,255,255,0.15)", color: "#ffffff" }}
             >
               {isLast ? (
                 <>Get Started<span aria-hidden="true">&nbsp;&#10003;</span></>
@@ -471,7 +429,6 @@ function WalkthroughBar({
           </div>
         </div>
 
-        {/* Progress dots */}
         <div className="flex items-center justify-center gap-2 mt-4" role="tablist" aria-label="Walkthrough progress">
           {WALKTHROUGH_STEPS.map((_, i) => (
             <div
@@ -479,11 +436,7 @@ function WalkthroughBar({
               className="w-2 h-2 rounded-full transition-all duration-200"
               style={{
                 backgroundColor:
-                  i === step
-                    ? "#ffffff"
-                    : i < step
-                      ? "rgba(255,255,255,0.4)"
-                      : "rgba(255,255,255,0.15)",
+                  i === step ? "#ffffff" : i < step ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.15)",
               }}
               role="tab"
               aria-selected={i === step}
@@ -510,7 +463,6 @@ function HeroSection({
   const greeting = getPersonalizedGreeting(ctx.user.firstName);
   const summary = buildStatusSummary(ctx);
 
-  // Time-based gradient: warm peach (morning) → soft blue (afternoon) → muted lavender (evening)
   const gradientMap: Record<TimeOfDay, string> = {
     morning:
       "linear-gradient(135deg, rgba(255,237,213,0.08) 0%, rgba(254,215,170,0.04) 100%)",
@@ -527,16 +479,11 @@ function HeroSection({
     >
       <div
         className="opacity-0"
-        style={{
-          animation: "fade-up 300ms ease-out 200ms forwards",
-        }}
+        style={{ animation: "fade-up 300ms ease-out 200ms forwards" }}
       >
         <h1
           className="text-[28px] font-normal leading-tight mb-2"
-          style={{
-            fontFamily: "var(--font-serif)",
-            color: "var(--text-primary)",
-          }}
+          style={{ fontFamily: "var(--font-serif)", color: "var(--text-primary)" }}
         >
           {greeting}
         </h1>
@@ -552,7 +499,6 @@ function HeroSection({
         )}
       </div>
 
-      {/* Subtle decorative gradient orb */}
       <div
         className="absolute -right-12 -top-12 w-40 h-40 rounded-full opacity-[0.03]"
         style={{
@@ -570,37 +516,89 @@ function HeroSection({
 }
 
 // ---------------------------------------------------------------------------
+// Loading skeleton
+// ---------------------------------------------------------------------------
+
+function DashboardSkeleton() {
+  return (
+    <div className="max-w-2xl mx-auto px-4 pt-6 pb-8 animate-pulse">
+      <div className="rounded-2xl h-28 mb-6" style={{ backgroundColor: "var(--bg-secondary)" }} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="rounded-2xl h-44" style={{ backgroundColor: "var(--bg-secondary)" }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
 export default function AppHomePage() {
-  // In production, populate from useAuth + useHealthData + useConversationHistory.
-  // For prototype, use mock data.
-  const [ctx] = useState<DashboardContext>(() => getMockDashboardContext());
+  const { authState } = useAuth();
+  const {
+    isConnected,
+    lastSynced,
+    conditions,
+    medications,
+    screenings,
+    coverage,
+    claims,
+    isLoading: healthLoading,
+  } = useHealthData();
+
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [timeOfDay] = useState<TimeOfDay>(() => getTimeOfDay());
   const walkthroughChecked = useRef(false);
 
-  // Check walkthrough flag
+  // Build dashboard context from REAL data
+  const ctx = useMemo<DashboardContext | null>(() => {
+    // Wait for auth to finish loading
+    if (authState.isLoading) return null;
+    // If somehow not authenticated (middleware should redirect, but safety check)
+    if (!authState.userId) return null;
+
+    return buildDashboardContext({
+      authState,
+      isConnected,
+      lastSynced,
+      conditions,
+      medications,
+      screenings,
+      coverage,
+      claims,
+    });
+  }, [authState, isConnected, lastSynced, conditions, medications, screenings, coverage, claims]);
+
+  // Check walkthrough flag (once)
   useEffect(() => {
-    if (walkthroughChecked.current) return;
+    if (walkthroughChecked.current || !ctx) return;
     walkthroughChecked.current = true;
 
-    // In production, read from user profile/API.
-    // For prototype, use sessionStorage so it only appears once per browser session.
     const completed = sessionStorage.getItem("denali_walkthrough_done");
     if (!completed && !ctx.user.hasCompletedWalkthrough) {
       setShowWalkthrough(true);
     }
-  }, [ctx.user.hasCompletedWalkthrough]);
+  }, [ctx]);
 
   const dismissWalkthrough = useCallback(() => {
     setShowWalkthrough(false);
     sessionStorage.setItem("denali_walkthrough_done", "1");
-    // In production: PATCH /api/profile { hasCompletedWalkthrough: true }
   }, []);
 
+  // Show skeleton while auth is loading
+  if (authState.isLoading || !ctx) {
+    return <DashboardSkeleton />;
+  }
+
   const nudge = selectNudge(ctx);
+
+  // Filter features: only show cards whose showWhen passes (or have no showWhen)
+  const visibleFeatures = FEATURES.filter(
+    (f) => !f.showWhen || f.showWhen(ctx)
+  );
 
   return (
     <div className="max-w-2xl mx-auto px-4 pt-6 pb-8">
@@ -620,7 +618,7 @@ export default function AppHomePage() {
 
       {/* Enhancement 2 + 5: Feature Cards with badges + animations */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        {FEATURES.map((feature, i) => (
+        {visibleFeatures.map((feature, i) => (
           <AnimatedFeatureCard
             key={feature.id}
             feature={feature}

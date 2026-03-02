@@ -1,19 +1,31 @@
 /**
- * Next.js Middleware — Cognito JWT Token Refresh
+ * Next.js Middleware — Cognito JWT Token Refresh + Auth Redirects
  *
- * Replaces the Supabase SSR middleware. Handles Cognito token refresh
- * by detecting expired access tokens and using the refresh token cookie
- * to obtain new tokens from Cognito.
+ * 1. Signed-in users hitting "/" → redirect to "/app" (Option A pattern)
+ * 2. Anonymous users hitting "/app" → redirect to "/" (auth-gate)
  *
- * For routes that don't need auth, this is a no-op pass-through.
+ * Auth detection: checks for `access_token` cookie (set by Cognito verify-otp).
+ * This is a lightweight check — full token validation happens in API routes
+ * via getAuthUser(). The cookie's presence is sufficient for redirect decisions.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  // Pass-through — Cognito token refresh is handled client-side via the
-  // Cognito Amplify SDK or via explicit refresh in auth hooks.
-  // Server routes call getAuthUser() from auth-server.ts for verification.
+  const { pathname } = request.nextUrl;
+  const hasAccessToken = request.cookies.has("access_token");
+
+  // Signed-in users on landing page → redirect to dashboard
+  if (pathname === "/" && hasAccessToken) {
+    return NextResponse.redirect(new URL("/app", request.url));
+  }
+
+  // Anonymous users on /app (exact) → redirect to landing
+  // Don't gate /app/chat, /app/health, /app/settings — those have their own auth handling
+  if (pathname === "/app" && !hasAccessToken) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   return NextResponse.next();
 }
 

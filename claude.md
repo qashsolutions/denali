@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-02 (dashboard UX: 5 enhancements — personalized hero, smart badges, nudge strip, walkthrough bar, card animations; fonts: Instrument Serif + DM Sans replacing Playfair Display + SF Pro; dashboard-context.ts data architecture; obesity support: OBESITY_PREVENTION_SKILL, hasObesityContext trigger, classifyObesityStatus, obesity drug detection, obesity screening CPTs, SAD list obesity drugs, severity keywords; blog: weekly-rotating default view for anonymous users, personalized view for signed-in users with topic prefs; AWS infra: scheduler deployed, monitor deployed, ECR/S3 lifecycles, qashai cleanup)
+     Last updated: 2026-03-02 (dashboard: auth-gated /app via middleware, signed-in redirect / → /app, real data from useAuth+useHealthData via buildDashboardContext(), conditional obesity Weight Management card, NO HARDCODE rule added to Critical Rules; dashboard UX: 5 enhancements — personalized hero, smart badges, nudge strip, walkthrough bar, card animations; fonts: Instrument Serif + DM Sans replacing Playfair Display + SF Pro; dashboard-context.ts data architecture; obesity support: OBESITY_PREVENTION_SKILL, hasObesityContext trigger, classifyObesityStatus, obesity drug detection, obesity screening CPTs, SAD list obesity drugs, severity keywords; blog: weekly-rotating default view for anonymous users, personalized view for signed-in users with topic prefs; AWS infra: scheduler deployed, monitor deployed, ECR/S3 lifecycles, qashai cleanup)
      Maintainer: @cvr
 -->
 
@@ -67,6 +67,31 @@
 ## Critical Rules
 
 These cause bugs or bad UX if violated. Read before every coding session.
+
+### ⛔ NO HARDCODED / MOCK / TEMPLATE PAGES — EVER
+
+**This is the #1 rule. Violating it wastes time and ships broken UX.**
+
+- **NEVER create pages with hardcoded/mock data.** Every page MUST pull real data from auth state (`useAuth`), health data (`useHealthData`), or API routes. No exceptions.
+- **NEVER use placeholder names, fake counts, or template strings** like "Good morning, Venkata" or "3 new claims" unless they come from real API data.
+- **NEVER ship a page that works without authentication when it should require it.** If a page shows user-specific content, it MUST check auth and redirect anonymous users.
+- **Mock data factories** (e.g., `getMockDashboardContext()`) are ONLY for unit tests and Storybook — NEVER for production page rendering.
+- **If data isn't available yet**, show a proper loading/empty state — not fake data that looks real.
+- **Auth-gated pages** (`/app/*`) MUST redirect to `/` or show sign-in prompt when user is not authenticated. No page under `/app/` should ever render meaningful content for anonymous users.
+
+**Pattern to follow:**
+```tsx
+// CORRECT — real data, auth-gated
+const { user, isLoading } = useAuth();
+const { healthData } = useHealthData();
+if (isLoading) return <Skeleton />;
+if (!user) return <Redirect to="/" />;
+return <Dashboard data={healthData} userName={user.email} />;
+
+// WRONG — hardcoded mock data, no auth check
+const ctx = getMockDashboardContext(); // ← NEVER in production
+return <Dashboard data={ctx} />; // ← shows fake data to everyone
+```
 
 ### Guardrails
 
@@ -135,8 +160,8 @@ Where to find specific logic in the codebase.
 | `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
 | `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
 | `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
-| `src/lib/dashboard-context.ts` | Dashboard personalization data layer. Types: `DashboardContext`, `DashboardUser`, `DashboardCoverage`, `DashboardMedicare`, `DashboardDiabetes`, `DashboardAppeals`, `Badge`, `Nudge`. Helpers: `getTimeOfDay()`, `getPersonalizedGreeting()`, `buildStatusSummary()`, `selectNudge()` (priority-sorted), badge getters per card (`getCoverageBadge`, `getDashboardBadge`, `getDiabetesBadge`, `getAppealsBadge`). Mock factories: `getMockDashboardContext()`, `getNewUserDashboardContext()`. Swap to real API data by populating from useAuth + useHealthData |
-| `src/app/app/page.tsx` | Authenticated dashboard home page. 5 UX enhancements: (1) `HeroSection` — time-aware greeting + contextual status summary + time-of-day gradient, (2) `StatusBadge` + per-card badge logic (pill-shaped, solid/outline variants), (3) `NudgeStrip` — priority-sorted contextual message with CTA + dismiss, (4) `WalkthroughBar` — 4-step guided tour (first visit only, sessionStorage flag), (5) `AnimatedFeatureCard` — staggered fade-up + hover lift + SVG ambient animations. 4 feature cards: Coverage Check (green), Medicare Dashboard (coral), Diabetes Care (blue), Appeals (purple). Uses `DashboardContext` from `dashboard-context.ts` |
+| `src/lib/dashboard-context.ts` | Dashboard personalization data layer. Types: `DashboardContext`, `DashboardUser`, `DashboardCoverage`, `DashboardMedicare`, `DashboardDiabetes`, `DashboardObesity`, `DashboardAppeals`, `Badge`, `Nudge`. `buildDashboardContext(input)` constructs context from real hook data (useAuth + useHealthData). Helpers: `getTimeOfDay()`, `getPersonalizedGreeting()`, `buildStatusSummary()`, `selectNudge()` (priority-sorted), badge getters per card (`getCoverageBadge`, `getDashboardBadge`, `getDiabetesBadge`, `getObesityBadge`, `getAppealsBadge`). Mock factory `getMockDashboardContext()` for tests only |
+| `src/app/app/page.tsx` | Authenticated dashboard home page. **Auth-gated via middleware** (anonymous → redirect to `/`). Uses `useAuth()` + `useHealthData()` for real data via `buildDashboardContext()`. 5 UX enhancements: (1) `HeroSection` — time-aware greeting + contextual status summary + time-of-day gradient, (2) `StatusBadge` + per-card badge logic (pill-shaped, solid/outline variants), (3) `NudgeStrip` — priority-sorted contextual message with CTA + dismiss, (4) `WalkthroughBar` — 4-step guided tour (first visit only, sessionStorage flag), (5) `AnimatedFeatureCard` — staggered fade-up + hover lift + SVG ambient animations. 5 feature cards: Coverage Check (green), Medicare Dashboard (coral), Diabetes Care (blue, conditional on `hasContext`), Weight Management (amber, conditional on `obesity.classification !== "none"`), Appeals (purple) |
 | `src/lib/cms.ts` | CMS content queries via `query()`: `getBlogPosts(category?)`, `getBlogPost(slug)`, `getBlogSlugs()`, `getUserTopics(userId)`, `getPersonalizedBlogPosts(topics?)`, `getDefaultBlogPosts()` (weekly-rotating: 1 post per topic via ISO week number), `getLandingPageData()`, `getSiteSettings()`, `getPricingPlans()`, `getTestimonials()`. All have try/catch with empty defaults for build-time resilience |
 | `src/app/blog/page.tsx` | Blog listing page. SSR with `revalidate = 3600`. Three display modes: (1) `?category=` or `?view=all` → all posts with category tabs, (2) signed-in user with topic prefs → personalized grouped view, (3) default (anonymous/no prefs) → 3 weekly-rotating posts (one per topic) with "Browse all" link. Reads JWT from cookie (lightweight decode, no full auth). Falls back gracefully on any error |
 | `src/app/blog/[slug]/page.tsx` | Individual blog post page. Dynamic route, ISR. Uses `getBlogPost(slug)` + `BlogArticle`. `generateStaticParams()` via `getBlogSlugs()` |
@@ -153,7 +178,7 @@ Where to find specific logic in the codebase.
 | `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade + credit add), `handleSubscriptionEvent()` (lifecycle + monthly credit reset). Uses admin client |
 | `src/components/payment/PaywallModal.tsx` | Paywall UI: plan selection (single/monthly), Stripe checkout redirect. CSS variables for theme. No dev bypass |
 | `src/components/appeal/AppealGate.tsx` | Appeal access orchestration: email OTP → TOTP → access check → PaywallModal pipeline |
-| `src/middleware.ts` | Cognito JWT middleware. Refreshes `access_token` cookie via `/api/auth/refresh` when expired. MUST run on every request before any `getAuthUser()` call to prevent silent 401s. |
+| `src/middleware.ts` | Cognito JWT middleware + auth redirects. (1) Signed-in users on `/` → redirect to `/app`. (2) Anonymous users on `/app` → redirect to `/`. Auth detection: checks `access_token` cookie existence. |
 | `src/lib/offline-cache.ts` | IndexedDB wrapper via `idb`. 6 stores (conversations, health-data, diabetes-log, diabetes-insights, profile, offline-queue). Exports `cacheSet()`, `cacheGet()`, `cacheGetIfFresh()`, `queueOfflineRequest()`, `getOfflineQueue()`, `removeFromQueue()`. TTL constants: profile=4h, everything else=24h |
 | `src/lib/offline-sync.ts` | Client-side offline queue processor. `processQueue()` replays failed POSTs, removes on success, drops after 3 retries. `getQueueCount()` for pending item count |
 | `src/hooks/useOnlineStatus.ts` | SSR-safe hook: always inits `true` (matches SSR), syncs `navigator.onLine` in `useEffect`. Returns `{ isOnline, wasOffline }` |

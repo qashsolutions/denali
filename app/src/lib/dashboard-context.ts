@@ -2,10 +2,18 @@
  * Dashboard personalization context.
  *
  * All data consumed by the authenticated home page is shaped here.
- * In the prototype/demo phase the mock factory produces realistic
- * values; swap to real API data later by populating from
- * useAuth + useHealthData + useConversationHistory.
+ * `buildDashboardContext()` constructs context from real hook data
+ * (useAuth + useHealthData). No mock data in production rendering.
  */
+
+import type { AuthState } from "@/hooks/useAuth";
+import type {
+  DiagnosisSummary,
+  MedicationSummary,
+  ScreeningHistory,
+  CoverageSummary,
+  ClaimSummary,
+} from "@/lib/fhir/transforms";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,6 +43,14 @@ export interface DashboardDiabetes {
   nextScreeningDate: string | null; // ISO 8601
   hasMedReminders: boolean;
   daysUntilScreening: number | null;
+  hasContext: boolean; // whether diabetes context exists at all
+}
+
+export interface DashboardObesity {
+  classification: "obese" | "at-risk" | "none";
+  hasActiveMedication: boolean;
+  medicationName: string | null;
+  hasOverdueScreening: boolean;
 }
 
 export interface DashboardAppeals {
@@ -49,6 +65,7 @@ export interface DashboardContext {
   coverage: DashboardCoverage;
   dashboard: DashboardMedicare;
   diabetes: DashboardDiabetes;
+  obesity: DashboardObesity;
   appeals: DashboardAppeals;
 }
 
@@ -73,6 +90,118 @@ export function getPersonalizedGreeting(firstName: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Build context from real data (useAuth + useHealthData)
+// ---------------------------------------------------------------------------
+
+interface BuildContextInput {
+  authState: AuthState;
+  isConnected: boolean;
+  lastSynced: Date | null;
+  conditions: DiagnosisSummary[];
+  medications: MedicationSummary[];
+  screenings: ScreeningHistory[];
+  coverage: CoverageSummary[];
+  claims: ClaimSummary[];
+}
+
+export function buildDashboardContext(input: BuildContextInput): DashboardContext {
+  const {
+    authState,
+    isConnected,
+    lastSynced,
+    conditions,
+    medications,
+    screenings,
+    claims,
+  } = input;
+
+  // Extract first name from email (before @) — best effort without full name
+  const email = authState.email ?? "";
+  const firstName = email.split("@")[0] || "there";
+
+  // Diabetes context
+  const hasDiabetesCondition = conditions.some(
+    (c) => c.category === "type1" || c.category === "type2" || c.category === "other-diabetes" || c.category === "pre-diabetic"
+  );
+  const hasDiabetesMed = medications.some((m) => m.isDiabetesMed);
+  const hasDiabetesContext = hasDiabetesCondition || hasDiabetesMed;
+
+  const a1cScreening = screenings.find((s) => s.screeningType === "a1c");
+  let daysUntilA1C: number | null = null;
+  let nextA1CDate: string | null = null;
+  if (a1cScreening?.lastDate) {
+    // A1C due every 3 months for diabetics, 6 months for pre-diabetic
+    const intervalMonths = hasDiabetesCondition ? 3 : 6;
+    const lastDate = new Date(a1cScreening.lastDate);
+    const nextDue = new Date(lastDate);
+    nextDue.setMonth(nextDue.getMonth() + intervalMonths);
+    daysUntilA1C = Math.ceil((nextDue.getTime() - Date.now()) / 86400000);
+    nextA1CDate = nextDue.toISOString();
+  }
+
+  // Obesity context
+  const obesityDx = conditions.find((c) => c.category === "obesity");
+  const activeObesityMed = medications.find((m) => m.isObesityMed && m.status === "Active");
+  const obesityClassification: "obese" | "at-risk" | "none" = obesityDx || activeObesityMed
+    ? "obese"
+    : conditions.find((c) => c.category === "pre-diabetic")
+      ? "at-risk"
+      : "none";
+
+  const obesityScreenings = screenings.filter((s) => s.screeningType === "obesity-counseling");
+  const hasOverdueObesityScreening = obesityScreenings.some((s) => s.isOverdue);
+
+  // Claims — count recent (last 30 days)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const recentClaims = claims.filter((c) => {
+    const d = new Date(c.serviceDate);
+    return d >= thirtyDaysAgo;
+  });
+
+  // Denied claims
+  const deniedClaims = claims.filter((c) => c.status === "denied");
+
+  return {
+    user: {
+      firstName,
+      lastLogin: new Date().toISOString(),
+      hasCompletedWalkthrough: false, // TODO: read from user profile API
+      plan: authState.plan,
+    },
+    coverage: {
+      hasRecentResult: false, // Coverage check results live in chat, not dashboard data
+      resultStatus: null,
+      procedureName: null,
+    },
+    dashboard: {
+      blueButtonConnected: isConnected,
+      unreviewedClaimsCount: recentClaims.length,
+      lastSyncDate: lastSynced?.toISOString() ?? null,
+    },
+    diabetes: {
+      latestA1C: null, // Blue Button doesn't provide actual lab values
+      nextScreeningDate: nextA1CDate,
+      hasMedReminders: hasDiabetesMed,
+      daysUntilScreening: daysUntilA1C,
+      hasContext: hasDiabetesContext,
+    },
+    obesity: {
+      classification: obesityClassification,
+      hasActiveMedication: !!activeObesityMed,
+      medicationName: activeObesityMed?.name ?? null,
+      hasOverdueScreening: hasOverdueObesityScreening,
+    },
+    appeals: {
+      activeAppealsCount: deniedClaims.length,
+      nearestDeadline: null, // Would need appeal tracking data
+      pendingActions: deniedClaims.length,
+      daysUntilDeadline: null,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Status summary builder  (Enhancement 1)
 // ---------------------------------------------------------------------------
 
@@ -92,6 +221,11 @@ export function buildStatusSummary(ctx: DashboardContext): string {
     parts.push(`${n} new claim${n === 1 ? "" : "s"} processed`);
   }
 
+  // Blue Button not connected
+  if (!ctx.dashboard.blueButtonConnected) {
+    parts.push("Connect Medicare to see your claims");
+  }
+
   // Diabetes screening
   if (
     ctx.diabetes.nextScreeningDate &&
@@ -109,10 +243,8 @@ export function buildStatusSummary(ctx: DashboardContext): string {
   // Appeals
   if (ctx.appeals.pendingActions > 0) {
     parts.push(
-      `${ctx.appeals.pendingActions} appeal deadline${ctx.appeals.pendingActions === 1 ? "" : "s"} this week`
+      `${ctx.appeals.pendingActions} denied claim${ctx.appeals.pendingActions === 1 ? "" : "s"} to review`
     );
-  } else {
-    parts.push("No pending appeals");
   }
 
   return parts.length > 0 ? parts.join(" \u00B7 ") : "";
@@ -139,7 +271,7 @@ export function selectNudge(ctx: DashboardContext): Nudge | null {
     ctx.diabetes.daysUntilScreening > 0
   ) {
     candidates.push({
-      message: `Your next A1C screening is due in ${ctx.diabetes.daysUntilScreening} days — staying on schedule matters.`,
+      message: `Your next A1C screening is due in ${ctx.diabetes.daysUntilScreening} days \u2014 staying on schedule matters.`,
       cta: "View Schedule",
       href: "/app/health",
       priority: 1,
@@ -153,7 +285,7 @@ export function selectNudge(ctx: DashboardContext): Nudge | null {
     ctx.appeals.daysUntilDeadline <= 14
   ) {
     candidates.push({
-      message: `You have an appeal deadline in ${ctx.appeals.daysUntilDeadline} days — don\u2019t miss your window.`,
+      message: `You have an appeal deadline in ${ctx.appeals.daysUntilDeadline} days \u2014 don\u2019t miss your window.`,
       cta: "Review Appeal",
       href: "/app/chat?topic=appeal",
       priority: 0,
@@ -171,6 +303,16 @@ export function selectNudge(ctx: DashboardContext): Nudge | null {
     });
   }
 
+  // P2.5 — Obesity management nudge
+  if (ctx.obesity.classification === "obese" && ctx.obesity.hasOverdueScreening) {
+    candidates.push({
+      message: "Your obesity counseling visit may be overdue \u2014 Medicare covers this at no cost.",
+      cta: "Learn More",
+      href: "/app/chat?topic=obesity",
+      priority: 2,
+    });
+  }
+
   // P3 — Feature discovery
   if (!ctx.dashboard.blueButtonConnected) {
     candidates.push({
@@ -179,16 +321,6 @@ export function selectNudge(ctx: DashboardContext): Nudge | null {
       cta: "Connect Now",
       href: "/app/health",
       priority: 3,
-    });
-  }
-
-  // P4 — A1C improvement
-  if (ctx.diabetes.latestA1C !== null && ctx.diabetes.latestA1C < 7) {
-    candidates.push({
-      message: `Your A1C is at ${ctx.diabetes.latestA1C}% — great progress. Keep it up.`,
-      cta: "View Details",
-      href: "/app/chat?topic=diabetes",
-      priority: 4,
     });
   }
 
@@ -240,6 +372,8 @@ export function getDashboardBadge(d: DashboardMedicare): Badge | null {
 }
 
 export function getDiabetesBadge(d: DashboardDiabetes): Badge | null {
+  if (!d.hasContext) return null;
+
   if (
     d.daysUntilScreening !== null &&
     d.daysUntilScreening > 0 &&
@@ -251,14 +385,32 @@ export function getDiabetesBadge(d: DashboardDiabetes): Badge | null {
       variant: "solid",
     };
   }
-  if (d.latestA1C !== null) {
-    return { label: "A1C Logged", color: "#2ECC71", variant: "solid" };
+  if (d.hasMedReminders) {
+    return { label: "Active", color: "#2ECC71", variant: "solid" };
   }
   return {
     label: "Start Tracking",
     color: "#3B82F6",
     variant: "outline",
   };
+}
+
+export function getObesityBadge(o: DashboardObesity): Badge | null {
+  if (o.classification === "none") return null;
+
+  if (o.hasOverdueScreening) {
+    return { label: "Screening Due", color: "#E74C5A", variant: "solid" };
+  }
+  if (o.hasActiveMedication) {
+    return { label: "Active", color: "#2ECC71", variant: "solid" };
+  }
+  if (o.classification === "obese") {
+    return { label: "Review Benefits", color: "#F59E0B", variant: "outline" };
+  }
+  if (o.classification === "at-risk") {
+    return { label: "At Risk", color: "#F59E0B", variant: "outline" };
+  }
+  return null;
 }
 
 export function getAppealsBadge(a: DashboardAppeals): Badge | null {
@@ -277,7 +429,7 @@ export function getAppealsBadge(a: DashboardAppeals): Badge | null {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data (swap for real API later)
+// Mock data (ONLY for unit tests and Storybook — never production rendering)
 // ---------------------------------------------------------------------------
 
 export function getMockDashboardContext(
@@ -289,7 +441,7 @@ export function getMockDashboardContext(
 
   return {
     user: {
-      firstName: "Venkata",
+      firstName: "TestUser",
       lastLogin: new Date(now.getTime() - 86400000).toISOString(),
       hasCompletedWalkthrough: false,
       plan: "trial",
@@ -309,6 +461,13 @@ export function getMockDashboardContext(
       nextScreeningDate: screeningDate.toISOString(),
       hasMedReminders: true,
       daysUntilScreening: 12,
+      hasContext: true,
+    },
+    obesity: {
+      classification: "none",
+      hasActiveMedication: false,
+      medicationName: null,
+      hasOverdueScreening: false,
     },
     appeals: {
       activeAppealsCount: 1,
@@ -319,39 +478,5 @@ export function getMockDashboardContext(
       daysUntilDeadline: 6,
     },
     ...overrides,
-  };
-}
-
-/** Empty context for brand-new users */
-export function getNewUserDashboardContext(): DashboardContext {
-  return {
-    user: {
-      firstName: "Venkata",
-      lastLogin: new Date().toISOString(),
-      hasCompletedWalkthrough: false,
-      plan: "trial",
-    },
-    coverage: {
-      hasRecentResult: false,
-      resultStatus: null,
-      procedureName: null,
-    },
-    dashboard: {
-      blueButtonConnected: false,
-      unreviewedClaimsCount: 0,
-      lastSyncDate: null,
-    },
-    diabetes: {
-      latestA1C: null,
-      nextScreeningDate: null,
-      hasMedReminders: false,
-      daysUntilScreening: null,
-    },
-    appeals: {
-      activeAppealsCount: 0,
-      nearestDeadline: null,
-      pendingActions: 0,
-      daysUntilDeadline: null,
-    },
   };
 }
