@@ -118,6 +118,12 @@ export async function POST(request: NextRequest) {
       maxAge: 30 * 24 * 60 * 60, // 30 days
     });
 
+    // Track session issuance time for 7-day forced re-auth policy (NIST 800-63B)
+    response.cookies.set("session_issued_at", Date.now().toString(), {
+      ...cookieOpts,
+      maxAge: 30 * 24 * 60 * 60, // same lifetime as refresh token
+    });
+
     // Clear any stale MFA verified cookie on fresh login
     response.cookies.set("mfa_verified", "", { ...cookieOpts, maxAge: 0 });
 

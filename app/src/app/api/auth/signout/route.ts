@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
   response.cookies.set("access_token", "", { ...clearOpts, maxAge: 0 });
   response.cookies.set("refresh_token", "", { ...clearOpts, maxAge: 0 });
   response.cookies.set("mfa_verified", "", { ...clearOpts, maxAge: 0 });
+  response.cookies.set("session_issued_at", "", { ...clearOpts, maxAge: 0 });
 
   return response;
 }

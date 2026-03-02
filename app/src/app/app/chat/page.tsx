@@ -31,6 +31,7 @@ import {
 import { getGreeting } from "@/lib/utils";
 import type { SessionState } from "@/lib/session-state";
 import { getUploadLimitForPlan } from "@/config/pricing";
+import { MFARequiredGate } from "@/components/auth/MFARequiredGate";
 
 
 function ChatContent() {
@@ -244,6 +245,16 @@ function ChatContent() {
     resetChat();
     router.push("/app/chat");
   }, [resetChat, router]);
+
+  // MFA gate: require MFA enrollment to use chat features.
+  // Admins bypass. Users without MFA can still access /app/health (Blue Button) and /app/settings.
+  if (!authState.isLoading && authState.isEmailVerified && !authState.isMfaEnrolled && !authState.isAdmin) {
+    return (
+      <div className="fixed top-14 sm:top-16 bottom-16 md:bottom-0 left-0 right-0 flex bg-[var(--bg-primary)]">
+        <MFARequiredGate />
+      </div>
+    );
+  }
 
   return (
     <div className="fixed top-14 sm:top-16 bottom-16 md:bottom-0 left-0 right-0 flex bg-[var(--bg-primary)]">

@@ -130,6 +130,40 @@ export const SESSION_TIMEOUT = {
 } as const;
 
 /**
+ * Session re-authentication policy (NIST 800-63B compliant)
+ *
+ * Forces a full re-authentication (OTP) after the session age exceeds the
+ * maximum lifetime — even if the refresh token is still valid. This prevents
+ * indefinite sessions and aligns with healthcare security standards.
+ *
+ * NIST 800-63B AAL1: max 30 days. We use 7 days for healthcare caution.
+ * NIST 800-63B AAL2: max 24 hours. Users with MFA get the full 7-day window.
+ */
+export const SESSION_POLICY = {
+  /** Maximum session lifetime before forced re-auth (7 days in ms) */
+  MAX_SESSION_AGE_MS: 7 * 24 * 60 * 60 * 1000,
+  /** Show "session expiring soon" nudge 24 hours before forced re-auth */
+  SESSION_EXPIRY_WARNING_MS: 6 * 24 * 60 * 60 * 1000,
+} as const;
+
+/**
+ * User-facing messages for auth/session events
+ */
+export const AUTH_MESSAGES = {
+  /** Shown on sign-in as a brief info toast */
+  SIGN_IN_WELCOME:
+    "For your security, sessions are locked after 30 minutes of inactivity and require a fresh sign-in every 7 days.",
+  /** Shown when 7-day session expires */
+  SESSION_EXPIRED_TITLE: "Welcome back!",
+  SESSION_EXPIRED_MESSAGE:
+    "It's been 7 days since you last signed in. For the security of your health information, please verify your identity to continue.",
+  /** Shown on chat page when MFA is not enrolled */
+  MFA_REQUIRED_TITLE: "Set up two-factor authentication",
+  MFA_REQUIRED_MESSAGE:
+    "To protect your health information, please enable two-factor authentication (MFA) in Settings before using the chat. You can still connect your Medicare data.",
+} as const;
+
+/**
  * Accessibility settings
  */
 export const ACCESSIBILITY_CONFIG = {

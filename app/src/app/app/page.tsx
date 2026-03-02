@@ -5,6 +5,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useHealthData } from "@/hooks/useHealthData";
+import { AUTH_MESSAGES } from "@/config/ui";
 import {
   type DashboardContext,
   type Badge,
@@ -550,8 +551,10 @@ export default function AppHomePage() {
   } = useHealthData();
 
   const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [showWelcomeToast, setShowWelcomeToast] = useState(false);
   const [timeOfDay] = useState<TimeOfDay>(() => getTimeOfDay());
   const walkthroughChecked = useRef(false);
+  const welcomeToastChecked = useRef(false);
 
   // Build dashboard context from REAL data
   const ctx = useMemo<DashboardContext | null>(() => {
@@ -583,6 +586,21 @@ export default function AppHomePage() {
     }
   }, [ctx]);
 
+  // Show welcome toast once per browser session (after sign-in)
+  useEffect(() => {
+    if (welcomeToastChecked.current || !ctx) return;
+    welcomeToastChecked.current = true;
+
+    const seen = sessionStorage.getItem("denali_welcome_shown");
+    if (!seen) {
+      setShowWelcomeToast(true);
+      sessionStorage.setItem("denali_welcome_shown", "1");
+      // Auto-dismiss after 8 seconds
+      const timer = setTimeout(() => setShowWelcomeToast(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [ctx]);
+
   const dismissWalkthrough = useCallback(() => {
     setShowWalkthrough(false);
     sessionStorage.setItem("denali_walkthrough_done", "1");
@@ -604,6 +622,42 @@ export default function AppHomePage() {
     <div className="max-w-2xl mx-auto px-4 pt-6 pb-8">
       {/* Enhancement 1: Personalized Hero */}
       <HeroSection ctx={ctx} timeOfDay={timeOfDay} />
+
+      {/* Welcome toast — shown once per browser session after sign-in */}
+      {showWelcomeToast && (
+        <div
+          className="mx-auto max-w-2xl mb-4"
+          style={{ animation: "fade-up 300ms ease-out forwards" }}
+        >
+          <div className="relative flex items-start gap-3 px-4 py-3 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+            <svg
+              className="w-5 h-5 text-blue-500 mt-0.5 shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"
+              />
+            </svg>
+            <p className="text-[13px] text-blue-800 dark:text-blue-200 leading-relaxed flex-1">
+              {AUTH_MESSAGES.SIGN_IN_WELCOME}
+            </p>
+            <button
+              onClick={() => setShowWelcomeToast(false)}
+              className="shrink-0 w-5 h-5 flex items-center justify-center text-blue-400 hover:text-blue-600 transition-colors"
+              aria-label="Dismiss"
+            >
+              <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="currentColor">
+                <path d="M4.646 4.646a.5.5 0 01.708 0L8 7.293l2.646-2.647a.5.5 0 01.708.708L8.707 8l2.647 2.646a.5.5 0 01-.708.708L8 8.707l-2.646 2.647a.5.5 0 01-.708-.708L7.293 8 4.646 5.354a.5.5 0 010-.708z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Enhancement 3: Nudge Strip */}
       {nudge && <NudgeStrip nudge={nudge} />}
