@@ -75,6 +75,7 @@ function ChatContent() {
       return {
         healthDataAvailable: false,
         consentHealthDataAi: false,
+        blueButtonConnected: true,
       } as Partial<SessionState>;
     }
 

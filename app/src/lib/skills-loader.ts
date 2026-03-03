@@ -286,6 +286,22 @@ export function buildSystemPrompt(
     }
   }
 
+  // Blue Button connected but health data AI consent is OFF
+  if (sessionState?.blueButtonConnected && !sessionState?.healthDataAvailable) {
+    sections.push(
+      `## Important: Medicare Data Access\n` +
+      `This user has connected their Medicare account via Blue Button, but has NOT enabled ` +
+      `"Use health data in AI conversations" in their Privacy & Data settings. ` +
+      `You do NOT have access to their health records, claims, conditions, or medications.\n\n` +
+      `When the user asks about their personal health data, conditions, claims, or medications:\n` +
+      `- Let them know their Medicare account IS connected\n` +
+      `- Tell them they can enable personalized health insights by going to **Settings → Privacy & Data** ` +
+      `and turning on "Use health data in AI conversations"\n` +
+      `- Offer to help with general Medicare questions in the meantime\n` +
+      `- Do NOT suggest connecting via Blue Button — they are already connected`
+    );
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // DIABETES PREVENTION - Personalized diabetes coaching
   // ─────────────────────────────────────────────────────────────────────────

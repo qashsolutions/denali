@@ -155,6 +155,7 @@ export interface SessionState {
 
   // Consent (set by client from useConsent hook)
   consentHealthDataAi?: boolean;               // Whether user consents to health data in AI
+  blueButtonConnected?: boolean;               // Whether Blue Button is connected (even if consent OFF)
 }
 
 export function createDefaultSessionState(): SessionState {
