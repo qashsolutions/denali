@@ -322,6 +322,25 @@ function ChatContent() {
           </div>
         )}
 
+        {/* Consent prompt — shown when Blue Button connected but health_data_ai OFF */}
+        {isConnected && !consent.health_data_ai && (
+          <div className="mx-4 mt-2 px-4 py-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-muted)] text-sm flex items-center gap-3">
+            <svg className="w-5 h-5 shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+            <span>
+              Your Medicare data is connected but not shared with AI.{" "}
+              <button
+                onClick={() => router.push("/app/settings")}
+                className="underline text-[var(--accent-primary)] hover:opacity-80 transition-opacity"
+              >
+                Enable in Settings
+              </button>
+              {" "}to get personalized coverage guidance.
+            </span>
+          </div>
+        )}
+
         {/* Messages Area — flex-col + mt-auto anchors messages to the bottom */}
         <div className="flex-1 overflow-y-auto flex flex-col">
           {messages.length === 0 && !isLoading ? (
