@@ -231,20 +231,28 @@ function ChatContent() {
     };
   }, []);
 
-  // Intercept upgrade-related messages to open paywall instead of hitting API
+  // Intercept action-related messages instead of sending them to the chat API
   const handleSendMessage = useCallback((message: string, attachment?: Parameters<typeof sendMessage>[1]) => {
     const normalized = message.trim().toLowerCase();
     if (normalized === "upgrade" || normalized === "upgrade plan") {
       setShowPaywall(true);
       return;
     }
+    if (normalized === "sign up" || normalized === "signup" || normalized === "sign in" || normalized === "signin") {
+      router.push("/app/settings");
+      return;
+    }
     sendMessage(message, attachment);
-  }, [sendMessage]);
+  }, [sendMessage, router]);
 
   const handleInitialCardSelect = (question: string) => handleSendMessage(question);
   const handleSuggestionSelect = (suggestion: string) => {
     if (suggestion === "Upgrade plan") {
       setShowPaywall(true);
+      return;
+    }
+    if (suggestion === "Sign up") {
+      router.push("/app/settings");
       return;
     }
     setPendingInput(suggestion);
