@@ -95,7 +95,7 @@ function rowToAppealLevel(row: AppealLevelRow): AppealLevel {
   };
 }
 
-// Helper: latest-row filter using the same pattern as the _latest views in Supabase
+// Helper: latest-row filter (matches the _latest view pattern in RDS)
 const latestFilter = (table: string) =>
   `effective_date = (SELECT MAX(effective_date) FROM ${table})`;
 

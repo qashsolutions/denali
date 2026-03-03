@@ -1,7 +1,6 @@
 /**
  * Send Checklist Email
  * POST /api/email/checklist
- * Replaces the Supabase Edge Function send-checklist-email.
  */
 
 import { NextResponse, type NextRequest } from "next/server";

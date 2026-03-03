@@ -495,7 +495,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         setSessionState(data.sessionState);
       }
 
-      // Messages are saved server-side by route.ts using authSupabase.
+      // Messages are saved server-side by route.ts via RDS query().
       if (data.conversationId && !currentConversationId) {
         currentConversationId = data.conversationId;
         setConversationId(data.conversationId);

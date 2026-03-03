@@ -21,8 +21,7 @@ interface UseConversationHistoryReturn {
 /**
  * Hook to fetch and manage conversation history.
  *
- * Fetches via /api/conversations (server-side, cookie-authenticated)
- * to avoid the browser Supabase client refresh-token race condition.
+ * Fetches via /api/conversations (server-side, cookie-authenticated).
  */
 export function useConversationHistory(): UseConversationHistoryReturn {
   const [conversations, setConversations] = useState<ConversationHistoryItem[]>([]);

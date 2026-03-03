@@ -233,7 +233,7 @@ function ChatContent() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Chat page lifecycle: lock body scroll + suppress Supabase AbortErrors
+  // Chat page lifecycle: lock body scroll + suppress AbortErrors
   useEffect(() => {
     document.body.style.overflow = "hidden";
     const handleRejection = (e: PromiseRejectionEvent) => {

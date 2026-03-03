@@ -4,7 +4,7 @@
  * CMS Interoperability compliance: Section I.4, Section V.25, HIPAA audit trail.
  * Logs sensitive operations (FHIR access, appeal generation, consent changes, etc.)
  * to the `audit_logs` table for transparency and accountability.
- * Uses RDS PostgreSQL directly (no Supabase admin client).
+ * Uses RDS PostgreSQL directly via query().
  */
 
 import { query } from "@/lib/db";

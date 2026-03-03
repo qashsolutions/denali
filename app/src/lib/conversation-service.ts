@@ -2,7 +2,7 @@
  * Conversation Persistence Service
  *
  * Client-side functions for conversations, appeals, feedback, and events.
- * All DB access goes through API routes — no direct Supabase/RDS calls here.
+ * All DB access goes through API routes — no direct RDS calls from client.
  */
 
 export interface ConversationData {

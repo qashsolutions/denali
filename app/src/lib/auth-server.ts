@@ -1,8 +1,7 @@
 /**
  * Server-side Cognito Auth
  *
- * Replaces createServerSupabaseClient().auth.getUser() in API routes.
- * Validates the Cognito JWT from the Authorization header or cookie.
+ * Validates the Cognito JWT from the httpOnly cookie.
  *
  * Usage in API routes:
  *   const user = await getAuthUser(request);

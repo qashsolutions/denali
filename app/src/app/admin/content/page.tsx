@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 
 // Dynamically import the admin content with SSR disabled
-// This prevents the Supabase client from being created during build
 const AdminContent = dynamic(() => import("./AdminContent"), {
   ssr: false,
   loading: () => (

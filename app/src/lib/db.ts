@@ -1,7 +1,6 @@
 /**
  * RDS PostgreSQL Client
  *
- * Replaces Supabase for server-side database access.
  * Connects to AWS RDS PostgreSQL via a connection pool.
  * Auth enforcement via manual user_id checks (RLS removed).
  *

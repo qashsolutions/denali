@@ -63,7 +63,7 @@ export function getTimeBasedGreeting(): string {
  * Medicare-specific constants (regulatory values by year)
  *
  * These values are set by CMS annually and should be updated each year.
- * Future enhancement: These could be stored in Supabase and learned/updated
+ * Future enhancement: These could be stored in RDS and learned/updated
  * from user-provided data patterns.
  */
 export const MEDICARE_CONSTANTS = {

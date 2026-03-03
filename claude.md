@@ -142,12 +142,11 @@ Three toggles in Settings → Privacy & Data. **All default OFF.** Enforcement i
 
 - **CRITICAL: Never block UI rendering on database operations.** In `useChat.ts`, `setMessages()` must run IMMEDIATELY after parsing the API response. Database saves and `claimConversation()` must be fire-and-forget (`.then()/.catch()`, not `await`). Blocking causes the "Thinking..." spinner to hang indefinitely even when the API returns 200.
 - **CRITICAL: Server route creates conversations using `query()`, not client-side code.** `route.ts` creates conversations directly via `query()` (RDS), setting `user_id = authUser.userId` at creation time. Never do DB writes in client hooks. `claimConversation()` in `conversation-service.ts` calls `POST /api/conversations/claim` which calls the `claim_conversation()` RDS function with the explicit `p_user_id` param (no `auth.uid()` — RDS has no RLS).
-- **CRITICAL: Auth detection pattern — custom event, not Supabase.** Client auth uses a custom DOM event: `window.dispatchEvent(new CustomEvent('auth-state-change', { detail: user|null }))`. All auth-dependent hooks (`AppHeader`, `useConversationHistory`, `useIdleTimeout`) listen to this event via `addEventListener('auth-state-change', handler)`. Rules:
+- **CRITICAL: Auth detection pattern — custom DOM event.** Client auth uses `window.dispatchEvent(new CustomEvent('auth-state-change', { detail: user|null }))`. All auth-dependent hooks (`AppHeader`, `useConversationHistory`, `useIdleTimeout`) listen to this event via `addEventListener('auth-state-change', handler)`. Rules:
   1. **`useAuth.ts` dispatches on verify success and signOut.** On mount, call `GET /api/profile` to restore session from httpOnly cookie — do NOT block UI on this.
   2. **Set UI state immediately, then fetch DB data non-blocking.** `setBasicAuth()` sets email+userId+isLoading=false instantly; `loadProfileData()` enhances with plan/trial/MFA afterward.
-  3. **No Supabase client in browser at all.** `lib/supabase.ts` exists but is unused. All data flows through API routes. No singleton, no `getClient()`.
+  3. **No direct DB calls from client.** All data flows through API routes → Cognito + RDS.
   - **DO:** `window.addEventListener('auth-state-change', (e) => { const user = (e as CustomEvent).detail; ... })`
-  - **DON'T:** `supabase.auth.onAuthStateChange(...)` — Supabase is not the auth provider
   - **DON'T:** Any direct DB calls from client components — always go through `/api/*` routes
 - **Timeout guards on pre-Claude async calls**: `route.ts` uses `withFallback()` for non-critical RDS queries before the Claude API call (e.g., `getUnreportedOutcome` at 5s, `buildSystemPromptWithLearning` at 10s). Falls back to defaults on timeout instead of blocking.
 - **AbortController for Claude API**: `withTimeout()` in `claude.ts` uses `AbortController` to truly cancel hung requests (not just `Promise.race`). 60s per iteration for Sonnet, 120s for Opus.
@@ -212,7 +211,7 @@ Where to find specific logic in the codebase.
 | `src/lib/conversation-service.ts` | Client-side conversation functions using `fetch()`: `loadConversation()`, `loadAppealsForConversation()`, `claimConversation()`, `submitMessageFeedback()`, `trackEvent()`. No direct DB access. |
 | `src/lib/conversation-server.ts` | Server-side conversation functions using `query()`: `saveAppeal()` (insert + credit decrement + outcome schedule), `getUnreportedOutcome()`. Import only from API routes. |
 | `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date with timestamps. Groups are collapsible — Today/Yesterday/Past Week expand by default; Past Month/Older collapse by default. Click group header to toggle; chevron rotates to show state; count badge visible when collapsed. Refreshes on both new conversation creation AND new chat click (via `useRef` tracking previous conversationId). No sign-in prompt — anon users see "No conversations yet" |
-| `src/types/database.ts` | TypeScript types for DB schema (originally Supabase-generated; still used for type safety on table rows). |
+| `src/types/database.ts` | TypeScript types for RDS schema (used for type safety on table rows). |
 
 ### API Routes
 
@@ -266,7 +265,7 @@ User (Chat UI) ──> Claude Agent (Brain) ──> Tools (APIs + RDS)
 - All intelligence lives in Claude + skills + tools
 - Domain skills are implemented via Claude tool calling in `/api/chat`, NOT separate edge functions
 - Tools are interchangeable (swap APIs without frontend changes)
-- **No Supabase** — Auth = Cognito + httpOnly cookies. DB = RDS via `query()`. No browser SDK.
+- **Auth** = Cognito + httpOnly cookies. **DB** = RDS via `query()`. No browser SDK.
 
 ### Two-Tier Tool System
 
@@ -327,8 +326,8 @@ User-facing (plain English):        Internal (codes, never shown):
 | `search_pubmed` | Clinical evidence search (rate-limited) | NCBI E-utilities |
 | `generate_appeal_letter` | Build appeal letter (Level 1 Redetermination for Original Medicare, Organization Determination Appeal for MA) with inline codes + policy refs + PubMed citations. Accepts `medicare_type` and `plan_name` params for MA branching | Combines multiple sources + policy_references + pubmed_citations inputs |
 | `check_sad_list` | Part B (physician) vs Part D (self-administered) drug routing | CMS SAD list |
-| `lookup_denial_code` | CARC/RARC code lookup + appeal strategy | Supabase `carc_codes`, `rarc_codes`, `eob_denial_mappings` |
-| `get_common_denials` | Top denial reasons for a procedure + prevention tips | Supabase (`denial_patterns` + `carc_codes`) |
+| `lookup_denial_code` | CARC/RARC code lookup + appeal strategy | RDS `carc_codes`, `rarc_codes`, `eob_denial_mappings` |
+| `get_common_denials` | Top denial reasons for a procedure + prevention tips | RDS (`denial_patterns` + `carc_codes`) |
 
 ### Data Inventory
 
@@ -339,9 +338,9 @@ User-facing (plain English):        Internal (codes, never shown):
 | NPI | Full | MCP server |
 | NCD/LCD | Full | MCP server |
 | PubMed | Full | NCBI API |
-| CARC codes | 90 codes | Supabase (from CMS, effective 2025-12-10) |
-| RARC codes | 195 codes | Supabase (from CMS, effective 2025-12-10) |
-| EOB-to-CARC/RARC mappings | 1,873 mappings | Supabase (from CMS, effective 2025-12-10) |
+| CARC codes | 90 codes | RDS (from CMS, effective 2025-12-10) |
+| RARC codes | 195 codes | RDS (from CMS, effective 2025-12-10) |
+| EOB-to-CARC/RARC mappings | 1,873 mappings | RDS (from CMS, effective 2025-12-10) |
 
 ---
 
@@ -548,7 +547,7 @@ Every signup = automatic 14-day trial. After trial expires → locked (0 chats, 
 
 ### AAL2 Compliance Strategy (CMS A1 / NIST 800-63B)
 
-**Blue Button satisfies CMS A1** — Blue Button OAuth via Medicare.gov handles IAL2/AAL2 as intermediary PHR path. TOTP MFA is opt-in (Settings > Security) for extra protection, never required. WebAuthn/passkeys NOT supported by Supabase. Future P1: email+password + TOTP if CMS tightens requirements.
+**Blue Button satisfies CMS A1** — Blue Button OAuth via Medicare.gov handles IAL2/AAL2 as intermediary PHR path. TOTP MFA is opt-in (Settings > Security) for extra protection, never required. Future P1: email+password + TOTP + WebAuthn if CMS tightens requirements.
 
 ### Appeal Gating Logic
 
@@ -585,7 +584,7 @@ Subscription states: `active` (full access) → `past_due` (retry) → `cancelle
 
 ### Stripe Critical Rules
 
-- **CRITICAL: `checkout/route.ts` must use `createServerSupabaseClient()`** — browser client has no auth context server-side, `user.id` would be empty, `fulfillCheckoutSession()` skips upgrade.
+- **CRITICAL: `checkout/route.ts` must use `getAuthUser()`** — auth required server-side so `fulfillCheckoutSession()` can look up the user.
 - **CRITICAL: Never return `{ url: null }` from checkout** — grants free access. Returns 503 error when Stripe not configured.
 - **Stripe SDK v20**: `current_period_end` lives on `subscription.items.data[0]`, NOT directly on `subscription`.
 - **Idempotent fulfillment**: `fulfillCheckoutSession()` is safe to call multiple times.
@@ -884,7 +883,7 @@ Designed for rural Medicare patients on spotty connections. Caches API responses
 
 **CRITICAL: Clone responses synchronously in SW caching strategies.** In `staleWhileRevalidate`, `response.clone()` must happen BEFORE any async `caches.open().then()` — the original response may be consumed by the client before the nested `.then()` runs, causing "Response body is already used" TypeError. Pattern: `const cloned = response.clone(); caches.open(name).then(c => c.put(req, cloned));`
 
-**Middleware**: `sw.js` excluded from Supabase SSR middleware matcher (`sw\\.js` in regex).
+**Middleware**: `sw.js` excluded from middleware matcher (`sw\\.js` in regex).
 
 ### IndexedDB Cache
 
@@ -918,7 +917,7 @@ fetch success → setState() → cacheSet() (fire-and-forget)
 fetch failure → cacheGetIfFresh() → setState() from cache (if within TTL)
 ```
 
-**CRITICAL: Never `await` IndexedDB writes before `setState()`.** Same rule as Supabase fire-and-forget — blocking on cache writes causes UI hangs.
+**CRITICAL: Never `await` IndexedDB writes before `setState()`.** Fire-and-forget pattern — blocking on cache writes causes UI hangs.
 
 | Hook | Store | TTL | Offline Behavior |
 |------|-------|-----|------------------|
@@ -949,7 +948,7 @@ fetch failure → cacheGetIfFresh() → setState() from cache (if within TTL)
 ### What's NOT Offline
 
 - **Chat**: Requires Claude API + MCP tools — fundamentally online-only
-- **Individual conversation messages**: Loaded via Supabase, not cached (v2 candidate)
+- **Individual conversation messages**: Loaded via API, not cached (v2 candidate)
 - **Blue Button OAuth**: Network-only (redirect flow)
 - **Stripe checkout/webhooks**: Network-only
 - **Push notifications**: Not implemented (permission complexity for elderly audience)
@@ -975,29 +974,22 @@ src/
     ui/             # Primitives (Button, Input, Card, Modal, CmsPledge, OfflineBanner)
     chat/           # Chat-specific (Message, ChatInput, Suggestions)
     appeal/         # Appeal-specific (AppealLetter, StatusBadge)
-    auth/           # Auth components (EmailOTPModal, TOTPEnrollModal, TOTPChallengeModal). Passkey modals exist but non-functional (Supabase has no WebAuthn)
+    auth/           # Auth components (EmailOTPModal, TOTPEnrollModal, TOTPChallengeModal)
     layout/         # Layout (AppHeader, BottomTabs, Container)
     health/         # Health page (ConnectMedicare, CoverageCards, DiagnosisSummaryCard, ClaimsTimeline, ProviderSummary, AlertsSection, HealthAlertsBanner, AccountSection, FinancialSummary, AIDisclaimer, StatusBanner, ConditionsAlertBanner, PreDiabetesRiskCard)
     diabetes/       # Diabetes dashboard (A1CTrendChart, ScreeningReminders, RiskAlerts, QuickLog, InsightsCard)
   hooks/            # Custom hooks (useAuth, useChat, useConsent, useHealthData, useDiabetesSnapshots, useDiabetesLog, useDiabetesInsights, useOnlineStatus, useSettings, etc.)
-  lib/              # Core libraries (claude.ts, supabase.ts, audit.ts, tools/, skills-loader.ts, denial-patterns.ts, diabetes-insights.ts, offline-cache.ts, offline-sync.ts)
+  lib/              # Core libraries (claude.ts, db.ts, auth-server.ts, audit.ts, tools/, skills-loader.ts, denial-patterns.ts, diabetes-insights.ts, offline-cache.ts, offline-sync.ts)
   lib/fhir/         # Blue Button 2.0 (crypto, tokens, client, transforms, context, sync, snapshots)
   lib/skills/       # AI skills injected via skills-loader (health-records, medicare-notifications, diabetes-prevention)
   config/           # Config (api.ts, brand.ts, pricing.ts, ui.ts)
-  types/            # TypeScript types (database.ts from Supabase gen)
+  types/            # TypeScript types (database.ts — RDS schema types)
   styles/           # Global styles + theme
 ```
 
-### Edge Functions
+### Background Tasks
 
-Domain skills are implemented via Claude tool calling in `/api/chat`, NOT separate edge functions. Edge functions are only for background/async tasks:
-
-```
-supabase/functions/
-  send-checklist-email/     # Email checklists via Resend
-  process-learning-queue/   # Background learning job processor
-  _shared/                  # Shared utilities (cors.ts, auth.ts)
-```
+Domain skills are implemented via Claude tool calling in `/api/chat`, NOT separate functions. Background/async tasks (email checklists, learning queue) are handled by API routes (e.g., `/api/email/checklist`). Legacy Supabase edge functions have been removed.
 
 ---
 
@@ -1024,7 +1016,7 @@ npx tsc --noEmit        # Type check
 
 **Fixtures**: `src/lib/fhir/__tests__/fixtures/synthetic-claims.ts` — 7 synthetic `ClaimSummary` objects exercising all extractors (carrier, outpatient, Part D with PDE, inpatient).
 
-**Route Handler Testing Pattern**: `consent/__tests__/route.test.ts` demonstrates how to unit-test Next.js App Router handlers with Vitest by mocking `createServerSupabaseClient` via `vi.mock()`. The mock returns a fake Supabase client with controllable `getUser()`, `from().select().eq()`, and `from().upsert()` methods. Route functions are imported and called directly with `new Request()` objects.
+**Route Handler Testing Pattern**: `consent/__tests__/route.test.ts` demonstrates how to unit-test Next.js App Router handlers with Vitest by mocking `getAuthUser` and `query()` via `vi.mock()`. Route functions are imported and called directly with `new Request()` objects.
 
 ### E2E Tests (Playwright)
 
