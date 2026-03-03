@@ -67,6 +67,17 @@ function ChatContent() {
   const initialSessionState = useMemo(() => {
     if (!isConnected) return undefined;
 
+    const aiConsent = consent.health_data_ai === true;
+
+    // If user has NOT consented to health data in AI, only send the consent flag
+    // and connection status — no actual health data leaves the client.
+    if (!aiConsent) {
+      return {
+        healthDataAvailable: false,
+        consentHealthDataAi: false,
+      } as Partial<SessionState>;
+    }
+
     const conditionsForState = conditions.map(c => ({ code: c.code, name: c.name, category: c.category }));
     const medsForState = medications.map(m => ({
       name: m.name,
@@ -83,7 +94,7 @@ function ChatContent() {
 
     const partial: Partial<SessionState> = {
       healthDataAvailable: true,
-      consentHealthDataAi: consent.health_data_ai === true,
+      consentHealthDataAi: true,
       activeCoverage: coverage.filter(c => c.status === "Active").map(c => c.type),
       recentDenials: claims.filter(c => c.status === "Denied").slice(0, 5).map(c => ({
         serviceDate: c.serviceDate,

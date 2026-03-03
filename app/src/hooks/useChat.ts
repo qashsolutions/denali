@@ -292,10 +292,31 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         content: msg.content,
       }));
 
-      // Ensure latest consent state is included (user may toggle mid-session)
-      const sessionWithConsent = sessionState
-        ? { ...sessionState, consentHealthDataAi: consent.health_data_ai === true }
-        : sessionState;
+      // Ensure latest consent state is respected (user may toggle mid-session).
+      // When consent is OFF, strip all health data — don't send it to the server at all.
+      const aiConsent = consent.health_data_ai === true;
+      let sessionWithConsent = sessionState;
+      if (sessionState && !aiConsent) {
+        sessionWithConsent = {
+          ...sessionState,
+          consentHealthDataAi: false,
+          healthDataAvailable: false,
+          activeCoverage: undefined,
+          recentDenials: undefined,
+          labs: undefined,
+          conditions: undefined,
+          medications: undefined,
+          screenings: undefined,
+          providers: undefined,
+          hospitalizations: undefined,
+          recentClaims: undefined,
+          diabetesClassification: undefined,
+          obesityClassification: undefined,
+          labTrends: undefined,
+        };
+      } else if (sessionState) {
+        sessionWithConsent = { ...sessionState, consentHealthDataAi: true };
+      }
 
       // Call the chat API
       const response = await fetch("/api/chat", {
