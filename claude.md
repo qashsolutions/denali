@@ -3,16 +3,20 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-02 (dashboard: auth-gated /app via middleware, signed-in redirect / → /app, real data from useAuth+useHealthData via buildDashboardContext(), conditional obesity Weight Management card, NO HARDCODE rule added to Critical Rules; dashboard UX: 5 enhancements — personalized hero, smart badges, nudge strip, walkthrough bar, card animations; fonts: Instrument Serif + DM Sans replacing Playfair Display + SF Pro; dashboard-context.ts data architecture; obesity support: OBESITY_PREVENTION_SKILL, hasObesityContext trigger, classifyObesityStatus, obesity drug detection, obesity screening CPTs, SAD list obesity drugs, severity keywords; blog: weekly-rotating default view for anonymous users, personalized view for signed-in users with topic prefs; AWS infra: scheduler deployed, monitor deployed, ECR/S3 lifecycles, qashai cleanup)
+     Last updated: 2026-03-03 (ECS deployment: task def :21 on staging.denali.health, domain routing documented — staging=AWS/prod=Vercel, Blue Button callback URL for staging, FHIR callback token refresh fix, middleware API route bypass, OTP subject line with code, auth error text styling; previous: dashboard auth-gated /app, NO HARDCODE rule, dashboard UX enhancements, fonts, obesity support, blog personalization, AWS infra)
      Maintainer: @cvr
 -->
 
-<!-- ✅ AWS MIGRATION COMPLETE (branch: aws-migration) — Last updated: 2026-02-26
+<!-- ✅ AWS MIGRATION COMPLETE (branch: aws-migration) — Last updated: 2026-03-03
      Phase 1 ✅ All server-side API routes + libs → RDS (query()) + Cognito (getAuthUser())
      Phase 2 ✅ Client-side auth → /api/auth/* routes + custom 'auth-state-change' event
      Phase 2b ✅ conversation-service.ts + useDiabetesSnapshots → API routes + query()
      Phase 3  ⬜ MCP tools → local (ICD-10, CMS Coverage, NPI) — post-deploy
-     NEXT: Merge aws-migration → main → GitHub Actions deploys to ECS → test staging.denali.health
+     DEPLOYED: ECS task def :21 (commit 35c160a) running on staging.denali.health
+     DOMAIN ROUTING:
+       www.denali.health / denali.health → Vercel (production — DO NOT TOUCH until staging validated)
+       staging.denali.health → AWS ALB → ECS Fargate (ALL testing happens here)
+       stage.denali.health → Vercel staging (DO NOT USE)
      Auth pattern: getAuthUser() from lib/auth-server.ts (reads Cognito httpOnly cookie)
      DB pattern: query() from lib/db.ts (pg pool → RDS PostgreSQL)
 -->
@@ -178,7 +182,7 @@ Where to find specific logic in the codebase.
 | `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade + credit add), `handleSubscriptionEvent()` (lifecycle + monthly credit reset). Uses admin client |
 | `src/components/payment/PaywallModal.tsx` | Paywall UI: plan selection (single/monthly), Stripe checkout redirect. CSS variables for theme. No dev bypass |
 | `src/components/appeal/AppealGate.tsx` | Appeal access orchestration: email OTP → TOTP → access check → PaywallModal pipeline |
-| `src/middleware.ts` | Cognito JWT middleware + auth redirects. (1) Signed-in users on `/` → redirect to `/app`. (2) Anonymous users on `/app` → redirect to `/`. Auth detection: checks `access_token` cookie existence. |
+| `src/middleware.ts` | Cognito JWT middleware + auth redirects. (0) API routes (`/api/*`) get early `NextResponse.next()` — no session enforcement or silent refresh (prevents recursive fetch + mid-request cookie clearing). (1) 7-day session lifetime enforcement via `session_issued_at` cookie. (2) Silent token refresh when `access_token` expired but `refresh_token` exists. (3) Signed-in users on `/` → redirect to `/app`. (4) Anonymous users on `/app` → redirect to `/`. Auth detection: checks `access_token` cookie existence. |
 | `src/lib/offline-cache.ts` | IndexedDB wrapper via `idb`. 6 stores (conversations, health-data, diabetes-log, diabetes-insights, profile, offline-queue). Exports `cacheSet()`, `cacheGet()`, `cacheGetIfFresh()`, `queueOfflineRequest()`, `getOfflineQueue()`, `removeFromQueue()`. TTL constants: profile=4h, everything else=24h |
 | `src/lib/offline-sync.ts` | Client-side offline queue processor. `processQueue()` replays failed POSTs, removes on success, drops after 3 retries. `getQueueCount()` for pending item count |
 | `src/hooks/useOnlineStatus.ts` | SSR-safe hook: always inits `true` (matches SSR), syncs `navigator.onLine` in `useEffect`. Returns `{ isOnline, wasOffline }` |
@@ -195,7 +199,7 @@ Where to find specific logic in the codebase.
 
 ```
 src/app/api/
-  auth/send-otp/route.ts      # Email OTP initiation (Cognito AdminCreateUser + Resend)
+  auth/send-otp/route.ts      # Email OTP initiation (Cognito AdminCreateUser + Resend). OTP shown in subject line for notification banner visibility
   auth/verify-otp/route.ts    # OTP verification → sets httpOnly access_token + refresh_token cookies
   auth/signout/route.ts       # Global sign out + clear cookies
   auth/refresh/route.ts       # Refresh access_token from refresh_token cookie
@@ -218,7 +222,7 @@ src/app/api/
   cms-metadata/route.ts       # GET public CMS app directory metadata
   health/route.ts             # GET health check (ALB target, returns 200)
   fhir/authorize/route.ts     # Blue Button OAuth initiation (PKCE + state)
-  fhir/callback/route.ts      # Blue Button OAuth callback (token exchange)
+  fhir/callback/route.ts      # Blue Button OAuth callback (token exchange + inline Cognito token refresh if access_token expired during OAuth redirect)
   fhir/data/route.ts          # GET FHIR data (from fhir_cache RDS table)
   fhir/disconnect/route.ts    # DELETE Blue Button connection
   diabetes/log/route.ts       # GET/POST/DELETE daily log entries
@@ -608,7 +612,7 @@ NEXT_PUBLIC_APP_URL=https://denali.health  # or https://staging.denali.health
 - **RDS managed secret (`rds!db-...`) only has `username` + `password`** — no `host`/`dbname`/`port`. Use `denali/prod/db` (self-managed) for all DB connection fields.
 - **Audit task def secrets before every manual deployment**: `aws ecs describe-task-definition --task-definition denali:N --query "taskDefinition.containerDefinitions[0].secrets[*].valueFrom" --region us-east-1 --output json | sort -u`
 - **DB credentials**: DB_USER/DB_PASSWORD reference `rds!db-...:username::` / `rds!db-...:password::` (auto-rotates every 7 days). DB_HOST/DB_NAME/DB_PORT are plain env vars.
-- **Current task def**: denali:13, steady state 2026-02-27. See `memory/aws-ecs.md` for full details.
+- **Current task def**: denali:21, commit 35c160a, steady state 2026-03-02. See `memory/aws-ecs.md` and `memory/aws-infra.md` for full details.
 - **RDS is private-only** (2026-02-27): `PubliclyAccessible: false`. ECS→RDS connectivity via security group `sg-018b0bc1ca0f1db14` allowing port 5432 from ECS SG `sg-0c234bbde5efb2d53`. No public endpoint, no EIP on RDS.
 - **CloudWatch log retention**: `/ecs/denali` set to 3 days (was 90). Sufficient for pre-launch debugging. Increase post-launch if needed.
 
@@ -651,7 +655,7 @@ Pre-launch cost optimization: ECS+RDS can be shut down outside working hours to 
 | Service | Resource | Spec | Est. Monthly Cost |
 |---------|----------|------|-------------------|
 | RDS | denali-prod | db.t4g.micro, PostgreSQL 16.9, 20GB gp3, private | ~$12.10 |
-| ECS Fargate | denali-web | 0.5 vCPU, 1GB RAM, task def :13 | ~$18.40 |
+| ECS Fargate | denali-web | 0.5 vCPU, 1GB RAM, task def :21 | ~$18.40 |
 | ALB | denali-alb | Application, internet-facing | ~$16.20 |
 | EIP | 3× (ALB-attached) | All associated, no idle charge | $0 |
 | Secrets Manager | 3 secrets | denali/prod/db, denali/prod/app, rds!db-... | ~$1.20 |
@@ -699,15 +703,21 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
    - Generate state (CSRF) + code_verifier (PKCE)
    - Compute code_challenge = SHA256(code_verifier) → base64url
    - Store state + code_verifier in httpOnly cookies (10 min TTL)
+   - Build redirect_uri from request origin (no BLUEBUTTON_CALLBACK_URL env var set)
    - Redirect to CMS: /v2/o/authorize/?client_id=...&code_challenge=...&code_challenge_method=S256
 3. User authorizes on CMS site → redirected to /api/fhir/callback?code=...&state=...
 4. GET /api/fhir/callback:
    - Validate state cookie
    - Read code_verifier cookie
    - POST /v2/o/token/ with {code, code_verifier, redirect_uri} + Basic Auth
+   - If access_token expired during OAuth redirect, inline refresh via refreshCognitoTokens()
    - Encrypt tokens (AES-256-GCM) → upsert ehr_connections
    - Clear cookies → redirect to /app/health?connected=true
 ```
+
+**Callback URL auto-detection**: `BLUEBUTTON_CALLBACK_URL` env var is NOT set in ECS. The authorize route auto-detects from request origin: `${origin}/api/fhir/callback`. When user is on `staging.denali.health`, the redirect_uri sent to CMS is `https://staging.denali.health/api/fhir/callback`.
+
+**Registered callback URLs** (Blue Button sandbox at `https://sandbox.bluebutton.cms.gov`): `https://denali.health/api/fhir/callback`, `http://localhost:3000/api/fhir/callback`, `https://stage.denali.health/api/fhir/callback`, `https://www.denali.health/api/fhir/callback`, `https://staging.denali.health/api/fhir/callback`.
 
 ### Scopes
 

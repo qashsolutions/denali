@@ -36,7 +36,7 @@ async function sendOtpEmail(email: string, otp: string): Promise<void> {
     body: JSON.stringify({
       from: process.env.RESEND_FROM_EMAIL || "Denali <noreply@denali.health>",
       to: [email],
-      subject: "Your Denali sign-in code",
+      subject: `Your Denali sign-in code: ${otp}`,
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
           <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">Your sign-in code</h2>

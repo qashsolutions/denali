@@ -48,9 +48,15 @@ export async function GET(request: NextRequest) {
       .digest("base64url");
 
     // Build callback URL — must match EXACTLY what's registered at CMS
-    // Use explicit env var to avoid origin-detection issues on Vercel
+    // Behind ALB, request.nextUrl.origin may reflect internal container URL,
+    // so prefer the Host header (which ALB forwards correctly) or x-forwarded-host.
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    const detectedOrigin = host ? `${proto}://${host}`.replace("://www.", "://") : null;
     const redirectUri = process.env.BLUEBUTTON_CALLBACK_URL
-      || `${getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin).replace("://www.", "://")}${blueButton.callbackPath}`;
+      || `${detectedOrigin || getBaseUrl(request.nextUrl.origin)}${blueButton.callbackPath}`;
+
+    console.log("[FHIR authorize] redirect_uri:", redirectUri, "| host:", host, "| proto:", proto, "| nextUrl.origin:", request.nextUrl.origin);
 
     // Build authorization URL
     const params = new URLSearchParams({

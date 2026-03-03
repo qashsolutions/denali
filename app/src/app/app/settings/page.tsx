@@ -29,6 +29,7 @@ export default function AppSettingsPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const [authMessageType, setAuthMessageType] = useState<"success" | "error" | "">("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -195,13 +196,16 @@ export default function AppSettingsPage() {
                       if (!emailInput) return;
                       setAuthLoading(true);
                       setAuthMessage("");
+                      setAuthMessageType("");
                       const ok = await sendEmailOTP(emailInput);
                       setAuthLoading(false);
                       if (ok) {
                         setOtpSent(true);
                         setAuthMessage("Check your email for a verification code.");
+                        setAuthMessageType("success");
                       } else {
                         setAuthMessage("Failed to send code. Try again.");
+                        setAuthMessageType("error");
                       }
                     }}
                     disabled={authLoading || !emailInput}
@@ -227,14 +231,17 @@ export default function AppSettingsPage() {
                       if (!otpInput) return;
                       setAuthLoading(true);
                       setAuthMessage("");
+                      setAuthMessageType("");
                       const result = await verifyEmailOTP(emailInput, otpInput);
                       setAuthLoading(false);
                       if (result.success) {
                         setAuthMessage("Signed in successfully!");
+                        setAuthMessageType("success");
                         setOtpSent(false);
                         setOtpInput("");
                       } else {
                         setAuthMessage("Invalid code. Try again.");
+                        setAuthMessageType("error");
                       }
                     }}
                     disabled={authLoading || !otpInput}
@@ -245,7 +252,7 @@ export default function AppSettingsPage() {
                 </div>
               )}
               {authMessage && (
-                <p className="text-xs text-[var(--text-muted)] mt-2">{authMessage}</p>
+                <p className={`mt-2 ${authMessageType === "error" ? "text-sm font-medium text-red-500" : "text-xs text-green-600"}`}>{authMessage}</p>
               )}
             </div>
           )}

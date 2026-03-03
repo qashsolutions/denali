@@ -98,9 +98,13 @@ export async function GET(request: NextRequest) {
         new URL("/app/health?error=config", request.url)
       );
     }
-    // Must match EXACTLY what was sent in authorize — use same env var
+    // Must match EXACTLY what was sent in authorize — use same origin detection
+    // Behind ALB, prefer Host/x-forwarded-host headers over request.nextUrl.origin
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    const detectedOrigin = host ? `${proto}://${host}`.replace("://www.", "://") : null;
     const redirectUri = process.env.BLUEBUTTON_CALLBACK_URL
-      || `${getBaseUrl(request.headers.get("origin") ?? request.nextUrl.origin).replace("://www.", "://")}${blueButton.callbackPath}`;
+      || `${detectedOrigin || getBaseUrl(request.nextUrl.origin)}${blueButton.callbackPath}`;
 
     const tokenUrl = `${blueButton.baseUrl}/${blueButton.version}/o/token/`;
     const body = new URLSearchParams({
