@@ -52,7 +52,9 @@ export async function GET(request: NextRequest) {
     // so prefer the Host header (which ALB forwards correctly) or x-forwarded-host.
     const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
     const proto = request.headers.get("x-forwarded-proto") || "https";
-    const detectedOrigin = host ? `${proto}://${host}`.replace("://www.", "://") : null;
+    // Do NOT strip www — cookies must be set on the same domain the user is on.
+    // www.denali.health is a registered CMS callback URL, so it works as-is.
+    const detectedOrigin = host ? `${proto}://${host}` : null;
     const redirectUri = process.env.BLUEBUTTON_CALLBACK_URL
       || `${detectedOrigin || getBaseUrl(request.nextUrl.origin)}${blueButton.callbackPath}`;
 
