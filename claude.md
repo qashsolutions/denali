@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-03 (ECS deployment: task def :21 on staging.denali.health, domain routing documented — staging=AWS/prod=Vercel, Blue Button callback URL for staging, FHIR callback token refresh fix, middleware API route bypass, OTP subject line with code, auth error text styling; previous: dashboard auth-gated /app, NO HARDCODE rule, dashboard UX enhancements, fonts, obesity support, blog personalization, AWS infra)
+     Last updated: 2026-03-03 (chat page: merged Check Coverage + Check My Symptoms cards, added Weight Management card, PaywallModal wired to "Upgrade plan" button, "Sign up" button navigates to /app/settings, Blue Button OAuth cookie domain + ALB redirect hostname fix, Route 53 DNS migration complete; previous: ECS deployment task def :21, domain routing, FHIR callback token refresh, middleware API route bypass, OTP subject line, auth error text styling, dashboard auth-gated /app, NO HARDCODE rule, dashboard UX enhancements, fonts, obesity support, blog personalization, AWS infra)
      Maintainer: @cvr
 -->
 
@@ -12,10 +12,11 @@
      Phase 2 ✅ Client-side auth → /api/auth/* routes + custom 'auth-state-change' event
      Phase 2b ✅ conversation-service.ts + useDiabetesSnapshots → API routes + query()
      Phase 3  ⬜ MCP tools → local (ICD-10, CMS Coverage, NPI) — post-deploy
-     DEPLOYED: ECS task def :21 (commit 35c160a) running on staging.denali.health
+     DEPLOYED: ECS task def :21 (commit 35c160a) running on denali.health
+     DNS: Route 53 (migrated from GoDaddy 2026-03-03). NS: ns-1637/ns-463/ns-1270/ns-847
      DOMAIN ROUTING:
-       www.denali.health / denali.health → Vercel (production — DO NOT TOUCH until staging validated)
-       staging.denali.health → AWS ALB → ECS Fargate (ALL testing happens here)
+       www.denali.health / denali.health → AWS ALB → ECS Fargate (production)
+       staging.denali.health → AWS ALB → ECS Fargate (same ALB, same ECS for now)
        stage.denali.health → Vercel staging (DO NOT USE)
      Auth pattern: getAuthUser() from lib/auth-server.ts (reads Cognito httpOnly cookie)
      DB pattern: query() from lib/db.ts (pg pool → RDS PostgreSQL)
@@ -166,6 +167,7 @@ Where to find specific logic in the codebase.
 | `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
 | `src/lib/dashboard-context.ts` | Dashboard personalization data layer. Types: `DashboardContext`, `DashboardUser`, `DashboardCoverage`, `DashboardMedicare`, `DashboardDiabetes`, `DashboardObesity`, `DashboardAppeals`, `Badge`, `Nudge`. `buildDashboardContext(input)` constructs context from real hook data (useAuth + useHealthData). Helpers: `getTimeOfDay()`, `getPersonalizedGreeting()`, `buildStatusSummary()`, `selectNudge()` (priority-sorted), badge getters per card (`getCoverageBadge`, `getDashboardBadge`, `getDiabetesBadge`, `getObesityBadge`, `getAppealsBadge`). Mock factory `getMockDashboardContext()` for tests only |
 | `src/app/app/page.tsx` | Authenticated dashboard home page. **Auth-gated via middleware** (anonymous → redirect to `/`). Uses `useAuth()` + `useHealthData()` for real data via `buildDashboardContext()`. 5 UX enhancements: (1) `HeroSection` — time-aware greeting + contextual status summary + time-of-day gradient, (2) `StatusBadge` + per-card badge logic (pill-shaped, solid/outline variants), (3) `NudgeStrip` — priority-sorted contextual message with CTA + dismiss, (4) `WalkthroughBar` — 4-step guided tour (first visit only, sessionStorage flag), (5) `AnimatedFeatureCard` — staggered fade-up + hover lift + SVG ambient animations. 5 feature cards: Coverage Check (green), Medicare Dashboard (coral), Diabetes Care (blue, conditional on `hasContext`), Weight Management (amber, conditional on `obesity.classification !== "none"`), Appeals (purple) |
+| `src/app/app/chat/page.tsx` | Ask Denali chat page. 6 suggestion cards on empty state: Check Coverage (blue), Appeal a Denial (red), Understand My Bill (amber), Preventive Care (green), Diabetes Care (purple), Weight Management (orange). Intercepts "Upgrade plan" → opens `PaywallModal` (Stripe checkout for $10 single / $20 monthly). Intercepts "Sign up" → navigates to `/app/settings` (email OTP flow). Health data → sessionState bridge via `useHealthData()` + `classifyDiabetesStatus()` + `classifyObesityStatus()`. MFA gate for authenticated non-admin users. Payment toast on `?payment=success` |
 | `src/lib/cms.ts` | CMS content queries via `query()`: `getBlogPosts(category?)`, `getBlogPost(slug)`, `getBlogSlugs()`, `getUserTopics(userId)`, `getPersonalizedBlogPosts(topics?)`, `getDefaultBlogPosts()` (weekly-rotating: 1 post per topic via ISO week number), `getLandingPageData()`, `getSiteSettings()`, `getPricingPlans()`, `getTestimonials()`. All have try/catch with empty defaults for build-time resilience |
 | `src/app/blog/page.tsx` | Blog listing page. SSR with `revalidate = 3600`. Three display modes: (1) `?category=` or `?view=all` → all posts with category tabs, (2) signed-in user with topic prefs → personalized grouped view, (3) default (anonymous/no prefs) → 3 weekly-rotating posts (one per topic) with "Browse all" link. Reads JWT from cookie (lightweight decode, no full auth). Falls back gracefully on any error |
 | `src/app/blog/[slug]/page.tsx` | Individual blog post page. Dynamic route, ISR. Uses `getBlogPost(slug)` + `BlogArticle`. `generateStaticParams()` via `getBlogSlugs()` |
@@ -556,7 +558,7 @@ PaywallModal (client) → POST /api/checkout → Stripe Checkout Session
                                         └── handleSubscriptionEvent() → sync status
 ```
 
-**Sandbox tested** (2026-02-11): Both plans verified end-to-end on denali.health — $10 single appeal checkout and $20/month subscription checkout complete successfully via Stripe sandbox. Switch to live keys for production.
+**Sandbox tested** (2026-03-03): Both plans verified end-to-end on denali.health — $10 single appeal checkout and $20/month subscription checkout complete successfully via Stripe sandbox. PaywallModal now wired to chat page "Upgrade plan" button (previously was a dead-end text suggestion). Switch to live keys for production.
 
 **Checkout route** (`checkout/route.ts`): Expects `plan: "single" | "monthly"` (not `"per_appeal"`). Maps to Stripe Price IDs via `PRICING.SINGLE_APPEAL.stripePriceId` / `PRICING.MONTHLY.stripePriceId`.
 
