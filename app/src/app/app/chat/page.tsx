@@ -14,6 +14,7 @@ import {
   AppealOutcomePrompt,
 } from "@/components/appeal";
 import { CmsPledge } from "@/components/ui";
+import { PaywallModal } from "@/components/payment/PaywallModal";
 import { useChat } from "@/hooks/useChat";
 import { useAuth } from "@/hooks/useAuth";
 import { useHealthData } from "@/hooks/useHealthData";
@@ -46,6 +47,7 @@ function ChatContent() {
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paymentToast, setPaymentToast] = useState<string | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
 
   // Health data → sessionState bridge
   const { coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, isConnected } = useHealthData();
@@ -229,9 +231,24 @@ function ChatContent() {
     };
   }, []);
 
-  const handleInitialCardSelect = (question: string) => sendMessage(question);
-  const handleSuggestionSelect = (suggestion: string) =>
+  // Intercept upgrade-related messages to open paywall instead of hitting API
+  const handleSendMessage = useCallback((message: string, attachment?: Parameters<typeof sendMessage>[1]) => {
+    const normalized = message.trim().toLowerCase();
+    if (normalized === "upgrade" || normalized === "upgrade plan") {
+      setShowPaywall(true);
+      return;
+    }
+    sendMessage(message, attachment);
+  }, [sendMessage]);
+
+  const handleInitialCardSelect = (question: string) => handleSendMessage(question);
+  const handleSuggestionSelect = (suggestion: string) => {
+    if (suggestion === "Upgrade plan") {
+      setShowPaywall(true);
+      return;
+    }
     setPendingInput(suggestion);
+  };
   const handlePendingInputUsed = useCallback(() => setPendingInput(undefined), []);
   const handlePrintComplete = useCallback(() => {}, []);
   const handleEmailFromPrint = useCallback(() => {
@@ -345,7 +362,7 @@ function ChatContent() {
               <CmsPledge type="ai" />
             </div>
             <ChatInput
-              onSend={sendMessage}
+              onSend={handleSendMessage}
               disabled={isLoading || !isOnline}
               placeholder={isOnline ? "Ask about Medicare, coverage, or health..." : "Chat requires an internet connection"}
               externalValue={pendingInput}
@@ -378,6 +395,18 @@ function ChatContent() {
           onReportOutcome={handleReportOutcome}
         />
       )}
+
+      {/* Paywall modal for trial expired / rate limited users */}
+      <PaywallModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        onSuccess={() => {
+          setShowPaywall(false);
+          window.location.replace("/app/chat?payment=success");
+        }}
+        appealCount={0}
+        trialExpired={true}
+      />
     </div>
   );
 }
