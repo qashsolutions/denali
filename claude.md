@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-03 (consent toggle enforcement: health_data_ai wired to sessionState + data stripping when OFF + consent-off UX banner + Claude prompt hint for toggle guidance, blueButtonConnected flag; previous: chat page card merge + Weight Management + PaywallModal + Sign up nav, Blue Button OAuth fixes, Route 53 DNS, ECS task def :21, middleware, dashboard, fonts, obesity, blog, AWS infra)
+     Last updated: 2026-03-03 (ECS task def :30 deployed via CI/CD, Supabase fully removed, Vercel Git disconnected; previous: consent toggle enforcement, chat page card merge + Weight Management + PaywallModal + Sign up nav, Blue Button OAuth fixes, Route 53 DNS, middleware, dashboard, fonts, obesity, blog, AWS infra)
      Maintainer: @cvr
 -->
 
@@ -12,7 +12,7 @@
      Phase 2 ✅ Client-side auth → /api/auth/* routes + custom 'auth-state-change' event
      Phase 2b ✅ conversation-service.ts + useDiabetesSnapshots → API routes + query()
      Phase 3  ⬜ MCP tools → local (ICD-10, CMS Coverage, NPI) — post-deploy
-     DEPLOYED: ECS task def :21 (commit 35c160a) running on denali.health
+     DEPLOYED: ECS task def :30 (commit 958cfba) running on denali.health
      DNS: Route 53 (migrated from GoDaddy 2026-03-03). NS: ns-1637/ns-463/ns-1270/ns-847
      DOMAIN ROUTING:
        www.denali.health / denali.health → AWS ALB → ECS Fargate (production)
@@ -630,7 +630,7 @@ NEXT_PUBLIC_APP_URL=https://denali.health  # or https://staging.denali.health
 - **RDS managed secret (`rds!db-...`) only has `username` + `password`** — no `host`/`dbname`/`port`. Use `denali/prod/db` (self-managed) for all DB connection fields.
 - **Audit task def secrets before every manual deployment**: `aws ecs describe-task-definition --task-definition denali:N --query "taskDefinition.containerDefinitions[0].secrets[*].valueFrom" --region us-east-1 --output json | sort -u`
 - **DB credentials**: DB_USER/DB_PASSWORD reference `rds!db-...:username::` / `rds!db-...:password::` (auto-rotates every 7 days). DB_HOST/DB_NAME/DB_PORT are plain env vars.
-- **Current task def**: denali:21, commit 35c160a, steady state 2026-03-02. See `memory/aws-ecs.md` and `memory/aws-infra.md` for full details.
+- **Current task def**: denali:30, commit 958cfba, deployed 2026-03-03 via CI/CD. See `memory/aws-ecs.md` and `memory/aws-infra.md` for full details.
 - **RDS is private-only** (2026-02-27): `PubliclyAccessible: false`. ECS→RDS connectivity via security group `sg-018b0bc1ca0f1db14` allowing port 5432 from ECS SG `sg-0c234bbde5efb2d53`. No public endpoint, no EIP on RDS.
 - **CloudWatch log retention**: `/ecs/denali` set to 3 days (was 90). Sufficient for pre-launch debugging. Increase post-launch if needed.
 
@@ -673,7 +673,7 @@ Pre-launch cost optimization: ECS+RDS can be shut down outside working hours to 
 | Service | Resource | Spec | Est. Monthly Cost |
 |---------|----------|------|-------------------|
 | RDS | denali-prod | db.t4g.micro, PostgreSQL 16.9, 20GB gp3, private | ~$12.10 |
-| ECS Fargate | denali-web | 0.5 vCPU, 1GB RAM, task def :21 | ~$18.40 |
+| ECS Fargate | denali-web | 0.5 vCPU, 1GB RAM, task def :30 | ~$18.40 |
 | ALB | denali-alb | Application, internet-facing | ~$16.20 |
 | EIP | 3× (ALB-attached) | All associated, no idle charge | $0 |
 | Secrets Manager | 3 secrets | denali/prod/db, denali/prod/app, rds!db-... | ~$1.20 |

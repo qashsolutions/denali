@@ -266,7 +266,7 @@ function ChatContent() {
       setShowPaywall(true);
       return;
     }
-    if (suggestion === "Sign up") {
+    if (suggestion === "Sign up" || suggestion === "Sign in") {
       router.push("/app/settings");
       return;
     }

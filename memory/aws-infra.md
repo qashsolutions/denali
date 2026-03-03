@@ -138,28 +138,17 @@ Estimated uptime: ~480 hrs/mo (vs 730)
 
 ### Current ECS Deployment
 
-- Task definition: `denali:21` (commit 35c160a)
-- Image: `236823123138.dkr.ecr.us-east-1.amazonaws.com/denali:35c160ad0eb2fd598691897153127ade9750d94f`
-- Deployed: 2026-03-02T17:12:00 CT
+- Task definition: `denali:30` (commit 958cfba)
+- Image: `236823123138.dkr.ecr.us-east-1.amazonaws.com/denali:958cfba945d666de090cce1026f865f00247aedb`
+- Deployed: 2026-03-03T16:32:00 CT (via GitHub Actions CI/CD)
 - Status: PRIMARY, 1 running, healthy
-
-### Pending Commits (not yet deployed to ECS)
-
-| Commit | Changes |
-|--------|---------|
-| 14adc86 | Blue Button OAuth: removed www stripping in authorize, fixed ALB redirect hostname in callback |
-| af021b0 | Merged Check Coverage + Check My Symptoms cards, added Weight Management card |
-| bcde7c5 | Wired PaywallModal to chat page "Upgrade plan" button (Stripe checkout) |
-| 4593780 | "Sign up" button navigates to /app/settings for email OTP sign-in |
-| 6d4cae0 | Wire health_data_ai consent toggle to Claude prompt injection |
-| 98c4aaf | Strip health data from sessionState when consent is OFF |
-| d922973 | Grey consent banner when Blue Button connected but AI toggle OFF |
-| f97e25d | Claude prompt hint directing user to Settings toggle (not Blue Button) + blueButtonConnected flag |
+- Includes all commits from :21 through :30 (Blue Button OAuth, card merge, PaywallModal, consent toggles, Supabase removal)
 
 ### Recent ECS Deployments
 
 | Task Def | Commit | Changes |
 |----------|--------|---------|
+| :30 | 958cfba | Supabase cleanup (11K lines removed), consent toggles, PaywallModal, card merge, Blue Button OAuth fixes, docs updates |
 | :21 | 35c160a | FHIR callback refreshes expired Cognito token during Blue Button OAuth |
 | :20 | 7d86a37 | Skip middleware session enforcement on API routes |
 | :19 | c4bd470 | 7-day forced re-auth, MFA gate on chat, session policy UX |

@@ -359,14 +359,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             role: "assistant",
             content: errorData.isAuthenticated
               ? `You've reached your daily limit of ${errorData.limit} messages. You can continue tomorrow, or upgrade for unlimited access.`
-              : `You've used your free message for today. **Sign up** for a 14-day trial with 3 messages per day.`,
+              : `You've used your free message for today. **Sign in** to continue, or sign up for a free 14-day trial.`,
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, rateLimitMsg]);
           setSuggestions(
             errorData.isAuthenticated
               ? ["Upgrade plan"]
-              : ["Sign up"]
+              : ["Sign in"]
           );
           setIsLoading(false);
           clearTimeout(timeoutId);
