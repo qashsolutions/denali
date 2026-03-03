@@ -292,6 +292,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         content: msg.content,
       }));
 
+      // Ensure latest consent state is included (user may toggle mid-session)
+      const sessionWithConsent = sessionState
+        ? { ...sessionState, consentHealthDataAi: consent.health_data_ai === true }
+        : sessionState;
+
       // Call the chat API
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -301,7 +306,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         body: JSON.stringify({
           messages: apiMessages,
           conversationId: currentConversationId,
-          sessionState,
+          sessionState: sessionWithConsent,
           ...(attachment ? { attachment } : {}),
         }),
         signal: abortControllerRef.current.signal,

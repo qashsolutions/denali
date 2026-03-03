@@ -19,6 +19,7 @@ import { useChat } from "@/hooks/useChat";
 import { useAuth } from "@/hooks/useAuth";
 import { useHealthData } from "@/hooks/useHealthData";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useConsent } from "@/hooks/useConsent";
 import { useDiabetesSnapshots } from "@/hooks/useDiabetesSnapshots";
 import { classifyDiabetesStatus, classifyObesityStatus } from "@/lib/fhir/transforms";
 import {
@@ -51,6 +52,7 @@ function ChatContent() {
 
   // Health data → sessionState bridge
   const { coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, isConnected } = useHealthData();
+  const { consent } = useConsent();
   const { a1cHistory } = useDiabetesSnapshots();
 
   // Compute upload limit based on user's plan
@@ -81,6 +83,7 @@ function ChatContent() {
 
     const partial: Partial<SessionState> = {
       healthDataAvailable: true,
+      consentHealthDataAi: consent.health_data_ai === true,
       activeCoverage: coverage.filter(c => c.status === "Active").map(c => c.type),
       recentDenials: claims.filter(c => c.status === "Denied").slice(0, 5).map(c => ({
         serviceDate: c.serviceDate,
@@ -153,7 +156,7 @@ function ChatContent() {
     }
 
     return partial;
-  }, [isConnected, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, a1cHistory]);
+  }, [isConnected, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, a1cHistory, consent.health_data_ai]);
 
   useEffect(() => {
     const payment = searchParams.get("payment");
