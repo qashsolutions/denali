@@ -27,6 +27,7 @@ import {
   DocumentTextIcon,
   HeartPulseIcon,
   ClipboardCheckIcon,
+  WeightScaleIcon,
 } from "@/components/icons";
 import { getGreeting } from "@/lib/utils";
 import type { SessionState } from "@/lib/session-state";
@@ -402,8 +403,8 @@ const EMPTY_STATE_CARDS = [
     icon: ShieldCheckIcon,
     color: "#3b82f6",
     title: "Check Coverage",
-    description: "Will Medicare cover my procedure?",
-    message: "I want to check if Medicare covers a procedure",
+    description: "Will Medicare cover my symptoms or procedure?",
+    message: "I want to check if Medicare covers a procedure or symptoms I'm having",
   },
   {
     icon: ScaleIcon,
@@ -420,13 +421,6 @@ const EMPTY_STATE_CARDS = [
     message: "Show me my most recent Medicare claim and help me understand what I owe and why",
   },
   {
-    icon: HeartPulseIcon,
-    color: "#ec4899",
-    title: "Check My Symptoms",
-    description: "What care might Medicare cover?",
-    message: "I have symptoms and want to know what Medicare might cover",
-  },
-  {
     icon: ClipboardCheckIcon,
     color: "#10b981",
     title: "Preventive Care",
@@ -439,6 +433,13 @@ const EMPTY_STATE_CARDS = [
     title: "Diabetes Care",
     description: "Coverage, screenings, and prevention",
     message: "What should I know about diabetes and Medicare coverage?",
+  },
+  {
+    icon: WeightScaleIcon,
+    color: "#e67e22",
+    title: "Weight Management",
+    description: "Obesity support and GLP-1 coverage",
+    message: "What does Medicare cover for weight management and obesity, like Wegovy or bariatric surgery?",
   },
 ] as const;
 
