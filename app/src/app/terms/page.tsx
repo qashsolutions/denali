@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { BRAND } from "@/config";
 
-const EFFECTIVE_DATE = "February 10, 2026";
+const EFFECTIVE_DATE = "March 3, 2026";
 
 const SECTIONS = [
   {
     id: "service-description",
     title: "1. Service Description",
     paragraphs: [
-      `${BRAND.NAME} is a Medicare claims intelligence application that provides AI-powered coverage guidance, appeal letter generation, and diabetes management coaching. The Service uses artificial intelligence (Claude via AWS Bedrock) to help you understand Medicare coverage rules, identify potential denial risks, and generate appeal letters when claims are denied.`,
+      `${BRAND.NAME} is a Medicare claims intelligence application that provides AI-powered coverage guidance, appeal letter generation, diabetes management coaching, and weight management guidance. The Service uses artificial intelligence (Claude via AWS Bedrock) to help you understand Medicare coverage rules, identify potential denial risks, and generate appeal letters when claims are denied.`,
       `The Service is coverage guidance only — not medical advice, legal advice, or billing services. All AI-generated content is clearly marked and should not be used as a substitute for professional medical or legal counsel.`,
     ],
   },
@@ -24,7 +24,7 @@ const SECTIONS = [
     id: "eligibility",
     title: "3. Eligibility",
     paragraphs: [
-      "The Service is designed for Original Medicare beneficiaries (generally age 65 and older) and their authorized caregivers. You must be at least 18 years of age to create an account. By using the Service, you represent that you meet these eligibility requirements.",
+      "The Service is designed for Medicare beneficiaries — both Original Medicare and Medicare Advantage — (generally age 65 and older) and their authorized caregivers. You must be at least 18 years of age to create an account. By using the Service, you represent that you meet these eligibility requirements.",
     ],
   },
   {
@@ -183,7 +183,6 @@ const SECTIONS = [
     items: [
       "Email: admin@denali.health",
       `Organization: ${BRAND.COMPANY_NAME}`,
-      "You can also ask Denali directly in the chat for general questions about our terms",
     ],
   },
 ];

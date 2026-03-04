@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-03 (ECS task def :30 deployed via CI/CD, Supabase fully removed, Vercel Git disconnected; previous: consent toggle enforcement, chat page card merge + Weight Management + PaywallModal + Sign up nav, Blue Button OAuth fixes, Route 53 DNS, middleware, dashboard, fonts, obesity, blog, AWS infra)
+     Last updated: 2026-03-03 (legal pages audited against CMS BB ToS + production access — RLS→app-level access controls, "Blue Button"→"Medicare" naming, Terms updated for MA+obesity, PDFs for CMS; previous: ECS task def :30, Supabase removed, consent toggle enforcement, chat page card merge + Weight Management + PaywallModal + Sign up nav, Blue Button OAuth fixes, Route 53 DNS, middleware, dashboard, fonts, obesity, blog, AWS infra)
      Maintainer: @cvr
 -->
 
@@ -205,7 +205,7 @@ Where to find specific logic in the codebase.
 | `src/lib/offline-sync.ts` | Client-side offline queue processor. `processQueue()` replays failed POSTs, removes on success, drops after 3 retries. `getQueueCount()` for pending item count |
 | `src/hooks/useOnlineStatus.ts` | SSR-safe hook: always inits `true` (matches SSR), syncs `navigator.onLine` in `useEffect`. Returns `{ isOnline, wasOffline }` |
 | `src/components/ui/OfflineBanner.tsx` | Fixed amber-accent banner below AppHeader when offline. Auto-dismisses on reconnect |
-| `src/hooks/useIdleTimeout.ts` | HIPAA inactivity timeout. Tracks mouse/key/touch/scroll (1s throttle), warns at 13 min, signs out at 15 min. Auth-gated (no-op for anon). Returns `{ showWarning, secondsRemaining, staySignedIn, isAuthenticated }` |
+| `src/hooks/useIdleTimeout.ts` | HIPAA inactivity timeout. Tracks mouse/key/touch/scroll (1s throttle), warns at 27 min, signs out at 30 min. Auth-gated (no-op for anon). Returns `{ showWarning, secondsRemaining, staySignedIn, isAuthenticated }` |
 | `src/components/ui/InactivityWarning.tsx` | Fixed amber-accent banner with countdown + "Stay signed in" button. Same positioning as OfflineBanner. Rendered in root `layout.tsx` |
 | `src/hooks/useConversationHistory.ts` | Chat sidebar history. Fetches from `/api/conversations` (cookie-authenticated). Listens to `auth-state-change` custom event for re-fetch on sign-in/out. Groups conversations by date. IndexedDB write-through + offline fallback |
 | `src/lib/conversation-service.ts` | Client-side conversation functions using `fetch()`: `loadConversation()`, `loadAppealsForConversation()`, `claimConversation()`, `submitMessageFeedback()`, `trackEvent()`. No direct DB access. |
@@ -938,7 +938,7 @@ fetch failure → cacheGetIfFresh() → setState() from cache (if within TTL)
 
 `SESSION_TIMEOUT` constants in `config/ui.ts`. `useIdleTimeout` hook in `hooks/useIdleTimeout.ts`. `InactivityWarning` component in `components/ui/InactivityWarning.tsx`.
 
-- **Warning at 13 min**, **sign out at 15 min** of inactivity (mouse/key/touch/scroll)
+- **Warning at 27 min**, **sign out at 30 min** of inactivity (mouse/key/touch/scroll)
 - Activity tracking throttled to 1s updates to avoid thrashing
 - Check interval: 30s normally, 1s during warning countdown
 - Auth-gated via `onAuthStateChange` — no timers for anonymous users
@@ -1183,9 +1183,9 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 | Gap | CMS Ref | Priority | Type |
 |-----|---------|----------|------|
-| **HIPAA compliance** | A6 | **P0** | **AWS migration COMPLETE (code)** — All phases done. Merge `aws-migration`→`main` to deploy to ECS. AWS BAA covers RDS+Cognito+ECS (free). Vercel BAA still needed for hosting. Anthropic Enterprise BAA needed for AI layer. ALB: `denali-alb-1075324152.us-east-1.elb.amazonaws.com`. See `memory/aws-migration.md`. |
+| **HIPAA compliance** | A6 | **P0** | **AWS migration COMPLETE + BAA executed** — All code phases done. ECS task def :30 deployed. AWS BAA executed Feb 25, 2026 (covers RDS, ECS/Fargate, Bedrock, Cognito). RDS storage encrypted (KMS). Legal pages updated to reflect AWS-only architecture (no Supabase/Vercel references). See `memory/aws-migration.md`. |
 | **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
-| **CMS security self-assessment** | A3 | **P0** | Docs — data source inventory + security checklist required for CMS review participation. In-app `/terms` (15 sections, fully compliant) and `/privacy` (16 sections, all CMS BB checklist requirements satisfied 2026-02-24) are complete. Remaining: submit formal security self-assessment document to CMS. |
+| **CMS security self-assessment** | A3 | **P0** | Docs — data source inventory + security checklist required for CMS review participation. In-app `/terms` (15 sections) and `/privacy` (16 sections) audited against CMS Blue Button ToS + production access checklist on 2026-03-03 — all 13 privacy policy checklist items pass, ToS consistent with Privacy, active opt-in, seven framework principles covered. PDFs generated for CMS submission (`DenaliHealth-Terms-of-Service.pdf`, `DenaliHealth-Privacy-Policy.pdf`). Implementation verification checklist: `terms_privacy.md`. Remaining: submit formal security self-assessment document to CMS. |
 | **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct Medicare.gov communication integration |
 | **CMS credential service integration** | A1 | **P1** | Code — CLEAR (CMS-contracted for Medicare.gov, IAL2/AAL2) identity verification. Blue Button OAuth via Medicare.gov currently satisfies AAL2 as an intermediary PHR path. |
 | **CMS review submission** | A3 | **P1** | Docs — submit data source inventory + security self-assessment to CMS |

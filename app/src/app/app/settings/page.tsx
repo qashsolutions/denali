@@ -178,7 +178,9 @@ export default function AppSettingsPage() {
                 Sign in with email
               </label>
               <p className="text-xs text-[var(--text-muted)] mb-3">
-                Sign in to save conversations, generate appeal letters, and connect Medicare.
+                Sign in to save conversations, generate appeal letters, and connect Medicare. By signing in, you agree to our{" "}
+                <a href="/terms" className="text-[var(--accent-primary)] hover:underline">Terms of Service</a> and{" "}
+                <a href="/privacy" className="text-[var(--accent-primary)] hover:underline">Privacy Policy</a>.
               </p>
               {!otpSent ? (
                 <div className="flex gap-2">

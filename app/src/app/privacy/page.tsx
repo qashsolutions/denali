@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BRAND } from "@/config";
 
-const EFFECTIVE_DATE = "February 24, 2026";
+const EFFECTIVE_DATE = "March 3, 2026";
 
 const SECTIONS = [
   {
@@ -82,7 +82,7 @@ const SECTIONS = [
           "Health data is cached locally for up to 24 hours to reduce API calls, then refreshed",
           "All data access is logged in our audit system (who, what, when, why)",
           "Data in transit is protected by TLS 1.2+",
-          "Row-Level Security (RLS) ensures you can only access your own data",
+          "Application-level access controls ensure you can only access your own data through authenticated API routes",
         ],
       },
       {
@@ -159,7 +159,7 @@ const SECTIONS = [
     items: [
       "AES-256-GCM encryption for OAuth tokens at rest",
       "TLS 1.2+ for all data in transit",
-      "Row-Level Security (RLS) in our database — users can only access their own data",
+      "Application-level access controls — users can only access their own data through authenticated API routes",
       "Email-based one-time passcode (OTP) authentication",
       "Optional TOTP multi-factor authentication (authenticator app)",
       "PKCE (Proof Key for Code Exchange) for Medicare OAuth to prevent authorization code interception",
@@ -263,7 +263,6 @@ const SECTIONS = [
     items: [
       "Ask Denali directly in the chat for privacy-related questions",
       "Email us at admin@denali.health",
-      `Write to: ${BRAND.COMPANY_NAME}, Privacy Inquiries`,
     ],
   },
 ];

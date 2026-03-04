@@ -351,7 +351,7 @@ const WALKTHROUGH_STEPS = [
   },
   {
     title: "Explore your Medicare data",
-    description: "Connect Blue Button to see your claims and medications.",
+    description: "Connect Medicare to see your claims and medications.",
     feature: "Medicare Dashboard",
   },
   {

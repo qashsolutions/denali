@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BRAND } from "@/config";
 
-const EFFECTIVE_DATE = "February 24, 2026";
+const EFFECTIVE_DATE = "March 3, 2026";
 
 export default function HIPAAPage() {
   return (
@@ -99,8 +99,8 @@ export default function HIPAAPage() {
               prevent code interception
             </li>
             <li>
-              Row-Level Security (RLS) in our database ensuring users can only
-              access their own records
+              Application-level access controls ensuring users can only
+              access their own records through authenticated API routes
             </li>
             <li>
               Optional TOTP multi-factor authentication for additional account
@@ -223,7 +223,7 @@ export default function HIPAAPage() {
             </li>
             <li>
               Database-level alerts for bulk data exports, privilege
-              escalation, and RLS policy bypass attempts
+              escalation, and access control bypass attempts
             </li>
             <li>
               User-reported incidents via admin@denali.health or in-app

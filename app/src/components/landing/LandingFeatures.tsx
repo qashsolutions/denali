@@ -30,7 +30,7 @@ const FEATURES = [
     title: "Medicare Dashboard",
     description:
       "Your claims, meds, and providers — all in one place.",
-    tags: ["Blue Button", "Claims & EOBs"],
+    tags: ["Medicare", "Claims & EOBs"],
     color: "health-red" as const,
     href: "/app/health",
     Illustration: HealthRecordsIllustration,
