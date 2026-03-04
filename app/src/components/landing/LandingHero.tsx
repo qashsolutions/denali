@@ -13,23 +13,25 @@ export function LandingHero({ section }: LandingHeroProps) {
 
   return (
     <section className="relative overflow-hidden bg-[var(--bg-primary)]">
-      {/* Subtle mountain silhouette */}
+      {/* Mountain range silhouette */}
       <svg
         className="absolute bottom-0 left-0 right-0 w-full pointer-events-none"
-        viewBox="0 0 1440 320"
+        viewBox="0 0 1440 400"
         preserveAspectRatio="none"
-        style={{ height: "60%" }}
+        style={{ height: "70%" }}
         aria-hidden="true"
       >
+        {/* Far range — lighter */}
         <path
-          d="M0,320 L0,220 Q120,180 240,200 Q360,220 420,160 Q480,100 560,120 Q640,140 720,80 Q800,20 880,60 Q960,100 1040,40 Q1120,0 1200,50 Q1280,100 1360,70 Q1400,55 1440,80 L1440,320 Z"
-          fill="var(--border)"
-          opacity="0.04"
+          d="M0,400 L0,280 Q80,260 160,270 Q240,280 320,220 Q400,160 480,180 Q560,200 640,140 Q720,80 800,120 Q880,160 960,90 Q1040,20 1120,60 Q1200,100 1280,50 Q1360,0 1440,40 L1440,400 Z"
+          fill="var(--text-muted)"
+          opacity="0.08"
         />
+        {/* Near range — darker */}
         <path
-          d="M0,320 L0,260 Q180,230 300,250 Q420,270 520,200 Q620,130 720,170 Q820,210 920,140 Q1020,70 1120,110 Q1220,150 1320,100 Q1380,75 1440,120 L1440,320 Z"
-          fill="var(--border)"
-          opacity="0.06"
+          d="M0,400 L0,320 Q120,290 240,310 Q360,330 460,260 Q560,190 660,230 Q760,270 860,200 Q960,130 1060,170 Q1160,210 1260,150 Q1360,100 1440,140 L1440,400 Z"
+          fill="var(--text-muted)"
+          opacity="0.12"
         />
       </svg>
 
@@ -44,8 +46,13 @@ export function LandingHero({ section }: LandingHeroProps) {
           <div className="w-16 h-px bg-[var(--accent-primary)] mx-auto mb-8" />
 
           {/* Subtitle */}
-          <p className="text-lg sm:text-xl text-[var(--text-secondary)] mb-12 max-w-xl mx-auto leading-relaxed">
+          <p className="text-lg sm:text-xl text-[var(--text-secondary)] mb-4 max-w-xl mx-auto leading-relaxed">
             {section.subtitle}
+          </p>
+
+          {/* Tagline */}
+          <p className="text-base text-[var(--text-muted)] mb-12 max-w-2xl mx-auto leading-relaxed">
+            DenaliHealth helps Medicare patients with diabetes and obesity navigate coverage, prevent claim denials, and appeal rejections.
           </p>
 
           {/* CTAs */}
