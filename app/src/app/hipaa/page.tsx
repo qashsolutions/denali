@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { BRAND } from "@/config";
+import { LandingFooter } from "@/components/landing";
 
 const EFFECTIVE_DATE = "March 3, 2026";
 
 export default function HIPAAPage() {
   return (
+    <>
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
         HIPAA Compliance Notice
@@ -427,41 +429,9 @@ export default function HIPAAPage() {
         </P>
       </Section>
 
-      {/* Footer */}
-      <div className="border-t border-[var(--border)] pt-6 mt-10">
-        <div className="flex flex-wrap gap-5 mb-4">
-          <Link
-            href="/faq"
-            className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-          >
-            FAQ
-          </Link>
-          <Link
-            href="/privacy"
-            className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-          >
-            Privacy Policy
-          </Link>
-          <Link
-            href="/terms"
-            className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-          >
-            Terms of Service
-          </Link>
-        </div>
-        <div className="border-t border-[var(--border)] pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <p className="text-xs text-[var(--text-muted)]">
-            Coverage guidance only, not medical advice. Always consult with
-            healthcare providers for medical decisions. This product is not
-            endorsed or certified by CMS or HHS.
-          </p>
-          <p className="text-xs text-[var(--text-muted)] shrink-0">
-            {BRAND.NAME} is {BRAND.COMPANY_ATTRIBUTION}.{" "}
-            {BRAND.COPYRIGHT_TEXT}
-          </p>
-        </div>
-      </div>
     </div>
+    <LandingFooter />
+  </>
   );
 }
 

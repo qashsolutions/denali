@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LandingFooter } from "@/components/landing";
 
 const FAQ_SECTIONS = [
   {
@@ -122,6 +123,7 @@ const FAQ_SECTIONS = [
 
 export default function FAQPage() {
   return (
+    <>
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
         Frequently Asked Questions
@@ -150,27 +152,15 @@ export default function FAQPage() {
         </div>
       ))}
 
-      <div className="border-t border-[var(--border)] pt-6 mt-10">
-        <p className="text-sm text-[var(--text-muted)] mb-4">
+      <p className="text-sm text-[var(--text-muted)] mt-10">
           Have more questions?{" "}
           <Link href="/app/chat" className="text-[var(--accent-primary)] hover:underline">
             Ask Denali
           </Link>{" "}
           or email support.
         </p>
-        <div className="flex flex-wrap gap-5 mb-4">
-          <Link href="/privacy" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">Privacy Policy</Link>
-          <Link href="/terms" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">Terms of Service</Link>
-          <Link href="/hipaa" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">HIPAA</Link>
-        </div>
-        <div className="border-t border-[var(--border)] pt-4">
-          <p className="text-xs text-[var(--text-muted)]">
-            Coverage guidance only, not medical advice. Always consult with
-            healthcare providers for medical decisions. This product is not
-            endorsed or certified by CMS or HHS.
-          </p>
-        </div>
-      </div>
     </div>
+    <LandingFooter />
+  </>
   );
 }

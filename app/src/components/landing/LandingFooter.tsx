@@ -2,12 +2,11 @@ import Link from "next/link";
 import { MountainIcon } from "../icons";
 
 interface LandingFooterProps {
-  settings: Record<string, string>;
+  settings?: Record<string, string>;
 }
 
-export function LandingFooter({ settings }: LandingFooterProps) {
+export function LandingFooter({ settings = {} }: LandingFooterProps) {
   const brandName = settings.brand_name || "DenaliHealth";
-  const companyPrefix = settings.company_prefix || "a unit of";
   const companyName = settings.company_name || "Qash Solutions Inc";
   const copyrightYear = settings.copyright_year || new Date().getFullYear();
 
