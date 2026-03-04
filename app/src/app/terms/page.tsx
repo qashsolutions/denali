@@ -151,6 +151,7 @@ const SECTIONS = [
     title: "12. Changes to These Terms",
     paragraphs: [
       "We may update these Terms from time to time. For material changes, we will notify registered users via email at least 30 days before the new terms take effect, with a summary of what changed. If you disagree with the changes, you may delete your account before the effective date. Continued use of the Service after the effective date constitutes acceptance of the updated Terms.",
+      "In the event of a merger, acquisition, or sale of assets, your data may be transferred to a successor entity. We will notify you via email at least 30 days before your data is transferred and becomes subject to different terms. As a holder of CMS Blue Button API production credentials, we will also notify CMS at the earliest practicable time, as production credentials are issued to a specific approved application and entity and a change of ownership requires CMS re-review. You may delete your account and all associated data before the transfer takes effect.",
     ],
   },
   {
