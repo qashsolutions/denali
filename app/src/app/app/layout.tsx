@@ -1,7 +1,7 @@
 "use client";
 
 import { BottomTabs } from "@/components/layout/BottomTabs";
-import { LandingFooter } from "@/components/landing";
+import { LandingFooter } from "@/components/landing/LandingFooter";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
