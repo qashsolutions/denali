@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-03 (legal pages audited against CMS BB ToS + production access — RLS→app-level access controls, "Blue Button"→"Medicare" naming, Terms updated for MA+obesity, PDFs for CMS; previous: ECS task def :30, Supabase removed, consent toggle enforcement, chat page card merge + Weight Management + PaywallModal + Sign up nav, Blue Button OAuth fixes, Route 53 DNS, middleware, dashboard, fonts, obesity, blog, AWS infra)
+     Last updated: 2026-03-04 (Privacy §2 PII removal — PatientSummary stripped to {age, gender} only, policy change email endpoint; previous: legal pages audited against CMS BB ToS + production access — RLS→app-level access controls, "Blue Button"→"Medicare" naming, Terms updated for MA+obesity, PDFs for CMS; ECS task def :30, Supabase removed, consent toggle enforcement, chat page card merge + Weight Management + PaywallModal + Sign up nav, Blue Button OAuth fixes, Route 53 DNS, middleware, dashboard, fonts, obesity, blog, AWS infra)
      Maintainer: @cvr
 -->
 
@@ -12,7 +12,7 @@
      Phase 2 ✅ Client-side auth → /api/auth/* routes + custom 'auth-state-change' event
      Phase 2b ✅ conversation-service.ts + useDiabetesSnapshots → API routes + query()
      Phase 3  ⬜ MCP tools → local (ICD-10, CMS Coverage, NPI) — post-deploy
-     DEPLOYED: ECS task def :30 (commit 958cfba) running on denali.health
+     DEPLOYED: ECS task def :33 (commit e361fe7) running on denali.health
      DNS: Route 53 (migrated from GoDaddy 2026-03-03). NS: ns-1637/ns-463/ns-1270/ns-847
      DOMAIN ROUTING:
        www.denali.health / denali.health → AWS ALB → ECS Fargate (production)
@@ -118,7 +118,8 @@ return <Dashboard data={ctx} />; // ← shows fake data to everyone
 
 ### Privacy
 
-- Do NOT store: Full names, addresses, SSN, insurance IDs, medical records
+- Do NOT store: Full names, dates of birth, addresses, SSN, insurance IDs, medical records
+- **FHIR Patient resource**: Only `age` and `gender` are extracted and cached. Full name, DOB, Medicare ID, and address are intentionally NOT extracted from the Blue Button FHIR Patient resource (Privacy §2 compliance). `transformPatient()` discards all PII — the raw FHIR resource is processed transiently and never persisted.
 - OK to store: Email, phone (for auth), anonymized phrases, conversation content
 - Account deletion: Cascade delete all user-linked data, cancel Stripe, retain anonymized learning data + audit logs (6-year HIPAA). Admin accounts return 403 — cannot self-delete through the app. Cognito user deleted via `CognitoIdentityProviderClient.AdminDeleteUser()` as final step so no login credentials remain.
 
@@ -171,7 +172,7 @@ Where to find specific logic in the codebase.
 | `src/lib/session-state.ts` | SessionState type definition. Includes `consentHealthDataAi` (toggle state) and `blueButtonConnected` (Blue Button connected even when consent OFF) |
 | `src/lib/denial-patterns.ts` | Async RDS queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
 | `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via `query()` (admin DB user, bypasses no RLS — RDS has none). Non-blocking fire-and-forget. Write-side dedup: `FHIR_DATA_ACCESS` skips insert if same user+action logged within 2h (`DEDUP_WINDOWS` map) |
-| `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformEOB()` extracts PDE info/careTeam/POS/inpatient fields + `classifyDiabetesStatus()`), `eob-clinical.ts` (clinical extraction pipeline — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 8 resource types), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
+| `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformPatient()` extracts ONLY age+gender from FHIR Patient — no name/DOB/address/Medicare ID per Privacy §2 + `transformEOB()` extracts PDE info/careTeam/POS/inpatient fields + `classifyDiabetesStatus()`), `eob-clinical.ts` (clinical extraction pipeline — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 8 resource types), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
 | `src/lib/diabetes-insights.ts` | Claude-powered diabetes insight generation. `generateDiabetesInsight(data)` calls Sonnet for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls |
 | `src/components/diabetes/` | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from CPT-based `ScreeningHistory[]`), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up, med refill gaps, specialty gaps, post-discharge follow-up), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display) |
 | `src/components/health/DiagnosisSummaryCard.tsx` | Renders "Conditions in Your Claims" list with severity color-coding. `getSeverityConfig()`: structured `DiagnosisSummary` category → `RED_KEYWORDS` (21 terms: neoplasm, cancer, stroke, heart failure, morbid obesity, severe obesity, obesity class iii, etc.) → `AMBER_KEYWORDS` (27 terms: hypertension, thyroid, anemia, COPD, etc.) → gray. `cleanDiagnosisName()` strips U+25CC combining mark artifacts from FHIR data |
@@ -247,6 +248,8 @@ src/app/api/
   diabetes/insights/route.ts  # GET/POST Claude-generated diabetes analysis
   diabetes/snapshots/route.ts # GET longitudinal lab history from diabetes_snapshots
   webhooks/stripe/route.ts    # POST Stripe webhook events
+  admin/cms/route.ts          # GET/PATCH CMS content tables (admin only)
+  admin/email/policy-change/route.ts  # POST 30-day policy change email to all users (admin only, dry-run support)
 ```
 
 ---
@@ -630,7 +633,7 @@ NEXT_PUBLIC_APP_URL=https://denali.health  # or https://staging.denali.health
 - **RDS managed secret (`rds!db-...`) only has `username` + `password`** — no `host`/`dbname`/`port`. Use `denali/prod/db` (self-managed) for all DB connection fields.
 - **Audit task def secrets before every manual deployment**: `aws ecs describe-task-definition --task-definition denali:N --query "taskDefinition.containerDefinitions[0].secrets[*].valueFrom" --region us-east-1 --output json | sort -u`
 - **DB credentials**: DB_USER/DB_PASSWORD reference `rds!db-...:username::` / `rds!db-...:password::` (auto-rotates every 7 days). DB_HOST/DB_NAME/DB_PORT are plain env vars.
-- **Current task def**: denali:30, commit 958cfba, deployed 2026-03-03 via CI/CD. See `memory/aws-ecs.md` and `memory/aws-infra.md` for full details.
+- **Current task def**: denali:33, commit e361fe7, deployed 2026-03-04 via CI/CD. See `memory/aws-ecs.md` and `memory/aws-infra.md` for full details.
 - **RDS is private-only** (2026-02-27): `PubliclyAccessible: false`. ECS→RDS connectivity via security group `sg-018b0bc1ca0f1db14` allowing port 5432 from ECS SG `sg-0c234bbde5efb2d53`. No public endpoint, no EIP on RDS.
 - **CloudWatch log retention**: `/ecs/denali` set to 3 days (was 90). Sufficient for pre-launch debugging. Increase post-launch if needed.
 
@@ -1161,6 +1164,8 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 **Medicare Notifications** (A2 partial): `MEDICARE_NOTIFICATIONS_SKILL` detects EOB/coverage changes from FHIR data.
 
+**Policy Change Notification** (Terms §12, Privacy §15): `POST /api/admin/email/policy-change` — admin-only endpoint sends branded HTML email to all registered users with 30-day advance notice of material policy changes. Supports dry-run mode (preview + recipient count), CMS regulatory change flag, and audit logging (`POLICY_CHANGE_EMAIL` action).
+
 **Chat & Appeal Infrastructure**: Rate limiting, sidebar auth+refresh, conversation persistence, requirement verification pipeline (vacuous truth fix), outcome incentive wiring, denial code extraction from user text, LCD prior auth prompt strengthening.
 
 **Blue Button ToS v3 Compliance** (2026-02-24): Full audit completed against all ToS sections. Fixed two code gaps: (1) Blue Button attribution ("not endorsed or certified by CMS or HHS") added to connected health page (`health/page.tsx`) so it's visible whenever Medicare data is displayed — previously only on the pre-connect screen; (2) `context.ts` consent gate changed from `=== false` to `!== true` so `null`/`undefined` `consentHealthDataAi` never accidentally injects health data into Claude (null-safe allow-list pattern). All 7 Framework principles verified: Transparency ✅, Consent ✅, Use & Disclosure ✅, Individual Access ✅, Security ✅, Data Quality ✅, Accountability ✅.
@@ -1171,7 +1176,7 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 **Privacy Policy Code Deltas — All 4 Resolved** (2026-02-24): Full audit of gaps between privacy policy claims and code behavior (`docs/delta-privacy.md`). Two code fixes, two policy text fixes: (1) **`health_data_storage` consent** — `useHealthData.ts` `cacheSet()` now gated on `healthDataStorageRef.current === true`; uses `useRef` pattern so stable `useCallback` dep array is not disturbed; (2) **`analytics` consent** — `trackEvent()` in `conversation-service.ts` now returns early if `analyticsConsent !== true`; `useChat.ts` imports `useConsent` and passes `consent.analytics` to all 3 call sites (`appeal_completed`, `feedback_positive`/`negative`, `outcome_reported`); (3) **audit log retention conflict** — removed audit logs from §7 deletion list, added HIPAA 6-year retention note; (4) **inactive account notice** — softened "will receive" → "may receive" (feature not yet implemented). TypeScript: clean.
 
-**FAQ Cross-Audit vs Terms + Privacy — 6 Deltas Fixed** (2026-02-24): Full three-way audit of `/faq` against `/terms` and `/privacy`. Six contradictions or omissions corrected: (1) "never store your full name" → corrected — Medicare OAuth provides name/DOB/Medicare ID which is stored while connected (Privacy §2); (2) data sharing list omitted Vercel → added (Privacy §5 lists Vercel as data processor, 30-day log retention); (3) "Is Denali free?" had no post-trial lock warning → added "chat access is locked until you purchase a plan" (Terms §7); (4) "Can I delete your account?" said "permanently delete all your data / payment records" → replaced with precise list matching Privacy §7; removed "payment records" (we cancel Stripe subscription, we don't delete Stripe's own records); (5) "What data is retained after deletion?" said "only anonymized data" → added audit logs as second retained category with 6-year HIPAA explanation (contradicted Privacy §7 directly); (6) "Is there a free trial?" said "1 appeal letter" → corrected to "1 appeal credit" (Terms §7 terminology); added post-trial lock notice for consistency.
+**FAQ Cross-Audit vs Terms + Privacy — 6 Deltas Fixed** (2026-02-24, updated 2026-03-04): Full three-way audit of `/faq` against `/terms` and `/privacy`. Six contradictions or omissions corrected: (1) "never store your full name" → now code-accurate: `transformPatient()` only extracts age+gender from FHIR Patient resource, discards name/DOB/Medicare ID/address (Privacy §2); (2) data sharing list omitted Vercel → added (Privacy §5 lists Vercel as data processor, 30-day log retention); (3) "Is Denali free?" had no post-trial lock warning → added "chat access is locked until you purchase a plan" (Terms §7); (4) "Can I delete your account?" said "permanently delete all your data / payment records" → replaced with precise list matching Privacy §7; removed "payment records" (we cancel Stripe subscription, we don't delete Stripe's own records); (5) "What data is retained after deletion?" said "only anonymized data" → added audit logs as second retained category with 6-year HIPAA explanation (contradicted Privacy §7 directly); (6) "Is there a free trial?" said "1 appeal letter" → corrected to "1 appeal credit" (Terms §7 terminology); added post-trial lock notice for consistency.
 
 **HIPAA Page Cross-Audit — 6 Deltas Fixed** (2026-02-24, see below for final pass): Full audit of `/hipaa` against `/faq`, `/terms`, and `/privacy`. Six issues corrected: (1) **PHI deletion claim** — closing paragraph in "PHI Retention" said "all PHI permanently removed on account deletion" with no carve-out; added audit log exception (6-year HIPAA retention) to match Privacy §7 and FAQ; (2) **BAA false claim** (highest risk for CMS) — `hipaa/page.tsx`, `privacy/page.tsx`, and `docs/cmsreview.md` all stated BAAs with Supabase and Vercel were "in place" / "maintained"; BAAs are not yet signed; softened to "BAAs being established / in process" with note that docs will update on execution; (3) **Breach 500+ bullet omitted FTC** — said "HHS and media" only; added FTC to match Privacy §10 and FAQ ("FTC and HHS"); (4) **"Improving our AI models"** — implied model training; Privacy §5 explicitly says Anthropic does not train on API data; changed to "improving our service using anonymized learning patterns" + added "We do not use your data to train AI models"; (5) **"Active session" TTL wording** — said cache retained only for "the active session"; actual behavior is 24-hour TTL surviving across sessions; corrected to "24-hour TTL, deleted on disconnect or account deletion"; (6) **Effective date** — updated Feb 8 → Feb 24, 2026. **Remaining action**: update BAA language in all three files to "in place" once Supabase and Vercel BAAs are signed.
 
