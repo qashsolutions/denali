@@ -6,7 +6,6 @@ import { useIntersectionObserver } from "@/hooks/useIntersectionObserver";
 import {
   HeartPulseIcon,
   ChatBubbleIcon,
-  DiabetesIcon,
   ClaimsIcon,
 } from "../icons";
 
@@ -27,7 +26,7 @@ const STEPS = [
   {
     step: 2,
     label: "Ask Denali",
-    hint: "Check coverage before you go",
+    hint: "Coverage checks, diabetes & weight management, bill help",
     Icon: ChatBubbleIcon,
     color: "var(--accent-primary)",
     colorLight: "#60a5fa",
@@ -35,15 +34,6 @@ const STEPS = [
   },
   {
     step: 3,
-    label: "Track Diabetes",
-    hint: "A1C trends, screenings, reminders",
-    Icon: DiabetesIcon,
-    color: "var(--accent-primary)",
-    colorLight: "#60a5fa",
-    href: "/app/diabetes",
-  },
-  {
-    step: 4,
     label: "Appeal Denials",
     hint: "Auto-built letters with citations",
     Icon: ClaimsIcon,
@@ -138,7 +128,7 @@ export function LandingHowItWorks({ section: _section }: LandingHowItWorksProps)
             How It Works
           </h2>
           <p className="text-base sm:text-lg text-[var(--text-secondary)]">
-            Four tools, one app. Start anywhere.
+            Three steps. One app.
           </p>
         </div>
 
