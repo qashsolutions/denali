@@ -19,7 +19,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Link href="/" className="flex items-center gap-2 mb-1">
                 <MountainIcon className="w-6 h-6" />
                 <span className="text-lg font-bold text-[var(--text-primary)]">
-                  Denali<span className="text-[var(--accent-secondary)]">Health</span>
+                  Denali<span className="text-[var(--brand-purple)]">Health</span>
                 </span>
               </Link>
             </div>

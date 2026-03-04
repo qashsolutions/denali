@@ -117,10 +117,10 @@ export function AppHeader() {
           <Link href="/" className="flex items-center gap-2 group mr-auto">
             <MountainIcon className="w-8 h-8 sm:w-10 sm:h-10 transition-transform group-hover:scale-105" />
             <div className="flex flex-col">
-              <span className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] leading-tight">
+              <span className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] leading-tight">
                 {prefix}
                 {suffix && (
-                  <span className="text-[var(--accent-secondary)]">{suffix}</span>
+                  <span className="text-[var(--brand-purple)]">{suffix}</span>
                 )}
               </span>
             </div>
