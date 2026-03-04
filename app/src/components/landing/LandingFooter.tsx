@@ -32,7 +32,7 @@ export function LandingFooter({ settings }: LandingFooterProps) {
               </span>
             </Link>
             <p className="text-sm text-[var(--text-muted)]">
-              {companyPrefix} {companyName}
+              {companyName} &copy; {copyrightYear}
             </p>
           </div>
 
@@ -79,7 +79,7 @@ export function LandingFooter({ settings }: LandingFooterProps) {
               This product is not endorsed or certified by CMS or HHS.
             </p>
             <p className="shrink-0">
-              &copy; {copyrightYear} {brandName}. All rights reserved.
+              {brandName}
             </p>
           </div>
         </div>

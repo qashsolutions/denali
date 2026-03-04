@@ -31,12 +31,12 @@ export const BRAND = {
 
   /** Full copyright text */
   get COPYRIGHT_TEXT() {
-    return `© ${this.COPYRIGHT_YEAR} ${this.NAME}. All rights reserved.`;
+    return `${this.COMPANY_NAME} © ${this.COPYRIGHT_YEAR}`;
   },
 
   /** Full company attribution */
   get COMPANY_ATTRIBUTION() {
-    return `${this.COMPANY_PREFIX} ${this.COMPANY_NAME}`;
+    return `${this.COMPANY_NAME} © ${this.COPYRIGHT_YEAR}`;
   },
 } as const;
 
