@@ -65,23 +65,16 @@ export function LandingFooter({ settings }: LandingFooterProps) {
           </div>
         </div>
 
-        {/* Row 2: HIPAA/BAA notice — full width */}
-        <p className="mb-6 text-base font-medium text-[var(--text-primary)]">
-          denali.health is built on HIPAA-ready infrastructure, including Claude via AWS Bedrock under a signed Business Associate Agreement with AWS.
-        </p>
-
-        {/* Bottom: Disclaimer + Copyright */}
-        <div className="pt-4 border-t border-[var(--border)]">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-[var(--text-muted)]">
-            <p>
-              Coverage guidance only, not medical advice. Always consult with
-              healthcare providers for medical decisions.
-              This product is not endorsed or certified by CMS or HHS.
-            </p>
-            <p className="shrink-0">
-              {brandName}
-            </p>
-          </div>
+        {/* HIPAA/BAA notice + Disclaimer */}
+        <div className="pt-4 border-t border-[var(--border)] space-y-2">
+          <p className="text-base font-medium text-[var(--text-primary)]">
+            denali.health is built on HIPAA-ready infrastructure, including Claude via AWS Bedrock under a signed Business Associate Agreement with AWS.
+          </p>
+          <p className="text-xs text-[var(--text-muted)]">
+            Coverage guidance only, not medical advice. Always consult with
+            healthcare providers for medical decisions.
+            This product is not endorsed or certified by CMS or HHS.
+          </p>
         </div>
       </div>
     </footer>
