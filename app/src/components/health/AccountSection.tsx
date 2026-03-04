@@ -51,40 +51,24 @@ export function AccountSection({
 
       {isOpen && (
         <div className="px-4 pb-4 border-t border-[var(--border)] pt-3">
+          {/* PRIVACY §2: Only age + gender stored from FHIR Patient resource.
+              No name, DOB, Medicare ID, or address is collected or displayed. */}
           {patient && (
             <div className="space-y-2 mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-[var(--health-red)]/15 flex items-center justify-center flex-shrink-0">
-                  <span className="text-[var(--health-red)] font-bold">
-                    {patient.name.charAt(0)}
+                  <span className="text-[var(--health-red)] font-bold text-lg">
+                    M
                   </span>
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[var(--text-primary)]">
-                    {patient.name}
+                    Medicare Beneficiary
                   </p>
                   <p className="text-xs text-[var(--text-secondary)]">
                     {patient.age} years old &middot; {patient.gender}
                   </p>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 mt-3">
-                <div className="bg-[var(--bg-tertiary)] rounded-lg px-3 py-2">
-                  <p className="text-[11px] text-[var(--text-muted)]">Medicare ID</p>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">{patient.medicareId}</p>
-                </div>
-                <div className="bg-[var(--bg-tertiary)] rounded-lg px-3 py-2">
-                  <p className="text-[11px] text-[var(--text-muted)]">Date of Birth</p>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">{patient.dateOfBirth}</p>
-                </div>
-                {patient.address && (
-                  <div className="bg-[var(--bg-tertiary)] rounded-lg px-3 py-2 col-span-2">
-                    <p className="text-[11px] text-[var(--text-muted)]">Location</p>
-                    <p className="text-sm font-medium text-[var(--text-primary)]">
-                      {patient.address.city}, {patient.address.state} {patient.address.zip}
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           )}

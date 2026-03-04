@@ -10,12 +10,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface PatientSummary {
-  name: string;
-  dateOfBirth: string;
+  // PRIVACY §2: We do NOT collect or store PII from the FHIR Patient resource.
+  // Only age and gender are retained — they are clinically useful and non-identifying.
+  // Full name, date of birth, address, and full Medicare ID are never extracted or cached.
   age: number;
   gender: string;
-  medicareId: string; // masked: "***1234"
-  address?: { city: string; state: string; zip: string };
+  // --- DISABLED (Privacy §2) — PII fields removed from FHIR extraction ---
+  // name: string;              // Full legal name — not collected
+  // dateOfBirth: string;       // Full DOB — not collected (age is sufficient)
+  // medicareId: string;        // Even masked, unnecessary to store
+  // address?: { city, state, zip } // Mailing address — not collected
 }
 
 export interface CoverageSummary {
@@ -135,36 +139,26 @@ interface FhirEOB {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function transformPatient(patient: FhirPatient): PatientSummary {
-  // Name: prefer "official" use, fall back to first
-  const nameEntry = patient.name?.find((n) => n.use === "official") ?? patient.name?.[0];
-  const given = nameEntry?.given?.join(" ") ?? "";
-  const family = nameEntry?.family ?? "";
-  const name = `${given} ${family}`.trim() || "Unknown";
+  // PRIVACY §2 COMPLIANCE: We only extract age and gender from the FHIR Patient resource.
+  // These are clinically useful (screening schedules, risk factors) and non-identifying.
+  //
+  // We intentionally do NOT extract or store:
+  //   - Full legal name (patient.name)
+  //   - Date of birth (patient.birthDate) — we compute age but discard the DOB
+  //   - Medicare beneficiary ID (patient.identifier)
+  //   - Mailing address (patient.address)
+  //
+  // Users are identified by their email address only. The FHIR Patient resource
+  // is processed transiently — only age + gender are persisted to fhir_cache.
 
-  // Date of birth
+  // Age: derived from birthDate, but DOB itself is NOT stored
   const dob = patient.birthDate ?? "";
-  const dateOfBirth = dob ? formatDate(dob) : "Unknown";
   const age = dob ? calculateAge(dob) : 0;
 
-  // Gender
+  // Gender: clinically relevant for screenings and risk assessment
   const gender = capitalize(patient.gender ?? "Unknown");
 
-  // Medicare ID — mask all but last 4 chars
-  const medicareIdentifier = patient.identifier?.find(
-    (id) => id.system?.includes("medicare") || id.system?.includes("bene_id")
-  );
-  const rawId = medicareIdentifier?.value ?? "";
-  const medicareId = rawId.length > 4
-    ? "***" + rawId.slice(-4)
-    : rawId || "Not available";
-
-  // Address
-  const addr = patient.address?.[0];
-  const address = addr?.city
-    ? { city: addr.city, state: addr.state ?? "", zip: addr.postalCode ?? "" }
-    : undefined;
-
-  return { name, dateOfBirth, age, gender, medicareId, address };
+  return { age, gender };
 }
 
 export function transformCoverage(coverage: FhirCoverage): CoverageSummary {

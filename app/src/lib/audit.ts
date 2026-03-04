@@ -23,7 +23,8 @@ export type AuditAction =
   | "TRIAL_STARTED"
   | "DIABETES_INSIGHT_GENERATED"
   | "DIABETES_LOG_ENTRY"
-  | "PREFERENCES_UPDATED";
+  | "PREFERENCES_UPDATED"
+  | "POLICY_CHANGE_EMAIL";
 
 type ResourceType =
   | "ehr_connection"
@@ -35,7 +36,8 @@ type ResourceType =
   | "settings"
   | "diabetes_insight"
   | "diabetes_log"
-  | "topic_preferences";
+  | "topic_preferences"
+  | "policy_notification";
 
 // Actions with a dedup window (ms). Same user+action within this window → skip insert.
 // Only high-frequency, low-value actions belong here. Sensitive actions (appeals, consent, etc.)
