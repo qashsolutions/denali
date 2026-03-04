@@ -18,9 +18,9 @@ export function LandingFooter({ settings }: LandingFooterProps) {
   return (
     <footer className="py-8 bg-[var(--bg-secondary)] border-t border-[var(--border)]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Top row: brand left, links right */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          {/* Left: Logo + Company + HIPAA/BAA notice */}
+        {/* Row 1: brand left, links right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          {/* Left: Logo + Company */}
           <div>
             <Link href="/" className="flex items-center gap-2 mb-1">
               <MountainIcon className="w-7 h-7" />
@@ -33,9 +33,6 @@ export function LandingFooter({ settings }: LandingFooterProps) {
             </Link>
             <p className="text-sm text-[var(--text-muted)]">
               {companyPrefix} {companyName}
-            </p>
-            <p className="mt-3 text-lg font-bold text-black dark:text-white">
-              denali.health is built on HIPAA-ready infrastructure, including Claude via AWS Bedrock under a signed Business Associate Agreement with AWS.
             </p>
           </div>
 
@@ -67,6 +64,11 @@ export function LandingFooter({ settings }: LandingFooterProps) {
             </Link>
           </div>
         </div>
+
+        {/* Row 2: HIPAA/BAA notice — full width */}
+        <p className="mb-6 text-lg font-bold text-black dark:text-white">
+          denali.health is built on HIPAA-ready infrastructure, including Claude via AWS Bedrock under a signed Business Associate Agreement with AWS.
+        </p>
 
         {/* Bottom: Disclaimer + Copyright */}
         <div className="pt-4 border-t border-[var(--border)]">
