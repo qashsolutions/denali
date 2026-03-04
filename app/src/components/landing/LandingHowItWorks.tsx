@@ -47,7 +47,7 @@ function StepNode({
     >
       <Link
         href={step.href}
-        className="group flex flex-col items-center text-center"
+        className="group flex flex-col items-center text-center transition-transform duration-300 ease-out hover:-translate-y-1"
       >
         {/* Monospace step number */}
         <span className="font-[var(--font-mono)] text-3xl sm:text-4xl font-semibold text-[var(--accent-primary)] mb-3 tracking-tight">
