@@ -40,7 +40,7 @@ export function AppealIllustration({ className }: Props) {
       </g>
 
       {/* Arrow from denied to approved */}
-      <g className="animate-float">
+      <g className="">
         <path
           d="M120 105 L155 105"
           stroke="var(--appeal-coral-light)"
@@ -75,7 +75,7 @@ export function AppealIllustration({ className }: Props) {
       <rect x="179" y="90" width="48" height="3" rx="1.5" fill="var(--appeal-coral)" opacity="0.25" />
 
       {/* Checkmark on approved doc */}
-      <g className="animate-pulse-gentle">
+      <g className="">
         <circle cx="205" cy="130" r="12" fill="var(--appeal-coral)" opacity="0.2" />
         <path
           d="M198 130 L203 135 L213 124"

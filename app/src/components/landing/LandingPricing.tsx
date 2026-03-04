@@ -11,11 +11,11 @@ export function LandingPricing({ plans }: LandingPricingProps) {
   if (!plans || plans.length === 0) return null;
 
   return (
-    <section className="py-20 sm:py-32 bg-[var(--bg-secondary)]">
+    <section className="py-24 sm:py-36">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-12 sm:mb-16">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[var(--text-primary)] mb-4">
+          <h2 className="font-[var(--font-serif)] text-2xl sm:text-3xl lg:text-4xl font-normal text-[var(--text-primary)] mb-4">
             Simple, Transparent Pricing
           </h2>
           <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
@@ -29,19 +29,19 @@ export function LandingPricing({ plans }: LandingPricingProps) {
           {plans.map((plan) => (
             <div
               key={plan.id}
-              className="flex flex-col bg-[var(--bg-primary)] rounded-2xl p-6 sm:p-8 border border-[var(--border)] hover:border-[var(--accent-primary)]/50 transition-all"
+              className="flex flex-col bg-[var(--bg-secondary)] rounded-xl p-6 sm:p-8 border border-[var(--border)] hover:border-[var(--accent-primary)]/40 transition-colors"
             >
               {/* Plan Name */}
-              <h3 className="text-xl font-semibold text-[var(--text-primary)] mb-2">
+              <h3 className="font-[var(--font-serif)] text-xl font-normal text-[var(--text-primary)] mb-2">
                 {plan.name}
               </h3>
 
               {/* Price */}
               <div className="mb-6">
-                <span className="text-4xl font-bold text-[var(--text-primary)]">
+                <span className="font-[var(--font-mono)] text-4xl font-semibold tracking-tight text-[var(--text-primary)]">
                   {formatPrice(plan.price_cents)}
                 </span>
-                <span className="text-[var(--text-muted)] ml-1">
+                <span className="font-[var(--font-mono)] text-sm text-[var(--text-muted)] ml-1">
                   {getBillingLabel(plan.billing_period)}
                 </span>
               </div>
@@ -51,7 +51,7 @@ export function LandingPricing({ plans }: LandingPricingProps) {
                 {Array.isArray(plan.features) &&
                   plan.features.map((feature, index) => (
                     <li key={index} className="flex items-start gap-3">
-                      <CheckIcon className="w-5 h-5 text-[var(--success)] flex-shrink-0 mt-0.5" />
+                      <CheckIcon className="w-5 h-5 text-[var(--accent-primary)] flex-shrink-0 mt-0.5" />
                       <span className="text-[var(--text-secondary)]">
                         {feature}
                       </span>
@@ -62,7 +62,7 @@ export function LandingPricing({ plans }: LandingPricingProps) {
               {/* CTA Button — pinned to bottom */}
               <Link
                 href="/app"
-                className="group w-full flex items-center justify-center gap-2 py-3 mt-8 rounded-xl font-semibold transition-all bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)]"
+                className="group w-full flex items-center justify-center gap-2 py-3 mt-8 rounded-lg font-medium text-sm tracking-wide transition-colors bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)]"
               >
                 {plan.price_cents === 0
                   ? "Start Free Trial"

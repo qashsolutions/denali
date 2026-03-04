@@ -39,7 +39,7 @@ export function DiabetesCareIllustration({ className }: Props) {
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
-        className="animate-float"
+        className=""
       />
 
       {/* Data points */}
@@ -51,7 +51,7 @@ export function DiabetesCareIllustration({ className }: Props) {
       <circle cx="200" cy="90" r="5" fill="var(--diabetes-violet)" opacity="0.5" />
 
       {/* Down arrow — trending well */}
-      <g className="animate-pulse-gentle">
+      <g className="">
         <circle cx="230" cy="52" r="15" fill="var(--diabetes-violet)" opacity="0.12" />
         <path
           d="M225 48 L230 56 L235 48"
@@ -64,7 +64,7 @@ export function DiabetesCareIllustration({ className }: Props) {
       </g>
 
       {/* Blood drop icon */}
-      <g className="animate-float">
+      <g className="">
         <path
           d="M55 160 C55 160 45 170 45 176 C45 182 49 186 55 186 C61 186 65 182 65 176 C65 170 55 160 55 160Z"
           fill="var(--diabetes-violet)"

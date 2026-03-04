@@ -66,7 +66,7 @@ export function LandingFooter({ settings }: LandingFooterProps) {
         </div>
 
         {/* Row 2: HIPAA/BAA notice — full width */}
-        <p className="mb-6 text-lg font-bold text-black dark:text-white">
+        <p className="mb-6 text-base font-medium text-[var(--text-primary)]">
           denali.health is built on HIPAA-ready infrastructure, including Claude via AWS Bedrock under a signed Business Associate Agreement with AWS.
         </p>
 

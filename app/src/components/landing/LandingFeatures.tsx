@@ -20,7 +20,6 @@ const FEATURES = [
     description:
       "Find out if Medicare covers it — before you go.",
     tags: ["Part A & B", "Prior Auth", "Coverage Rules"],
-    color: "check-teal" as const,
     href: "/app/chat",
     Illustration: CoverageCheckIllustration,
   },
@@ -31,7 +30,6 @@ const FEATURES = [
     description:
       "Your claims, meds, and providers — all in one place.",
     tags: ["Medicare", "Claims & EOBs"],
-    color: "health-red" as const,
     href: "/app/health",
     Illustration: HealthRecordsIllustration,
   },
@@ -42,7 +40,6 @@ const FEATURES = [
     description:
       "Track your A1C, screenings, and medications over time.",
     tags: ["A1C Tracking", "Screenings", "Med Reminders"],
-    color: "diabetes-violet" as const,
     href: "/app/chat?topic=diabetes",
     Illustration: DiabetesCareIllustration,
   },
@@ -53,56 +50,16 @@ const FEATURES = [
     description:
       "Denied? We build the letter with the right codes and citations.",
     tags: ["5 Levels", "Auto-Letters", "Deadline Alerts"],
-    color: "appeal-coral" as const,
     href: "/app/chat",
     Illustration: AppealIllustration,
   },
 ] as const;
 
-const COLOR_CLASSES = {
-  "health-red": {
-    accent: "var(--health-red)",
-    accentLight: "var(--health-red-light)",
-    bg: "bg-[var(--health-red-bg)]",
-    text: "text-[var(--health-red)]",
-    tagBg: "bg-[var(--health-red)]/10",
-    barFrom: "from-[var(--health-red)]",
-    barTo: "to-[var(--health-red-light)]",
-  },
-  "check-teal": {
-    accent: "var(--check-teal)",
-    accentLight: "var(--check-teal-light)",
-    bg: "bg-[var(--check-teal-bg)]",
-    text: "text-[var(--check-teal)]",
-    tagBg: "bg-[var(--check-teal)]/10",
-    barFrom: "from-[var(--check-teal)]",
-    barTo: "to-[var(--check-teal-light)]",
-  },
-  "diabetes-violet": {
-    accent: "var(--diabetes-violet)",
-    accentLight: "var(--diabetes-violet-light)",
-    bg: "bg-[var(--diabetes-violet-bg)]",
-    text: "text-[var(--diabetes-violet)]",
-    tagBg: "bg-[var(--diabetes-violet)]/10",
-    barFrom: "from-[var(--diabetes-violet)]",
-    barTo: "to-[var(--diabetes-violet-light)]",
-  },
-  "appeal-coral": {
-    accent: "var(--appeal-coral)",
-    accentLight: "var(--appeal-coral-light)",
-    bg: "bg-[var(--appeal-coral-bg)]",
-    text: "text-[var(--appeal-coral)]",
-    tagBg: "bg-[var(--appeal-coral)]/10",
-    barFrom: "from-[var(--appeal-coral)]",
-    barTo: "to-[var(--appeal-coral-light)]",
-  },
-};
-
 const SECTION_WORDS = [
-  { text: "Connect.", color: "var(--accent-primary)" },
-  { text: "Understand.", color: "var(--accent-primary)" },
-  { text: "Prevent.", color: "var(--accent-primary)" },
-  { text: "Appeal.", color: "var(--accent-primary)" },
+  { text: "Connect.", accent: false },
+  { text: "Understand.", accent: false },
+  { text: "Prevent.", accent: false },
+  { text: "Appeal.", accent: true },
 ];
 
 function FeatureCard({
@@ -113,41 +70,35 @@ function FeatureCard({
   index: number;
 }) {
   const { ref, isVisible } = useIntersectionObserver();
-  const colors = COLOR_CLASSES[feature.color];
   const { Illustration } = feature;
 
   return (
     <div
       ref={ref}
       className={`transition-all duration-600 ease-out
-        ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}
+        ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
       style={{ transitionDelay: `${index * 100}ms` }}
     >
     <Link
       href={feature.href}
-      className="group relative block bg-[var(--bg-primary)] rounded-2xl border border-[var(--border)] overflow-hidden
-        transition-all duration-300 ease-out
-        hover:-translate-y-1 hover:shadow-xl"
+      className="group relative block bg-[var(--bg-primary)] rounded-xl border border-[var(--border)] overflow-hidden
+        transition-colors duration-300 ease-out
+        hover:border-[var(--accent-primary)]/40"
     >
-      {/* Accent bar */}
-      <div
-        className={`h-1 bg-gradient-to-r ${colors.barFrom} ${colors.barTo}`}
-      />
-
       {/* Illustration area */}
-      <div className={`${colors.bg} flex items-center justify-center py-8`}>
+      <div className="bg-[var(--bg-tertiary)] flex items-center justify-center py-8">
         <Illustration className="w-full max-w-[240px] h-auto" />
       </div>
 
       {/* Content area */}
       <div className="p-6">
         {/* Step + audience */}
-        <p className="font-mono text-xs tracking-wider text-[var(--text-muted)] mb-2">
+        <p className="font-[var(--font-mono)] text-[11px] tracking-[0.1em] uppercase text-[var(--text-muted)] mb-2">
           {feature.step} — {feature.audience}
         </p>
 
         {/* Title */}
-        <h3 className="font-[var(--font-serif)] text-xl font-semibold text-[var(--text-primary)] mb-3">
+        <h3 className="font-[var(--font-serif)] text-xl font-normal text-[var(--text-primary)] mb-3">
           {feature.title}
         </h3>
 
@@ -156,12 +107,12 @@ function FeatureCard({
           {feature.description}
         </p>
 
-        {/* Tags */}
+        {/* Tags — monochromatic */}
         <div className="flex flex-wrap gap-2">
           {feature.tags.map((tag) => (
             <span
               key={tag}
-              className={`${colors.text} ${colors.tagBg} text-xs font-medium rounded-full px-3 py-1`}
+              className="text-[var(--text-muted)] bg-[var(--bg-tertiary)] text-xs font-medium rounded-full px-3 py-1"
             >
               {tag}
             </span>
@@ -175,16 +126,15 @@ function FeatureCard({
 
 export function LandingFeatures({ section: _section }: LandingFeaturesProps) {
   return (
-    <section className="py-20 sm:py-32 bg-[var(--bg-secondary)]">
+    <section className="py-24 sm:py-36 bg-[var(--bg-secondary)]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-12 sm:mb-16">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-4">
+          <h2 className="font-[var(--font-serif)] text-3xl sm:text-4xl lg:text-5xl font-normal mb-4">
             {SECTION_WORDS.map((word, i) => (
               <span key={i}>
                 <span
-                  className="font-[var(--font-serif)]"
-                  style={{ color: word.color }}
+                  className={word.accent ? "text-[var(--accent-primary)]" : "text-[var(--text-primary)]"}
                 >
                   {word.text}
                 </span>

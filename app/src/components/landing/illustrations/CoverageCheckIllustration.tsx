@@ -33,7 +33,7 @@ export function CoverageCheckIllustration({ className }: Props) {
       <rect x="106" y="116" width="55" height="4" rx="2" fill="var(--check-teal)" opacity="0.25" />
 
       {/* Magnifying glass */}
-      <g className="animate-float">
+      <g className="">
         <circle
           cx="62"
           cy="80"
@@ -58,7 +58,7 @@ export function CoverageCheckIllustration({ className }: Props) {
       </g>
 
       {/* Shield badge */}
-      <g className="animate-pulse-gentle">
+      <g className="">
         <path
           d="M220 55 L220 85 C220 100 205 110 205 110 C205 110 190 100 190 85 L190 55 L205 48 L220 55Z"
           fill="var(--check-teal)"

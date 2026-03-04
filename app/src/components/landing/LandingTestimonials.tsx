@@ -11,11 +11,11 @@ export function LandingTestimonials({
   if (!testimonials || testimonials.length === 0) return null;
 
   return (
-    <section className="py-16 sm:py-24">
+    <section className="py-24 sm:py-36 bg-[var(--bg-secondary)]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-12 sm:mb-16">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[var(--text-primary)] mb-4">
+          <h2 className="font-[var(--font-serif)] text-2xl sm:text-3xl lg:text-4xl font-normal text-[var(--text-primary)] mb-4">
             Trusted by Medicare Patients
           </h2>
           <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
@@ -28,7 +28,7 @@ export function LandingTestimonials({
           {testimonials.map((testimonial) => (
             <div
               key={testimonial.id}
-              className="bg-[var(--bg-secondary)] rounded-2xl p-6 sm:p-8 border border-[var(--border)] transition-all hover:border-[var(--accent-primary)]/30 hover:shadow-lg"
+              className="bg-[var(--bg-primary)] rounded-xl p-6 sm:p-8 border border-[var(--border)]"
             >
               {/* Rating Stars */}
               <div className="flex gap-1 mb-4">
@@ -38,22 +38,22 @@ export function LandingTestimonials({
                     filled={i < testimonial.rating}
                     className={
                       i < testimonial.rating
-                        ? "text-yellow-400"
+                        ? "text-[var(--accent-primary)]"
                         : "text-[var(--border)]"
                     }
                   />
                 ))}
               </div>
 
-              {/* Quote */}
-              <blockquote className="text-[var(--text-primary)] leading-relaxed mb-6">
+              {/* Quote — serif italic for editorial feel */}
+              <blockquote className="font-[var(--font-serif)] italic text-[var(--text-primary)] leading-relaxed mb-6">
                 &ldquo;{testimonial.content}&rdquo;
               </blockquote>
 
               {/* Author */}
               <div className="flex items-center gap-3">
-                {/* Avatar Placeholder */}
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] flex items-center justify-center text-white font-semibold text-sm">
+                {/* Avatar — flat bg, no gradient */}
+                <div className="w-10 h-10 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-[var(--text-secondary)] font-semibold text-sm">
                   {testimonial.author_name
                     .split(" ")
                     .map((n) => n[0])

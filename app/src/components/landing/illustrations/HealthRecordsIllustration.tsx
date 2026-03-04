@@ -33,7 +33,7 @@ export function HealthRecordsIllustration({ className }: Props) {
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
-        className="animate-float"
+        className=""
       />
 
       {/* Heart icon */}
@@ -44,13 +44,13 @@ export function HealthRecordsIllustration({ className }: Props) {
       />
 
       {/* Medication pill */}
-      <g className="animate-pulse-gentle">
+      <g className="">
         <rect x="45" y="140" width="50" height="22" rx="11" fill="var(--health-red)" opacity="0.15" stroke="var(--health-red)" strokeWidth="1.5" />
         <line x1="70" y1="140" x2="70" y2="162" stroke="var(--health-red)" strokeWidth="1" opacity="0.3" />
       </g>
 
       {/* Lab result badge */}
-      <g className="animate-float">
+      <g className="">
         <rect x="185" y="135" width="55" height="35" rx="6" fill="var(--health-red)" opacity="0.1" stroke="var(--health-red)" strokeWidth="1.5" />
         <rect x="195" y="145" width="30" height="3" rx="1.5" fill="var(--health-red)" opacity="0.3" />
         <rect x="195" y="153" width="20" height="3" rx="1.5" fill="var(--health-red)" opacity="0.2" />
