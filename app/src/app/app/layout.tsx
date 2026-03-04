@@ -21,6 +21,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 Denali<span className="text-[var(--accent-secondary)]">Health</span>
               </span>
             </Link>
+            <p className="text-sm text-[var(--text-secondary)] mb-2">
+              denali.health is built on HIPAA-ready infrastructure, including Claude via AWS Bedrock under a signed Business Associate Agreement with AWS.
+            </p>
             <p className="text-xs text-[var(--text-muted)] mb-1">
               Coverage guidance only, not medical advice. This product is not endorsed or certified by CMS or HHS.
             </p>
