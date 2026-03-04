@@ -36,8 +36,8 @@
 - [Quick Reference](#quick-reference)
 - [Critical Rules](#critical-rules)
 - [Key Files](#key-files) — [API Routes](#api-routes)
-- [Architecture](#architecture) — [Two-Tier Tool System](#two-tier-tool-system) · [Session State](#session-state)
-- [Tools & Data Sources](#tools--data-sources) — [MCP Tools](#mcp-tools-external-auto-handled-by-api) · [Local Tools](#local-tools-defined-in-srclibtools) · [Data Inventory](#data-inventory)
+- [Architecture](#architecture) — [Tool System](#tool-system) · [Session State](#session-state)
+- [Tools & Data Sources](#tools--data-sources) — [Government API Tools](#government-api-tools-local-executors-replaced-mcp-servers) · [Local Tools](#other-local-tools-defined-in-srclibtools) · [Data Inventory](#data-inventory)
 - [Database Schema](#database-schema) — [Core Tables](#core-tables) · [Denial Code Tables](#denial-code-tables) · [Learning Tables](#learning-tables-no-user-link) · [Key Functions](#key-functions)
 - [Skills & Prompt System](#skills--prompt-system) — [Skill Loading Order](#skill-loading-order--gates) · [Base Prompt](#base-prompt-always-loaded) · [Additional Skills](#additional-skills-loaded-contextually)
 - [Orchestration Flows](#orchestration-flows) — [Coverage Guidance](#flow-1-coverage-guidance-proactive-denial-prevention) · [Appeal](#flow-2-appeal-reactive-denial-response) · [Denial Code Lookup](#flow-3-quick-denial-code-lookup) · [Coverage-to-Appeal Bridge](#flow-4-coverage-to-appeal-bridge) · [EOB Explainer](#flow-5-eob-explainer-bill-understanding)
@@ -47,7 +47,7 @@
 - [PWA Offline & Low-Bandwidth](#pwa-offline--low-bandwidth) — [Service Worker](#service-worker-strategies) · [IndexedDB Cache](#indexeddb-cache) · [Offline Write Queue](#offline-write-queue) · [Hook Integration](#hook-integration-pattern)
 - [Coding Standards](#coding-standards) — [Project Structure](#project-structure)
 - [Testing](#testing) — [Unit Tests (Vitest)](#unit-tests-vitest) · [E2E Tests (Playwright)](#e2e-tests-playwright) · [Security Tests](#security-tests)
-- [MCP Integration](#mcp-integration)
+- [Tool Integration](#tool-integration-formerly-mcp)
 - [Learning System](#learning-system)
 - [CMS Interoperability Framework](#cms-interoperability-framework)
 
@@ -155,7 +155,7 @@ Three toggles in Settings → Privacy & Data. **All default OFF.** Enforcement i
 - **CRITICAL: Never call RDS from client-side code.** All data access goes through API routes. Pattern: client calls `fetch("/api/route", { credentials: "include" })` → server route calls `getAuthUser(request)` + `query()` → returns JSON. Examples: `useConversationHistory` → `/api/conversations`, `useHealthData` → `/api/fhir/data`, `useAuth` → `/api/profile`, `loadConversation()` → `/api/conversations/[id]`.
 - **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
 - **CRITICAL: SSR-safe hooks must initialize with server-matching values.** `useOnlineStatus` must use `useState(true)` — NOT `useState(typeof navigator !== "undefined" ? navigator.onLine : true)`. The latter reads `navigator.onLine` on the client during hydration, which may return `false` (flaky connection, SW cached page), causing React hydration mismatch (#418) because the server rendered `null` but the client renders a div.
-- **MCP servers run via Anthropic Beta API (direct), not Bedrock.** The app uses `ANTHROPIC_API_KEY` + `claude.beta.messages.create()` with `mcp_servers`. Bedrock does not support MCP. Do not switch the AI layer to Bedrock.
+- **All AI calls route through Bedrock in production.** ECS has no `ANTHROPIC_API_KEY` → `getClaudeClient()` returns `AnthropicBedrock` (IAM auth). Both chat (`claude.ts`) and diabetes insights (`diabetes-insights.ts`) use `getClaudeClient()`. MCP servers were fully replaced by local tool executors calling public government APIs directly — no data leaves AWS for AI processing.
 
 ---
 
@@ -173,7 +173,7 @@ Where to find specific logic in the codebase.
 | `src/lib/denial-patterns.ts` | Async RDS queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
 | `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via `query()` (admin DB user, bypasses no RLS — RDS has none). Non-blocking fire-and-forget. Write-side dedup: `FHIR_DATA_ACCESS` skips insert if same user+action logged within 2h (`DEDUP_WINDOWS` map) |
 | `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformPatient()` extracts ONLY age+gender from FHIR Patient — no name/DOB/address/Medicare ID per Privacy §2 + `transformEOB()` extracts PDE info/careTeam/POS/inpatient fields + `classifyDiabetesStatus()`), `eob-clinical.ts` (clinical extraction pipeline — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 8 resource types), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
-| `src/lib/diabetes-insights.ts` | Claude-powered diabetes insight generation. `generateDiabetesInsight(data)` calls Sonnet for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls |
+| `src/lib/diabetes-insights.ts` | Claude-powered diabetes insight generation via `getClaudeClient()` (Bedrock in production). `generateDiabetesInsight(data)` calls Claude for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls |
 | `src/components/diabetes/` | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from CPT-based `ScreeningHistory[]`), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up, med refill gaps, specialty gaps, post-discharge follow-up), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display) |
 | `src/components/health/DiagnosisSummaryCard.tsx` | Renders "Conditions in Your Claims" list with severity color-coding. `getSeverityConfig()`: structured `DiagnosisSummary` category → `RED_KEYWORDS` (21 terms: neoplasm, cancer, stroke, heart failure, morbid obesity, severe obesity, obesity class iii, etc.) → `AMBER_KEYWORDS` (27 terms: hypertension, thyroid, anemia, COPD, etc.) → gray. `cleanDiagnosisName()` strips U+25CC combining mark artifacts from FHIR data |
 | `src/hooks/useDiabetesSnapshots.ts` | Fetches longitudinal lab data from `diabetes_snapshots`. Returns `{ snapshots, a1cHistory, isLoading }` |
@@ -270,14 +270,9 @@ User (Chat UI) ──> Claude Agent (Brain) ──> Tools (APIs + RDS)
 - Tools are interchangeable (swap APIs without frontend changes)
 - **Auth** = Cognito + httpOnly cookies. **DB** = RDS via `query()`. No browser SDK.
 
-### Two-Tier Tool System
+### Tool System
 
-Claude has access to two types of tools. **MCP servers use the Anthropic Beta API directly** (not Bedrock — Bedrock does not support `mcp_servers`).
-
-| Type | Invoked By | Handled By | Content Block |
-|------|-----------|------------|---------------|
-| **MCP tools** (ICD-10, CMS, NPI) | Claude directly via Anthropic Beta API | API auto-handles results | `mcp_tool_use` / `mcp_tool_result` |
-| **Local tools** (CPT, CARC/RARC, appeal, etc.) | Claude requests, server executes | `processToolCalls()` in chat loop | `tool_use` / `tool_result` |
+All tools are local executors handled by `processToolCalls()` in the chat loop. Claude requests a `tool_use`, our server executes the function, and returns a `tool_result`. Government API tools (ICD-10, CMS Coverage, NPI) call free public endpoints with generic search terms — no patient data sent. Previously used MCP servers at `mcp.deepsense.ai` (migrated to local executors 2026-03-04).
 
 ### Session State
 
@@ -309,15 +304,17 @@ User-facing (plain English):        Internal (codes, never shown):
 
 ## Tools & Data Sources
 
-### MCP Tools (external, auto-handled by API)
+### Government API Tools (local executors, replaced MCP servers)
 
-| Server | URL | Tools | Data |
-|--------|-----|-------|------|
-| `cms-coverage` | `mcp.deepsense.ai/cms_coverage/mcp` | search_local_coverage, search_national_coverage, get_coverage_document | LCD/NCD coverage policies |
-| `npi-registry` | `mcp.deepsense.ai/npi_registry/mcp` | npi_lookup, npi_search | Provider NPI, specialty, Medicare status |
-| `icd10-codes` | `mcp.deepsense.ai/icd10_codes/mcp` | search_icd10 | ICD-10 diagnosis codes |
+These tools are local executors in `tools/index.ts` that call free public government APIs directly. No patient data is sent — only generic search terms. Previously used MCP servers at `mcp.deepsense.ai` (removed 2026-03-04).
 
-### Local Tools (defined in `src/lib/tools/index.ts`)
+| Tool | API Endpoint | Data |
+|------|-------------|------|
+| `search_icd10` | `clinicaltables.nlm.nih.gov/api/icd10cm/v3/search` (NLM, public) | ICD-10 diagnosis codes |
+| `search_local_coverage`, `search_national_coverage`, `get_coverage_document` | `api.coverage-finder.medicare.gov/api/v1` (CMS, public) | LCD/NCD coverage policies |
+| `npi_search`, `npi_lookup` | `npiregistry.cms.hhs.gov/api` (NPPES, public) | Provider NPI, specialty, Medicare status |
+
+### Other Local Tools (defined in `src/lib/tools/index.ts`)
 
 | Tool | Purpose | Data Source |
 |------|---------|-------------|
@@ -1079,47 +1076,30 @@ npx tsc --noEmit        # Type check
 
 ---
 
-## MCP Integration
+## Tool Integration (formerly MCP)
 
-Claude accesses real CMS coverage data through Model Context Protocol (MCP) servers. This is the **primary method** for healthcare data retrieval.
-
-### Beta API Usage
-
-MCP requires the beta API:
+MCP servers at `mcp.deepsense.ai` were fully replaced by local tool executors (2026-03-04). All tools now run server-side via `processToolCalls()` in the chat loop, calling public government APIs directly. No third-party intermediary receives patient data.
 
 ```typescript
-// src/lib/claude.ts
-const response = await claude.beta.messages.create({
-  model: API_CONFIG.claude.model,
+// src/lib/claude.ts — all tools are local, no mcp_servers parameter
+const response = await claude.messages.create({
+  model,
   max_tokens: API_CONFIG.claude.maxTokens,
   system: request.systemPrompt,
   messages,
-  tools: localToolDefinitions,
-  mcp_servers: MCP_SERVERS,
-  betas: ["mcp-client-2025-04-04"],
+  tools: anthropicTools.length > 0 ? anthropicTools : undefined,
 });
 ```
 
-- Use `claude.beta.messages.create()` NOT `claude.messages.create()`
-- Import types from `@anthropic-ai/sdk/resources/beta/messages/messages`
-- MCP tools: `mcp_tool_use` blocks (auto-handled by API)
-- Local tools: `tool_use` blocks (executed by `processToolCalls()`)
-
 ### Debugging
 
-Server-side logs (Vercel Functions, not browser console):
+Server-side logs (ECS CloudWatch):
 
 ```
-[CLAUDE API] Using BETA API with mcp_servers parameter
-[CLAUDE API] >>> MCP TOOL CALLED: search_local_coverage
+[CLAUDE API] Using AWS Bedrock (IAM auth)
+[CLAUDE API] >>> LOCAL TOOL CALLED: search_local_coverage
 [CLAUDE API] >>> LOCAL TOOL CALLED: search_cpt
 ```
-
-**Verification**:
-1. Logs show `Using BETA API with mcp_servers parameter`
-2. Response contains `mcp_tool_use` content blocks
-3. Real policy references returned (e.g., `L34220`)
-4. No `Local tools called: search_icd10` (that means MCP fallback was triggered — a bug)
 
 ---
 
@@ -1195,6 +1175,53 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 **Legal Page Footer Parity** (2026-02-24): All four legal pages (`/faq`, `/terms`, `/privacy`, `/hipaa`) were missing cross-navigation links and the CMS non-endorsement/medical advice disclaimer row present in `LandingFooter`. Each page now shows links to its three sibling legal pages + the disclaimer: "Coverage guidance only, not medical advice. Always consult with healthcare providers for medical decisions. This product is not endorsed or certified by CMS or HHS." Footer structure now matches the landing page. Previously: HIPAA had only Privacy + FAQ links (missing Terms); Privacy and Terms had no nav links at all; FAQ had no nav links and no disclaimer.
 
 **Final 4-Doc Cross-Audit + Automated Checker** (2026-02-24): Exhaustive final pass across all four legal documents (FAQ, Terms, Privacy, HIPAA) using both a human-equivalent agent (23 topics) and a new automated script (`scripts/check-legal-docs.ts`, 28 checks). The script found 4 issues the human audit missed: (1) **Terms §11** — "all your data will be permanently deleted" had no audit log carve-out, contradicting Privacy §7/FAQ/HIPAA; (2) **Terms §13** — "all Medicare data is permanently deleted immediately" had no audit log carve-out; (3) **HIPAA "no model training" phrasing** — "do not use your data to train AI models" didn't literally contain "not train" — rephrased to "do not train AI models on your data" to match Privacy §5; (4) **FAQ audit log check** — case-sensitivity bug in the checker itself ("Audit" vs "audit") — fixed regex to case-insensitive. All 28 checks now green. **Run anytime:** `npx tsx scripts/check-legal-docs.ts` from project root.
+
+### CMS Submission Q&A (2026-03-04)
+
+Verified answers to CMS early adopter questionnaire, backed by code and AWS infrastructure audit.
+
+**App description (for CMS directory):**
+> DenaliHealth connects to Medicare claims data through Blue Button 2.0 and uses Claude (Anthropic) on AWS Bedrock to deliver personalized coverage guidance for beneficiaries with diabetes and obesity. The app extracts conditions, medications, screenings, and denial history from a patient's own claims, then provides tailored support — offering direct assistance when appropriate and directing patients to care from a health professional when needed.
+
+**Q: If data is shared with third parties, how will you obtain informed consent?**
+DenaliHealth does not share patient health data (PHI) with any third party. All health data processing runs through Claude Opus 4.6 on AWS Bedrock — data never leaves AWS. Two service providers receive limited operational data (email address only) under data processing agreements: Stripe (payments) and Resend (email delivery). Patient consent for health data use is obtained through three granular opt-in toggles (all default OFF) in Settings > Privacy & Data: Health Data AI, Health Data Storage, Analytics. Medicare data access requires separate Blue Button OAuth through Medicare.gov. Consent changes take effect immediately (including mid-conversation) and are audit-logged.
+
+**Q: Do third-party vendors commit to data protection requirements?**
+Yes. No third-party vendor has access to patient health data. AWS: BAA executed 2026-02-25, HIPAA-eligible, SOC 2 Type II, FedRAMP High, HITRUST certified. Stripe: PCI DSS Level 1 certified, receives only email + payment identifiers. Resend: SOC 2 Type II certified, receives only email addresses. Public government APIs (NLM, CMS, NPPES) receive only generic search terms — never patient data.
+
+**Q: What happens when a user withdraws consent?**
+Consent toggles take effect immediately. Health Data AI → OFF: data stripped client-side before any API call. Disconnecting Medicare: all cached health data + encrypted OAuth tokens permanently deleted. Account deletion: 11-step cascade deletes all user data, Cognito credentials removed as final step. Only audit logs (6-year HIPAA) and anonymized learning patterns survive.
+
+**Q: What happens if the company is sold?**
+Terms §12 and Privacy §5 both require: (1) users notified via email at least 30 days before data transfer; (2) CMS notified at earliest practicable time (Blue Button credentials are entity-specific, change of ownership requires CMS re-review); (3) users can delete account and all data before transfer.
+
+**Q: How do you store/retain health information consistent with PHI protection best practices?**
+Verified via AWS CLI audit (2026-03-04):
+- **Encryption at rest**: RDS AES-256 via KMS (`a44e46d3-84bc-4f3e-87ff-50cc848843b8`), deletion protection ON. Blue Button tokens: app-layer AES-256-GCM. Secrets Manager: KMS encryption.
+- **Encryption in transit**: ALB TLS 1.3/1.2 (`ELBSecurityPolicy-TLS13-1-2-2021-06`), HTTP→HTTPS redirect. RDS TLS via `rds-ca-rsa2048-g1` CA cert.
+- **Network isolation**: RDS `PubliclyAccessible: false`, ECS→RDS via VPC security group (port 5432 restricted). Fargate serverless (no SSH).
+- **Access controls**: Cognito with email OTP + optional TOTP MFA, deletion protection ACTIVE. App-level user-scoped data access. HIPAA 30-min inactivity timeout.
+- **Audit**: App-level audit log (6-year retention, 16 action types). CloudTrail multi-region with log file validation. Infrastructure monitoring 2x/daily.
+- **Data minimization**: Only age+gender from FHIR Patient resource (no name/DOB/address/Medicare ID). Health cache 24h TTL, deleted on disconnect. Consent toggles all default OFF.
+- **AI data handling**: All AI via Bedrock (within AWS/BAA). Anthropic does not train on Bedrock API data. Health data in AI only when consent toggle ON.
+- **Backups**: RDS automated backups encrypted, 7-day retention.
+
+**Q: Data deletion approach?**
+"We securely delete all data on user request." Account deletion cascades through 11 tables + Cognito. Two categories retained per legal requirements: audit logs (6-year HIPAA) and anonymized learning patterns (no user linkage). Medicare data can also be deleted independently via Blue Button disconnect.
+
+**Third-party data flow summary (verified 2026-03-04):**
+
+| Service | Data Sent | Health Data? |
+|---------|-----------|-------------|
+| AWS Bedrock (Claude) | Conversation + health context (consent-gated) | Yes — within AWS/BAA |
+| NLM Clinical Tables | Generic ICD-10 search terms | No |
+| CMS Coverage DB | Generic procedure keywords | No |
+| NPPES NPI Registry | Provider names/locations | No |
+| PubMed/NCBI | Clinical search terms | No |
+| CMS Blue Button | OAuth tokens (reads FROM CMS) | No — inbound only |
+| Cognito | Email address | No |
+| Stripe | Email, internal user ID | No |
+| Resend | Email address | No |
 
 ### Remaining Gaps
 
