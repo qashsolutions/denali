@@ -3,10 +3,9 @@
 import Link from "next/link";
 import type { LandingSection } from "@/types/cms";
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver";
-import { HealthRecordsIllustration } from "./illustrations/HealthRecordsIllustration";
-import { CoverageCheckIllustration } from "./illustrations/CoverageCheckIllustration";
 import { DiabetesCareIllustration } from "./illustrations/DiabetesCareIllustration";
-import { AppealIllustration } from "./illustrations/AppealIllustration";
+import { WeightManagementIllustration } from "./illustrations/WeightManagementIllustration";
+import { HealthRecordsIllustration } from "./illustrations/HealthRecordsIllustration";
 
 interface LandingFeaturesProps {
   section: LandingSection | undefined;
@@ -15,52 +14,35 @@ interface LandingFeaturesProps {
 const FEATURES = [
   {
     step: "01",
-    audience: "BEFORE YOU GO",
-    title: "Coverage Check",
-    description:
-      "Find out if Medicare covers it — before you go.",
-    tags: ["Part A & B", "Prior Auth", "Coverage Rules"],
-    href: "/app/chat",
-    Illustration: CoverageCheckIllustration,
-  },
-  {
-    step: "02",
-    audience: "YOUR DATA",
-    title: "Medicare Dashboard",
-    description:
-      "Your claims, meds, and providers — all in one place.",
-    tags: ["Medicare", "Claims & EOBs"],
-    href: "/app/health",
-    Illustration: HealthRecordsIllustration,
-  },
-  {
-    step: "03",
-    audience: "PREVENTION",
+    audience: "DIABETES",
     title: "Diabetes Care",
     description:
-      "Track your A1C, screenings, and medications over time.",
-    tags: ["A1C Tracking", "Screenings", "Med Reminders"],
+      "Track screenings, medications, and A1C over time. Personalized guidance when appropriate — direction to your doctor when needed.",
+    tags: ["A1C Tracking", "Screenings", "Med Reminders", "Coverage"],
     href: "/app/chat?topic=diabetes",
     Illustration: DiabetesCareIllustration,
   },
   {
-    step: "04",
-    audience: "WHEN DENIED",
-    title: "Appeals",
+    step: "02",
+    audience: "WEIGHT MANAGEMENT",
+    title: "Obesity Care",
     description:
-      "Denied? We build the letter with the right codes and citations.",
-    tags: ["5 Levels", "Auto-Letters", "Deadline Alerts"],
-    href: "/app/chat",
-    Illustration: AppealIllustration,
+      "Navigate obesity coverage — GLP-1s, bariatric surgery, nutrition counseling. Know what Medicare covers before you go.",
+    tags: ["GLP-1s", "Bariatric", "Counseling", "Coverage"],
+    href: "/app/chat?topic=obesity",
+    Illustration: WeightManagementIllustration,
+  },
+  {
+    step: "03",
+    audience: "YOUR MEDICARE",
+    title: "Claims & Appeals",
+    description:
+      "Claims, coverage, and providers in one place. Denied? We help build the appeal letter with the right codes and citations.",
+    tags: ["Claims", "Coverage Check", "Appeal Letters"],
+    href: "/app/health",
+    Illustration: HealthRecordsIllustration,
   },
 ] as const;
-
-const SECTION_WORDS = [
-  { text: "Connect.", accent: false },
-  { text: "Understand.", accent: false },
-  { text: "Prevent.", accent: false },
-  { text: "Appeal.", accent: true },
-];
 
 function FeatureCard({
   feature,
@@ -130,25 +112,18 @@ export function LandingFeatures({ section: _section }: LandingFeaturesProps) {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-12 sm:mb-16">
-          <h2 className="font-[var(--font-serif)] text-3xl sm:text-4xl lg:text-5xl font-normal mb-4">
-            {SECTION_WORDS.map((word, i) => (
-              <span key={i}>
-                <span
-                  className={word.accent ? "text-[var(--accent-primary)]" : "text-[var(--text-primary)]"}
-                >
-                  {word.text}
-                </span>
-                {i < SECTION_WORDS.length - 1 && " "}
-              </span>
-            ))}
+          <h2 className="font-[var(--font-serif)] text-3xl sm:text-4xl lg:text-5xl font-normal text-[var(--text-primary)] mb-4">
+            Personalized support for{" "}
+            <span className="text-[var(--accent-primary)]">diabetes</span> and{" "}
+            <span className="text-[var(--accent-primary)]">obesity</span>
           </h2>
           <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-            Four tools, one mission — make sure Medicare works for you.
+            Tailored guidance with your Medicare data — direct assistance when appropriate, direction to your doctor when needed.
           </p>
         </div>
 
-        {/* Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Features Grid — 3 cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {FEATURES.map((feature, index) => (
             <FeatureCard key={feature.step} feature={feature} index={index} />
           ))}
