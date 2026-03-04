@@ -26,7 +26,7 @@ const STEPS = [
   {
     step: 2,
     label: "Ask Denali",
-    hint: "Coverage checks, diabetes & weight management, bill help",
+    hint: "Coverage, Diabetes, Obesity, Denials",
     Icon: ChatBubbleIcon,
     color: "var(--accent-primary)",
     colorLight: "#60a5fa",
