@@ -27,14 +27,6 @@ export const API_CONFIG = {
     iterationTimeoutMs: parseInt(process.env.CLAUDE_ITERATION_TIMEOUT || "60000", 10),
   },
 
-  /** MCP (Model Context Protocol) endpoints */
-  mcp: {
-    cmsCoverage: process.env.CMS_COVERAGE_MCP_URL || "https://mcp.deepsense.ai/cms_coverage/mcp",
-    npiRegistry: process.env.NPI_REGISTRY_MCP_URL || "https://mcp.deepsense.ai/npi_registry/mcp",
-    pubmed: process.env.PUBMED_MCP_URL || "https://mcp.deepsense.ai/pubmed/mcp",
-    icd10: process.env.ICD10_MCP_URL || "https://mcp.deepsense.ai/icd10/mcp",
-  },
-
   /** Blue Button 2.0 (Medicare FHIR API) */
   blueButton: {
     baseUrl: process.env.BLUEBUTTON_BASE_URL || "https://sandbox.bluebutton.cms.gov",

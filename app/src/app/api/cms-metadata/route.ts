@@ -16,9 +16,11 @@ export async function GET() {
       name: BRAND.NAME,
       version: "1.0.0",
       description:
-        "Medicare coverage guidance and appeal letter generation powered by AI. Helps Original Medicare beneficiaries understand coverage, prevent claim denials, and appeal denied claims.",
+        "DenaliHealth connects to Medicare claims data through Blue Button 2.0 and uses Claude (Anthropic) on AWS Bedrock to deliver personalized coverage guidance for beneficiaries with diabetes and obesity. The app extracts conditions, medications, screenings, and denial history from a patient's own claims, then provides tailored support — offering direct assistance when appropriate and directing patients to care from a health professional when needed.",
       url: BRAND.SITE_URL,
       privacyPolicyUrl: `${BRAND.SITE_URL}/privacy`,
+      termsOfServiceUrl: `${BRAND.SITE_URL}/terms`,
+      hipaaNoticeUrl: `${BRAND.SITE_URL}/hipaa`,
       contactEmail: "admin@denali.health",
     },
     cms: {
@@ -28,6 +30,13 @@ export async function GET() {
       ],
       frameworkVersion: "2025",
       earlyAdopter: true,
+    },
+    ai: {
+      model: "Claude Opus 4.6",
+      provider: "Anthropic",
+      infrastructure: "AWS Bedrock",
+      baaExecuted: "2026-02-25",
+      dataResidency: "All data remains within AWS infrastructure (us-east-1)",
     },
     compliance: {
       "A1_IAL2_Auth": { status: "done", notes: "Medicare OAuth via Medicare.gov satisfies IAL2/AAL2 (intermediary PHR path). TOTP MFA available as opt-in." },

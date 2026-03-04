@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-04 (Privacy §2 PII removal — PatientSummary stripped to {age, gender} only, policy change email endpoint; previous: legal pages audited against CMS BB ToS + production access — RLS→app-level access controls, "Blue Button"→"Medicare" naming, Terms updated for MA+obesity, PDFs for CMS; ECS task def :30, Supabase removed, consent toggle enforcement, chat page card merge + Weight Management + PaywallModal + Sign up nav, Blue Button OAuth fixes, Route 53 DNS, middleware, dashboard, fonts, obesity, blog, AWS infra)
+     Last updated: 2026-03-04 (Landing page premium redesign — warm palette across entire app, typographic hero with mountain silhouette, 3 health-first feature cards (Diabetes/Obesity/Claims), shared LandingFooter across all pages, animation cleanup, --brand-purple + --font-mono CSS vars; previous: Privacy §2 PII removal, policy change email endpoint, legal pages audited against CMS BB ToS, ECS task def :33)
      Maintainer: @cvr
 -->
 
@@ -181,7 +181,7 @@ Where to find specific logic in the codebase.
 | `src/hooks/useDiabetesInsights.ts` | AI insight fetch/refresh via `/api/diabetes/insights`. Returns `{ insight, isLoading, refresh }`. IndexedDB write-through + offline fallback |
 | `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
 | `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
-| `src/components/landing/LandingFooter.tsx` | Footer for landing + blog: brand left, legal links right (FAQ, Privacy, HIPAA) |
+| `src/components/landing/LandingFooter.tsx` | Shared footer across ALL pages (landing, blog, legal, app layout). Brand left, legal links right (FAQ, Privacy, Terms, HIPAA). HIPAA/BAA notice + disclaimer. Import directly (NOT from barrel) in `"use client"` components to avoid pulling `pg` into client bundle |
 | `src/lib/dashboard-context.ts` | Dashboard personalization data layer. Types: `DashboardContext`, `DashboardUser`, `DashboardCoverage`, `DashboardMedicare`, `DashboardDiabetes`, `DashboardObesity`, `DashboardAppeals`, `Badge`, `Nudge`. `buildDashboardContext(input)` constructs context from real hook data (useAuth + useHealthData). Helpers: `getTimeOfDay()`, `getPersonalizedGreeting()`, `buildStatusSummary()`, `selectNudge()` (priority-sorted), badge getters per card (`getCoverageBadge`, `getDashboardBadge`, `getDiabetesBadge`, `getObesityBadge`, `getAppealsBadge`). Mock factory `getMockDashboardContext()` for tests only |
 | `src/app/app/page.tsx` | Authenticated dashboard home page. **Auth-gated via middleware** (anonymous → redirect to `/`). Uses `useAuth()` + `useHealthData()` for real data via `buildDashboardContext()`. 5 UX enhancements: (1) `HeroSection` — time-aware greeting + contextual status summary + time-of-day gradient, (2) `StatusBadge` + per-card badge logic (pill-shaped, solid/outline variants), (3) `NudgeStrip` — priority-sorted contextual message with CTA + dismiss, (4) `WalkthroughBar` — 4-step guided tour (first visit only, sessionStorage flag), (5) `AnimatedFeatureCard` — staggered fade-up + hover lift + SVG ambient animations. 5 feature cards: Coverage Check (green), Medicare Dashboard (coral), Diabetes Care (blue, conditional on `hasContext`), Weight Management (amber, conditional on `obesity.classification !== "none"`), Appeals (purple) |
 | `src/app/app/chat/page.tsx` | Ask Denali chat page. 6 suggestion cards on empty state: Check Coverage (blue), Appeal a Denial (red), Understand My Bill (amber), Preventive Care (green), Diabetes Care (purple), Weight Management (orange). Intercepts "Upgrade plan" → opens `PaywallModal` (Stripe checkout for $10 single / $20 monthly). Intercepts "Sign up" → navigates to `/app/settings` (email OTP flow). **Consent-gated health data bridge**: when `consent.health_data_ai` is OFF, `initialSessionState` returns minimal state (`healthDataAvailable: false`, `blueButtonConnected: true`, no health fields). Grey consent banner shown when Blue Button connected but AI toggle OFF, with link to Settings. MFA gate for authenticated non-admin users. Payment toast on `?payment=success` |
@@ -815,16 +815,23 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 - Sign In links to `/app/settings` (email OTP flow); Gear navigates to `/app/settings`
 - Hamburger dropdown shows nav items on mobile
 
-**App Footer** (`src/app/app/layout.tsx` inline) — desktop only, horizontal single-row:
-- Left: Logo + Disclaimer + Copyright (from `BRAND` config)
-- Right: FAQ · Privacy · HIPAA links
-
-**Landing Footer** (`src/components/landing/LandingFooter.tsx`) — landing + blog pages:
-- Top row: Logo + company (left), FAQ · Privacy Policy · HIPAA (right)
-- Bottom row: Disclaimer (left), Copyright (right), separated by border-t
+**Shared Footer** (`src/components/landing/LandingFooter.tsx`) — used across ALL pages:
+- Used by: landing page, blog, legal pages (faq/terms/privacy/hipaa), app layout (desktop only via `hidden md:block`)
+- Top row: Logo + "Qash Solutions Inc © 2026" (left), FAQ · Privacy · Terms · HIPAA links (right)
+- Bottom row: HIPAA/BAA notice (`text-base font-medium`) + disclaimer (`text-xs`), separated by `border-t`
+- **CRITICAL**: In `"use client"` components (like `app/layout.tsx`), import directly from `"@/components/landing/LandingFooter"` — NOT from barrel `"@/components/landing"`. Barrel import pulls `pg` into client bundle via transitive server deps
 
 **BottomTabs** (`src/components/layout/BottomTabs.tsx`) — mobile only, `/app/*` pages:
 - Tabs: Home, Health, Ask Denali, Settings (4 tabs, fixed bottom)
+
+**Landing Page** (`src/components/landing/`) — premium warm medical reference design:
+- **Hero** (`LandingHero.tsx`): Typographic hero with subtle mountain silhouette SVG (two path layers at opacity 0.08/0.12). Serif heading, decorative accent line, refined pill CTAs, uppercase trust line. Tagline: diabetes + obesity + coverage + denials + appeals.
+- **Features** (`LandingFeatures.tsx`): 3 health-first cards prioritizing CMS diabetes/obesity categories: (1) Diabetes Care — A1C, screenings, meds, coverage; (2) Obesity Care — GLP-1s, bariatric, counseling, coverage; (3) Claims & Appeals — Medicare data + appeal letters. Section header uses CMS language: "Personalized support for **diabetes** and **obesity**". Cards: `rounded-xl`, monospace step labels (`01`/`02`/`03`), monochromatic tags, subtle border hover.
+- **Illustrations** (`illustrations/`): Static SVGs (no animation classes). `DiabetesCareIllustration`, `WeightManagementIllustration` (scale + gauge + trend + capsule), `HealthRecordsIllustration`.
+- **HowItWorks** (`LandingHowItWorks.tsx`): Clean typographic steps with monospace numbers, serif labels, sans hints. Vertical separators on desktop, horizontal on mobile. Hover `-translate-y-1`.
+- **Pricing** (`LandingPricing.tsx`): Serif plan names, monospace prices (`--font-mono`), warm amber check icons.
+- **Testimonials** (`LandingTestimonials.tsx`): Serif italic quotes, warm amber stars, flat avatars.
+- Section bg alternation: Hero `bg-primary`, Features `bg-secondary`, HowItWorks `bg-secondary`, Pricing `bg-primary`, Testimonials `bg-secondary`, Footer `bg-secondary`.
 
 **Health Hub** (`src/app/app/health/page.tsx`) — 7 collapsible accordion cards replacing 11-section scroll:
 - Each card: `HealthHubCard` — status dot (red/amber/green) + title + one-line summary + chevron toggle
@@ -845,13 +852,18 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 - Greeting: 28px Bold
 - Body: 16px min Regular
 - Labels: 11-12px Semibold
-- Font: Instrument Serif (headings, via `--font-serif`) + DM Sans (body, via `--font-sans-dm`). Loaded via `next/font/google` in root layout. Warm, trustworthy feel — not techy
+- Font: Instrument Serif (headings, via `--font-serif`) + DM Sans (body, via `--font-sans-dm`) + Monospace (step labels, prices, via `--font-mono`). Loaded via `next/font/google` in root layout. Warm, trustworthy feel — not techy
 
 ### Theme
 
+Premium warm medical reference palette — applied across the **entire app**, not just landing page.
+
 - Default: Follow system preference
-- Dark: Slate 900->800 gradient, Blue->Violet accents
-- Light: Slate 50->White gradient, Blue->Violet accents
+- **Light**: Warm cream/stone — `--bg-primary: #FEFCF8`, `--bg-secondary: #FFFEFA`, `--bg-tertiary: #F5F0E8`, `--text-primary: #2C1810`, `--accent-primary: #C26A3E` (warm amber), `--border: #E8DFD3`
+- **Dark**: Warm dark — `--bg-primary: #1A1612`, `--bg-secondary: #241F1A`, `--accent-primary: #D4845A`
+- **Brand**: `--brand-purple: #7c3aed` — dedicated variable for "Health" text in DenaliHealth logo (independent of warm accent palette)
+- Feature colors: muted earth tones — sage (`--check-teal: #5A8A6E`), terracotta (`--health-red: #B3695A`), plum (`--diabetes-violet: #7B6B8A`), rust (`--appeal-coral: #B8704E`)
+- Landing page animations removed (float, pulse-gentle, draw-in, shimmer, sway, pulse-line, flow-move). Dashboard animations preserved (popover-in, fade-up, slide-down-fade, card-enter)
 
 ### Accessibility
 

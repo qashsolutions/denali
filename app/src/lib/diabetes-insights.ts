@@ -1,13 +1,13 @@
 /**
  * Diabetes Insights — Claude-generated Analysis
  *
- * Generates personalized diabetes insights using Claude API.
+ * Generates personalized diabetes insights using Claude via AWS Bedrock.
  * Includes summary, recommendations, risk alerts, and screening reminders.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "crypto";
 import { API_CONFIG } from "@/config";
+import { getClaudeClient } from "@/lib/claude";
 
 export interface InsightInput {
   classification: string;
@@ -46,7 +46,7 @@ export function computeDataHash(data: InsightInput): string {
 export async function generateDiabetesInsight(
   data: InsightInput
 ): Promise<InsightOutput> {
-  const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const claude = getClaudeClient();
 
   const prompt = buildPrompt(data);
 
@@ -58,8 +58,8 @@ export async function generateDiabetesInsight(
   });
 
   const text = response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
+    .filter((b) => b.type === "text")
+    .map((b) => ("text" in b ? b.text : ""))
     .join("");
 
   try {
