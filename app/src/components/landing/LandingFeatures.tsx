@@ -68,38 +68,26 @@ function FeatureCard({
         hover:border-[var(--accent-primary)]/40"
     >
       {/* Illustration area */}
-      <div className="bg-[var(--bg-tertiary)] flex items-center justify-center py-8">
-        <Illustration className="w-full max-w-[240px] h-auto" />
+      <div className="bg-[var(--bg-tertiary)] flex items-center justify-center py-10 sm:py-12">
+        <Illustration className="w-full max-w-[260px] h-auto" />
       </div>
 
       {/* Content area */}
-      <div className="p-6">
+      <div className="p-8">
         {/* Step + audience */}
-        <p className="font-[var(--font-mono)] text-[11px] tracking-[0.1em] uppercase text-[var(--text-muted)] mb-2">
+        <p className="font-[var(--font-mono)] text-xs tracking-[0.1em] uppercase text-[var(--accent-primary)] mb-3">
           {feature.step} — {feature.audience}
         </p>
 
         {/* Title */}
-        <h3 className="font-[var(--font-serif)] text-xl font-normal text-[var(--text-primary)] mb-3">
+        <h3 className="font-[var(--font-serif)] text-2xl sm:text-3xl font-normal text-[var(--text-primary)] mb-4">
           {feature.title}
         </h3>
 
         {/* Description */}
-        <p className="text-[var(--text-secondary)] text-sm leading-relaxed mb-4">
+        <p className="text-[var(--text-primary)] text-base leading-relaxed">
           {feature.description}
         </p>
-
-        {/* Tags — monochromatic */}
-        <div className="flex flex-wrap gap-2">
-          {feature.tags.map((tag) => (
-            <span
-              key={tag}
-              className="text-[var(--text-muted)] bg-[var(--bg-tertiary)] text-xs font-medium rounded-full px-3 py-1"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
       </div>
     </Link>
     </div>
@@ -123,7 +111,7 @@ export function LandingFeatures({ section: _section }: LandingFeaturesProps) {
         </div>
 
         {/* Features Grid — 3 cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
           {FEATURES.map((feature, index) => (
             <FeatureCard key={feature.step} feature={feature} index={index} />
           ))}
