@@ -15,7 +15,7 @@ import {
 import { BRAND } from "@/config";
 
 const NAV_ITEMS = [
-  { label: "Health", href: "/app/health", Icon: HeartPulseIcon, color: "text-rose-500" },
+  { label: "MyHealth", href: "/app/health", Icon: HeartPulseIcon, color: "text-rose-500" },
   { label: "Ask Denali", href: "/app/chat", Icon: ChatBubbleIcon, color: "text-blue-500" },
   { label: "Blog", href: "/blog", Icon: DocumentTextIcon, color: "text-violet-500" },
   { label: "FAQ", href: "/faq", Icon: QuestionMarkIcon, color: "text-amber-500" },

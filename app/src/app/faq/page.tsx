@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { LandingFooter } from "@/components/landing/LandingFooter";
-import { ArrowRightIcon } from "@/components/icons";
+import { MagnifyingGlassIcon } from "@/components/icons";
 
 const FAQ_SECTIONS = [
   {
@@ -68,11 +67,48 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "Is Denali free?",
-        a: "Every new account gets a 14-day free trial (3 messages/day, 1 appeal credit). After the trial, chat access is locked until you purchase a plan: Pay Per Appeal ($10/appeal, 5 messages/day) or Monthly ($20/month, 3 appeals + unlimited messages).",
+        a: "Coverage guidance is available without an account — 1 free message per day, no signup required. Every new account gets a 14-day free trial (3 messages/day, 1 appeal credit). After the trial, chat access is locked until you purchase a plan: Pay Per Appeal ($10/appeal, 5 messages/day) or Monthly ($20/month, 3 appeals + unlimited messages).",
       },
       {
         q: "Is there a free trial?",
         a: "Yes. Every new account gets a 14-day trial with 3 messages/day and 1 appeal credit. After the trial period, chat access is locked — choose Pay Per Appeal ($10/appeal) or Monthly ($20/month) to continue.",
+      },
+      {
+        q: "How many free messages do I get?",
+        a: "Without an account: 1 message per day. With a free trial: 3 messages per day for 14 days. Pay Per Appeal plan: 5 messages per day. Monthly plan: unlimited messages.",
+      },
+    ],
+  },
+  {
+    title: "Features",
+    items: [
+      {
+        q: "What is MyHealth?",
+        a: "MyHealth is your personalized Medicare health dashboard. After you sign in and connect your Medicare account, it shows your coverage status, recent claims, health conditions, active medications, screening reminders, care team providers, and any denied claims — all extracted from your Medicare data. You can also connect and disconnect your Medicare account from this page.",
+      },
+      {
+        q: "What is Ask Denali?",
+        a: "Ask Denali is the chat feature where you can ask questions about Medicare coverage in plain English. You can check if a procedure is covered, understand a denial, get help with an appeal letter, or ask about diabetes and weight management coverage. It uses AI to look up real Medicare policies and give you personalized guidance. One free message per day without an account.",
+      },
+      {
+        q: "What is in the Blog?",
+        a: "The Blog has articles about Medicare topics like understanding denial codes, navigating coverage rules, filing appeals, prior authorization tips, diabetes care, and weight management. If you're signed in and have set topic preferences, you'll see personalized article recommendations. Otherwise, you'll see a weekly-rotating selection of articles.",
+      },
+      {
+        q: "How do I find my diabetes information?",
+        a: "Go to the Diabetes Care page from your dashboard. If you've connected your Medicare account, you'll see your A1C history, screening reminders, medication tracking, and personalized coaching. If you haven't connected Medicare, you can still use the quick actions and coverage reference guides.",
+      },
+      {
+        q: "How do I check my Medicare coverage?",
+        a: "Tap 'Ask Denali' and describe the procedure or service you need. Denali will look up the relevant Medicare coverage policies (LCD/NCD), check requirements, and tell you what's covered — including any prior authorization needed.",
+      },
+      {
+        q: "What is the weight management feature?",
+        a: "The Weight Management page shows your obesity-related conditions, medications, and screening history from Medicare claims. It includes Medicare coverage info for intensive behavioral therapy (IBT), medical nutrition therapy, bariatric surgery, and GLP-1 medications like Wegovy.",
+      },
+      {
+        q: "How do appeal letters work?",
+        a: "When a Medicare claim is denied, tell Denali about it. The AI will look up the denial reason, gather your details, and generate a formal appeal letter citing real LCD/NCD policy numbers, ICD-10/CPT codes, and clinical evidence from PubMed. Appeal letters require an account and use 1 appeal credit.",
       },
     ],
   },
@@ -127,9 +163,32 @@ const FAQ_SECTIONS = [
 ];
 
 export default function FAQPage() {
-  const router = useRouter();
-  const [question, setQuestion] = useState("");
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    new Set()
+  );
+
+  // Filter sections by search query (matches against question + answer text)
+  const filteredSections = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return FAQ_SECTIONS;
+
+    return FAQ_SECTIONS.map((section) => ({
+      ...section,
+      items: section.items.filter(
+        (item) =>
+          item.q.toLowerCase().includes(q) ||
+          item.a.toLowerCase().includes(q) ||
+          section.title.toLowerCase().includes(q)
+      ),
+    })).filter((section) => section.items.length > 0);
+  }, [search]);
+
+  // Auto-expand all sections when searching
+  const visibleSections = search.trim()
+    ? filteredSections
+    : FAQ_SECTIONS;
+  const isSearching = search.trim().length > 0;
 
   function toggleSection(title: string) {
     setExpandedSections((prev) => {
@@ -143,11 +202,10 @@ export default function FAQPage() {
     });
   }
 
-  function handleAsk(e: FormEvent) {
-    e.preventDefault();
-    const trimmed = question.trim();
-    if (!trimmed) return;
-    router.push(`/app/chat?message=${encodeURIComponent(trimmed)}`);
+  function isSectionExpanded(title: string) {
+    // When searching, all matching sections are expanded
+    if (isSearching) return true;
+    return expandedSections.has(title);
   }
 
   return (
@@ -157,93 +215,109 @@ export default function FAQPage() {
           Frequently Asked Questions
         </h1>
         <p className="text-[var(--text-secondary)] mb-2">
-          How Denali handles your data, privacy, and Medicare guidance.
+          How Denali works — features, pricing, privacy, and more.
         </p>
         <p className="text-xs text-[var(--text-muted)] mb-8">
           Effective: March 5, 2026
         </p>
 
-        {/* Ask bar */}
-        <form onSubmit={handleAsk} className="mb-10">
-          <div className="relative">
-            <input
-              type="text"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask me anything about this website..."
-              className="w-full px-5 py-4 pr-14 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-primary)] text-base placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)]/30 transition-colors"
-            />
+        {/* Search bar — filters FAQ content in-page */}
+        <div className="relative mb-8">
+          <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search FAQs — e.g. pricing, diabetes, appeals, privacy..."
+            className="w-full pl-12 pr-5 py-4 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-primary)] text-base placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)]/30 transition-colors"
+            aria-label="Search frequently asked questions"
+          />
+          {search && (
             <button
-              type="submit"
-              disabled={!question.trim()}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-lg bg-[var(--accent-primary)] text-white flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-              aria-label="Ask Denali"
+              onClick={() => setSearch("")}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+              aria-label="Clear search"
             >
-              <ArrowRightIcon className="w-5 h-5" />
+              <XIcon className="w-5 h-5" />
             </button>
-          </div>
-          <p className="text-xs text-[var(--text-muted)] mt-2">
-            No signup required — get an instant answer from Denali.
-          </p>
-        </form>
-
-        {/* Accordion sections */}
-        <div className="space-y-2">
-          {FAQ_SECTIONS.map((section) => {
-            const isExpanded = expandedSections.has(section.title);
-            return (
-              <div
-                key={section.title}
-                className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] overflow-hidden"
-              >
-                <button
-                  onClick={() => toggleSection(section.title)}
-                  className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[var(--bg-tertiary)] transition-colors"
-                  aria-expanded={isExpanded}
-                >
-                  <span className="text-base font-semibold text-[var(--text-primary)]">
-                    {section.title}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--text-muted)]">
-                      {section.items.length}
-                    </span>
-                    <ChevronIcon
-                      className={`w-5 h-5 text-[var(--text-muted)] transition-transform duration-200 ${
-                        isExpanded ? "rotate-180" : ""
-                      }`}
-                    />
-                  </div>
-                </button>
-
-                {isExpanded && (
-                  <div className="px-5 pb-5 space-y-5 border-t border-[var(--border)]">
-                    {section.items.map((item) => (
-                      <div key={item.q} className="pt-4">
-                        <h3 className="text-sm font-medium text-[var(--text-primary)] mb-1.5">
-                          {item.q}
-                        </h3>
-                        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                          {item.a}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          )}
         </div>
 
+        {/* Accordion sections */}
+        {visibleSections.length > 0 ? (
+          <div className="space-y-2">
+            {visibleSections.map((section) => {
+              const isExpanded = isSectionExpanded(section.title);
+              return (
+                <div
+                  key={section.title}
+                  className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] overflow-hidden"
+                >
+                  <button
+                    onClick={() => toggleSection(section.title)}
+                    className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[var(--bg-tertiary)] transition-colors"
+                    aria-expanded={isExpanded}
+                  >
+                    <span className="text-base font-semibold text-[var(--text-primary)]">
+                      {section.title}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-[var(--text-muted)]">
+                        {section.items.length}
+                      </span>
+                      <ChevronIcon
+                        className={`w-5 h-5 text-[var(--text-muted)] transition-transform duration-200 ${
+                          isExpanded ? "rotate-180" : ""
+                        }`}
+                      />
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-5 pb-5 space-y-5 border-t border-[var(--border)]">
+                      {section.items.map((item) => (
+                        <div key={item.q} className="pt-4">
+                          <h3 className="text-sm font-medium text-[var(--text-primary)] mb-1.5">
+                            {item.q}
+                          </h3>
+                          <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                            {item.a}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-[var(--text-secondary)] mb-3">
+              No matching questions found.
+            </p>
+            <p className="text-sm text-[var(--text-muted)]">
+              For Medicare coverage, diabetes, or obesity questions,{" "}
+              <Link
+                href="/app/chat"
+                className="text-[var(--accent-primary)] hover:underline"
+              >
+                Ask Denali
+              </Link>{" "}
+              directly.
+            </p>
+          </div>
+        )}
+
         <p className="text-sm text-[var(--text-muted)] mt-10">
-          Have more questions?{" "}
+          Have a question about Medicare coverage?{" "}
           <Link
             href="/app/chat"
             className="text-[var(--accent-primary)] hover:underline"
           >
             Ask Denali
           </Link>{" "}
-          or email support.
+          — no signup required.
         </p>
       </div>
       <LandingFooter />
@@ -263,6 +337,22 @@ function ChevronIcon({ className }: { className?: string }) {
       strokeLinejoin="round"
     >
       <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 6L6 18M6 6l12 12" />
     </svg>
   );
 }

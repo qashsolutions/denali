@@ -18,7 +18,7 @@ const TABS = [
     exact: true,
   },
   {
-    label: "Health",
+    label: "MyHealth",
     href: "/app/health",
     Icon: HeartPulseIcon,
   },
