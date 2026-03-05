@@ -114,12 +114,12 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-40 backdrop-blur-md bg-[var(--bg-primary)]/90 border-b border-[var(--border)]/50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center h-16 sm:h-20">
+        <div className="flex items-center h-[72px] sm:h-[88px]">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group mr-auto">
-            <MountainIcon className="w-8 h-8 sm:w-10 sm:h-10 transition-transform group-hover:scale-105" />
+            <MountainIcon className="w-10 h-10 sm:w-12 sm:h-12 transition-transform group-hover:scale-105" />
             <div className="flex flex-col">
-              <span className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] leading-tight">
+              <span className="text-3xl sm:text-4xl font-bold text-[var(--text-primary)] leading-tight">
                 {prefix}
                 {suffix && (
                   <span className="text-[var(--brand-purple)]">{suffix}</span>
