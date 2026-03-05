@@ -277,10 +277,10 @@ export default function FAQPage() {
                     <div className="px-5 pb-5 space-y-5 border-t border-[var(--border)]">
                       {section.items.map((item) => (
                         <div key={item.q} className="pt-4">
-                          <h3 className="text-sm font-medium text-[var(--text-primary)] mb-1.5">
+                          <h3 className="text-base font-medium text-[var(--text-primary)] mb-1.5">
                             {item.q}
                           </h3>
-                          <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                          <p className="text-base text-[var(--text-primary)] leading-relaxed">
                             {item.a}
                           </p>
                         </div>
