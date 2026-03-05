@@ -81,8 +81,8 @@ function FeatureCard({
       </div>
 
       {/* Illustration area — below text */}
-      <div className="bg-[var(--bg-tertiary)] flex items-center justify-center py-8 sm:py-10 mx-6 mb-6 rounded-lg">
-        <Illustration className="w-full max-w-[260px] h-auto" />
+      <div className="bg-[var(--bg-tertiary)] flex items-center justify-center py-10 sm:py-12 mx-4 mb-4 rounded-lg">
+        <Illustration className="w-full max-w-[400px] h-auto px-4" />
       </div>
     </Link>
     </div>

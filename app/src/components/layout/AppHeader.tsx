@@ -113,7 +113,7 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-40 backdrop-blur-md bg-[var(--bg-primary)]/90 border-b border-[var(--border)]/50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center h-[72px] sm:h-[88px]">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group mr-auto">
