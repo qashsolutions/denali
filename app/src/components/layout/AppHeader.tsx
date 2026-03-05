@@ -129,7 +129,7 @@ export function AppHeader() {
           </Link>
 
           {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-1 mr-4" aria-label="Main navigation">
+          <nav className="hidden md:flex items-center gap-2 mr-2" aria-label="Main navigation">
             {NAV_ITEMS.map(({ label, href, Icon, color }) => {
               const isActive =
                 pathname === href || pathname?.startsWith(href + "/");
