@@ -129,8 +129,8 @@ export function AppHeader() {
             </div>
           </Link>
 
-          {/* Desktop Nav — sits near logo, pushes Sign In to far right */}
-          <nav className="hidden md:flex items-center gap-3 ml-8 mr-auto" aria-label="Main navigation">
+          {/* Desktop Nav — centered between logo and Sign In */}
+          <nav className="hidden md:flex items-center gap-3 mx-auto" aria-label="Main navigation">
             {NAV_ITEMS.map(({ label, href, Icon, color }) => {
               const isActive =
                 pathname === href || pathname?.startsWith(href + "/");

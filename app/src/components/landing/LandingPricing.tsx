@@ -93,13 +93,6 @@ export function LandingPricing() {
                   : "border-[var(--border)] hover:border-[var(--accent-primary)]/40"
               }`}
             >
-              {/* Popular badge */}
-              {plan.popular && (
-                <span className="self-start px-3 py-1 text-xs font-medium bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] rounded-full mb-3">
-                  Most Popular
-                </span>
-              )}
-
               {/* Plan Name */}
               <h3 className="font-[var(--font-serif)] text-xl font-normal text-[var(--text-primary)] mb-2">
                 {plan.name}
