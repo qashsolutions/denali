@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BRAND } from "@/config";
 import { LandingFooter } from "@/components/landing";
 
-const EFFECTIVE_DATE = "March 3, 2026";
+const EFFECTIVE_DATE = "March 5, 2026";
 
 const SECTIONS = [
   {
@@ -73,6 +73,13 @@ const SECTIONS = [
     id: "payment-terms",
     title: "7. Payment Terms",
     subsections: [
+      {
+        title: "Anonymous Access",
+        items: [
+          "Coverage guidance is available without an account — 1 message per day, no signup required",
+          "Anonymous users cannot generate appeal letters or access health data features",
+        ],
+      },
       {
         title: "Trial",
         items: [
@@ -163,7 +170,7 @@ const SECTIONS = [
     items: [
       "Access: You may view all Medicare data we have stored about you at any time through the Health section of the app",
       "Correction: If you believe data displayed is inaccurate or incomplete, you can refresh your connection to re-sync from the official Medicare source or contact us to flag discrepancies",
-      "Deletion: You may delete your account at any time through Settings > Danger Zone — all Medicare data is permanently deleted immediately (audit logs recording data access events are retained for a minimum of 6 years per HIPAA requirements)",
+      "Deletion: You may delete your account at any time through Settings > Danger Zone — all Medicare data, conversations, appeal letters, and diabetes tracking data are permanently deleted immediately (audit logs recording data access events are retained for a minimum of 6 years per HIPAA requirements)",
       "Revocation: You may disconnect your Medicare connection at any time through Settings — this immediately deletes all cached health data",
       "Consent withdrawal: You may withdraw consent for AI use of your health data at any time through Settings > Privacy & Data",
       "Data portability: You may request a copy of your stored data by contacting us",

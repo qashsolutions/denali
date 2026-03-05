@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BRAND } from "@/config";
 import { LandingFooter } from "@/components/landing";
 
-const EFFECTIVE_DATE = "March 3, 2026";
+const EFFECTIVE_DATE = "March 5, 2026";
 
 const SECTIONS = [
   {
@@ -27,7 +27,7 @@ const SECTIONS = [
       {
         title: "Medicare Health Data (With Your Explicit Consent)",
         items: [
-          "Patient demographics (name, date of birth, Medicare beneficiary ID — from your Medicare account)",
+          "Patient demographics (age and gender only — we do not store your full name, date of birth, address, or Medicare beneficiary ID)",
           "Coverage information (Medicare Part A/B enrollment, plan details)",
           "Claims and Explanation of Benefits (EOBs) including denied claims",
           "Conditions, medications, and screening history (extracted from your claims data)",
@@ -36,9 +36,9 @@ const SECTIONS = [
       {
         title: "Information We Do NOT Collect",
         items: [
-          "Full legal names or mailing addresses",
+          "Full names, dates of birth, or mailing addresses",
           "Social Security Numbers (SSN)",
-          "Medicare insurance card numbers (we access data via secure OAuth, not card numbers)",
+          "Medicare beneficiary IDs or insurance card numbers (we access data via secure OAuth, not card numbers)",
           "Bank account or financial information (payments processed by Stripe)",
           "Medical records beyond what Medicare provides",
         ],
@@ -109,7 +109,8 @@ const SECTIONS = [
       "AWS (Amazon Web Services): Our database (RDS PostgreSQL), application hosting (ECS/Fargate), and AI processing (Bedrock) provider. AWS is HIPAA-eligible and our Business Associate Agreement (BAA) was executed on February 25, 2026. Your account data, conversation history, and cached health data are stored in encrypted AWS RDS databases in us-east-1. Sharing is persistent for the lifetime of your account.",
       "Legal Requirements: We may disclose information if required by law, court order, or government regulation.",
       "Business Transfers: In the event of a merger, acquisition, or sale of assets, your personal information may be transferred. We will notify you via email at least 30 days before your data is transferred and becomes subject to a different privacy policy. As a holder of CMS Blue Button API production credentials, we will also notify CMS at the earliest practicable time, as production credentials are issued to a specific approved application and entity and a change of ownership requires CMS re-review.",
-      "Vendor Data Protection Commitments: Each third-party service provider we work with is contractually required to protect your information using safeguards appropriate to the sensitivity of the data they handle, consistent with applicable law. All providers handling protected health information are covered by Business Associate Agreements (BAAs). AWS is HIPAA-eligible and SOC 2 Type II certified (BAA executed February 25, 2026); Stripe is PCI DSS certified for payment data.",
+      "Resend: Email delivery service for authentication codes and account communications. Resend receives only your email address, transiently for message delivery. SOC 2 Type II certified.",
+      "Vendor Data Protection Commitments: Each third-party service provider we work with is contractually required to protect your information using safeguards appropriate to the sensitivity of the data they handle, consistent with applicable law. All providers handling protected health information are covered by Business Associate Agreements (BAAs). AWS is HIPAA-eligible and SOC 2 Type II certified (BAA executed February 25, 2026); Stripe is PCI DSS certified for payment data; Resend is SOC 2 Type II certified for email delivery.",
     ],
     subsections: [
       {
@@ -148,6 +149,7 @@ const SECTIONS = [
       "All conversations and messages",
       "All appeal letters",
       "Your consent preferences",
+      "Your diabetes tracking data (daily logs, lab snapshots, and AI-generated insights)",
       "Your authentication credentials",
       "Your Stripe subscription (if active)",
     ],

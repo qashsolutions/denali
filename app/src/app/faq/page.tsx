@@ -7,7 +7,7 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "What data does Denali collect?",
-        a: "We store only what's needed: your email (for login), conversation history, and appeal letters. If you connect Medicare via the official Medicare API, we also cache your claims and coverage data (encrypted, refreshed every 24 hours), along with basic patient demographics (name, date of birth, Medicare ID) as provided by CMS. We never store your address, Social Security Number, Medicare card number, or bank details.",
+        a: "We store only what's needed: your email (for login), conversation history, and appeal letters. If you connect Medicare via the official Medicare API, we also cache your claims and coverage data (encrypted, refreshed every 24 hours), along with basic demographics (age and gender only). We never store your full name, date of birth, address, Social Security Number, Medicare beneficiary ID, or bank details.",
       },
       {
         q: "Is my health data encrypted?",
@@ -15,7 +15,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "Who can see my data?",
-        a: "We share data only with the service providers needed to run the app: AWS (database, hosting, and AI via Bedrock) and Stripe (payments) — never for marketing or advertising. Each provider is contractually required to protect your data. See our Privacy Policy for details on what each provider receives and for how long.",
+        a: "We share data only with the service providers needed to run the app: AWS (database, hosting, and AI via Bedrock), Stripe (payments), and Resend (email delivery — receives only your email address). We never share data for marketing or advertising. Each provider is contractually required to protect your data. See our Privacy Policy for details on what each provider receives and for how long.",
       },
       {
         q: "What happens if there's a data breach?",
@@ -93,7 +93,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "What are the limitations?",
-        a: "Denali provides Medicare coverage guidance only — not medical advice, legal advice, or billing services. We focus on Original Medicare; Medicare Advantage plans have their own rules. Always verify with your healthcare provider.",
+        a: "Denali provides Medicare coverage guidance only — not medical advice, legal advice, or billing services. We support both Original Medicare and Medicare Advantage, though coverage rules differ between them. Always verify with your healthcare provider.",
       },
     ],
   },
@@ -102,7 +102,7 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "Can I delete my account?",
-        a: "Yes. Go to Settings > Danger Zone and request account deletion. We permanently delete your conversations, appeal letters, cached health data, Medicare connection, consent preferences, and authentication credentials. Your Stripe subscription is cancelled. This action cannot be undone.",
+        a: "Yes. Go to Settings > Danger Zone and request account deletion. We permanently delete your conversations, appeal letters, cached health data, Medicare connection, consent preferences, diabetes tracking data (logs, snapshots, and AI insights), and authentication credentials. Your Stripe subscription is cancelled. This action cannot be undone.",
       },
       {
         q: "What data is retained after deletion?",
@@ -128,8 +128,11 @@ export default function FAQPage() {
       <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
         Frequently Asked Questions
       </h1>
-      <p className="text-[var(--text-secondary)] mb-10">
+      <p className="text-[var(--text-secondary)] mb-2">
         How Denali handles your data, privacy, and Medicare guidance.
+      </p>
+      <p className="text-xs text-[var(--text-muted)] mb-10">
+        Effective: March 5, 2026
       </p>
 
       {FAQ_SECTIONS.map((section) => (

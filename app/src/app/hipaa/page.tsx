@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BRAND } from "@/config";
 import { LandingFooter } from "@/components/landing";
 
-const EFFECTIVE_DATE = "March 3, 2026";
+const EFFECTIVE_DATE = "March 5, 2026";
 
 export default function HIPAAPage() {
   return (
@@ -40,7 +40,7 @@ export default function HIPAAPage() {
           may access the following categories of PHI:
         </P>
         <UL>
-          <li>Patient demographics (name, date of birth, Medicare ID)</li>
+          <li>Patient demographics (age and gender only — we do not store full names, dates of birth, addresses, or Medicare beneficiary IDs)</li>
           <li>Medicare enrollment and coverage details</li>
           <li>Claims and Explanation of Benefits (EOBs)</li>
           <li>
@@ -60,8 +60,8 @@ export default function HIPAAPage() {
           <UL>
             <li>
               <strong>Treatment support:</strong> Providing personalized
-              Medicare coverage guidance and diabetes management coaching based
-              on your health records
+              Medicare coverage guidance, diabetes management coaching, and
+              weight management guidance based on your health records
             </li>
             <li>
               <strong>Healthcare operations:</strong> Improving our service
@@ -318,6 +318,12 @@ export default function HIPAAPage() {
           <li>
             <strong>Stripe:</strong> Payment processing only — does not
             process or store any health information. PCI DSS certified.
+          </li>
+          <li>
+            <strong>Resend:</strong> Email delivery for authentication
+            codes and account communications — receives only email
+            addresses. Does not process or store any health information.
+            SOC 2 Type II certified.
           </li>
         </UL>
         <P>

@@ -264,12 +264,29 @@ const checks: Check[] = [
     },
   },
 
+  // ── Resend mentioned in all vendor lists ────────────────────────────────
+  {
+    name: "Resend named as service provider in FAQ, Privacy, HIPAA",
+    run: () => {
+      const faq = /resend/i.test(docs.faq);
+      const privacy = /resend/i.test(docs.privacy);
+      const hipaa = /resend/i.test(docs.hipaa);
+      const pass = faq && privacy && hipaa;
+      return { pass, detail: pass ? undefined : `Resend missing from: ${[!faq && "FAQ", !privacy && "Privacy", !hipaa && "HIPAA"].filter(Boolean).join(", ")}` };
+    },
+  },
+
   // ── Negative checks (things that must NOT appear) ────────────────────────
   {
-    name: "FAQ does not claim 'never store your full name'",
+    name: "No doc claims to store name/DOB/Medicare ID (only age+gender per code)",
     run: () => {
-      const bad = docs.faq.includes("never store your full name");
-      return { pass: !bad, detail: bad ? "Incorrect claim still present in FAQ" : undefined };
+      // Catches "demographics (name, date of birth" — the old false claim
+      const pattern = /demographics \(name,/i;
+      const faqBad = pattern.test(docs.faq);
+      const privBad = pattern.test(docs.privacy);
+      const hipaaBad = pattern.test(docs.hipaa);
+      const bad = faqBad || privBad || hipaaBad;
+      return { pass: !bad, detail: bad ? `False PII claim in: ${[faqBad && "FAQ", privBad && "Privacy", hipaaBad && "HIPAA"].filter(Boolean).join(", ")}` : undefined };
     },
   },
   {
