@@ -1,5 +1,10 @@
+"use client";
+
+import { useState, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LandingFooter } from "@/components/landing";
+import { LandingFooter } from "@/components/landing/LandingFooter";
+import { ArrowRightIcon } from "@/components/icons";
 
 const FAQ_SECTIONS = [
   {
@@ -122,48 +127,142 @@ const FAQ_SECTIONS = [
 ];
 
 export default function FAQPage() {
+  const router = useRouter();
+  const [question, setQuestion] = useState("");
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+
+  function toggleSection(title: string) {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(title)) {
+        next.delete(title);
+      } else {
+        next.add(title);
+      }
+      return next;
+    });
+  }
+
+  function handleAsk(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = question.trim();
+    if (!trimmed) return;
+    router.push(`/app/chat?message=${encodeURIComponent(trimmed)}`);
+  }
+
   return (
     <>
-    <div className="max-w-3xl mx-auto px-4 py-12">
-      <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
-        Frequently Asked Questions
-      </h1>
-      <p className="text-[var(--text-secondary)] mb-2">
-        How Denali handles your data, privacy, and Medicare guidance.
-      </p>
-      <p className="text-xs text-[var(--text-muted)] mb-10">
-        Effective: March 5, 2026
-      </p>
+      <div className="max-w-3xl mx-auto px-4 py-12">
+        <h1 className="font-[var(--font-serif)] text-3xl sm:text-4xl font-normal text-[var(--text-primary)] mb-2">
+          Frequently Asked Questions
+        </h1>
+        <p className="text-[var(--text-secondary)] mb-2">
+          How Denali handles your data, privacy, and Medicare guidance.
+        </p>
+        <p className="text-xs text-[var(--text-muted)] mb-8">
+          Effective: March 5, 2026
+        </p>
 
-      {FAQ_SECTIONS.map((section) => (
-        <div key={section.title} className="mb-10">
-          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4 pb-2 border-b border-[var(--border)]">
-            {section.title}
-          </h2>
-          <div className="space-y-6">
-            {section.items.map((item) => (
-              <div key={item.q}>
-                <h3 className="text-sm font-medium text-[var(--text-primary)] mb-1">
-                  {item.q}
-                </h3>
-                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                  {item.a}
-                </p>
-              </div>
-            ))}
+        {/* Ask bar */}
+        <form onSubmit={handleAsk} className="mb-10">
+          <div className="relative">
+            <input
+              type="text"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="Ask me anything about this website..."
+              className="w-full px-5 py-4 pr-14 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-primary)] text-base placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)]/30 transition-colors"
+            />
+            <button
+              type="submit"
+              disabled={!question.trim()}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-lg bg-[var(--accent-primary)] text-white flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Ask Denali"
+            >
+              <ArrowRightIcon className="w-5 h-5" />
+            </button>
           </div>
-        </div>
-      ))}
+          <p className="text-xs text-[var(--text-muted)] mt-2">
+            No signup required — get an instant answer from Denali.
+          </p>
+        </form>
 
-      <p className="text-sm text-[var(--text-muted)] mt-10">
+        {/* Accordion sections */}
+        <div className="space-y-2">
+          {FAQ_SECTIONS.map((section) => {
+            const isExpanded = expandedSections.has(section.title);
+            return (
+              <div
+                key={section.title}
+                className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] overflow-hidden"
+              >
+                <button
+                  onClick={() => toggleSection(section.title)}
+                  className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[var(--bg-tertiary)] transition-colors"
+                  aria-expanded={isExpanded}
+                >
+                  <span className="text-base font-semibold text-[var(--text-primary)]">
+                    {section.title}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {section.items.length}
+                    </span>
+                    <ChevronIcon
+                      className={`w-5 h-5 text-[var(--text-muted)] transition-transform duration-200 ${
+                        isExpanded ? "rotate-180" : ""
+                      }`}
+                    />
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div className="px-5 pb-5 space-y-5 border-t border-[var(--border)]">
+                    {section.items.map((item) => (
+                      <div key={item.q} className="pt-4">
+                        <h3 className="text-sm font-medium text-[var(--text-primary)] mb-1.5">
+                          {item.q}
+                        </h3>
+                        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                          {item.a}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <p className="text-sm text-[var(--text-muted)] mt-10">
           Have more questions?{" "}
-          <Link href="/app/chat" className="text-[var(--accent-primary)] hover:underline">
+          <Link
+            href="/app/chat"
+            className="text-[var(--accent-primary)] hover:underline"
+          >
             Ask Denali
           </Link>{" "}
           or email support.
         </p>
-    </div>
-    <LandingFooter />
-  </>
+      </div>
+      <LandingFooter />
+    </>
+  );
+}
+
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
   );
 }
