@@ -139,7 +139,7 @@ export function AppHeader() {
                   key={href}
                   href={href}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                    "flex items-center gap-2 px-4 py-2 rounded-lg text-base font-medium transition-colors",
                     isActive
                       ? "bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]"
                       : "text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
@@ -226,7 +226,7 @@ export function AppHeader() {
             ) : (
               <Link
                 href="/app/settings"
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
+                className="px-5 py-2.5 rounded-lg text-base font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
               >
                 Sign In
               </Link>
