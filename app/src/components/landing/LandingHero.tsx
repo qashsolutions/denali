@@ -59,7 +59,7 @@ export function LandingHero({ section }: LandingHeroProps) {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             {/* Primary CTA */}
             <Link
-              href={content?.cta_primary_link || "/app"}
+              href={content?.cta_primary_link || "/app/chat"}
               className="group flex items-center gap-2 px-8 py-4 rounded-full bg-[var(--accent-primary)] text-white font-medium text-base tracking-wide transition-opacity hover:opacity-90"
             >
               {content?.cta_primary || "Ask About Coverage"}

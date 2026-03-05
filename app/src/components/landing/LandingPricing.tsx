@@ -1,15 +1,60 @@
 import Link from "next/link";
 import { CheckIcon, ArrowRightIcon } from "../icons";
-import { formatPrice, getBillingLabel } from "@/lib/cms";
-import type { PricingPlan } from "@/types/cms";
 
-interface LandingPricingProps {
-  plans: PricingPlan[];
+interface Plan {
+  name: string;
+  price: string;
+  period: string;
+  features: string[];
+  cta: string;
+  href: string;
+  popular?: boolean;
 }
 
-export function LandingPricing({ plans }: LandingPricingProps) {
-  if (!plans || plans.length === 0) return null;
+const PLANS: Plan[] = [
+  {
+    name: "Free",
+    price: "$0",
+    period: "",
+    features: [
+      "1 message per day, no signup",
+      "3 messages per day with free trial",
+      "1 appeal credit during trial",
+      "Medicare coverage lookups",
+    ],
+    cta: "Try It Free",
+    href: "/app/chat",
+  },
+  {
+    name: "Per Appeal",
+    price: "$10",
+    period: "/appeal",
+    features: [
+      "5 messages per day",
+      "1 appeal credit per purchase",
+      "Appeal letters with citations",
+      "Diabetes & obesity guidance",
+    ],
+    cta: "Get Started",
+    href: "/app",
+  },
+  {
+    name: "Monthly",
+    price: "$20",
+    period: "/month",
+    features: [
+      "Unlimited messages",
+      "3 appeal credits per month",
+      "Full diabetes & obesity coaching",
+      "Priority coverage guidance",
+    ],
+    cta: "Subscribe",
+    href: "/app",
+    popular: true,
+  },
+];
 
+export function LandingPricing() {
   return (
     <section className="py-24 sm:py-36">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -19,18 +64,29 @@ export function LandingPricing({ plans }: LandingPricingProps) {
             Simple, Transparent Pricing
           </h2>
           <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-            Start with a free 14-day trial. Only pay when you need more appeal
+            Start with a free 14-day trial. Only pay when you need appeal
             letters.
           </p>
         </div>
 
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto items-stretch">
-          {plans.map((plan) => (
+          {PLANS.map((plan) => (
             <div
-              key={plan.id}
-              className="flex flex-col bg-[var(--bg-secondary)] rounded-xl p-6 sm:p-8 border border-[var(--border)] hover:border-[var(--accent-primary)]/40 transition-colors"
+              key={plan.name}
+              className={`flex flex-col bg-[var(--bg-secondary)] rounded-xl p-6 sm:p-8 border transition-colors ${
+                plan.popular
+                  ? "border-[var(--accent-primary)]/50 ring-1 ring-[var(--accent-primary)]/20"
+                  : "border-[var(--border)] hover:border-[var(--accent-primary)]/40"
+              }`}
             >
+              {/* Popular badge */}
+              {plan.popular && (
+                <span className="self-start text-[10px] font-semibold uppercase tracking-wider text-[var(--accent-primary)] mb-2">
+                  Most Popular
+                </span>
+              )}
+
               {/* Plan Name */}
               <h3 className="font-[var(--font-serif)] text-xl font-normal text-[var(--text-primary)] mb-2">
                 {plan.name}
@@ -39,36 +95,37 @@ export function LandingPricing({ plans }: LandingPricingProps) {
               {/* Price */}
               <div className="mb-6">
                 <span className="font-[var(--font-mono)] text-4xl font-semibold tracking-tight text-[var(--text-primary)]">
-                  {formatPrice(plan.price_cents)}
+                  {plan.price}
                 </span>
-                <span className="font-[var(--font-mono)] text-sm text-[var(--text-muted)] ml-1">
-                  {getBillingLabel(plan.billing_period)}
-                </span>
+                {plan.period && (
+                  <span className="font-[var(--font-mono)] text-sm text-[var(--text-muted)] ml-1">
+                    {plan.period}
+                  </span>
+                )}
               </div>
 
               {/* Features */}
               <ul className="space-y-3 flex-1">
-                {Array.isArray(plan.features) &&
-                  plan.features.map((feature, index) => (
-                    <li key={index} className="flex items-start gap-3">
-                      <CheckIcon className="w-5 h-5 text-[var(--accent-primary)] flex-shrink-0 mt-0.5" />
-                      <span className="text-[var(--text-secondary)]">
-                        {feature}
-                      </span>
-                    </li>
-                  ))}
+                {plan.features.map((feature) => (
+                  <li key={feature} className="flex items-start gap-3">
+                    <CheckIcon className="w-5 h-5 text-[var(--accent-primary)] flex-shrink-0 mt-0.5" />
+                    <span className="text-[var(--text-secondary)]">
+                      {feature}
+                    </span>
+                  </li>
+                ))}
               </ul>
 
-              {/* CTA Button — pinned to bottom */}
+              {/* CTA Button */}
               <Link
-                href="/app"
-                className="group w-full flex items-center justify-center gap-2 py-3 mt-8 rounded-lg font-medium text-sm tracking-wide transition-colors bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)]"
+                href={plan.href}
+                className={`group w-full flex items-center justify-center gap-2 py-3 mt-8 rounded-lg font-medium text-sm tracking-wide transition-colors ${
+                  plan.popular
+                    ? "bg-[var(--accent-primary)] text-white hover:opacity-90"
+                    : "bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)]"
+                }`}
               >
-                {plan.price_cents === 0
-                  ? "Start Free Trial"
-                  : plan.billing_period === "monthly"
-                    ? "Subscribe"
-                    : "Get Started"}
+                {plan.cta}
                 <ArrowRightIcon className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>

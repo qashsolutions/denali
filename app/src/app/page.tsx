@@ -27,7 +27,7 @@ export default async function LandingPage() {
         <LandingHero section={heroSection} />
         <LandingFeatures section={featuresSection} />
         <LandingHowItWorks section={howItWorksSection} />
-        <LandingPricing plans={data.pricing} />
+        <LandingPricing />
         <LandingTestimonials testimonials={data.testimonials} />
       </main>
 
