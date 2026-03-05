@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-04 (Landing page premium redesign — warm palette across entire app, typographic hero with mountain silhouette, 3 health-first feature cards (Diabetes/Obesity/Claims), shared LandingFooter across all pages, animation cleanup, --brand-purple + --font-mono CSS vars; previous: Privacy §2 PII removal, policy change email endpoint, legal pages audited against CMS BB ToS, ECS task def :33)
+     Last updated: 2026-03-04 (CMS provider referral: diabetes/obesity skills instruct Claude to offer NPI provider search, emergency regex expanded for DKA/hypoglycemia, RiskAlerts gains 3 obesity alerts + "Find a specialist" CTAs, HealthAlertsBanner includes isObesityMed, landing page pricing section hardcoded (3 tiers), hero CTA → /app/chat for anonymous users; previous: Landing page premium redesign — warm palette, typographic hero, 3 health-first feature cards, shared LandingFooter, animation cleanup, ECS task def :33)
      Maintainer: @cvr
 -->
 
@@ -174,7 +174,7 @@ Where to find specific logic in the codebase.
 | `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via `query()` (admin DB user, bypasses no RLS — RDS has none). Non-blocking fire-and-forget. Write-side dedup: `FHIR_DATA_ACCESS` skips insert if same user+action logged within 2h (`DEDUP_WINDOWS` map) |
 | `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformPatient()` extracts ONLY age+gender from FHIR Patient — no name/DOB/address/Medicare ID per Privacy §2 + `transformEOB()` extracts PDE info/careTeam/POS/inpatient fields + `classifyDiabetesStatus()`), `eob-clinical.ts` (clinical extraction pipeline — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 8 resource types), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
 | `src/lib/diabetes-insights.ts` | Claude-powered diabetes insight generation via `getClaudeClient()` (Bedrock in production). `generateDiabetesInsight(data)` calls Claude for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls |
-| `src/components/diabetes/` | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from CPT-based `ScreeningHistory[]`), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up, med refill gaps, specialty gaps, post-discharge follow-up), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display) |
+| `src/components/diabetes/` | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from CPT-based `ScreeningHistory[]`), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up, med refill gaps, specialty gaps, post-discharge follow-up, obesity alerts — no counseling/med refill/obesity+diabetes+no endo — with "Find a specialist" CTAs and optional `ctaLabel`), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display) |
 | `src/components/health/DiagnosisSummaryCard.tsx` | Renders "Conditions in Your Claims" list with severity color-coding. `getSeverityConfig()`: structured `DiagnosisSummary` category → `RED_KEYWORDS` (21 terms: neoplasm, cancer, stroke, heart failure, morbid obesity, severe obesity, obesity class iii, etc.) → `AMBER_KEYWORDS` (27 terms: hypertension, thyroid, anemia, COPD, etc.) → gray. `cleanDiagnosisName()` strips U+25CC combining mark artifacts from FHIR data |
 | `src/hooks/useDiabetesSnapshots.ts` | Fetches longitudinal lab data from `diabetes_snapshots`. Returns `{ snapshots, a1cHistory, isLoading }` |
 | `src/hooks/useDiabetesLog.ts` | CRUD for daily log entries via `/api/diabetes/log`. Returns `{ entries, isLoading, addEntry, deleteEntry }`. IndexedDB cache + offline queue for POST (optimistic local add) |
@@ -427,7 +427,7 @@ The system uses gates that return early and prevent later skills from loading pr
 
 | Priority | Trigger | Skill Loaded | Gate Behavior |
 |----------|---------|-------------|---------------|
-| 1 | Emergency symptoms detected | RED_FLAG_SKILL | Highest priority, overrides all |
+| 1 | Emergency symptoms detected | RED_FLAG_SKILL | Highest priority, overrides all. Regex covers: chest pain+SOB, sudden headache/numbness, DKA (fruity breath+thirst, extreme thirst+urination), severe hypoglycemia (shaking+sweating+sugar, seizure+sugar, passed out+sugar) |
 | 2 | Missing name OR ZIP | ONBOARDING | + TOOL_RESTRAINT (no tools allowed) |
 | 3 | Has procedure but missing symptoms/duration | SYMPTOM_GATHERING | + TOOL_RESTRAINT (+ PROCEDURE_SKILL for clarification) |
 | 4 | Has symptom info but no provider confirmed | PROVIDER_VERIFICATION | NPI tools only |
@@ -455,8 +455,8 @@ The system uses gates that return early and prevent later skills from loading pr
 |-------|------|---------|
 | `HEALTH_RECORDS_SKILL` | `src/lib/skills/health-records.ts` | `hasHealthData` or `hasRecentDenials` |
 | `MEDICARE_NOTIFICATIONS_SKILL` | `src/lib/skills/medicare-notifications.ts` | `hasHealthData && hasRecentChanges` |
-| `DIABETES_PREVENTION_SKILL` | `src/lib/skills/diabetes-prevention.ts` | `hasDiabetesContext` |
-| `OBESITY_PREVENTION_SKILL` | `src/lib/skills/obesity-prevention.ts` | `hasObesityContext` — obesity diagnosis (E66), obesity medications, or user keywords (weight loss, bariatric, BMI, Wegovy, etc.) |
+| `DIABETES_PREVENTION_SKILL` | `src/lib/skills/diabetes-prevention.ts` | `hasDiabetesContext` — includes provider search (NPI) for endocrinologists/dietitians/MDPP, urgent A1C values (≥12% contact doctor, ≥14% DKA warning) |
+| `OBESITY_PREVENTION_SKILL` | `src/lib/skills/obesity-prevention.ts` | `hasObesityContext` — obesity diagnosis (E66), obesity medications, or user keywords (weight loss, bariatric, BMI, Wegovy, etc.). Includes severity awareness (morbid/severe → bariatric/specialist referral), provider search for bariatric surgeons/counselors |
 | `EOB_EXPLAINER_SKILL` | `src/skills/domain/eob-explainer.ts` | `hasEOBQuestion && hasHealthData` — user asks about bills/claims with Blue Button connected |
 | `OUTCOME_PROMPTING_SKILL` | `src/skills/domain/outcome-prompting.ts` | Returning user with pending appeal (`hasUnreportedOutcome`). Outcome reported via `/api/appeal-outcome` → `recordAppealOutcome()` + `applyOutcomeIncentive()` (free appeal credit) |
 | `COUNSELOR_SKILL` | `src/skills/channel/counselor.ts` | `role === "counselor"` |
@@ -822,11 +822,11 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 - Tabs: Home, Health, Ask Denali, Settings (4 tabs, fixed bottom)
 
 **Landing Page** (`src/components/landing/`) — premium warm medical reference design:
-- **Hero** (`LandingHero.tsx`): Typographic hero with subtle mountain silhouette SVG (two path layers at opacity 0.08/0.12). Serif heading, decorative accent line, refined pill CTAs, uppercase trust line. Tagline: diabetes + obesity + coverage + denials + appeals.
+- **Hero** (`LandingHero.tsx`): Typographic hero with subtle mountain silhouette SVG (two path layers at opacity 0.08/0.12). Serif heading, decorative accent line, refined pill CTAs, uppercase trust line. Tagline: diabetes + obesity + coverage + denials + appeals. Primary CTA defaults to `/app/chat` (not `/app`) so anonymous users land on chat directly.
 - **Features** (`LandingFeatures.tsx`): 3 health-first cards prioritizing CMS diabetes/obesity categories: (1) Diabetes Care — A1C, screenings, meds, coverage; (2) Obesity Care — GLP-1s, bariatric, counseling, coverage; (3) Claims & Appeals — Medicare data + appeal letters. Section header uses CMS language: "Personalized support for **diabetes** and **obesity**". Cards: `rounded-xl`, monospace step labels (`01`/`02`/`03`), monochromatic tags, subtle border hover.
 - **Illustrations** (`illustrations/`): Static SVGs (no animation classes). `DiabetesCareIllustration`, `WeightManagementIllustration` (scale + gauge + trend + capsule), `HealthRecordsIllustration`.
 - **HowItWorks** (`LandingHowItWorks.tsx`): Clean typographic steps with monospace numbers, serif labels, sans hints. Vertical separators on desktop, horizontal on mobile. Hover `-translate-y-1`.
-- **Pricing** (`LandingPricing.tsx`): Serif plan names, monospace prices (`--font-mono`), warm amber check icons.
+- **Pricing** (`LandingPricing.tsx`): Hardcoded 3 tiers (Free/Per Appeal $10/Monthly $20). No DB dependency — `pricing_plans` table no longer used. Free tier CTA → `/app/chat` (anonymous access). Monthly has "Most Popular" badge + accent ring. Serif plan names, monospace prices (`--font-mono`), warm amber check icons.
 - **Testimonials** (`LandingTestimonials.tsx`): Serif italic quotes, warm amber stars, flat avatars.
 - Section bg alternation: Hero `bg-primary`, Features `bg-secondary`, HowItWorks `bg-secondary`, Pricing `bg-primary`, Testimonials `bg-secondary`, Footer `bg-secondary`.
 
