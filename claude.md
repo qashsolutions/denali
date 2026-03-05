@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-04 (CMS provider referral: diabetes/obesity skills instruct Claude to offer NPI provider search, emergency regex expanded for DKA/hypoglycemia, RiskAlerts gains 3 obesity alerts + "Find a specialist" CTAs, HealthAlertsBanner includes isObesityMed, landing page pricing section hardcoded (3 tiers), hero CTA → /app/chat for anonymous users; previous: Landing page premium redesign — warm palette, typographic hero, 3 health-first feature cards, shared LandingFooter, animation cleanup, ECS task def :33)
+     Last updated: 2026-03-05 (5-tier pricing restructure: Anonymous/Trial/Starter/Plus/Unlimited, Sonnet 4.6 for chat, weekly frequency limits, rolling anonymous cap, all paid plans monthly subscriptions; previous: CMS provider referral, emergency regex expanded, RiskAlerts obesity alerts, landing page pricing hardcoded, ECS task def :33)
      Maintainer: @cvr
 -->
 
@@ -60,12 +60,14 @@
 | **Target User** | Original Medicare & Medicare Advantage patients & caregivers |
 | **NOT for** | Commercial payers, Medicaid, billers, coders |
 | **Tone** | Warm, simple, no jargon, empathetic, 8th grade reading level |
-| **Anonymous** | 1 message/day, no signup |
-| **Trial** | 14-day free trial, 3 msgs/day, 1 appeal credit (email OTP) |
-| **Paid** | $10/appeal (5 msgs/day) or $20/month (3 appeals, unlimited msgs) |
+| **Anonymous** | 4 messages total in 14-day window, no signup |
+| **Trial** | 14-day free trial, 2 msgs/day, 1 day/week, no appeals (email OTP) |
+| **Starter** | $10/month, 2 msgs/day, 1 day/week, 1 appeal credit |
+| **Plus** | $20/month, 5 msgs/day, 5 days/week, 2 appeal credits |
+| **Unlimited** | $60/month, unlimited msgs, unlimited appeals |
 | **Tech Stack** | Next.js PWA, AWS RDS+Cognito (auth+DB), Claude via Bedrock (agentic), Stripe |
-| **AI Model** | Claude via AWS Bedrock (no MCP servers on Bedrock — local tools only) |
-| **Deploy** | AWS ECS/Fargate + ALB (migrating from Vercel) |
+| **AI Model** | Sonnet 4.6 (chat) / Opus 4.6 (appeals) via AWS Bedrock |
+| **Deploy** | AWS ECS/Fargate + ALB |
 
 ---
 
@@ -155,7 +157,7 @@ Three toggles in Settings → Privacy & Data. **All default OFF.** Enforcement i
 - **CRITICAL: Never call RDS from client-side code.** All data access goes through API routes. Pattern: client calls `fetch("/api/route", { credentials: "include" })` → server route calls `getAuthUser(request)` + `query()` → returns JSON. Examples: `useConversationHistory` → `/api/conversations`, `useHealthData` → `/api/fhir/data`, `useAuth` → `/api/profile`, `loadConversation()` → `/api/conversations/[id]`.
 - **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
 - **CRITICAL: SSR-safe hooks must initialize with server-matching values.** `useOnlineStatus` must use `useState(true)` — NOT `useState(typeof navigator !== "undefined" ? navigator.onLine : true)`. The latter reads `navigator.onLine` on the client during hydration, which may return `false` (flaky connection, SW cached page), causing React hydration mismatch (#418) because the server rendered `null` but the client renders a div.
-- **All AI calls route through Bedrock in production.** ECS has no `ANTHROPIC_API_KEY` → `getClaudeClient()` returns `AnthropicBedrock` (IAM auth). Both chat (`claude.ts`) and diabetes insights (`diabetes-insights.ts`) use `getClaudeClient()`. MCP servers were fully replaced by local tool executors calling public government APIs directly — no data leaves AWS for AI processing.
+- **All AI calls route through Bedrock in production.** ECS has no `ANTHROPIC_API_KEY` → `getClaudeClient()` returns `AnthropicBedrock` (IAM auth). Chat uses Sonnet 4.6 (`global.anthropic.claude-sonnet-4-6`); appeals use Opus 4.6 (`global.anthropic.claude-opus-4-6-v1`). Both `claude.ts` and `diabetes-insights.ts` use `getClaudeClient()`. Bedrock model access is auto-enabled (no manual activation needed); controlled via IAM policies on `denali-ecs-task-role`. MCP servers were fully replaced by local tool executors calling public government APIs directly — no data leaves AWS for AI processing.
 
 ---
 
@@ -184,7 +186,7 @@ Where to find specific logic in the codebase.
 | `src/components/landing/LandingFooter.tsx` | Shared footer across ALL pages (landing, blog, legal, app layout). Brand left, legal links right (FAQ, Privacy, Terms, HIPAA). HIPAA/BAA notice + disclaimer. Import directly (NOT from barrel) in `"use client"` components to avoid pulling `pg` into client bundle |
 | `src/lib/dashboard-context.ts` | Dashboard personalization data layer. Types: `DashboardContext`, `DashboardUser`, `DashboardCoverage`, `DashboardMedicare`, `DashboardDiabetes`, `DashboardObesity`, `DashboardAppeals`, `Badge`, `Nudge`. `buildDashboardContext(input)` constructs context from real hook data (useAuth + useHealthData). Helpers: `getTimeOfDay()`, `getPersonalizedGreeting()`, `buildStatusSummary()`, `selectNudge()` (priority-sorted), badge getters per card (`getCoverageBadge`, `getDashboardBadge`, `getDiabetesBadge`, `getObesityBadge`, `getAppealsBadge`). Mock factory `getMockDashboardContext()` for tests only |
 | `src/app/app/page.tsx` | Authenticated dashboard home page. **Auth-gated via middleware** (anonymous → redirect to `/`). Uses `useAuth()` + `useHealthData()` for real data via `buildDashboardContext()`. 5 UX enhancements: (1) `HeroSection` — time-aware greeting + contextual status summary + time-of-day gradient, (2) `StatusBadge` + per-card badge logic (pill-shaped, solid/outline variants), (3) `NudgeStrip` — priority-sorted contextual message with CTA + dismiss, (4) `WalkthroughBar` — 4-step guided tour (first visit only, sessionStorage flag), (5) `AnimatedFeatureCard` — staggered fade-up + hover lift + SVG ambient animations. 5 feature cards: Coverage Check (green), Medicare Dashboard (coral), Diabetes Care (blue, conditional on `hasContext`), Weight Management (amber, conditional on `obesity.classification !== "none"`), Appeals (purple) |
-| `src/app/app/chat/page.tsx` | Ask Denali chat page. 6 suggestion cards on empty state: Check Coverage (blue), Appeal a Denial (red), Understand My Bill (amber), Preventive Care (green), Diabetes Care (purple), Weight Management (orange). Intercepts "Upgrade plan" → opens `PaywallModal` (Stripe checkout for $10 single / $20 monthly). Intercepts "Sign up" → navigates to `/app/settings` (email OTP flow). **Consent-gated health data bridge**: when `consent.health_data_ai` is OFF, `initialSessionState` returns minimal state (`healthDataAvailable: false`, `blueButtonConnected: true`, no health fields). Grey consent banner shown when Blue Button connected but AI toggle OFF, with link to Settings. MFA gate for authenticated non-admin users. Payment toast on `?payment=success` |
+| `src/app/app/chat/page.tsx` | Ask Denali chat page. 6 suggestion cards on empty state: Check Coverage (blue), Appeal a Denial (red), Understand My Bill (amber), Preventive Care (green), Diabetes Care (purple), Weight Management (orange). Intercepts "Upgrade plan" → opens `PaywallModal` (Starter $10 / Plus $20 / Unlimited $60 subscriptions). Intercepts "Sign up" → navigates to `/app/settings` (email OTP flow). **Consent-gated health data bridge**: when `consent.health_data_ai` is OFF, `initialSessionState` returns minimal state (`healthDataAvailable: false`, `blueButtonConnected: true`, no health fields). Grey consent banner shown when Blue Button connected but AI toggle OFF, with link to Settings. MFA gate for authenticated non-admin users. Payment toast on `?payment=success` |
 | `src/lib/cms.ts` | CMS content queries via `query()`: `getBlogPosts(category?)`, `getBlogPost(slug)`, `getBlogSlugs()`, `getUserTopics(userId)`, `getPersonalizedBlogPosts(topics?)`, `getDefaultBlogPosts()` (weekly-rotating: 1 post per topic via ISO week number), `getLandingPageData()`, `getSiteSettings()`, `getPricingPlans()`, `getTestimonials()`. All have try/catch with empty defaults for build-time resilience |
 | `src/app/blog/page.tsx` | Blog listing page. SSR with `revalidate = 3600`. Three display modes: (1) `?category=` or `?view=all` → all posts with category tabs, (2) signed-in user with topic prefs → personalized grouped view, (3) default (anonymous/no prefs) → 3 weekly-rotating posts (one per topic) with "Browse all" link. Reads JWT from cookie (lightweight decode, no full auth). Falls back gracefully on any error |
 | `src/app/blog/[slug]/page.tsx` | Individual blog post page. Dynamic route, ISR. Uses `getBlogPost(slug)` + `BlogArticle`. `generateStaticParams()` via `getBlogSlugs()` |
@@ -197,9 +199,9 @@ Where to find specific logic in the codebase.
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table. Default all OFF. Three enforcement points: `health_data_ai` → chat/page.tsx strips health data from sessionState + context.ts blocks prompt injection; `health_data_storage` → useHealthData.ts gates IndexedDB caching; `analytics` → conversation-service.ts gates trackEvent calls |
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations. IndexedDB write-through + offline fallback |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
-| `src/config/pricing.ts` | Pricing constants: credit amounts (`TRIAL_APPEAL_CREDITS: 1`, `MONTHLY_APPEAL_CREDITS: 3`), trial duration, daily chat limits (`ANON: 1`, `TRIAL: 3`, `PER_APPEAL: 5`, `PAID: 0`), Stripe price IDs. `MONTHLY.appealLimit: 3` |
+| `src/config/pricing.ts` | 5-tier pricing: `TRIAL_APPEAL_CREDITS: 0`, daily chat limits (`TRIAL: 2`, `STARTER: 2`, `PLUS: 5`, `UNLIMITED: 0`), weekly limits (`TRIAL: 1`, `STARTER: 1`, `PLUS: 5`, `UNLIMITED: 0`), anonymous rolling cap (`ANON_ROLLING_MAX: 4`, window 14 days), Stripe price IDs for 3 subscriptions (`STARTER/PLUS/UNLIMITED`) |
 | `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade + credit add), `handleSubscriptionEvent()` (lifecycle + monthly credit reset). Uses admin client |
-| `src/components/payment/PaywallModal.tsx` | Paywall UI: plan selection (single/monthly), Stripe checkout redirect. CSS variables for theme. No dev bypass |
+| `src/components/payment/PaywallModal.tsx` | Paywall UI: 3-plan selector (Starter/Plus/Unlimited), Stripe subscription checkout. CSS variables for theme. No dev bypass |
 | `src/components/appeal/AppealGate.tsx` | Appeal access orchestration: email OTP → TOTP → access check → PaywallModal pipeline |
 | `src/middleware.ts` | Cognito JWT middleware + auth redirects. (0) API routes (`/api/*`) get early `NextResponse.next()` — no session enforcement or silent refresh (prevents recursive fetch + mid-request cookie clearing). (1) 7-day session lifetime enforcement via `session_issued_at` cookie. (2) Silent token refresh when `access_token` expired but `refresh_token` exists. (3) Signed-in users on `/` → redirect to `/app`. (4) Anonymous users on `/app` → redirect to `/`. Auth detection: checks `access_token` cookie existence. |
 | `src/lib/offline-cache.ts` | IndexedDB wrapper via `idb`. 6 stores (conversations, health-data, diabetes-log, diabetes-insights, profile, offline-queue). Exports `cacheSet()`, `cacheGet()`, `cacheGetIfFresh()`, `queueOfflineRequest()`, `getOfflineQueue()`, `removeFromQueue()`. TTL constants: profile=4h, everything else=24h |
@@ -350,9 +352,9 @@ These tools are local executors in `tools/index.ts` that call free public govern
 
 | Table | Purpose |
 |-------|---------|
-| `users` | Auth, phone (primary), email, plan (`trial`/`per_appeal`/`monthly` — CHECK constraint), `is_admin` (bypass all limits), theme, accessibility settings |
+| `users` | Auth, phone (primary), email, plan (`trial`/`starter`/`plus`/`unlimited` — CHECK constraint), `is_admin` (bypass all limits), theme, accessibility settings |
 | `user_verification` | Email + mobile OTP status |
-| `subscriptions` | Plan type (`trial`/`per_appeal`/`monthly` — CHECK constraint), Stripe customer ID, billing status, `trial_start`/`trial_end`/`trial_converted`. RLS: users SELECT/INSERT/UPDATE own rows |
+| `subscriptions` | Plan type (`trial`/`starter`/`plus`/`unlimited` — CHECK constraint), Stripe customer ID, billing status, `trial_start`/`trial_end`/`trial_converted`. RLS: users SELECT/INSERT/UPDATE own rows |
 | `usage` | Appeal count (lifetime) + appeal credits (available) per email. Credits decremented on appeal save, added by Stripe fulfillment |
 | `conversations` | Chat history per user |
 | `messages` | Individual messages (role: user/assistant) |
@@ -412,6 +414,8 @@ These tools are local executors in `tools/index.ts` that call free public govern
 | `get_denial_pattern_for_carc(carc_code)` | Match CARC code to denial pattern with appeal strategy |
 | `get_denial_patterns_for_cpt(cpt_code)` | Get denial patterns commonly associated with a CPT code |
 | `check_and_increment_chat(p_identifier, p_daily_limit)` | Atomic rate limit check: returns `{allowed, count}`. SECURITY DEFINER — upserts `chat_daily_usage` and increments count if under limit |
+| `check_weekly_frequency(p_identifier, p_max_days)` | Weekly frequency check: returns `{allowed, days_used}`. Counts distinct days chatted in current week. 0 = unlimited. SECURITY DEFINER |
+| `check_rolling_chat_limit(p_identifier, p_max, p_window_days)` | Rolling cap check (anonymous): returns `{allowed, total, is_last}`. Sums messages in window. `is_last` = true on final allowed message. SECURITY DEFINER |
 | `get_grouped_audit_logs(p_user_id, p_limit, p_offset)` | Returns audit logs grouped by `action + resource_type + DATE(created_at)` with `entry_count`. SECURITY DEFINER. Used by `/api/audit-log` for daily grouping with count badges |
 | `delete_user_cascade(user_id)` | GDPR/CCPA compliant deletion |
 
@@ -523,26 +527,32 @@ Reuses existing `sessionState` (ICD-10, CPT, policy refs from earlier coverage f
 
 ### Pricing
 
-| Plan | Price | Appeals | Chat Messages/Day | Auth Required |
-|------|-------|---------|-------------------|---------------|
-| Anonymous | $0 | — | 1 | None |
-| Trial (14 days) | $0 | 1 credit | 3 | Email OTP |
-| Expired (post-trial) | — | — | 0 (locked) | Email OTP |
-| Pay Per Appeal | $10/appeal | 1 credit per purchase | 5 | Email OTP |
-| Monthly | $20/month | 3 credits/month | Unlimited | Email OTP |
-| **Admin** | — | Unlimited | Unlimited | `is_admin = TRUE` on `users` row |
+| Plan | Price | Appeals/30d | Chat Messages/Day | Weekly Frequency | Auth Required |
+|------|-------|-------------|-------------------|-----------------|---------------|
+| Anonymous | $0 | — | N/A | N/A | None |
+| Trial (14 days) | $0 | 0 | 2 | 1 day/week | Email OTP |
+| Expired (post-trial) | — | — | 0 (locked) | — | Email OTP |
+| Starter | $10/month | 1 credit | 2 | 1 day/week | Email OTP |
+| Plus | $20/month | 2 credits | 5 | 5 days/week | Email OTP |
+| Unlimited | $60/month | Unlimited | Unlimited | Unlimited | Email OTP |
+| **Admin** | — | Unlimited | Unlimited | Unlimited | `is_admin = TRUE` on `users` row |
 
-Every signup = automatic 14-day trial. After trial expires → locked (0 chats, must pay). Plan values are `trial`, `per_appeal`, `monthly` only (no `free` — unified into `trial`). Appeal access is credit-based via `usage.appeal_credits` column. `AppealAccessStatus` returns `"available"` (has credits), `"paywall"` (no credits), or `"allowed"` (admin/counselor). Chat rate limiting enforced via `check_and_increment_chat` RPC (identifier = user_id for authenticated, IP for anonymous). Returns 429 when limit exceeded; returns 403 `TRIAL_EXPIRED` when expired trial users try to chat. **Admin users** (`users.is_admin`) bypass all rate limits and appeal paywalls.
+**Anonymous**: 4 messages total in a rolling 14-day window. On the 4th message, a signup prompt is shown. After 4 messages, blocked until the window rolls forward.
+
+Every signup = automatic 14-day trial. After trial expires → locked (0 chats, must pay). Plan values are `trial`, `starter`, `plus`, `unlimited` only. All paid plans are monthly subscriptions (no one-time payments). Appeal access is credit-based via `usage.appeal_credits` column; `unlimited` plan bypasses credit checks entirely. `AppealAccessStatus` returns `"available"` (has credits), `"paywall"` (no credits), or `"allowed"` (admin/counselor/unlimited). Chat rate limiting enforced via three layers: (1) `check_rolling_chat_limit` for anonymous rolling cap, (2) `check_weekly_frequency` for weekly day limits, (3) `check_and_increment_chat` for daily limits. Returns 429 `ROLLING_LIMIT` / `WEEKLY_LIMIT` / `RATE_LIMITED`; returns 403 `TRIAL_EXPIRED` when expired trial users try to chat. **Admin users** (`users.is_admin`) bypass all rate limits and appeal paywalls.
+
+**AI Model**: Sonnet 4.6 for all chat messages (cost-efficient). Opus 4.6 for appeal letter generation only (higher quality for formal letters).
 
 ### Auth Gating
 
 | Feature | Auth Required |
 |---------|---------------|
-| Anonymous chat (1 msg/day) | None |
-| 14-day trial (3 msgs/day, 1 appeal credit) | Email OTP |
-| Post-trial (locked) | Email OTP + Payment to continue |
-| Per-appeal (5 msgs/day, 1 credit per $10) | Email OTP + Payment |
-| Monthly (unlimited chat, 3 appeals/month) | Email OTP + $20/month |
+| Anonymous chat (4 msgs/14-day rolling) | None |
+| 14-day trial (2 msgs/day, 1 day/week) | Email OTP |
+| Post-trial (locked) | Email OTP + Subscription to continue |
+| Starter (2 msgs/day, 1 day/week, 1 appeal) | Email OTP + $10/month |
+| Plus (5 msgs/day, 5 days/week, 2 appeals) | Email OTP + $20/month |
+| Unlimited (everything unlimited) | Email OTP + $60/month |
 | Medicare health data | Email OTP + Blue Button OAuth (+ TOTP challenge if user has opted in) |
 
 ### AAL2 Compliance Strategy (CMS A1 / NIST 800-63B)
@@ -554,10 +564,11 @@ Every signup = automatic 14-day trial. After trial expires → locked (0 chats, 
 ```
 1. User requests appeal letter
 2. Check email:
-   - Not verified -> Signup wall (email OTP → auto-trial with 1 credit)
+   - Not verified -> Signup wall (email OTP → auto-trial, 0 appeal credits)
+   - Verified, plan = unlimited -> Generate letter (no credit tracking)
    - Verified, appeal_credits > 0 -> Generate letter, decrement credit, increment count
-   - Verified, appeal_credits = 0 -> Show paywall ($10 single or $20/month)
-3. After payment -> Credit added, reveal letter
+   - Verified, appeal_credits = 0 (or trial) -> Show paywall (Starter $10 / Plus $20 / Unlimited $60)
+3. After subscription -> Credits added per plan, reveal letter
 ```
 
 ### Stripe Payment Architecture
@@ -574,11 +585,11 @@ PaywallModal (client) → POST /api/checkout → Stripe Checkout Session
                                         └── handleSubscriptionEvent() → sync status
 ```
 
-**Sandbox tested** (2026-03-03): Both plans verified end-to-end on denali.health — $10 single appeal checkout and $20/month subscription checkout complete successfully via Stripe sandbox. PaywallModal now wired to chat page "Upgrade plan" button (previously was a dead-end text suggestion). Switch to live keys for production.
+**Stripe products** (2026-03-05): 3 products in Stripe sandbox — `STRIPE_PRICE_PAY_PER_CLAIM` ($10/mo), `STRIPE_PRICE_MONTHLY` ($20/mo), `STRIPE_PRICE_UNLIMITED` ($60/mo). Price IDs in AWS Secrets Manager (`denali/prod/app`). Switch to live keys for production.
 
-**Checkout route** (`checkout/route.ts`): Expects `plan: "single" | "monthly"` (not `"per_appeal"`). Maps to Stripe Price IDs via `PRICING.SINGLE_APPEAL.stripePriceId` / `PRICING.MONTHLY.stripePriceId`.
+**Checkout route** (`checkout/route.ts`): Expects `plan: "starter" | "plus" | "unlimited"`. All plans use `mode: "subscription"`. Maps to Stripe Price IDs via `PRICING.STARTER/PLUS/UNLIMITED.stripePriceId`.
 
-Key webhook events: `checkout.session.completed` → `fulfillCheckoutSession()` (reads metadata → plan upgrade to `per_appeal` or `monthly` + credit add). `customer.subscription.updated/deleted` → `handleSubscriptionEvent()` (syncs status). `invoice.payment_failed` → marks `past_due`.
+Key webhook events: `checkout.session.completed` → `fulfillCheckoutSession()` (reads metadata → plan upgrade to `starter`, `plus`, or `unlimited` + credit reset). `customer.subscription.updated/deleted` → `handleSubscriptionEvent()` (syncs status + plan-aware credit reset). `invoice.payment_failed` → marks `past_due`.
 
 Subscription states: `active` (full access) → `past_due` (retry) → `cancelled` (reverts to expired/locked).
 
@@ -588,7 +599,7 @@ Subscription states: `active` (full access) → `past_due` (retry) → `cancelle
 - **CRITICAL: Never return `{ url: null }` from checkout** — grants free access. Returns 503 error when Stripe not configured.
 - **Stripe SDK v20**: `current_period_end` lives on `subscription.items.data[0]`, NOT directly on `subscription`.
 - **Idempotent fulfillment**: `fulfillCheckoutSession()` is safe to call multiple times.
-- **Settings page PaywallModal**: Upgrade button in Settings opens `PaywallModal` inline (not redirect to `/app/chat`). Settings displays "Monthly Plan" (not "Unlimited Plan") with subtitle showing credits/month + unlimited messages.
+- **Settings page PaywallModal**: Upgrade button in Settings opens `PaywallModal` inline (not redirect to `/app/chat`). Settings displays plan name (Starter/Plus/Unlimited) with subtitle showing credits + message limits per plan.
 
 ### Environment Variables
 
@@ -598,10 +609,10 @@ All runtime env vars are stored in **AWS Secrets Manager** and injected by ECS a
 # Injected by ECS from Secrets Manager at runtime:
 # NOTE: Do NOT set ANTHROPIC_API_KEY in ECS — its absence triggers AWS Bedrock IAM auth
 # ANTHROPIC_API_KEY=sk-ant-...          # Only for Vercel/local — omit for ECS/Bedrock
-ANTHROPIC_MODEL=arn:aws:bedrock:us-east-1:236823123138:inference-profile/global.anthropic.claude-opus-4-6-v1
+ANTHROPIC_MODEL=arn:aws:bedrock:us-east-1:236823123138:inference-profile/global.anthropic.claude-sonnet-4-6
 ANTHROPIC_APPEAL_MODEL=arn:aws:bedrock:us-east-1:236823123138:inference-profile/global.anthropic.claude-opus-4-6-v1
 # Bedrock: prefix is "global." NOT "us.", no ":0" suffix, full ARN required
-# Vercel/local values: claude-sonnet-4-5-20250929 (chat) / claude-opus-4-6 (appeals)
+# Vercel/local values: claude-sonnet-4-6-20260301 (chat) / claude-opus-4-6 (appeals)
 DATABASE_URL=postgresql://...             # RDS connection string
 COGNITO_USER_POOL_ID=us-east-1_...
 COGNITO_CLIENT_ID=...
@@ -615,9 +626,9 @@ BLUEBUTTON_BASE_URL=https://sandbox.bluebutton.cms.gov
 FHIR_TOKEN_ENCRYPTION_KEY=...             # 32-byte hex key for AES-256-GCM token encryption
 STRIPE_SECRET_KEY=sk_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_PRICE_PAY_PER_CLAIM=price_...
-STRIPE_PRICE_UNLIMITED_MONTHLY=price_...
-STRIPE_PRICE_UNLIMITED_ANNUAL=price_...
+STRIPE_PRICE_PAY_PER_CLAIM=price_...     # Starter $10/mo subscription
+STRIPE_PRICE_MONTHLY=price_...            # Plus $20/mo subscription (was STRIPE_PRICE_UNLIMITED_MONTHLY)
+STRIPE_PRICE_UNLIMITED=price_...          # Unlimited $60/mo subscription (new)
 
 # Baked into Docker image at build time (GitHub secrets):
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
@@ -826,7 +837,7 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 - **Features** (`LandingFeatures.tsx`): 3 health-first cards prioritizing CMS diabetes/obesity categories: (1) Diabetes Care — A1C, screenings, meds, coverage; (2) Obesity Care — GLP-1s, bariatric, counseling, coverage; (3) Claims & Appeals — Medicare data + appeal letters. Section header uses CMS language: "Personalized support for **diabetes** and **obesity**". Cards: `rounded-xl`, monospace step labels (`01`/`02`/`03`), monochromatic tags, subtle border hover.
 - **Illustrations** (`illustrations/`): Static SVGs (no animation classes). `DiabetesCareIllustration`, `WeightManagementIllustration` (scale + gauge + trend + capsule), `HealthRecordsIllustration`.
 - **HowItWorks** (`LandingHowItWorks.tsx`): Clean typographic steps with monospace numbers, serif labels, sans hints. Vertical separators on desktop, horizontal on mobile. Hover `-translate-y-1`.
-- **Pricing** (`LandingPricing.tsx`): Hardcoded 3 tiers (Free/Per Appeal $10/Monthly $20). No DB dependency — `pricing_plans` table no longer used. Free tier CTA → `/app/chat` (anonymous access). Monthly has "Most Popular" badge + accent ring. Serif plan names, monospace prices (`--font-mono`), warm amber check icons.
+- **Pricing** (`LandingPricing.tsx`): Hardcoded 4 tiers (Free Trial / Starter $10 / Plus $20 / Unlimited $60). No DB dependency. Free Trial CTA → `/app/chat` (anonymous access). Plus has "Most Popular" badge + accent ring. Features show msgs/day + days/week limits. Serif plan names, monospace prices (`--font-mono`), warm amber check icons.
 - **Testimonials** (`LandingTestimonials.tsx`): Serif italic quotes, warm amber stars, flat avatars.
 - Section bg alternation: Hero `bg-primary`, Features `bg-secondary`, HowItWorks `bg-secondary`, Pricing `bg-primary`, Testimonials `bg-secondary`, Footer `bg-secondary`.
 
@@ -1184,7 +1195,7 @@ Verified answers to CMS early adopter questionnaire, backed by code and AWS infr
 > DenaliHealth connects to Medicare claims data through Blue Button 2.0 and uses Claude (Anthropic) on AWS Bedrock to deliver personalized coverage guidance for beneficiaries with diabetes and obesity. The app extracts conditions, medications, screenings, and denial history from a patient's own claims, then provides tailored support — offering direct assistance when appropriate and directing patients to care from a health professional when needed.
 
 **Q: If data is shared with third parties, how will you obtain informed consent?**
-DenaliHealth does not share patient health data (PHI) with any third party. All health data processing runs through Claude Opus 4.6 on AWS Bedrock — data never leaves AWS. Two service providers receive limited operational data (email address only) under data processing agreements: Stripe (payments) and Resend (email delivery). Patient consent for health data use is obtained through three granular opt-in toggles (all default OFF) in Settings > Privacy & Data: Health Data AI, Health Data Storage, Analytics. Medicare data access requires separate Blue Button OAuth through Medicare.gov. Consent changes take effect immediately (including mid-conversation) and are audit-logged.
+DenaliHealth does not share patient health data (PHI) with any third party. All health data processing runs through Claude on AWS Bedrock (Sonnet 4.6 for chat, Opus 4.6 for appeals) — data never leaves AWS. Two service providers receive limited operational data (email address only) under data processing agreements: Stripe (payments) and Resend (email delivery). Patient consent for health data use is obtained through three granular opt-in toggles (all default OFF) in Settings > Privacy & Data: Health Data AI, Health Data Storage, Analytics. Medicare data access requires separate Blue Button OAuth through Medicare.gov. Consent changes take effect immediately (including mid-conversation) and are audit-logged.
 
 **Q: Do third-party vendors commit to data protection requirements?**
 Yes. No third-party vendor has access to patient health data. AWS: BAA executed 2026-02-25, HIPAA-eligible, SOC 2 Type II, FedRAMP High, HITRUST certified. Stripe: PCI DSS Level 1 certified, receives only email + payment identifiers. Resend: SOC 2 Type II certified, receives only email addresses. Public government APIs (NLM, CMS, NPPES) receive only generic search terms — never patient data.

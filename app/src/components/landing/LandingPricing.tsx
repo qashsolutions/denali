@@ -8,29 +8,30 @@ interface Plan {
   features: string[];
   cta: string;
   href: string;
+  popular?: boolean;
 }
 
 const PLANS: Plan[] = [
   {
-    name: "Free",
+    name: "Free Trial",
     price: "$0",
-    period: "",
+    period: "14 days",
     features: [
-      "1 message per day, no signup",
-      "3 messages per day with free trial",
-      "1 appeal credit during trial",
+      "2 messages per day, 1 day/week",
       "Medicare coverage lookups",
+      "No appeal letters",
+      "No credit card required",
     ],
     cta: "Try It Free",
     href: "/app/chat",
   },
   {
-    name: "Per Appeal",
+    name: "Starter",
     price: "$10",
-    period: "/appeal",
+    period: "/month",
     features: [
-      "5 messages per day",
-      "1 appeal credit per purchase",
+      "2 messages per day, 1 day/week",
+      "1 appeal credit per month",
       "Appeal letters with citations",
       "Diabetes & obesity guidance",
     ],
@@ -38,16 +39,30 @@ const PLANS: Plan[] = [
     href: "/app",
   },
   {
-    name: "Monthly",
+    name: "Plus",
     price: "$20",
     period: "/month",
+    popular: true,
     features: [
-      "Unlimited messages",
-      "3 appeal credits per month",
+      "5 messages per day, 5 days/week",
+      "2 appeal credits per month",
       "Full diabetes & obesity coaching",
       "Priority coverage guidance",
     ],
     cta: "Subscribe",
+    href: "/app",
+  },
+  {
+    name: "Unlimited",
+    price: "$60",
+    period: "/month",
+    features: [
+      "Unlimited messages every day",
+      "Unlimited appeal letters",
+      "Full diabetes & obesity coaching",
+      "Priority coverage guidance",
+    ],
+    cta: "Go Unlimited",
     href: "/app",
   },
 ];
@@ -62,18 +77,29 @@ export function LandingPricing() {
             Simple, Transparent Pricing
           </h2>
           <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-            Start with a free 14-day trial. Only pay when you need appeal
-            letters.
+            Start with a free 14-day trial. Upgrade when you need appeal
+            letters or more access.
           </p>
         </div>
 
         {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 max-w-6xl mx-auto items-stretch">
           {PLANS.map((plan) => (
             <div
               key={plan.name}
-              className="flex flex-col bg-[var(--bg-secondary)] rounded-xl p-6 sm:p-8 border border-[var(--border)] hover:border-[var(--accent-primary)]/40 transition-colors"
+              className={`flex flex-col bg-[var(--bg-secondary)] rounded-xl p-6 sm:p-8 border transition-colors ${
+                plan.popular
+                  ? "border-[var(--accent-primary)] ring-1 ring-[var(--accent-primary)]/30"
+                  : "border-[var(--border)] hover:border-[var(--accent-primary)]/40"
+              }`}
             >
+              {/* Popular badge */}
+              {plan.popular && (
+                <span className="self-start px-3 py-1 text-xs font-medium bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] rounded-full mb-3">
+                  Most Popular
+                </span>
+              )}
+
               {/* Plan Name */}
               <h3 className="font-[var(--font-serif)] text-xl font-normal text-[var(--text-primary)] mb-2">
                 {plan.name}
@@ -106,7 +132,11 @@ export function LandingPricing() {
               {/* CTA Button */}
               <Link
                 href={plan.href}
-                className="group w-full flex items-center justify-center gap-2 py-3 mt-8 rounded-lg font-medium text-sm tracking-wide bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)] transition-colors"
+                className={`group w-full flex items-center justify-center gap-2 py-3 mt-8 rounded-lg font-medium text-sm tracking-wide transition-colors ${
+                  plan.popular
+                    ? "bg-[var(--accent-primary)] text-white hover:opacity-90"
+                    : "bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)]"
+                }`}
               >
                 {plan.cta}
                 <ArrowRightIcon className="w-4 h-4 transition-transform group-hover:translate-x-1" />

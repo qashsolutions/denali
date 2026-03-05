@@ -273,29 +273,33 @@ export default function AppSettingsPage() {
                 <p className="text-sm font-medium text-[var(--text-primary)]">
                   {authState.isAdmin
                     ? "Admin"
-                    : authState.plan === "monthly"
-                    ? "Monthly Plan"
+                    : authState.plan === "unlimited"
+                    ? "Unlimited Plan"
+                    : authState.plan === "plus"
+                    ? "Plus Plan"
+                    : authState.plan === "starter"
+                    ? "Starter Plan"
                     : authState.plan === "trial"
                     ? "Free Trial"
-                    : authState.plan === "per_appeal"
-                    ? "Pay Per Appeal"
                     : "Trial"}
                 </p>
                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
                   {authState.isAdmin
                     ? "Unlimited access"
-                    : authState.plan === "monthly"
-                    ? `${formatPrice(PRICING.MONTHLY.amount)}/month \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""}/month \u00b7 Unlimited messages`
-                    : authState.plan === "per_appeal"
-                    ? `${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""} \u00b7 5 messages/day`
+                    : authState.plan === "unlimited"
+                    ? `${formatPrice(PRICING.UNLIMITED.amount)}/month \u00b7 Unlimited appeals \u00b7 Unlimited messages`
+                    : authState.plan === "plus"
+                    ? `${formatPrice(PRICING.PLUS.amount)}/month \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""}/month \u00b7 5 msgs/day, 5 days/week`
+                    : authState.plan === "starter"
+                    ? `${formatPrice(PRICING.STARTER.amount)}/month \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""}/month \u00b7 2 msgs/day, 1 day/week`
                     : authState.plan === "trial" && authState.trialStatus === "active"
-                    ? `${authState.trialDaysRemaining} days remaining \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""}`
+                    ? `${authState.trialDaysRemaining} days remaining \u00b7 2 msgs/day, 1 day/week`
                     : authState.plan === "trial" && authState.trialStatus === "expired"
                     ? "Trial ended \u2014 upgrade to continue"
                     : "No active plan"}
                 </p>
               </div>
-              {authState.plan !== "monthly" && !authState.isAdmin && (
+              {authState.plan !== "unlimited" && !authState.isAdmin && (
                 <button
                   onClick={() => setShowPaywall(true)}
                   className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"

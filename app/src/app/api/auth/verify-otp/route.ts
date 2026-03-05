@@ -74,10 +74,10 @@ export async function POST(request: NextRequest) {
       [new Date().toISOString(), ver.user_id]
     );
 
-    // 6. Initialize usage record with 1 appeal credit on first sign-in
+    // 6. Initialize usage record (0 appeal credits — trial has no appeal access)
     await query(
       `INSERT INTO usage (user_id, email, appeal_count, appeal_credits)
-       VALUES ($1, $2, 0, 1)
+       VALUES ($1, $2, 0, 0)
        ON CONFLICT (email) DO NOTHING`,
       [ver.user_id, email]
     );

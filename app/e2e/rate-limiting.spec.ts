@@ -59,10 +59,10 @@ test.describe("Chat rate limiting and paywall UI", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           error:
-            "You've reached your daily limit of 1 messages. Upgrade for unlimited access.",
+            "You've reached your daily limit of 2 messages. Upgrade for more access.",
           code: "RATE_LIMITED",
-          limit: 1,
-          count: 1,
+          limit: 2,
+          count: 2,
           isAuthenticated: true,
         }),
       });
@@ -112,10 +112,10 @@ test.describe("Chat rate limiting and paywall UI", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           error:
-            "You've used your 1 free messages today. Sign in for more.",
+            "You've used your free messages. Sign up for a free trial to continue.",
           code: "RATE_LIMITED",
-          limit: 1,
-          count: 1,
+          limit: 4,
+          count: 4,
           isAuthenticated: false,
         }),
       });
@@ -124,7 +124,7 @@ test.describe("Chat rate limiting and paywall UI", () => {
     await page.goto("/app/chat");
     await sendTestMessage(page);
 
-    await expect(page.getByText("free message")).toBeVisible({
+    await expect(page.getByText("free messages")).toBeVisible({
       timeout: 10_000,
     });
     await expect(
@@ -148,7 +148,7 @@ test.describe("Chat rate limiting and paywall UI", () => {
 
     // Verify the API returns the expected error shape
     const response = await page.request.post("/api/checkout", {
-      data: { plan: "single" },
+      data: { plan: "starter" },
     });
     // The mock intercepts this and returns 503
     expect(response.status()).toBe(503);
@@ -167,7 +167,7 @@ test.describe("Chat rate limiting and paywall UI", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           error:
-            "You've reached your daily limit of 5 messages. Upgrade for unlimited access.",
+            "You've reached your daily limit of 5 messages. Upgrade for more access.",
           code: "RATE_LIMITED",
           limit: 5,
           count: 5,

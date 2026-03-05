@@ -12,12 +12,62 @@ interface PaywallModalProps {
   trialExpired?: boolean;
 }
 
-type PlanType = "single" | "monthly";
+type PlanType = "starter" | "plus" | "unlimited";
+
+const PLAN_OPTIONS: {
+  key: PlanType;
+  name: string;
+  price: number;
+  label: string;
+  description: string;
+  features: string[];
+  badge?: string;
+  accent?: string;
+}[] = [
+  {
+    key: "starter",
+    name: "Starter",
+    price: PRICING.STARTER.amount,
+    label: PRICING.STARTER.label,
+    description: "2 msgs/day, 1 day/week",
+    features: [
+      "1 appeal credit per month",
+      "2 messages per day",
+      "1 chat day per week",
+    ],
+  },
+  {
+    key: "plus",
+    name: "Plus",
+    price: PRICING.PLUS.amount,
+    label: PRICING.PLUS.label,
+    description: "5 msgs/day, 5 days/week",
+    badge: "Most Popular",
+    accent: "violet",
+    features: [
+      "2 appeal credits per month",
+      "5 messages per day",
+      "5 chat days per week",
+    ],
+  },
+  {
+    key: "unlimited",
+    name: "Unlimited",
+    price: PRICING.UNLIMITED.amount,
+    label: PRICING.UNLIMITED.label,
+    description: "Unlimited everything",
+    features: [
+      "Unlimited appeal letters",
+      "Unlimited messages",
+      "Chat every day",
+    ],
+  },
+];
 
 /**
  * PaywallModal Component
  *
- * Shows pricing options for appeal letters.
+ * Shows 3 subscription plan options.
  * Prices are configured via PRICING config.
  */
 export function PaywallModal({
@@ -27,7 +77,7 @@ export function PaywallModal({
   appealCount,
   trialExpired,
 }: PaywallModalProps) {
-  const [selectedPlan, setSelectedPlan] = useState<PlanType>("single");
+  const [selectedPlan, setSelectedPlan] = useState<PlanType>("plus");
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +112,8 @@ export function PaywallModal({
 
   if (!isOpen) return null;
 
+  const selected = PLAN_OPTIONS.find((p) => p.key === selectedPlan)!;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
@@ -71,7 +123,7 @@ export function PaywallModal({
       />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-lg mx-4 bg-[var(--bg-primary)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden">
+      <div className="relative z-10 w-full max-w-2xl mx-4 bg-[var(--bg-primary)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden">
         {/* Header */}
         <div className="relative p-6 pb-4 border-b border-[var(--border)]">
           <button
@@ -95,10 +147,10 @@ export function PaywallModal({
           </button>
 
           <h2 className="text-xl font-semibold text-[var(--text-primary)]">
-            Get Your Appeal Letter
+            Choose Your Plan
           </h2>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Choose how you&apos;d like to access appeal letters
+            Unlock appeal letters and more daily messages
           </p>
         </div>
 
@@ -117,104 +169,59 @@ export function PaywallModal({
           )}
 
           {/* Plan options */}
-          <div className="space-y-3">
-            {/* Single appeal option */}
-            <button
-              onClick={() => setSelectedPlan("single")}
-              className={cn(
-                "w-full p-4 rounded-xl border-2 text-left transition-all",
-                selectedPlan === "single"
-                  ? "border-[var(--accent-primary)] bg-[var(--accent-primary)]/10"
-                  : "border-[var(--border)] bg-[var(--bg-secondary)] hover:border-[var(--text-muted)]"
-              )}
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-[var(--text-primary)]">
-                      Pay Per Appeal
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {PLAN_OPTIONS.map((plan) => {
+              const isSelected = selectedPlan === plan.key;
+              const isPopular = plan.badge;
+              return (
+                <button
+                  key={plan.key}
+                  onClick={() => setSelectedPlan(plan.key)}
+                  className={cn(
+                    "p-4 rounded-xl border-2 text-left transition-all relative",
+                    isSelected
+                      ? isPopular
+                        ? "border-violet-500 bg-violet-500/10"
+                        : "border-[var(--accent-primary)] bg-[var(--accent-primary)]/10"
+                      : "border-[var(--border)] bg-[var(--bg-secondary)] hover:border-[var(--text-muted)]"
+                  )}
+                >
+                  {isPopular && (
+                    <span className="absolute -top-2.5 left-3 px-2 py-0.5 text-xs font-medium bg-violet-500 text-white rounded-full">
+                      {plan.badge}
                     </span>
-                    {selectedPlan === "single" && (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-[var(--accent-primary)]/20 text-[var(--accent-primary)] rounded-full">
-                        Selected
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                    1 appeal + 5 messages/day
-                  </p>
-                </div>
-                <div className="text-right">
+                  )}
                   <div className="text-2xl font-bold text-[var(--text-primary)]">
-                    {formatPrice(PRICING.SINGLE_APPEAL.amount)}
+                    {formatPrice(plan.price)}
                   </div>
-                  <div className="text-xs text-[var(--text-muted)]">{PRICING.SINGLE_APPEAL.label}</div>
-                </div>
-              </div>
-            </button>
-
-            {/* Monthly option */}
-            <button
-              onClick={() => setSelectedPlan("monthly")}
-              className={cn(
-                "w-full p-4 rounded-xl border-2 text-left transition-all relative",
-                selectedPlan === "monthly"
-                  ? "border-violet-500 bg-violet-500/10"
-                  : "border-[var(--border)] bg-[var(--bg-secondary)] hover:border-[var(--text-muted)]"
-              )}
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-[var(--text-primary)]">
-                      Monthly
-                    </span>
-                    <span className="px-2 py-0.5 text-xs font-medium bg-violet-500/20 text-violet-500 rounded-full">
-                      {selectedPlan === "monthly" ? "Selected" : "Best value"}
-                    </span>
+                  <div className="text-xs text-[var(--text-muted)]">/{plan.label}</div>
+                  <div className="font-semibold text-sm text-[var(--text-primary)] mt-2">
+                    {plan.name}
                   </div>
-                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                    3 appeals/month, unlimited messages
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">
+                    {plan.description}
                   </p>
-                  <ul className="mt-2 space-y-1">
-                    <li className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                      <svg
-                        className="w-3 h-3 text-green-500"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      {PRICING.MONTHLY.appealLimit} appeal letters per month
-                    </li>
-                    <li className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                      <svg
-                        className="w-3 h-3 text-green-500"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Unlimited daily messages
-                    </li>
+                  <ul className="mt-3 space-y-1.5">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                        <svg
+                          className="w-3 h-3 text-green-500 flex-shrink-0"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {feature}
+                      </li>
+                    ))}
                   </ul>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-[var(--text-primary)]">
-                    {formatPrice(PRICING.MONTHLY.amount)}
-                  </div>
-                  <div className="text-xs text-[var(--text-muted)]">/{PRICING.MONTHLY.label}</div>
-                </div>
-              </div>
-            </button>
+                </button>
+              );
+            })}
           </div>
 
           {/* Error message */}
@@ -261,11 +268,7 @@ export function PaywallModal({
                 Processing...
               </span>
             ) : (
-              <>
-                {selectedPlan === "single"
-                  ? `Pay ${formatPrice(PRICING.SINGLE_APPEAL.amount)} & Get Letter`
-                  : `Subscribe for ${formatPrice(PRICING.MONTHLY.amount)}/month`}
-              </>
+              <>Subscribe to {selected.name} &mdash; {formatPrice(selected.price)}/mo</>
             )}
           </button>
 

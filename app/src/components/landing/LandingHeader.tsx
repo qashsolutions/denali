@@ -52,10 +52,10 @@ export function LandingHeader({ settings }: LandingHeaderProps) {
           <Link href="/" className="flex items-center gap-3 group">
             <MountainIcon className="w-8 h-8 sm:w-10 sm:h-10 transition-transform group-hover:scale-105" />
             <div className="flex flex-col">
-              <span className="text-lg sm:text-xl font-bold text-[var(--text-primary)]">
-                {prefix}
+              <span className="text-lg sm:text-xl font-bold">
+                <span className="text-[var(--accent-primary)]">{prefix}</span>
                 {suffix && (
-                  <span className="text-[var(--accent-secondary)]">{suffix}</span>
+                  <span className="text-[var(--text-primary)]">{suffix}</span>
                 )}
               </span>
               <span className="hidden sm:block text-xs text-[var(--text-muted)] leading-tight">

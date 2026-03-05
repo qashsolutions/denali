@@ -39,8 +39,9 @@ export function AppHeader() {
   // Check auth state
   useEffect(() => {
     const planLabels: Record<string, string> = {
-      monthly: "Monthly Plan",
-      per_appeal: "Pay Per Appeal",
+      unlimited: "Unlimited",
+      plus: "Plus Plan",
+      starter: "Starter Plan",
       trial: "Trial",
     };
 
@@ -116,20 +117,20 @@ export function AppHeader() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center h-[72px] sm:h-[88px]">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 group mr-auto">
+          <Link href="/" className="flex items-center gap-2 group shrink-0">
             <MountainIcon className="w-10 h-10 sm:w-12 sm:h-12 transition-transform group-hover:scale-105" />
             <div className="flex flex-col">
-              <span className="text-3xl sm:text-4xl font-bold text-[var(--text-primary)] leading-tight">
-                {prefix}
+              <span className="text-3xl sm:text-4xl font-bold leading-tight">
+                <span className="text-[var(--accent-primary)]">{prefix}</span>
                 {suffix && (
-                  <span className="text-[var(--brand-purple)]">{suffix}</span>
+                  <span className="text-[var(--text-primary)]">{suffix}</span>
                 )}
               </span>
             </div>
           </Link>
 
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-2 mr-2" aria-label="Main navigation">
+          {/* Desktop Nav — sits near logo, pushes Sign In to far right */}
+          <nav className="hidden md:flex items-center gap-3 ml-8 mr-auto" aria-label="Main navigation">
             {NAV_ITEMS.map(({ label, href, Icon, color }) => {
               const isActive =
                 pathname === href || pathname?.startsWith(href + "/");
@@ -141,12 +142,12 @@ export function AppHeader() {
                   className={cn(
                     "flex items-center gap-2 px-4 py-2 rounded-lg text-base font-medium transition-colors",
                     isActive
-                      ? "bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]"
+                      ? "bg-[var(--accent-primary)] text-white"
                       : "text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
                   )}
                   aria-current={isActive ? "page" : undefined}
                 >
-                  <Icon className={cn("w-4 h-4", !isActive && color)} />
+                  <Icon className={cn("w-4 h-4", isActive ? "text-white" : color)} />
                   {label}
                 </Link>
               );

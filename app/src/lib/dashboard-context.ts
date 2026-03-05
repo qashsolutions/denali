@@ -23,7 +23,7 @@ export interface DashboardUser {
   firstName: string;
   lastLogin: string; // ISO 8601
   hasCompletedWalkthrough: boolean;
-  plan: "trial" | "per_appeal" | "monthly";
+  plan: "trial" | "starter" | "plus" | "unlimited";
 }
 
 export interface DashboardCoverage {

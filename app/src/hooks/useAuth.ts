@@ -10,7 +10,7 @@ export interface AuthState {
   isMfaEnrolled: boolean;
   isMfaVerified: boolean;
   currentAAL: string | null;
-  plan: "trial" | "per_appeal" | "monthly";
+  plan: "trial" | "starter" | "plus" | "unlimited";
   role: "patient" | "counselor" | "provider";
   appealCount: number;
   appealCredits: number;
@@ -96,10 +96,12 @@ export function useAuth(): UseAuthReturn {
         // mfa_verified cookie presence = AAL2 (checked server-side; client infers from response)
         const isMfaVerified = false; // Will be updated after TOTP challenge
 
-        const validPlans = ["trial", "per_appeal", "monthly"] as const;
+        const validPlans = ["trial", "starter", "plus", "unlimited"] as const;
         const rawPlan = profileData?.plan || "trial";
-        const userPlan = validPlans.includes(rawPlan as (typeof validPlans)[number])
-          ? (rawPlan as "trial" | "per_appeal" | "monthly")
+        // Backward-compat: map legacy plan names
+        const normalized = rawPlan === "per_appeal" ? "starter" : rawPlan === "monthly" ? "plus" : rawPlan;
+        const userPlan = validPlans.includes(normalized as (typeof validPlans)[number])
+          ? (normalized as "trial" | "starter" | "plus" | "unlimited")
           : "trial";
 
         const validRoles = ["patient", "counselor", "provider"] as const;
@@ -466,14 +468,17 @@ export function useAuth(): UseAuthReturn {
       const data = res.ok ? await res.json() : null;
       const credits = data?.appealCredits ?? authState.appealCredits;
 
-      if (authState.plan === "trial") {
-        return authState.trialStatus === "active" && credits > 0 ? "available" : "paywall";
-      }
-      if (authState.plan === "per_appeal" || authState.plan === "monthly") {
+      // Unlimited plan bypasses credit checks
+      if (authState.plan === "unlimited") return "allowed";
+      // Trial has no appeal credits
+      if (authState.plan === "trial") return "paywall";
+      // Starter/Plus — credit-based
+      if (authState.plan === "starter" || authState.plan === "plus") {
         return credits > 0 ? "available" : "paywall";
       }
       return "paywall";
     } catch {
+      if (authState.plan === "unlimited") return "allowed";
       return authState.appealCredits > 0 ? "available" : "paywall";
     }
   }, [authState]);

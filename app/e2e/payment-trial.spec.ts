@@ -34,7 +34,7 @@ test.describe("Checkout API access control", () => {
     // With STRIPE_SECRET_KEY but no auth → 401
     // Either way, status >= 400
     const response = await request.post("/api/checkout", {
-      data: { plan: "single" },
+      data: { plan: "starter" },
     });
     expect(response.status()).toBeGreaterThanOrEqual(400);
   });

@@ -67,15 +67,15 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "Is Denali free?",
-        a: "Coverage guidance is available without an account — 1 free message per day, no signup required. Every new account gets a 14-day free trial (3 messages/day, 1 appeal credit). After the trial, chat access is locked until you purchase a plan: Pay Per Appeal ($10/appeal, 5 messages/day) or Monthly ($20/month, 3 appeals + unlimited messages).",
+        a: "Coverage guidance is available without an account — 4 free messages over 14 days, no signup required. Every new account gets a 14-day free trial (2 messages/day, 1 day/week). After the trial, chat access is locked until you subscribe: Starter ($10/month, 1 appeal credit), Plus ($20/month, 2 appeal credits, 5 days/week), or Unlimited ($60/month, unlimited everything).",
       },
       {
         q: "Is there a free trial?",
-        a: "Yes. Every new account gets a 14-day trial with 3 messages/day and 1 appeal credit. After the trial period, chat access is locked — choose Pay Per Appeal ($10/appeal) or Monthly ($20/month) to continue.",
+        a: "Yes. Every new account gets a 14-day trial with 2 messages/day, 1 day per week. After the trial period, chat access is locked — choose Starter ($10/month), Plus ($20/month), or Unlimited ($60/month) to continue. Trial does not include appeal letters.",
       },
       {
         q: "How many free messages do I get?",
-        a: "Without an account: 1 message per day. With a free trial: 3 messages per day for 14 days. Pay Per Appeal plan: 5 messages per day. Monthly plan: unlimited messages.",
+        a: "Without an account: 4 messages total over 14 days. With a free trial: 2 messages per day, 1 day per week. Starter plan: 2 messages/day, 1 day/week. Plus plan: 5 messages/day, 5 days/week. Unlimited plan: unlimited messages every day.",
       },
     ],
   },

@@ -3,8 +3,8 @@
  *
  * POST /api/checkout
  *
- * Creates a Stripe Checkout session for appeal letter purchases.
- * Pricing is configured via config/pricing.ts
+ * Creates a Stripe Checkout session for subscription plans.
+ * All plans are monthly subscriptions: Starter ($10), Plus ($20), Unlimited ($60).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -15,14 +15,17 @@ import { logAudit } from "@/lib/audit";
 // Stripe is imported dynamically to avoid build errors when key is not set
 type Stripe = typeof import("stripe").default;
 
+type PlanType = "starter" | "plus" | "unlimited";
+
 interface CheckoutRequestBody {
-  plan: "single" | "monthly";
+  plan: PlanType;
 }
 
-// Price IDs from config (with Stripe Dashboard fallback)
-const STRIPE_PRICES = {
-  single: PRICING.SINGLE_APPEAL.stripePriceId,
-  monthly: PRICING.MONTHLY.stripePriceId,
+// Price IDs from config
+const STRIPE_PRICES: Record<PlanType, string> = {
+  starter: PRICING.STARTER.stripePriceId,
+  plus: PRICING.PLUS.stripePriceId,
+  unlimited: PRICING.UNLIMITED.stripePriceId,
 };
 
 export async function POST(request: NextRequest) {
@@ -30,7 +33,7 @@ export async function POST(request: NextRequest) {
     const body: CheckoutRequestBody = await request.json();
 
     // Validate request
-    if (!body.plan || !["single", "monthly"].includes(body.plan)) {
+    if (!body.plan || !["starter", "plus", "unlimited"].includes(body.plan)) {
       return NextResponse.json(
         { error: "Invalid plan type" },
         { status: 400 }
@@ -67,7 +70,7 @@ export async function POST(request: NextRequest) {
     // Get the origin for redirect URLs (uses safe fallback from config)
     const origin = getBaseUrl(request.headers.get("origin"));
 
-    // Create checkout session
+    // All plans are subscriptions
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -76,7 +79,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      mode: body.plan === "monthly" ? "subscription" : "payment",
+      mode: "subscription",
       success_url: `${origin}/app/chat?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/app/chat?payment=cancelled`,
       customer_email: email || undefined,

@@ -10,14 +10,20 @@ describe("getUploadLimitForPlan", () => {
     expect(getUploadLimitForPlan("trial", false, true)).toBe(2 * 1024 * 1024);
   });
 
-  it("returns per-appeal limit for per_appeal plan", () => {
-    expect(getUploadLimitForPlan("per_appeal", false, true)).toBe(
+  it("returns starter limit for starter plan", () => {
+    expect(getUploadLimitForPlan("starter", false, true)).toBe(
+      4 * 1024 * 1024
+    );
+  });
+
+  it("returns plus limit for plus plan", () => {
+    expect(getUploadLimitForPlan("plus", false, true)).toBe(
       6 * 1024 * 1024
     );
   });
 
-  it("returns monthly limit for monthly plan", () => {
-    expect(getUploadLimitForPlan("monthly", false, true)).toBe(
+  it("returns unlimited limit for unlimited plan", () => {
+    expect(getUploadLimitForPlan("unlimited", false, true)).toBe(
       10 * 1024 * 1024
     );
   });

@@ -65,7 +65,7 @@ function FeatureCard({
       {/* Content area — text on top */}
       <div className="p-8 pb-4 text-center">
         {/* Step label */}
-        <p className="font-[var(--font-mono)] text-sm tracking-[0.1em] uppercase text-[var(--accent-primary)] mb-3">
+        <p className="font-[var(--font-mono)] text-2xl font-bold tracking-[0.1em] uppercase text-[var(--accent-primary)] mb-3">
           {feature.step}
         </p>
 
@@ -81,8 +81,8 @@ function FeatureCard({
       </div>
 
       {/* Illustration area — below text */}
-      <div className="bg-[var(--bg-tertiary)] flex items-center justify-center py-10 sm:py-12 mx-4 mb-4 rounded-lg">
-        <Illustration className="w-full max-w-[400px] h-auto px-4" />
+      <div className="bg-[var(--bg-tertiary)] flex items-center justify-center py-12 sm:py-16 mx-4 mb-4 rounded-lg">
+        <Illustration className="w-full max-w-[600px] h-auto px-4" />
       </div>
     </Link>
     </div>

@@ -95,12 +95,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // --- Rate limiting: check daily chat usage ---
+    // --- Rate limiting: multi-dimensional check (rolling cap, weekly frequency, daily limit) ---
     const authUser = await getAuthUser(request);
 
-    let chatLimit: number = PRICING.CHAT_LIMITS.ANON; // 1/day for unauthenticated
+    let chatLimit: number = PRICING.CHAT_LIMITS.ANON_ROLLING_MAX; // fallback
+    let weeklyLimit: number = 0;
     let chatIdentifier: string;
     let userProfile: { plan: string | null; is_admin: boolean | null } | null = null;
+    let signupPrompt = false;
 
     if (authUser) {
       chatIdentifier = authUser.userId;
@@ -114,12 +116,18 @@ export async function POST(request: NextRequest) {
 
       if (userProfile?.is_admin) {
         chatLimit = 0; // Admin: unlimited
+        weeklyLimit = 0;
       } else {
         const plan = userProfile?.plan || "trial";
-        if (plan === "monthly") {
-          chatLimit = PRICING.CHAT_LIMITS.PAID; // 0 = unlimited
-        } else if (plan === "per_appeal") {
-          chatLimit = PRICING.CHAT_LIMITS.PER_APPEAL; // 5/day
+        if (plan === "unlimited") {
+          chatLimit = PRICING.CHAT_LIMITS.UNLIMITED;
+          weeklyLimit = PRICING.WEEKLY_LIMITS.UNLIMITED;
+        } else if (plan === "plus") {
+          chatLimit = PRICING.CHAT_LIMITS.PLUS;
+          weeklyLimit = PRICING.WEEKLY_LIMITS.PLUS;
+        } else if (plan === "starter") {
+          chatLimit = PRICING.CHAT_LIMITS.STARTER;
+          weeklyLimit = PRICING.WEEKLY_LIMITS.STARTER;
         } else if (plan === "trial") {
           // Check trial expiry
           const subResult = await query<{ trial_end: string | null }>(
@@ -128,7 +136,8 @@ export async function POST(request: NextRequest) {
           );
           const trialEnd = subResult.rows[0]?.trial_end ? new Date(subResult.rows[0].trial_end) : null;
           if (trialEnd && trialEnd > new Date()) {
-            chatLimit = PRICING.CHAT_LIMITS.TRIAL; // 3/day
+            chatLimit = PRICING.CHAT_LIMITS.TRIAL;
+            weeklyLimit = PRICING.WEEKLY_LIMITS.TRIAL;
           } else {
             // Trial expired — locked out
             return NextResponse.json(
@@ -153,13 +162,68 @@ export async function POST(request: NextRequest) {
         }
       }
     } else {
-      // Hash IP for privacy
+      // Anonymous — hash IP for privacy
       const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
         || request.headers.get("x-real-ip")
         || "unknown";
       chatIdentifier = `ip:${createHash("sha256").update(ip).digest("hex").slice(0, 16)}`;
     }
 
+    // --- Anonymous rolling cap: 4 messages in 14-day window ---
+    if (!authUser) {
+      try {
+        const rollingResult = await query<{ allowed: boolean; total: number; is_last: boolean }>(
+          `SELECT * FROM check_rolling_chat_limit($1, $2, $3)`,
+          [chatIdentifier, PRICING.CHAT_LIMITS.ANON_ROLLING_MAX, PRICING.CHAT_LIMITS.ANON_ROLLING_WINDOW]
+        );
+        const rolling = rollingResult.rows[0];
+        if (rolling && !rolling.allowed) {
+          return NextResponse.json(
+            {
+              error: `You've used all ${PRICING.CHAT_LIMITS.ANON_ROLLING_MAX} free messages. Sign up for a free trial to continue.`,
+              code: "ROLLING_LIMIT",
+              isAuthenticated: false,
+            },
+            { status: 429 }
+          );
+        }
+        if (rolling?.is_last) {
+          signupPrompt = true;
+        }
+      } catch (rollingError) {
+        console.warn("[Chat API] Rolling limit check failed:", rollingError);
+      }
+
+      // Anonymous uses a high daily limit (the rolling cap is the real gate)
+      chatLimit = PRICING.CHAT_LIMITS.ANON_ROLLING_MAX;
+    }
+
+    // --- Weekly frequency check (authenticated plans with weekly limits) ---
+    if (authUser && weeklyLimit > 0) {
+      try {
+        const weeklyResult = await query<{ allowed: boolean; days_used: number }>(
+          `SELECT * FROM check_weekly_frequency($1, $2)`,
+          [chatIdentifier, weeklyLimit]
+        );
+        const weekly = weeklyResult.rows[0];
+        if (weekly && !weekly.allowed) {
+          return NextResponse.json(
+            {
+              error: `You can chat ${weeklyLimit} day${weeklyLimit !== 1 ? "s" : ""} per week on your plan. Upgrade for more access.`,
+              code: "WEEKLY_LIMIT",
+              weeklyLimit,
+              daysUsed: weekly.days_used,
+              isAuthenticated: true,
+            },
+            { status: 429 }
+          );
+        }
+      } catch (weeklyError) {
+        console.warn("[Chat API] Weekly frequency check failed:", weeklyError);
+      }
+    }
+
+    // --- Daily message limit check ---
     if (chatLimit > 0) {
       try {
         const usageResult = await query<{ allowed: boolean; count: number }>(
@@ -172,8 +236,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json(
             {
               error: isAuthed
-                ? `You've reached your daily limit of ${chatLimit} messages. Upgrade for unlimited access.`
-                : `You've used your ${chatLimit} free messages today. Sign in for more.`,
+                ? `You've reached your daily limit of ${chatLimit} messages. Upgrade for more access.`
+                : `You've used your free messages. Sign up for a free trial to continue.`,
               code: "RATE_LIMITED",
               limit: chatLimit,
               count: usageRow.count,
@@ -484,7 +548,8 @@ export async function POST(request: NextRequest) {
           toolsUsed: result.toolsUsed,
           appealId,
           appealLetter: result.appealLetter,
-        } satisfies ChatResponseBody);
+          ...(signupPrompt ? { signupPrompt: true } : {}),
+        } satisfies ChatResponseBody & { signupPrompt?: boolean });
 
         console.log("[Chat API] Stream complete with", result.suggestions.length, "suggestions");
         await writer.close();

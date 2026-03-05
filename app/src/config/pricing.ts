@@ -1,54 +1,76 @@
 /**
  * Pricing Configuration
  *
- * Centralized pricing values for the application.
- * These can be overridden via environment variables.
+ * 5-tier model: Anonymous → Trial → Starter → Plus → Unlimited
+ * Chat uses Sonnet 4.6; appeals always use Opus 4.6.
+ * All paid plans are monthly subscriptions (no one-time payments).
  */
 
 export const PRICING = {
   /** Trial duration in days (CMS criteria A4) */
   TRIAL_DURATION_DAYS: 14,
 
-  /** Appeal credits granted with trial */
-  TRIAL_APPEAL_CREDITS: 1 as number,
+  /** Appeal credits granted with trial (none — trial has no appeal access) */
+  TRIAL_APPEAL_CREDITS: 0 as number,
 
-  /** Appeal credits reset monthly for subscribers */
-  MONTHLY_APPEAL_CREDITS: 3 as number,
-
-  /** Daily chat message limits */
+  /** Daily chat message limits per plan (0 = unlimited) */
   CHAT_LIMITS: {
-    /** Unauthenticated users */
-    ANON: 1 as number,
+    /** Anonymous: 4 messages total in rolling 14-day window (daily limit unused) */
+    ANON_ROLLING_MAX: 4 as number,
+    /** Rolling window in days for anonymous cap */
+    ANON_ROLLING_WINDOW: 14 as number,
     /** Trial users (active trial) */
-    TRIAL: 3 as number,
-    /** Per-appeal purchasers */
-    PER_APPEAL: 5 as number,
-    /** Monthly subscribers (0 = unlimited) */
-    PAID: 0 as number,
+    TRIAL: 2 as number,
+    /** Starter subscribers */
+    STARTER: 2 as number,
+    /** Plus subscribers */
+    PLUS: 5 as number,
+    /** Unlimited subscribers (0 = unlimited) */
+    UNLIMITED: 0 as number,
   },
 
-  /** Single appeal one-time payment */
-  SINGLE_APPEAL: {
-    amount: parseInt(process.env.NEXT_PUBLIC_PRICE_SINGLE_APPEAL || "10", 10),
-    currency: "USD",
-    label: "One-time",
-    stripePriceId: process.env.STRIPE_PRICE_PAY_PER_CLAIM || "price_single_appeal",
+  /** Weekly frequency limits: max days per week a user can chat (0 = unlimited) */
+  WEEKLY_LIMITS: {
+    TRIAL: 1 as number,
+    STARTER: 1 as number,
+    PLUS: 5 as number,
+    UNLIMITED: 0 as number,
   },
 
-  /** Monthly subscription (3 appeals/month + unlimited chat) */
-  MONTHLY: {
-    amount: parseInt(process.env.NEXT_PUBLIC_PRICE_UNLIMITED_MONTHLY || "20", 10),
+  /** Starter subscription ($10/month, 1 appeal credit) */
+  STARTER: {
+    amount: 10,
     currency: "USD",
     label: "per month",
-    appealLimit: 3 as number,
-    stripePriceId: process.env.STRIPE_PRICE_UNLIMITED_MONTHLY || "price_unlimited_monthly",
+    appealCredits: 1 as number,
+    stripePriceId: process.env.STRIPE_PRICE_PAY_PER_CLAIM || "price_starter",
   },
+
+  /** Plus subscription ($20/month, 2 appeal credits) */
+  PLUS: {
+    amount: 20,
+    currency: "USD",
+    label: "per month",
+    appealCredits: 2 as number,
+    stripePriceId: process.env.STRIPE_PRICE_MONTHLY || "price_plus",
+  },
+
+  /** Unlimited subscription ($60/month, unlimited appeals) */
+  UNLIMITED: {
+    amount: 60,
+    currency: "USD",
+    label: "per month",
+    appealCredits: -1 as number, // -1 = unlimited
+    stripePriceId: process.env.STRIPE_PRICE_UNLIMITED || "price_unlimited",
+  },
+
   /** File upload size limits (bytes). 0 = disabled (anon), -1 = unlimited (admin). */
   UPLOAD_LIMITS: {
     ANON: 0 as number,
     TRIAL: 2 * 1024 * 1024 as number,
-    PER_APPEAL: 6 * 1024 * 1024 as number,
-    MONTHLY: 10 * 1024 * 1024 as number,
+    STARTER: 4 * 1024 * 1024 as number,
+    PLUS: 6 * 1024 * 1024 as number,
+    UNLIMITED: 10 * 1024 * 1024 as number,
     ADMIN: -1 as number,
   },
 } as const;
@@ -66,10 +88,12 @@ export function getUploadLimitForPlan(
   if (!isAuthenticated) return PRICING.UPLOAD_LIMITS.ANON;
   if (isAdmin) return PRICING.UPLOAD_LIMITS.ADMIN;
   switch (plan) {
-    case "monthly":
-      return PRICING.UPLOAD_LIMITS.MONTHLY;
-    case "per_appeal":
-      return PRICING.UPLOAD_LIMITS.PER_APPEAL;
+    case "unlimited":
+      return PRICING.UPLOAD_LIMITS.UNLIMITED;
+    case "plus":
+      return PRICING.UPLOAD_LIMITS.PLUS;
+    case "starter":
+      return PRICING.UPLOAD_LIMITS.STARTER;
     case "trial":
       return PRICING.UPLOAD_LIMITS.TRIAL;
     default:
@@ -98,15 +122,3 @@ export function formatPrice(amount: number, currency: string = "USD"): string {
     maximumFractionDigits: 0,
   }).format(amount);
 }
-
-// DEAD CODE — No consumers. Callers use formatPrice(PRICING.SINGLE_APPEAL.amount) directly.
-// Commented out 2026-02-06.
-// export function getSingleAppealPrice(): string {
-//   return formatPrice(PRICING.SINGLE_APPEAL.amount);
-// }
-
-// DEAD CODE — No consumers. Callers use formatPrice(PRICING.MONTHLY.amount) directly.
-// Commented out 2026-02-06.
-// export function getMonthlyPrice(): string {
-//   return formatPrice(PRICING.MONTHLY.amount);
-// }

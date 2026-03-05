@@ -83,22 +83,24 @@ const SECTIONS = [
       {
         title: "Trial",
         items: [
-          "Every new account receives a 14-day free trial with 3 messages per day and 1 appeal credit",
-          "After the trial period, chat access is locked until you purchase a plan",
+          "Every new account receives a 14-day free trial with 2 messages per day, 1 chat day per week",
+          "The free trial does not include appeal letter generation",
+          "After the trial period, chat access is locked until you subscribe to a plan",
         ],
       },
       {
         title: "Paid Plans",
         items: [
-          "Pay Per Appeal: $10 per appeal letter (5 messages per day)",
-          "Monthly: $20 per month (3 appeal credits per month, unlimited messages)",
+          "Starter: $10 per month (1 appeal credit, 2 messages/day, 1 chat day/week)",
+          "Plus: $20 per month (2 appeal credits, 5 messages/day, 5 chat days/week)",
+          "Unlimited: $60 per month (unlimited appeal letters and messages)",
         ],
       },
       {
         title: "Billing",
         items: [
           "Payments are processed by Stripe — we never see or store your credit card number",
-          "Monthly subscriptions renew automatically and can be cancelled at any time",
+          "All subscriptions renew automatically on a monthly basis and can be cancelled at any time",
           "Appeal credits are non-refundable once used to generate an appeal letter",
           "Unused appeal credits do not roll over between monthly billing periods",
         ],

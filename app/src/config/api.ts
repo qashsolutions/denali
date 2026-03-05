@@ -8,17 +8,18 @@ import { BRAND } from "./brand";
 
 export const API_CONFIG = {
   /** Claude configuration
+   * Chat uses Sonnet 4.6 for cost efficiency; appeals use Opus 4.6 for quality.
    * Vercel/local: set ANTHROPIC_API_KEY → uses direct Anthropic API
-   *   ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
+   *   ANTHROPIC_MODEL=claude-sonnet-4-6-20260301
    *   ANTHROPIC_APPEAL_MODEL=claude-opus-4-6
    * ECS/Bedrock: no ANTHROPIC_API_KEY → IAM auth via task role
-   *   ANTHROPIC_MODEL=arn:aws:bedrock:us-east-1:ACCOUNT:inference-profile/global.anthropic.claude-opus-4-6-v1
+   *   ANTHROPIC_MODEL=arn:aws:bedrock:us-east-1:ACCOUNT:inference-profile/global.anthropic.claude-sonnet-4-6
    *   ANTHROPIC_APPEAL_MODEL=arn:aws:bedrock:us-east-1:ACCOUNT:inference-profile/global.anthropic.claude-opus-4-6-v1
    *   (prefix is "global." not "us.", no ":0" suffix, full ARN required)
    */
   claude: {
-    /** Chat model — Sonnet 4.5 (direct API default) or Bedrock inference profile ID via ANTHROPIC_MODEL env */
-    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929",
+    /** Chat model — Sonnet 4.6 (direct API default) or Bedrock inference profile ID via ANTHROPIC_MODEL env */
+    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6-20260301",
     /** Appeal model — Opus 4.6 (direct API default) or Bedrock inference profile ID via ANTHROPIC_APPEAL_MODEL env */
     appealModel: process.env.ANTHROPIC_APPEAL_MODEL || "claude-opus-4-6",
     maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS || "4096", 10),
