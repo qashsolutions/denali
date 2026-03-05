@@ -58,31 +58,31 @@ function FeatureCard({
     >
     <Link
       href={feature.href}
-      className="group relative block bg-[var(--bg-primary)] rounded-xl border border-[var(--border)] overflow-hidden
+      className="group relative flex flex-col bg-[var(--bg-primary)] rounded-xl border border-[var(--border)] overflow-hidden
         transition-colors duration-300 ease-out
-        hover:border-[var(--accent-primary)]/40"
+        hover:border-[var(--accent-primary)]/40 min-h-[420px] sm:min-h-[480px]"
     >
-      {/* Content area — text on top */}
-      <div className="p-8 pb-4 text-center">
+      {/* Content area — compact text on top */}
+      <div className="px-6 pt-5 pb-2 text-center">
         {/* Step label */}
-        <p className="font-[var(--font-mono)] text-2xl font-bold tracking-[0.1em] uppercase text-[var(--accent-primary)] mb-3">
+        <p className="font-[var(--font-mono)] text-lg font-bold tracking-[0.1em] uppercase text-[var(--accent-primary)] mb-1">
           {feature.step}
         </p>
 
         {/* Title */}
-        <h3 className="font-[var(--font-serif)] text-2xl sm:text-3xl font-normal text-[var(--text-primary)] mb-2">
+        <h3 className="font-[var(--font-serif)] text-xl sm:text-2xl font-normal text-[var(--text-primary)] mb-1">
           {feature.title}
         </h3>
 
         {/* Kicker */}
-        <p className="text-[var(--text-primary)] text-base">
+        <p className="text-[var(--text-primary)] text-sm">
           {feature.kicker}
         </p>
       </div>
 
-      {/* Illustration area — below text */}
-      <div className="bg-[var(--bg-tertiary)] flex items-center justify-center py-4 sm:py-6 mx-3 mb-3 rounded-lg">
-        <Illustration className="w-full h-auto px-2" />
+      {/* Illustration area — fills most of card */}
+      <div className="bg-[var(--bg-tertiary)] flex items-center justify-center mx-3 mb-3 rounded-lg flex-1 p-4">
+        <Illustration className="w-full h-full" />
       </div>
     </Link>
     </div>
