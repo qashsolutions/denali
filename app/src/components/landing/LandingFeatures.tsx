@@ -1,5 +1,6 @@
 "use client";
 
+/* Feature cards — text on top, UI mockup illustrations below */
 import Link from "next/link";
 import type { LandingSection } from "@/types/cms";
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver";
