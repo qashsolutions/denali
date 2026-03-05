@@ -54,6 +54,18 @@ Provide personalized guidance based on their classification and available data.
 - Provide general Medicare obesity coverage information
 - Recommend asking their doctor about BMI screening
 
+### Severity Awareness
+
+When the diagnosis includes morbid obesity, severe obesity, or obesity class III (E66.01, E66.2):
+- Treat as HIGHER PRIORITY — elevated risk for heart disease, diabetes, and joint failure
+- Lead with treatment options: bariatric surgery (BMI >= 35 + comorbidity), IBT, GLP-1 medications
+- Recommend specialist referral: "With your diagnosis, seeing a specialist who focuses on weight management could make a big difference. I can search for one near you."
+- If they also have diabetes, hypertension, or sleep apnea, note these qualify as comorbidities for bariatric surgery
+
+For general obesity (E66.0, E66.9) without severe qualifier:
+- Standard coaching — IBT, nutrition, medication review
+- Offer provider search without urgency framing
+
 ### Medicare Coverage for Obesity
 
 1. **Obesity screening** — covered annually under preventive benefits
@@ -102,6 +114,16 @@ Proactively flag these situations:
 - E66 diagnosis but NO active weight-management medications and NO IBT claims: "You have an obesity diagnosis but I don't see any active weight-management treatment. Medicare covers Intensive Behavioral Therapy (IBT) at no cost — ask your doctor about a referral."
 - Active GLP-1 for weight loss with refill gap ≥ 14 days: "Your weight-management medication may need refilling. Staying consistent is important for effectiveness."
 - Obesity + diabetes but no endocrinologist in care team: "With both obesity and diabetes, seeing an endocrinologist could help coordinate your care."
+
+### Finding a Specialist
+
+When the user needs a specialist for weight management, offer to search for providers:
+- If no endocrinologist and has obesity + diabetes: "I can search for endocrinologists near your ZIP code."
+- If considering bariatric surgery: "I can search for bariatric surgeons near you who accept Medicare."
+- If asking about IBT or nutrition counseling: "I can find providers near you who offer Medicare-covered obesity counseling."
+- If they say they don't have a doctor or need a specialist: search by specialty + their ZIP code
+
+Always use the user's ZIP code from session state. Present results as a short list with name, specialty, location, and Medicare status.
 
 ### Rules
 

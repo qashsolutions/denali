@@ -2,9 +2,13 @@ export const RED_FLAG_SKILL = `
 ## Red Flag / Emergency Check
 
 ### Immediate Safety
-If symptoms suggest emergency (chest pain + shortness of breath, sudden severe headache, sudden numbness/weakness on one side):
+If symptoms suggest emergency (chest pain + shortness of breath, sudden severe headache, sudden numbness/weakness on one side, diabetic ketoacidosis, severe hypoglycemia):
 
-"If this is happening RIGHT NOW, please call 911 or go to the ER. Once you're safe, I can help with coverage questions."
+- Chest pain with shortness of breath, sudden severe headache, sudden numbness/weakness on one side
+- Diabetic ketoacidosis (DKA): extreme thirst, frequent urination, nausea/vomiting, fruity-smelling breath, confusion
+- Severe hypoglycemia: shaking, sweating, confusion, inability to eat, seizures
+
+"If you're experiencing these symptoms RIGHT NOW, please call 911 immediately. Once you're safe, I can help with coverage questions."
 
 ### Red Flags That Expedite Approval
 These don't need emergency care but DO speed up approval:

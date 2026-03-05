@@ -51,7 +51,7 @@ export function HealthAlertsBanner({
 
     // Medication refill overdue (amber)
     const overdueMeds = medications.filter(
-      (m) => m.isDiabetesMed && m.gapDays != null && m.gapDays >= 14
+      (m) => (m.isDiabetesMed || m.isObesityMed) && m.gapDays != null && m.gapDays >= 14
     );
     if (overdueMeds.length > 0) {
       const med = overdueMeds[0];
@@ -88,7 +88,7 @@ export function HealthAlertsBanner({
           title: "No endocrinologist visits found",
           detail: "Consider a referral for specialized diabetes care",
           chatMessage:
-            "I have diabetes but haven't seen an endocrinologist. Should I get a referral?",
+            "I have diabetes but haven't seen an endocrinologist. Can you find one near me who accepts Medicare?",
         });
       }
     }

@@ -135,7 +135,7 @@ export interface SkillTriggers {
 }
 
 // Emergency symptom patterns
-const EMERGENCY_PATTERNS = /chest pain.*(breath|short)|sudden.*(headache|numb|weak)|can't (move|feel)|worst headache|one side.*(numb|weak)/i;
+const EMERGENCY_PATTERNS = /chest pain.*(breath|short)|sudden.*(headache|numb|weak)|can't (move|feel)|worst headache|one side.*(numb|weak)|fruity breath.*(thirst|naus)|extreme thirst.*(urinat|naus|vomit)|shaking.*(sweat|confus).*(sugar|diabet|eat)|seizure.*(sugar|diabet|insulin)|passed out.*(sugar|insulin|diabet)/i;
 
 export function detectTriggers(
   messages: Array<{ role: string; content: string }>,

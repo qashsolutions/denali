@@ -70,6 +70,7 @@ export default function DiabetesPage() {
           a1cHistory={a1cHistory}
           providers={providers}
           hospitalizations={hospitalizations}
+          screenings={screenings}
         />
       )}
 

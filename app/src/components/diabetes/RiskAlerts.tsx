@@ -9,6 +9,7 @@ import type {
   DiabetesClassification,
   ProviderDetail,
   HospitalizationSummary,
+  ScreeningHistory,
 } from "@/lib/fhir/transforms";
 import type { SnapshotPoint } from "@/hooks/useDiabetesSnapshots";
 
@@ -20,15 +21,17 @@ interface RiskAlertsProps {
   a1cHistory?: SnapshotPoint[];
   providers?: ProviderDetail[];
   hospitalizations?: HospitalizationSummary[];
+  screenings?: ScreeningHistory[];
 }
 
 interface Alert {
   severity: "red" | "amber";
   title: string;
   chatMessage: string;
+  ctaLabel?: string;
 }
 
-export function RiskAlerts({ labs, conditions, medications, classification, a1cHistory, providers, hospitalizations }: RiskAlertsProps) {
+export function RiskAlerts({ labs, conditions, medications, classification, a1cHistory, providers, hospitalizations, screenings }: RiskAlertsProps) {
   const router = useRouter();
 
   const alerts = useMemo(() => {
@@ -95,7 +98,8 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
         result.push({
           severity: "amber",
           title: "No endocrinologist visits found",
-          chatMessage: "I have diabetes but haven't seen an endocrinologist. Should I get a referral?",
+          chatMessage: "I have diabetes but haven't seen an endocrinologist. Can you find one near me who accepts Medicare?",
+          ctaLabel: "Find a specialist",
         });
       }
     }
@@ -113,8 +117,52 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
       }
     }
 
+    // Obesity + no counseling — obesity diagnosis but no obesity-counseling screenings
+    const hasObesityDx = conditions.some((c) => c.category === "obesity");
+    if (hasObesityDx && screenings) {
+      const hasObesityCounseling = screenings.some(
+        (s) => s.screeningType === "obesity-counseling"
+      );
+      if (!hasObesityCounseling) {
+        result.push({
+          severity: "amber",
+          title: "No obesity counseling visits found",
+          chatMessage: "I have an obesity diagnosis but no counseling visits. Can you find a provider near me who offers Medicare-covered obesity counseling?",
+          ctaLabel: "Find a specialist",
+        });
+      }
+    }
+
+    // Obesity medication refill gap — obesity-only meds (not dual-flagged diabetes)
+    const overdueObesityMeds = medications.filter(
+      (m) => m.isObesityMed && !m.isDiabetesMed && m.gapDays != null && m.gapDays >= 14
+    );
+    if (overdueObesityMeds.length > 0) {
+      const medName = overdueObesityMeds[0].name;
+      result.push({
+        severity: "amber",
+        title: "Weight management medication refill may be overdue",
+        chatMessage: `My ${medName} refill may be overdue. Can you help me understand my options?`,
+      });
+    }
+
+    // Obesity + diabetes + no endocrinologist
+    if (hasObesityDx && hasDiabetesDx && providers && providers.length > 0) {
+      const hasEndo = providers.some(
+        (p) => p.specialty?.toLowerCase().includes("endocrin")
+      );
+      if (!hasEndo) {
+        result.push({
+          severity: "amber",
+          title: "No endocrinologist for obesity + diabetes",
+          chatMessage: "I have both obesity and diabetes but haven't seen an endocrinologist. Can you find one near me who accepts Medicare?",
+          ctaLabel: "Find a specialist",
+        });
+      }
+    }
+
     return result;
-  }, [labs, conditions, medications, classification, a1cHistory, providers, hospitalizations]);
+  }, [labs, conditions, medications, classification, a1cHistory, providers, hospitalizations, screenings]);
 
   if (alerts.length === 0) return null;
 
@@ -147,7 +195,7 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
                 onClick={() => router.push(`/app/chat?message=${encodeURIComponent(alert.chatMessage)}`)}
                 className="text-xs font-medium text-[var(--accent-primary)] hover:underline mt-1"
               >
-                Talk to Denali
+                {alert.ctaLabel || "Talk to Denali"}
               </button>
             </div>
           </div>
