@@ -13,7 +13,7 @@ export function OfflineBanner() {
 
   return (
     <div
-      className="fixed top-14 sm:top-16 left-0 right-0 z-30 flex items-center gap-2 px-4 py-2 bg-[var(--bg-secondary)] border-b border-[var(--border)] border-l-4 border-l-amber-500"
+      className="fixed top-16 sm:top-20 left-0 right-0 z-30 flex items-center gap-2 px-4 py-2 bg-[var(--bg-secondary)] border-b border-[var(--border)] border-l-4 border-l-amber-500"
       role="status"
       aria-live="polite"
     >
