@@ -8,7 +8,6 @@ interface Plan {
   features: string[];
   cta: string;
   href: string;
-  popular?: boolean;
 }
 
 const PLANS: Plan[] = [
@@ -50,7 +49,6 @@ const PLANS: Plan[] = [
     ],
     cta: "Subscribe",
     href: "/app",
-    popular: true,
   },
 ];
 
@@ -74,19 +72,8 @@ export function LandingPricing() {
           {PLANS.map((plan) => (
             <div
               key={plan.name}
-              className={`flex flex-col bg-[var(--bg-secondary)] rounded-xl p-6 sm:p-8 border transition-colors ${
-                plan.popular
-                  ? "border-[var(--accent-primary)]/50 ring-1 ring-[var(--accent-primary)]/20"
-                  : "border-[var(--border)] hover:border-[var(--accent-primary)]/40"
-              }`}
+              className="flex flex-col bg-[var(--bg-secondary)] rounded-xl p-6 sm:p-8 border border-[var(--border)] hover:border-[var(--accent-primary)]/40 transition-colors"
             >
-              {/* Popular badge */}
-              {plan.popular && (
-                <span className="self-start text-[10px] font-semibold uppercase tracking-wider text-[var(--accent-primary)] mb-2">
-                  Most Popular
-                </span>
-              )}
-
               {/* Plan Name */}
               <h3 className="font-[var(--font-serif)] text-xl font-normal text-[var(--text-primary)] mb-2">
                 {plan.name}
@@ -109,7 +96,7 @@ export function LandingPricing() {
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex items-start gap-3">
                     <CheckIcon className="w-5 h-5 text-[var(--accent-primary)] flex-shrink-0 mt-0.5" />
-                    <span className="text-[var(--text-secondary)]">
+                    <span className="text-[var(--text-primary)]">
                       {feature}
                     </span>
                   </li>
@@ -119,11 +106,7 @@ export function LandingPricing() {
               {/* CTA Button */}
               <Link
                 href={plan.href}
-                className={`group w-full flex items-center justify-center gap-2 py-3 mt-8 rounded-lg font-medium text-sm tracking-wide transition-colors ${
-                  plan.popular
-                    ? "bg-[var(--accent-primary)] text-white hover:opacity-90"
-                    : "bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)]"
-                }`}
+                className="group w-full flex items-center justify-center gap-2 py-3 mt-8 rounded-lg font-medium text-sm tracking-wide bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)] transition-colors"
               >
                 {plan.cta}
                 <ArrowRightIcon className="w-4 h-4 transition-transform group-hover:translate-x-1" />
