@@ -5,7 +5,7 @@ interface Props {
 export function HealthRecordsIllustration({ className }: Props) {
   return (
     <svg
-      viewBox="0 0 300 200"
+      viewBox="12 20 285 155"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"

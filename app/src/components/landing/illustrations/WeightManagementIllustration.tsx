@@ -5,7 +5,7 @@ interface Props {
 export function WeightManagementIllustration({ className }: Props) {
   return (
     <svg
-      viewBox="0 0 300 200"
+      viewBox="30 10 240 180"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
