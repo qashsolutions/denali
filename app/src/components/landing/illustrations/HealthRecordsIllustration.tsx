@@ -5,61 +5,78 @@ interface Props {
 export function HealthRecordsIllustration({ className }: Props) {
   return (
     <svg
-      viewBox="0 0 280 200"
+      viewBox="0 0 300 200"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label="Health records illustration"
+      aria-label="Claims and appeals illustration showing denied claim becoming approved appeal"
       className={className}
     >
-      {/* Heart rate card */}
-      <rect
-        x="70"
-        y="35"
-        width="140"
-        height="90"
-        rx="8"
-        fill="var(--health-red)"
-        opacity="0.1"
-        stroke="var(--health-red)"
-        strokeWidth="1.5"
-      />
+      {/* Left card: Denied claim */}
+      <rect x="20" y="30" width="120" height="140" rx="10" fill="var(--bg-primary)" stroke="var(--border)" strokeWidth="1" />
 
-      {/* Heart rate line */}
-      <polyline
-        points="85,85 100,85 110,65 118,95 126,55 134,85 145,85 155,85 165,70 175,85 195,85"
-        stroke="var(--health-red)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-        className=""
-      />
+      {/* Denied header bar */}
+      <rect x="20" y="30" width="120" height="32" rx="10" fill="var(--health-red)" opacity="0.1" />
+      <rect x="20" y="52" width="120" height="10" fill="var(--health-red)" opacity="0.1" />
+      <circle cx="38" cy="46" r="8" fill="var(--health-red)" opacity="0.2" />
+      <text x="34" y="49" fontSize="10" fontWeight="700" fill="var(--health-red)">!</text>
+      <text x="52" y="49" fontSize="10" fontWeight="600" fill="var(--health-red)">Denied</text>
 
-      {/* Heart icon */}
-      <path
-        d="M135 50 C135 45 130 42 126 42 C120 42 118 47 118 50 C118 47 116 42 110 42 C106 42 101 45 101 50 C101 60 118 68 118 68 C118 68 135 60 135 50Z"
-        fill="var(--health-red)"
-        opacity="0.3"
-      />
+      {/* Claim details lines */}
+      <text x="32" y="78" fontSize="8" fill="var(--text-muted)" fontFamily="var(--font-mono)">CLAIM</text>
+      <rect x="32" y="83" width="96" height="3" rx="1.5" fill="var(--text-muted)" opacity="0.2" />
+      <rect x="32" y="91" width="72" height="3" rx="1.5" fill="var(--text-muted)" opacity="0.15" />
 
-      {/* Medication pill */}
-      <g className="">
-        <rect x="45" y="140" width="50" height="22" rx="11" fill="var(--health-red)" opacity="0.15" stroke="var(--health-red)" strokeWidth="1.5" />
-        <line x1="70" y1="140" x2="70" y2="162" stroke="var(--health-red)" strokeWidth="1" opacity="0.3" />
+      <text x="32" y="110" fontSize="8" fill="var(--text-muted)" fontFamily="var(--font-mono)">REASON</text>
+      <rect x="32" y="115" width="84" height="3" rx="1.5" fill="var(--health-red)" opacity="0.25" />
+      <rect x="32" y="123" width="60" height="3" rx="1.5" fill="var(--health-red)" opacity="0.15" />
+
+      {/* Amount */}
+      <text x="32" y="148" fontSize="9" fill="var(--text-muted)">You owe</text>
+      <text x="32" y="161" fontSize="14" fontWeight="700" fill="var(--health-red)">$1,240</text>
+
+      {/* Arrow in the middle */}
+      <g>
+        <circle cx="155" cy="100" r="14" fill="var(--accent-primary)" opacity="0.12" />
+        <path
+          d="M149 100 L161 100 M157 95 L162 100 L157 105"
+          stroke="var(--accent-primary)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </g>
 
-      {/* Lab result badge */}
-      <g className="">
-        <rect x="185" y="135" width="55" height="35" rx="6" fill="var(--health-red)" opacity="0.1" stroke="var(--health-red)" strokeWidth="1.5" />
-        <rect x="195" y="145" width="30" height="3" rx="1.5" fill="var(--health-red)" opacity="0.3" />
-        <rect x="195" y="153" width="20" height="3" rx="1.5" fill="var(--health-red)" opacity="0.2" />
-      </g>
+      {/* Right card: Appeal letter */}
+      <rect x="175" y="30" width="120" height="140" rx="10" fill="var(--bg-primary)" stroke="var(--border)" strokeWidth="1" />
 
-      {/* Decorative dots */}
-      <circle cx="50" cy="50" r="3" fill="var(--health-red)" opacity="0.2" />
-      <circle cx="240" cy="60" r="2.5" fill="var(--health-red)" opacity="0.15" />
-      <circle cx="230" cy="110" r="2" fill="var(--health-red)" opacity="0.15" />
+      {/* Approved header bar */}
+      <rect x="175" y="30" width="120" height="32" rx="10" fill="var(--check-teal)" opacity="0.1" />
+      <rect x="175" y="52" width="120" height="10" fill="var(--check-teal)" opacity="0.1" />
+      <circle cx="193" cy="46" r="8" fill="var(--check-teal)" opacity="0.2" />
+      <path d="M189 46 L192 49 L198 43" stroke="var(--check-teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <text x="207" y="49" fontSize="10" fontWeight="600" fill="var(--check-teal)">Appeal</text>
+
+      {/* Appeal letter lines */}
+      <text x="187" y="78" fontSize="8" fill="var(--text-muted)" fontFamily="var(--font-mono)">APPEAL LETTER</text>
+      <rect x="187" y="83" width="96" height="3" rx="1.5" fill="var(--text-primary)" opacity="0.15" />
+      <rect x="187" y="91" width="80" height="3" rx="1.5" fill="var(--text-primary)" opacity="0.1" />
+      <rect x="187" y="99" width="88" height="3" rx="1.5" fill="var(--text-primary)" opacity="0.1" />
+
+      {/* Policy citation badge */}
+      <rect x="187" y="112" width="56" height="16" rx="4" fill="var(--accent-primary)" opacity="0.1" />
+      <text x="193" y="123" fontSize="7" fontWeight="600" fill="var(--accent-primary)" fontFamily="var(--font-mono)">LCD L35936</text>
+
+      <rect x="248" y="112" width="36" height="16" rx="4" fill="var(--accent-primary)" opacity="0.1" />
+      <text x="253" y="123" fontSize="7" fontWeight="600" fill="var(--accent-primary)" fontFamily="var(--font-mono)">ICD-10</text>
+
+      {/* PubMed citation */}
+      <rect x="187" y="134" width="96" height="3" rx="1.5" fill="var(--text-primary)" opacity="0.1" />
+      <rect x="187" y="142" width="72" height="3" rx="1.5" fill="var(--text-primary)" opacity="0.08" />
+
+      {/* Savings */}
+      <text x="187" y="161" fontSize="9" fill="var(--text-muted)">Saved</text>
+      <text x="216" y="161" fontSize="12" fontWeight="700" fill="var(--check-teal)">$1,240</text>
     </svg>
   );
 }

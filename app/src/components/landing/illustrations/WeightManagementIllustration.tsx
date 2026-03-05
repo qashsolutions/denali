@@ -5,103 +5,53 @@ interface Props {
 export function WeightManagementIllustration({ className }: Props) {
   return (
     <svg
-      viewBox="0 0 280 200"
+      viewBox="0 0 300 200"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label="Weight management illustration"
+      aria-label="Weight management coverage cards showing medications and counseling"
       className={className}
     >
-      {/* Scale base */}
-      <rect
-        x="80"
-        y="130"
-        width="120"
-        height="40"
-        rx="8"
-        fill="var(--appeal-coral)"
-        opacity="0.1"
-        stroke="var(--appeal-coral)"
-        strokeWidth="1.5"
-      />
+      {/* Card 1: Medication — Wegovy */}
+      <rect x="40" y="18" width="220" height="48" rx="10" fill="var(--bg-primary)" stroke="var(--border)" strokeWidth="1" />
+      {/* Pill icon circle */}
+      <circle cx="68" cy="42" r="16" fill="var(--accent-primary)" opacity="0.12" />
+      <rect x="58" y="38" width="20" height="8" rx="4" fill="var(--accent-primary)" opacity="0.6" />
+      <line x1="68" y1="38" x2="68" y2="46" stroke="var(--bg-primary)" strokeWidth="0.8" />
+      {/* Text */}
+      <text x="94" y="38" fontSize="11" fontWeight="600" fill="var(--text-primary)">Wegovy (semaglutide)</text>
+      <text x="94" y="52" fontSize="9" fill="var(--text-muted)">GLP-1 · Medicare Part D</text>
+      {/* Status badge */}
+      <rect x="216" y="32" width="36" height="18" rx="9" fill="var(--check-teal)" opacity="0.15" />
+      <text x="234" y="44" fontSize="8" fontWeight="600" fill="var(--check-teal)" textAnchor="middle">Active</text>
 
-      {/* Scale display */}
-      <rect
-        x="110"
-        y="140"
-        width="60"
-        height="20"
-        rx="4"
-        fill="var(--appeal-coral)"
-        opacity="0.08"
-        stroke="var(--appeal-coral)"
-        strokeWidth="1"
-      />
-      <rect x="120" y="147" width="40" height="3" rx="1.5" fill="var(--appeal-coral)" opacity="0.35" />
-      <rect x="128" y="153" width="24" height="2" rx="1" fill="var(--appeal-coral)" opacity="0.2" />
+      {/* Card 2: Counseling — IBT */}
+      <rect x="40" y="76" width="220" height="48" rx="10" fill="var(--bg-primary)" stroke="var(--border)" strokeWidth="1" />
+      {/* Chat icon circle */}
+      <circle cx="68" cy="100" r="16" fill="var(--accent-primary)" opacity="0.12" />
+      <rect x="56" y="93" width="16" height="11" rx="3" fill="var(--accent-primary)" opacity="0.5" />
+      <path d="M60 104 L63 108 L66 104" fill="var(--accent-primary)" opacity="0.5" />
+      {/* Text */}
+      <text x="94" y="96" fontSize="11" fontWeight="600" fill="var(--text-primary)">Obesity Counseling</text>
+      <text x="94" y="110" fontSize="9" fill="var(--text-muted)">IBT · G0447 · Covered</text>
+      {/* Check badge */}
+      <rect x="216" y="90" width="36" height="18" rx="9" fill="var(--check-teal)" opacity="0.15" />
+      <text x="234" y="102" fontSize="8" fontWeight="600" fill="var(--check-teal)" textAnchor="middle">Cover</text>
 
-      {/* Gauge / dial above scale */}
-      <circle
-        cx="140"
-        cy="90"
-        r="40"
-        fill="var(--appeal-coral)"
-        opacity="0.08"
-        stroke="var(--appeal-coral)"
-        strokeWidth="1.5"
-      />
-
-      {/* Gauge tick marks */}
-      <line x1="140" y1="54" x2="140" y2="60" stroke="var(--appeal-coral)" strokeWidth="1.5" opacity="0.3" />
-      <line x1="165" y1="60" x2="162" y2="66" stroke="var(--appeal-coral)" strokeWidth="1" opacity="0.2" />
-      <line x1="115" y1="60" x2="118" y2="66" stroke="var(--appeal-coral)" strokeWidth="1" opacity="0.2" />
-      <line x1="176" y1="78" x2="171" y2="82" stroke="var(--appeal-coral)" strokeWidth="1" opacity="0.2" />
-      <line x1="104" y1="78" x2="109" y2="82" stroke="var(--appeal-coral)" strokeWidth="1" opacity="0.2" />
-
-      {/* Needle */}
-      <line
-        x1="140"
-        y1="90"
-        x2="155"
-        y2="65"
-        stroke="var(--appeal-coral)"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <circle cx="140" cy="90" r="4" fill="var(--appeal-coral)" opacity="0.3" />
-
-      {/* Trend arrow (improving) */}
-      <g>
-        <path
-          d="M45 100 L55 85 L65 90 L75 70"
-          stroke="var(--appeal-coral)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-          opacity="0.4"
-        />
-        <path
-          d="M70 65 L77 70 L72 75"
-          stroke="var(--appeal-coral)"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-          opacity="0.4"
-        />
-      </g>
-
-      {/* Medication capsule */}
-      <g>
-        <rect x="205" y="80" width="40" height="18" rx="9" fill="var(--appeal-coral)" opacity="0.12" stroke="var(--appeal-coral)" strokeWidth="1.5" />
-        <line x1="225" y1="80" x2="225" y2="98" stroke="var(--appeal-coral)" strokeWidth="1" opacity="0.25" />
-      </g>
-
-      {/* Decorative dots */}
-      <circle cx="45" cy="140" r="2.5" fill="var(--appeal-coral)" opacity="0.15" />
-      <circle cx="235" cy="130" r="3" fill="var(--appeal-coral)" opacity="0.2" />
-      <circle cx="245" cy="60" r="2" fill="var(--appeal-coral)" opacity="0.15" />
+      {/* Card 3: Bariatric */}
+      <rect x="40" y="134" width="220" height="48" rx="10" fill="var(--bg-primary)" stroke="var(--border)" strokeWidth="1" />
+      {/* Clipboard icon circle */}
+      <circle cx="68" cy="158" r="16" fill="var(--accent-primary)" opacity="0.12" />
+      <rect x="60" y="150" width="16" height="16" rx="2" fill="none" stroke="var(--accent-primary)" strokeWidth="1.5" opacity="0.5" />
+      <rect x="64" y="147" width="8" height="4" rx="1" fill="var(--accent-primary)" opacity="0.5" />
+      <line x1="64" y1="156" x2="72" y2="156" stroke="var(--accent-primary)" strokeWidth="1" opacity="0.35" />
+      <line x1="64" y1="160" x2="70" y2="160" stroke="var(--accent-primary)" strokeWidth="1" opacity="0.35" />
+      {/* Text */}
+      <text x="94" y="154" fontSize="11" fontWeight="600" fill="var(--text-primary)">Bariatric Surgery</text>
+      <text x="94" y="168" fontSize="9" fill="var(--text-muted)">BMI 35+ · Prior auth required</text>
+      {/* Status badge */}
+      <rect x="210" y="148" width="42" height="18" rx="9" fill="var(--accent-primary)" opacity="0.12" />
+      <text x="231" y="160" fontSize="8" fontWeight="600" fill="var(--accent-primary)" textAnchor="middle">Review</text>
     </svg>
   );
 }

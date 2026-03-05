@@ -16,9 +16,7 @@ const FEATURES = [
     step: "01",
     audience: "DIABETES",
     title: "Diabetes Care",
-    description:
-      "Track screenings, medications, and A1C over time. Personalized guidance when appropriate — direction to your doctor when needed.",
-    tags: ["A1C Tracking", "Screenings", "Med Reminders", "Coverage"],
+    kicker: "Track A1C over time.",
     href: "/app/chat?topic=diabetes",
     Illustration: DiabetesCareIllustration,
   },
@@ -26,9 +24,7 @@ const FEATURES = [
     step: "02",
     audience: "WEIGHT MANAGEMENT",
     title: "Obesity Care",
-    description:
-      "Navigate obesity coverage — GLP-1s, bariatric surgery, nutrition counseling. Know what Medicare covers before you go.",
-    tags: ["GLP-1s", "Bariatric", "Counseling", "Coverage"],
+    kicker: "Know your coverage options.",
     href: "/app/chat?topic=obesity",
     Illustration: WeightManagementIllustration,
   },
@@ -36,9 +32,7 @@ const FEATURES = [
     step: "03",
     audience: "YOUR MEDICARE",
     title: "Claims & Appeals",
-    description:
-      "Claims, coverage, and providers in one place. Denied? We help build the appeal letter with the right codes and citations.",
-    tags: ["Claims", "Coverage Check", "Appeal Letters"],
+    kicker: "Fight denials with evidence.",
     href: "/app/health",
     Illustration: HealthRecordsIllustration,
   },
@@ -67,27 +61,27 @@ function FeatureCard({
         transition-colors duration-300 ease-out
         hover:border-[var(--accent-primary)]/40"
     >
-      {/* Illustration area */}
-      <div className="bg-[var(--bg-tertiary)] flex items-center justify-center py-10 sm:py-12">
-        <Illustration className="w-full max-w-[260px] h-auto" />
-      </div>
-
-      {/* Content area */}
-      <div className="p-8">
-        {/* Step + audience */}
-        <p className="font-[var(--font-mono)] text-xs tracking-[0.1em] uppercase text-[var(--accent-primary)] mb-3">
-          {feature.step} — {feature.audience}
+      {/* Content area — text on top */}
+      <div className="p-8 pb-4 text-center">
+        {/* Step label */}
+        <p className="font-[var(--font-mono)] text-sm tracking-[0.1em] uppercase text-[var(--accent-primary)] mb-3">
+          {feature.step}
         </p>
 
         {/* Title */}
-        <h3 className="font-[var(--font-serif)] text-2xl sm:text-3xl font-normal text-[var(--text-primary)] mb-4">
+        <h3 className="font-[var(--font-serif)] text-2xl sm:text-3xl font-normal text-[var(--text-primary)] mb-2">
           {feature.title}
         </h3>
 
-        {/* Description */}
-        <p className="text-[var(--text-primary)] text-base leading-relaxed">
-          {feature.description}
+        {/* Kicker */}
+        <p className="text-[var(--text-primary)] text-base">
+          {feature.kicker}
         </p>
+      </div>
+
+      {/* Illustration area — below text */}
+      <div className="bg-[var(--bg-tertiary)] flex items-center justify-center py-8 sm:py-10 mx-6 mb-6 rounded-lg">
+        <Illustration className="w-full max-w-[260px] h-auto" />
       </div>
     </Link>
     </div>
