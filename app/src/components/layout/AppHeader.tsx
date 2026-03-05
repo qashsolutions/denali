@@ -140,14 +140,14 @@ export function AppHeader() {
                   key={href}
                   href={href}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg text-base font-medium transition-colors",
+                    "flex items-center gap-2 px-4 py-2 rounded-lg text-base font-bold transition-colors text-[var(--text-primary)]",
                     isActive
-                      ? "bg-[var(--accent-primary)] text-white"
-                      : "text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
+                      ? "border border-[var(--accent-primary)]"
+                      : "border border-transparent hover:bg-[var(--bg-secondary)]"
                   )}
                   aria-current={isActive ? "page" : undefined}
                 >
-                  <Icon className={cn("w-4 h-4", isActive ? "text-white" : color)} />
+                  <Icon className={cn("w-4 h-4", color)} />
                   {label}
                 </Link>
               );
