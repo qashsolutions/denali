@@ -38,12 +38,6 @@ export function LandingFooter({ settings = {} }: LandingFooterProps) {
           {/* Right: Legal links */}
           <div className="flex items-center gap-5">
             <Link
-              href="/faq"
-              className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-            >
-              FAQ
-            </Link>
-            <Link
               href="/privacy"
               className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
             >
