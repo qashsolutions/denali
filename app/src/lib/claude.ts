@@ -436,12 +436,22 @@ export async function chat(
     ? API_CONFIG.claude.iterationTimeoutMs * 2
     : API_CONFIG.claude.iterationTimeoutMs;
 
-  // Convert our tool definitions to Anthropic format
-  const anthropicTools = request.tools.map((tool) => ({
+  // Convert our tool definitions to Anthropic format with prompt caching
+  // Add cache_control to the LAST tool so the entire tools array is cached
+  const anthropicTools = request.tools.map((tool, idx) => ({
     name: tool.name,
     description: tool.description,
     input_schema: tool.input_schema,
+    ...(idx === request.tools.length - 1 ? { cache_control: { type: "ephemeral" as const } } : {}),
   }));
+
+  // Build system prompt as cacheable content blocks
+  // Base prompt is cached; soft cap additions are separate uncached blocks
+  const baseSystemBlock = {
+    type: "text" as const,
+    text: request.systemPrompt,
+    cache_control: { type: "ephemeral" as const },
+  };
 
   const messages = [...request.messages];
   let iterations = 0;
@@ -449,15 +459,27 @@ export async function chat(
   while (iterations < maxIterations) {
     iterations++;
 
+    // Build system blocks for this iteration — base is always cached
+    const systemBlocks: Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }> = [
+      baseSystemBlock,
+    ];
+
     // Appeal mode soft cap: by iteration 4, Claude has denial codes, ICD-10, CPT, coverage, PubMed
     // Force letter generation instead of continuing to search
+    // Added as separate uncached block to preserve cache on base prompt
     if (isAppealModel && iterations === 4) {
-      request.systemPrompt += `\n\n## URGENT: Generate Appeal Letter NOW\nYou have completed ${iterations - 1} tool rounds and should have denial codes, diagnosis/procedure codes, coverage policy, and clinical evidence. STOP calling tools. Use generate_appeal_letter NOW with the data you have. Do NOT search for more information.`;
+      systemBlocks.push({
+        type: "text",
+        text: `\n\n## URGENT: Generate Appeal Letter NOW\nYou have completed ${iterations - 1} tool rounds and should have denial codes, diagnosis/procedure codes, coverage policy, and clinical evidence. STOP calling tools. Use generate_appeal_letter NOW with the data you have. Do NOT search for more information.`,
+      });
     }
 
     // General soft cap: warn Claude to wrap up 2 iterations before the hard limit
     if (iterations === maxIterations - 1) {
-      request.systemPrompt += `\n\n## URGENT: Approaching Tool Limit\nYou have used ${iterations - 1} of ${maxIterations} tool rounds. STOP calling tools after this round.\nUse the data you already have to respond to the user. Generate your response NOW.`;
+      systemBlocks.push({
+        type: "text",
+        text: `\n\n## URGENT: Approaching Tool Limit\nYou have used ${iterations - 1} of ${maxIterations} tool rounds. STOP calling tools after this round.\nUse the data you already have to respond to the user. Generate your response NOW.`,
+      });
     }
 
     // DEBUG: Log what we're sending to Claude
@@ -466,6 +488,8 @@ export async function chat(
     console.log("[CLAUDE API] Model:", model);
     console.log("[CLAUDE API] Timeout:", timeoutMs / 1000, "s per iteration");
     console.log("[CLAUDE API] Tools:", anthropicTools.map(t => t.name).join(", ") || "none");
+    console.log("[CLAUDE API] System blocks:", systemBlocks.length, "(cached:", systemBlocks.filter(b => b.cache_control).length, ")");
+    console.log("[CLAUDE API] Tools cached:", anthropicTools.length > 0 ? "yes (last tool)" : "no tools");
     console.log("========================================");
 
     // Call Claude via AWS Bedrock (IAM auth from ECS task role)
@@ -478,10 +502,10 @@ export async function chat(
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-        const streamResult = await claude.messages.create({
+        const streamResult = await (claude.messages.create as Function)({
           model,
           max_tokens: API_CONFIG.claude.maxTokens,
-          system: request.systemPrompt,
+          system: systemBlocks,
           messages,
           tools: anthropicTools.length > 0 ? anthropicTools : undefined,
           stream: true,
@@ -491,6 +515,7 @@ export async function chat(
         const contentBlocks: Array<Record<string, unknown>> = [];
         let stopReason = "";
         let hasLocalToolUse = false;
+        let streamUsage: Record<string, number> = {};
 
         for await (const event of streamResult) {
           if (event.type === "content_block_start") {
@@ -530,6 +555,13 @@ export async function chat(
           } else if (event.type === "message_delta") {
             const delta = event.delta as unknown as Record<string, unknown>;
             stopReason = (delta.stop_reason as string) || "";
+            // Capture usage stats including cache metrics
+            const eventUsage = (event as unknown as Record<string, unknown>).usage as Record<string, number> | undefined;
+            if (eventUsage) streamUsage = { ...streamUsage, ...eventUsage };
+          } else if (event.type === "message_start") {
+            const msg = (event as unknown as Record<string, unknown>).message as Record<string, unknown> | undefined;
+            const msgUsage = msg?.usage as Record<string, number> | undefined;
+            if (msgUsage) streamUsage = { ...streamUsage, ...msgUsage };
           }
         }
         clearTimeout(timer);
@@ -537,6 +569,7 @@ export async function chat(
         response = {
           content: contentBlocks.filter(Boolean),
           stop_reason: stopReason,
+          usage: streamUsage,
         } as unknown as Message;
 
         console.log("[CLAUDE API] Streaming iteration complete, stop_reason:", stopReason);
@@ -544,10 +577,10 @@ export async function chat(
         // Streaming failed — fall back to non-streaming
         console.warn("[CLAUDE API] Streaming failed, falling back to non-streaming:", streamErr);
         response = await withTimeout(
-          (signal) => claude.messages.create({
+          (signal) => (claude.messages.create as Function)({
             model,
             max_tokens: API_CONFIG.claude.maxTokens,
-            system: request.systemPrompt,
+            system: systemBlocks,
             messages,
             tools: anthropicTools.length > 0 ? anthropicTools : undefined,
           }, { signal }) as Promise<Message>,
@@ -558,10 +591,10 @@ export async function chat(
     } else {
       // Non-streaming path
       response = await withTimeout(
-        (signal) => claude.messages.create({
+        (signal) => (claude.messages.create as Function)({
           model,
           max_tokens: API_CONFIG.claude.maxTokens,
-          system: request.systemPrompt,
+          system: systemBlocks,
           messages,
           tools: anthropicTools.length > 0 ? anthropicTools : undefined,
         }, { signal }) as Promise<Message>,
@@ -570,9 +603,23 @@ export async function chat(
       );
     }
 
-    // DEBUG: Log response content block types
+    // DEBUG: Log response content block types + cache usage
     console.log("[CLAUDE API] Response stop_reason:", response.stop_reason);
     console.log("[CLAUDE API] Response content blocks:", response.content.map(b => b.type).join(", "));
+    // Log prompt caching stats when available
+    const usage = (response as unknown as Record<string, unknown>).usage as Record<string, number> | undefined;
+    if (usage) {
+      const cacheWrite = usage.cache_creation_input_tokens || 0;
+      const cacheRead = usage.cache_read_input_tokens || 0;
+      const inputTokens = usage.input_tokens || 0;
+      const outputTokens = usage.output_tokens || 0;
+      console.log(`[CLAUDE API] Tokens — input: ${inputTokens}, output: ${outputTokens}, cache_write: ${cacheWrite}, cache_read: ${cacheRead}`);
+      if (cacheRead > 0) {
+        console.log(`[CLAUDE API] ✓ Cache HIT — saved ${cacheRead} tokens at 90% discount`);
+      } else if (cacheWrite > 0) {
+        console.log(`[CLAUDE API] ○ Cache WRITE — ${cacheWrite} tokens cached for next call`);
+      }
+    }
 
     // Check if Claude wants to use tools
     const toolUseBlocks = response.content.filter(
