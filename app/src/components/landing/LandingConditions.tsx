@@ -85,7 +85,7 @@ export function LandingConditions() {
         <div className="text-center mb-12 sm:mb-16">
           <h2 className="font-[var(--font-serif)] text-2xl sm:text-3xl lg:text-4xl font-normal text-[var(--text-primary)] mb-4">
             Analysis grounded in your{" "}
-            <span className="text-[var(--accent-primary)]">Blue Button 2.0</span> data
+            <span className="text-[var(--accent-primary)]">Medicare</span> data
           </h2>
         </div>
 

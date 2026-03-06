@@ -17,7 +17,7 @@ const FEATURES = [
     step: "01",
     audience: "DIABETES",
     title: "Pre-Diabetes & Diabetes Care",
-    kicker: "Track A1C over time.",
+    kicker: "Track A1C screenings over time.",
     href: "/app/chat?topic=diabetes",
     Illustration: DiabetesCareIllustration,
   },
