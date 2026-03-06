@@ -66,10 +66,10 @@ function ConditionRow({
           imageFirst ? "md:order-2" : "md:order-1"
         }`}
       >
-        <h3 className="font-[var(--font-serif)] text-2xl sm:text-3xl font-normal text-[var(--text-primary)] mb-3">
+        <h3 className="font-[var(--font-serif)] text-3xl sm:text-4xl lg:text-5xl font-normal text-[var(--text-primary)] mb-4">
           {condition.title}
         </h3>
-        <p className="text-base sm:text-lg text-[var(--text-secondary)] leading-relaxed">
+        <p className="text-lg sm:text-xl lg:text-2xl text-[var(--text-primary)] leading-relaxed">
           {condition.description}
         </p>
       </div>
