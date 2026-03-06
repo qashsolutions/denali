@@ -66,9 +66,6 @@ function ConditionRow({
           imageFirst ? "md:order-2" : "md:order-1"
         }`}
       >
-        <p className="font-[var(--font-mono)] text-sm font-bold tracking-[0.1em] uppercase text-[var(--accent-primary)] mb-2">
-          {String(index + 1).padStart(2, "0")}
-        </p>
         <h3 className="font-[var(--font-serif)] text-2xl sm:text-3xl font-normal text-[var(--text-primary)] mb-3">
           {condition.title}
         </h3>
