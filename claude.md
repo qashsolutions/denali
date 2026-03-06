@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-05 (5-tier pricing restructure: Anonymous/Trial/Starter/Plus/Unlimited, Sonnet 4.6 for chat, weekly frequency limits, rolling anonymous cap, all paid plans monthly subscriptions; previous: CMS provider referral, emergency regex expanded, RiskAlerts obesity alerts, landing page pricing hardcoded, ECS task def :33)
+     Last updated: 2026-03-05 (Health Summary Report: auto-generated after BB connect, shareable via public link + email, 12-section ReportView; BB data gap closure: DME, hospice safety gate, diagnosis types, NDC, network status; trial limit 2→10 msgs/day; previous: 5-tier pricing restructure)
      Maintainer: @cvr
 -->
 
@@ -61,7 +61,7 @@
 | **NOT for** | Commercial payers, Medicaid, billers, coders |
 | **Tone** | Warm, simple, no jargon, empathetic, 8th grade reading level |
 | **Anonymous** | 4 messages total in 14-day window, no signup |
-| **Trial** | 14-day free trial, 2 msgs/day, 1 day/week, no appeals (email OTP) |
+| **Trial** | 14-day free trial, 10 msgs/day, 1 day/week, no appeals (email OTP) |
 | **Starter** | $10/month, 2 msgs/day, 1 day/week, 1 appeal credit |
 | **Plus** | $20/month, 5 msgs/day, 5 days/week, 2 appeal credits |
 | **Unlimited** | $60/month, unlimited msgs, unlimited appeals |
@@ -174,8 +174,11 @@ Where to find specific logic in the codebase.
 | `src/lib/session-state.ts` | SessionState type definition. Includes `consentHealthDataAi` (toggle state) and `blueButtonConnected` (Blue Button connected even when consent OFF) |
 | `src/lib/denial-patterns.ts` | Async RDS queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
 | `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via `query()` (admin DB user, bypasses no RLS — RDS has none). Non-blocking fire-and-forget. Write-side dedup: `FHIR_DATA_ACCESS` skips insert if same user+action logged within 2h (`DEDUP_WINDOWS` map) |
-| `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformPatient()` extracts ONLY age+gender from FHIR Patient — no name/DOB/address/Medicare ID per Privacy §2 + `transformEOB()` extracts PDE info/careTeam/POS/inpatient fields + `classifyDiabetesStatus()`), `eob-clinical.ts` (clinical extraction pipeline — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 8 resource types), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
+| `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformPatient()` extracts ONLY age+gender from FHIR Patient — no name/DOB/address/Medicare ID per Privacy §2 + `transformEOB()` extracts PDE info/careTeam/POS/inpatient/diagnosis-types/NDC/network fields + `classifyDiabetesStatus()` + `DMESummary`/`WeightMeasurement` types), `eob-clinical.ts` (clinical extraction pipeline — 8 extractors including `extractDMEFromClaims()`, `extractPatientWeight()`, `detectHospiceStatus()` — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials + DME + hospice safety gate), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 11 resource types including dme, hospice_status, sync_meta), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
 | `src/lib/diabetes-insights.ts` | Claude-powered diabetes insight generation via `getClaudeClient()` (Bedrock in production). `generateDiabetesInsight(data)` calls Claude for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls |
+| `src/lib/health-report.ts` | Claude-powered health summary report generation. `generateHealthReport()` calls Sonnet 4.6 for structured JSON analysis covering 12 sections (red flags, diabetes, obesity, pre-diabetes resources, conditions, medications, DME, screenings, care team, denials, hospice). `computeReportHash()` for dedup. `HealthReport` type definition |
+| `src/components/health/ReportView.tsx` | Shared report renderer used by public `/report/[token]` page and in-app `/app/health/report`. 12 sections with severity-coded cards, pre-diabetes CDC risk test link (CMS criterion #4), hospice notice, disclaimers |
+| `src/hooks/useHealthReport.ts` | Client hook for report management. Returns `{ report, isLoading, isGenerating, shareUrl, regenerate, emailReport }`. Polls status while generating (3s interval, max 60s) |
 | `src/components/diabetes/` | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from CPT-based `ScreeningHistory[]`), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up, med refill gaps, specialty gaps, post-discharge follow-up, obesity alerts — no counseling/med refill/obesity+diabetes+no endo — with "Find a specialist" CTAs and optional `ctaLabel`), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display) |
 | `src/components/health/DiagnosisSummaryCard.tsx` | Renders "Conditions in Your Claims" list with severity color-coding. `getSeverityConfig()`: structured `DiagnosisSummary` category → `RED_KEYWORDS` (21 terms: neoplasm, cancer, stroke, heart failure, morbid obesity, severe obesity, obesity class iii, etc.) → `AMBER_KEYWORDS` (27 terms: hypertension, thyroid, anemia, COPD, etc.) → gray. `cleanDiagnosisName()` strips U+25CC combining mark artifacts from FHIR data |
 | `src/hooks/useDiabetesSnapshots.ts` | Fetches longitudinal lab data from `diabetes_snapshots`. Returns `{ snapshots, a1cHistory, isLoading }` |
@@ -199,7 +202,7 @@ Where to find specific logic in the codebase.
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table. Default all OFF. Three enforcement points: `health_data_ai` → chat/page.tsx strips health data from sessionState + context.ts blocks prompt injection; `health_data_storage` → useHealthData.ts gates IndexedDB caching; `analytics` → conversation-service.ts gates trackEvent calls |
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations. IndexedDB write-through + offline fallback |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
-| `src/config/pricing.ts` | 5-tier pricing: `TRIAL_APPEAL_CREDITS: 0`, daily chat limits (`TRIAL: 2`, `STARTER: 2`, `PLUS: 5`, `UNLIMITED: 0`), weekly limits (`TRIAL: 1`, `STARTER: 1`, `PLUS: 5`, `UNLIMITED: 0`), anonymous rolling cap (`ANON_ROLLING_MAX: 4`, window 14 days), Stripe price IDs for 3 subscriptions (`STARTER/PLUS/UNLIMITED`) |
+| `src/config/pricing.ts` | 5-tier pricing: `TRIAL_APPEAL_CREDITS: 0`, daily chat limits (`TRIAL: 10`, `STARTER: 2`, `PLUS: 5`, `UNLIMITED: 0`), weekly limits (`TRIAL: 1`, `STARTER: 1`, `PLUS: 5`, `UNLIMITED: 0`), anonymous rolling cap (`ANON_ROLLING_MAX: 4`, window 14 days), Stripe price IDs for 3 subscriptions (`STARTER/PLUS/UNLIMITED`) |
 | `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade + credit add), `handleSubscriptionEvent()` (lifecycle + monthly credit reset). Uses admin client |
 | `src/components/payment/PaywallModal.tsx` | Paywall UI: 3-plan selector (Starter/Plus/Unlimited), Stripe subscription checkout. CSS variables for theme. No dev bypass |
 | `src/components/appeal/AppealGate.tsx` | Appeal access orchestration: email OTP → TOTP → access check → PaywallModal pipeline |
@@ -235,7 +238,7 @@ src/app/api/
   profile/route.ts            # GET user profile: plan, role, is_admin, appeal credits
   appeal-outcome/route.ts     # POST record appeal result
   audit-log/route.ts          # GET audit log grouped by action+day
-  account/delete/route.ts     # DELETE cascade: fhir_cache→ehr_connections→diabetes_*→messages→appeals→conversations→usage→subscriptions(+Stripe)→user_events→user_verification→users→Cognito AdminDeleteUser. Admin blocked (403). audit_logs survive (HIPAA 6yr).
+  account/delete/route.ts     # DELETE cascade: health_reports→fhir_cache→ehr_connections→diabetes_*→messages→appeals→conversations→usage→subscriptions(+Stripe)→user_events→user_verification→users→Cognito AdminDeleteUser. Admin blocked (403). audit_logs survive (HIPAA 6yr).
   checkout/route.ts           # POST Stripe checkout session
   consent/route.ts            # GET/PUT consent preferences
   preferences/topics/route.ts # GET/PUT user topic preferences (max 2: diabetes, obesity)
@@ -249,6 +252,12 @@ src/app/api/
   diabetes/log/route.ts       # GET/POST/DELETE daily log entries
   diabetes/insights/route.ts  # GET/POST Claude-generated diabetes analysis
   diabetes/snapshots/route.ts # GET longitudinal lab history from diabetes_snapshots
+  health-report/route.ts       # GET latest health report for user
+  health-report/generate/route.ts # POST generate health report (Claude Sonnet 4.6)
+  health-report/[id]/route.ts  # GET specific report by ID
+  health-report/share/[token]/route.ts # GET public share (no auth, 30-day expiry)
+  health-report/pdf/[id]/route.ts # GET download report as text file
+  health-report/email/route.ts # POST email report via Resend
   webhooks/stripe/route.ts    # POST Stripe webhook events
   admin/cms/route.ts          # GET/PATCH CMS content tables (admin only)
   admin/email/policy-change/route.ts  # POST 30-day policy change email to all users (admin only, dry-run support)
@@ -368,6 +377,7 @@ These tools are local executors in `tools/index.ts` that call free public govern
 | `diabetes_log` | User-entered daily entries (glucose/activity/meal/note). Any signed-in user. CHECK constraint on entry_type. RLS: users CRUD own |
 | `diabetes_insights` | Claude-generated diabetes analysis (summary, recommendations, risk_alerts, screening_reminders). Unique on user_id. Hash-based dedup avoids redundant Claude calls. RLS: users read own, service_role manages |
 | `chat_daily_usage` | Daily chat message rate limiting. Columns: `identifier` (user_id or IP), `usage_date`, `message_count`. Unique on `(identifier, usage_date)`. Managed by `check_and_increment_chat` RPC |
+| `health_reports` | Claude-generated health summary reports. Columns: id (UUID PK), user_id (FK→users CASCADE), share_token (UUID UNIQUE), status (pending/generating/ready/failed), report_data (JSONB — `HealthReport` type), source_hash (dedup), expires_at (30-day default), created_at, updated_at. Public share via `/report/[token]` (no auth). Auto-generated after Blue Button connect. Cascade deleted on account deletion |
 | `blog_posts` | Public blog content. Columns: slug (UNIQUE), title, kicker, key_message, body, category, cta_text, cta_url, sources (TEXT[]), tags (TEXT[]), meta_title, meta_description, published (bool), published_at. 16 posts across 4 categories: denial-codes (3), coverage (3+6 topic posts), appeals (2), prior-auth (2). Tags: `medicare-general` (all 10 originals), `diabetes` (3), `obesity` (3), some dual-tagged (e.g., GLP-1 article). Seeded via `scripts/migrate-blog.js` + `scripts/migrate-blog-topics.js`. ON CONFLICT (slug) DO NOTHING for idempotency |
 | `user_topic_preferences` | User content topic selections (max 2). Columns: id (UUID PK), user_id (FK→users, CASCADE), topic (TEXT, CHECK IN diabetes/obesity/medicare-general), created_at. Unique index on `(user_id, topic)`. Used by blog page SSR for personalized content grouping |
 
@@ -530,7 +540,7 @@ Reuses existing `sessionState` (ICD-10, CPT, policy refs from earlier coverage f
 | Plan | Price | Appeals/30d | Chat Messages/Day | Weekly Frequency | Auth Required |
 |------|-------|-------------|-------------------|-----------------|---------------|
 | Anonymous | $0 | — | N/A | N/A | None |
-| Trial (14 days) | $0 | 0 | 2 | 1 day/week | Email OTP |
+| Trial (14 days) | $0 | 0 | 10 | 1 day/week | Email OTP |
 | Expired (post-trial) | — | — | 0 (locked) | — | Email OTP |
 | Starter | $10/month | 1 credit | 2 | 1 day/week | Email OTP |
 | Plus | $20/month | 2 credits | 5 | 5 days/week | Email OTP |
@@ -548,7 +558,7 @@ Every signup = automatic 14-day trial. After trial expires → locked (0 chats, 
 | Feature | Auth Required |
 |---------|---------------|
 | Anonymous chat (4 msgs/14-day rolling) | None |
-| 14-day trial (2 msgs/day, 1 day/week) | Email OTP |
+| 14-day trial (10 msgs/day, 1 day/week) | Email OTP |
 | Post-trial (locked) | Email OTP + Subscription to continue |
 | Starter (2 msgs/day, 1 day/week, 1 appeal) | Email OTP + $10/month |
 | Plus (5 msgs/day, 5 days/week, 2 appeals) | Email OTP + $20/month |
@@ -779,14 +789,20 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 | `extractScreeningsFromClaims()` | Carrier/Outpatient claims | `ScreeningHistory[]` | Matches `procedureCodes[]` against `SCREENING_CPT_MAP` (20 CPT codes → 9 screening types: A1C, eye-exam, kidney, ECG, office-visit, nutrition, DSMT, metabolic-panel, obesity-counseling). Dedupes by type, computes monthsSinceLast + isOverdue |
 | `extractProvidersFromClaims()` | All claims with careTeam | `ProviderDetail[]` | Aggregates by NPI, tracks specialty, visit count, claim types. From `careTeam[]` extracted in `transformEOB()` |
 | `extractHospitalizationsFromClaims()` | Inpatient/SNF claims | `HospitalizationSummary[]` | Filters inpatient claims, computes LOS, daysSinceDischarge, needsFollowUp (< 30 days). Admission type + discharge status from `supportingInfo[]` |
+| `extractDMEFromClaims()` | DME claims | `DMESummary[]` | Maps HCPCS codes (E0607, E2100, A4253, E0601, E0784, etc.) to categories (glucose-monitor, cpap, insulin-pump, test-strips, etc.) with diabetes/obesity relevance flags |
+| `extractPatientWeight()` | Professional/Carrier claims | `WeightMeasurement[]` | Scans `supportingInfo` for `patientweight` category. Returns empty if BB doesn't populate (placeholder) |
+| `detectHospiceStatus()` | All claims | `boolean` | Returns true if ANY hospice claim exists. **SAFETY**: triggers hospice gate in AI prompt + suppresses risk alerts |
 
-**Data flow**: Blue Button FHIR → `transformEOB()` (extracts PDE/careTeam/POS/inpatient fields onto `ClaimSummary`) → `eob-clinical.ts` extractors → `sync.ts` caches 8 resource types → `useHealthData` hook → `context.ts` prompt injection + `chat/page.tsx` SessionState bridge
+**Data flow**: Blue Button FHIR → `transformEOB()` (extracts PDE/careTeam/POS/inpatient/diagnosis-types/NDC/network fields onto `ClaimSummary`) → `eob-clinical.ts` extractors (8 functions) → `sync.ts` caches 11 resource types (patient, coverage, eob, conditions, medications, screenings, providers, hospitalizations, dme, hospice_status, sync_meta) → `useHealthData` hook → `context.ts` prompt injection + `chat/page.tsx` SessionState bridge
 
 **`transformEOB()` enrichments** (in `transforms.ts`):
 - `extractPDEInfo()`: Reads `supportingInfo[]` for dayssupply, refillnum, brandgenericindicator → `ClaimSummary.pdeInfo`
 - `extractCareTeam()`: Maps `careTeam[]` to NPI + name + role + specialty → `ClaimSummary.careTeam`
 - `extractPlaceOfService()`: Maps `item[].locationCodeableConcept` via `POS_CODE_MAP` → `ClaimSummary.placeOfService`
 - Inpatient: `extractAdmissionType()`, `extractDRGCode()`, `extractDischargeStatus()` from `supportingInfo[]` → `ClaimSummary` fields (only populated for inpatient claim types)
+- Diagnosis types: `extractDiagnosisTypes()` maps `diagnosis[].type` to primary/secondary, populates `primaryDiagnosis`, `diagnosisTypes`, `presentOnAdmission` on `ClaimSummary`
+- NDC codes: `extractNDCCodes()` extracts 11-digit NDC from PDE `item.productOrService.coding` → `ClaimSummary.ndcCodes`
+- Network status: `extractNetworkStatus()` reads `item.adjudication[billingnetworkstatus]` → `ClaimSummary.networkStatus` ("in"/"out"/null)
 
 ### Condition Severity Classification
 
