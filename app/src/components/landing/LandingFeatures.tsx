@@ -81,7 +81,7 @@ function FeatureCard({
       </div>
 
       {/* Illustration area — fills most of card */}
-      <div className="bg-[var(--bg-tertiary)] flex items-center justify-center mx-3 mb-3 rounded-lg flex-1 p-4">
+      <div className="flex items-center justify-center mx-2 mb-2 flex-1">
         <Illustration className="w-full h-full" />
       </div>
     </Link>
