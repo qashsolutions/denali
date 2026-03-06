@@ -60,10 +60,10 @@ function FeatureCard({
       href={feature.href}
       className="group relative flex flex-col bg-[var(--bg-primary)] rounded-xl border border-[var(--border)] overflow-hidden
         transition-colors duration-300 ease-out
-        hover:border-[var(--accent-primary)]/40 min-h-[420px] sm:min-h-[480px]"
+        hover:border-[var(--accent-primary)]/40"
     >
-      {/* Content area — compact text on top */}
-      <div className="px-6 pt-5 pb-2 text-center">
+      {/* Content area — text on colored background */}
+      <div className="px-6 pt-5 pb-3 text-center bg-[var(--bg-tertiary)] rounded-t-xl">
         {/* Step label */}
         <p className="font-[var(--font-mono)] text-lg font-bold tracking-[0.1em] uppercase text-[var(--accent-primary)] mb-1">
           {feature.step}
@@ -80,9 +80,9 @@ function FeatureCard({
         </p>
       </div>
 
-      {/* Illustration area — fills most of card */}
-      <div className="flex items-center justify-center mx-2 mb-2 flex-1">
-        <Illustration className="w-full h-full" />
+      {/* Illustration area */}
+      <div className="flex items-center justify-center px-3 pt-2 pb-1">
+        <Illustration className="w-full h-auto" />
       </div>
     </Link>
     </div>
