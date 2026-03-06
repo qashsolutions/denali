@@ -20,6 +20,7 @@ import type {
   ScreeningHistory,
   ProviderDetail,
   HospitalizationSummary,
+  DMESummary,
 } from "@/lib/fhir/transforms";
 import { computeDashboardMetrics, type HealthDashboardMetrics } from "@/lib/health-analytics";
 
@@ -33,6 +34,8 @@ interface UseHealthDataReturn {
   screenings: ScreeningHistory[];
   providers: ProviderDetail[];
   hospitalizations: HospitalizationSummary[];
+  dme: DMESummary[];
+  isHospice: boolean;
   metrics: HealthDashboardMetrics;
   isConnected: boolean;
   isLoading: boolean;
@@ -61,6 +64,8 @@ export function useHealthData(): UseHealthDataReturn {
   const [screenings, setScreenings] = useState<ScreeningHistory[]>([]);
   const [providers, setProviders] = useState<ProviderDetail[]>([]);
   const [hospitalizations, setHospitalizations] = useState<HospitalizationSummary[]>([]);
+  const [dme, setDme] = useState<DMESummary[]>([]);
+  const [isHospice, setIsHospice] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
@@ -89,6 +94,8 @@ export function useHealthData(): UseHealthDataReturn {
       setScreenings(data.screenings ?? []);
       setProviders(data.providers ?? []);
       setHospitalizations(data.hospitalizations ?? []);
+      setDme(data.dme ?? []);
+      setIsHospice(data.isHospice ?? false);
       setLastSynced(data.lastSynced ? new Date(data.lastSynced) : null);
 
       // Write-through: cache full health snapshot only if user has consented to local storage
@@ -104,6 +111,8 @@ export function useHealthData(): UseHealthDataReturn {
           screenings: data.screenings,
           providers: data.providers,
           hospitalizations: data.hospitalizations,
+          dme: data.dme,
+          isHospice: data.isHospice,
           lastSynced: data.lastSynced,
         });
       }
@@ -120,6 +129,8 @@ export function useHealthData(): UseHealthDataReturn {
         screenings: ScreeningHistory[];
         providers: ProviderDetail[];
         hospitalizations: HospitalizationSummary[];
+        dme?: DMESummary[];
+        isHospice?: boolean;
         lastSynced: string | null;
       }>(STORES.HEALTH_DATA, "snapshot", TTL.HEALTH_DATA);
 
@@ -135,6 +146,8 @@ export function useHealthData(): UseHealthDataReturn {
         setScreenings(d.screenings ?? []);
         setProviders(d.providers ?? []);
         setHospitalizations(d.hospitalizations ?? []);
+        setDme(d.dme ?? []);
+        setIsHospice(d.isHospice ?? false);
         setLastSynced(d.lastSynced ? new Date(d.lastSynced) : null);
       } else {
         setError("Unable to connect. Please try again.");
@@ -167,6 +180,8 @@ export function useHealthData(): UseHealthDataReturn {
         setScreenings([]);
         setProviders([]);
         setHospitalizations([]);
+        setDme([]);
+        setIsHospice(false);
         setLastSynced(null);
       }
     } catch {
@@ -193,6 +208,8 @@ export function useHealthData(): UseHealthDataReturn {
     screenings,
     providers,
     hospitalizations,
+    dme,
+    isHospice,
     metrics,
     isConnected,
     isLoading,

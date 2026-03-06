@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
     const connected = await hasActiveConnection(user.userId);
     if (!connected) {
       return NextResponse.json(
-        { connected: false, patient: null, coverage: [], claims: [], labs: [], conditions: [], medications: [], screenings: [], providers: [], hospitalizations: [] }
+        { connected: false, patient: null, coverage: [], claims: [], labs: [], conditions: [], medications: [], screenings: [], providers: [], hospitalizations: [], dme: [], isHospice: false }
       );
     }
 

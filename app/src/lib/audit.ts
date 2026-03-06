@@ -24,7 +24,10 @@ export type AuditAction =
   | "DIABETES_INSIGHT_GENERATED"
   | "DIABETES_LOG_ENTRY"
   | "PREFERENCES_UPDATED"
-  | "POLICY_CHANGE_EMAIL";
+  | "POLICY_CHANGE_EMAIL"
+  | "HEALTH_REPORT_GENERATED"
+  | "REPORT_SHARED_ACCESS"
+  | "REPORT_EMAILED";
 
 type ResourceType =
   | "ehr_connection"

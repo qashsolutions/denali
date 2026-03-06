@@ -6,6 +6,7 @@ import Link from "next/link";
 import { HeartPulseIcon, DiabetesIcon, WeightScaleIcon } from "@/components/icons";
 import { useHealthData } from "@/hooks/useHealthData";
 import { useAuth } from "@/hooks/useAuth";
+import { useHealthReport } from "@/hooks/useHealthReport";
 import { getSeverityConfig } from "@/components/health/DiagnosisSummaryCard";
 import {
   ConnectMedicare,
@@ -520,6 +521,12 @@ function HealthPageInner() {
     refresh,
   } = useHealthData();
 
+  const {
+    report: healthReport,
+    isGenerating: reportGenerating,
+    shareUrl: reportShareUrl,
+  } = useHealthReport();
+
   // Handle OAuth callback params
   const oauthError = searchParams.get("error");
   useEffect(() => {
@@ -648,6 +655,42 @@ function HealthPageInner() {
 
       <div className="space-y-3">
         <AIDisclaimer />
+
+        {/* Health Report Banner */}
+        {healthReport?.status === "ready" && (
+          <div className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--accent-primary)]/30 p-4 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[var(--accent-primary)]/10 flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-[var(--accent-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">
+                Your Health Summary Report is ready
+              </p>
+              <p className="text-xs text-[var(--text-secondary)]">
+                Personalized report with coverage guidance, screenings, and action items.
+              </p>
+            </div>
+            <Link
+              href="/app/health/report"
+              className="px-3 py-1.5 rounded-lg bg-[var(--accent-primary)] text-white text-xs font-medium hover:opacity-90 shrink-0"
+            >
+              View
+            </Link>
+          </div>
+        )}
+        {reportGenerating && (
+          <div className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border)] p-4 flex items-center gap-3">
+            <svg className="animate-spin w-4 h-4 text-[var(--accent-primary)] shrink-0" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+              <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+            </svg>
+            <p className="text-sm text-[var(--text-secondary)]">
+              Generating your health summary report...
+            </p>
+          </div>
+        )}
 
         {/* 1. Needs Attention */}
         {cardStatuses["needs-attention"].visible && (

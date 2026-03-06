@@ -17,7 +17,7 @@ const PLANS: Plan[] = [
     price: "$0",
     period: "14 days",
     features: [
-      "2 messages per day, 1 day/week",
+      "10 messages per day, 1 day/week",
       "Medicare coverage lookups",
       "No appeal letters",
       "No credit card required",

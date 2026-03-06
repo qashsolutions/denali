@@ -22,6 +22,7 @@ interface RiskAlertsProps {
   providers?: ProviderDetail[];
   hospitalizations?: HospitalizationSummary[];
   screenings?: ScreeningHistory[];
+  isHospice?: boolean;
 }
 
 interface Alert {
@@ -31,10 +32,12 @@ interface Alert {
   ctaLabel?: string;
 }
 
-export function RiskAlerts({ labs, conditions, medications, classification, a1cHistory, providers, hospitalizations, screenings }: RiskAlertsProps) {
+export function RiskAlerts({ labs, conditions, medications, classification, a1cHistory, providers, hospitalizations, screenings, isHospice }: RiskAlertsProps) {
   const router = useRouter();
 
   const alerts = useMemo(() => {
+    // SAFETY: Suppress all risk alerts for hospice patients
+    if (isHospice) return [];
     const result: Alert[] = [];
 
     const latestA1C = labs.find((l) => l.name.toLowerCase().includes("a1c"));
@@ -162,7 +165,7 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
     }
 
     return result;
-  }, [labs, conditions, medications, classification, a1cHistory, providers, hospitalizations, screenings]);
+  }, [labs, conditions, medications, classification, a1cHistory, providers, hospitalizations, screenings, isHospice]);
 
   if (alerts.length === 0) return null;
 

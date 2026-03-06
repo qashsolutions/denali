@@ -134,6 +134,17 @@ export interface SessionState {
     needsFollowUp: boolean;
   }>;
 
+  // DME supplies (P4 — from DME claims)
+  dme?: Array<{
+    category: string;
+    items: string[];
+    isRelevantToDiabetes: boolean;
+    isRelevantToObesity: boolean;
+  }>;
+
+  // Hospice status (P4 — SAFETY flag)
+  isHospice?: boolean;
+
   // Recent claims (top 5 most recent for EOB review)
   recentClaims?: Array<{
     serviceDate: string;

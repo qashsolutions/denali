@@ -47,7 +47,8 @@ export async function DELETE(request: NextRequest) {
 
     // --- Cascade deletion in FK-safe order ---
 
-    // 0. Delete EHR connections and FHIR cache (Blue Button data)
+    // 0. Delete health reports, EHR connections, and FHIR cache (Blue Button data)
+    await query(`DELETE FROM health_reports WHERE user_id = $1`, [userId]);
     await query(`DELETE FROM fhir_cache WHERE user_id = $1`, [userId]);
     await query(`DELETE FROM ehr_connections WHERE user_id = $1`, [userId]);
 

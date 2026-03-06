@@ -61,6 +61,12 @@ export interface ClaimSummary {
   admissionType?: string;
   drgCode?: string;
   dischargeStatus?: string;
+  // P4: Diagnosis classification + network + NDC
+  primaryDiagnosis?: string;          // First diagnosis with type "principal" or "primary"
+  diagnosisTypes?: Record<string, string>; // code → "principal"|"secondary"|"admitting"
+  presentOnAdmission?: Record<string, string>; // code → "Y"|"N"|"U"|"W"
+  networkStatus?: "in" | "out" | null;
+  ndcCodes?: string[];                // 11-digit NDC from PDE item.productOrService
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -99,9 +105,10 @@ interface FhirEOB {
   diagnosis?: Array<{
     diagnosisCodeableConcept?: { coding?: Array<{ code?: string; display?: string }> };
     type?: Array<{ coding?: Array<{ code?: string }> }>;
+    onAdmission?: { coding?: Array<{ code?: string }> };
   }>;
   item?: Array<{
-    productOrService?: { coding?: Array<{ code?: string; display?: string }> };
+    productOrService?: { coding?: Array<{ code?: string; display?: string; system?: string }> };
     servicedDate?: string;
     quantity?: { value?: number; unit?: string };
     locationCodeableConcept?: { coding?: Array<{ code?: string; display?: string }> };
@@ -200,15 +207,39 @@ export function transformEOB(eob: FhirEOB): ClaimSummary {
   const diagnosisEntries = (eob.diagnosis ?? [])
     .map((d) => {
       const coding = d.diagnosisCodeableConcept?.coding?.[0];
+      const typeCode = d.type?.[0]?.coding?.[0]?.code?.toLowerCase() ?? "";
+      const onAdmCode = d.onAdmission?.coding?.[0]?.code ?? undefined;
       return {
         display: coding?.display ?? coding?.code ?? null,
         code: coding?.code ?? null,
+        typeCode,
+        onAdmCode,
       };
     })
     .filter((d) => d.display !== null);
   const diagnosis = diagnosisEntries.map((d) => d.display as string);
   // Parallel to diagnosis[] — "" where ICD-10 code is unavailable
   const diagnosisCodes = diagnosisEntries.map((d) => d.code ?? "");
+
+  // P4: Diagnosis types + primary diagnosis + present on admission
+  const diagnosisTypes: Record<string, string> = {};
+  const presentOnAdmission: Record<string, string> = {};
+  let primaryDiagnosis: string | undefined;
+  for (const entry of diagnosisEntries) {
+    if (!entry.code) continue;
+    if (entry.typeCode) {
+      const normalizedType = entry.typeCode === "principal" || entry.typeCode === "primary"
+        ? "principal"
+        : entry.typeCode === "admitting" ? "admitting" : "secondary";
+      diagnosisTypes[entry.code] = normalizedType;
+      if (!primaryDiagnosis && (entry.typeCode === "principal" || entry.typeCode === "primary")) {
+        primaryDiagnosis = entry.code;
+      }
+    }
+    if (entry.onAdmCode) {
+      presentOnAdmission[entry.code] = entry.onAdmCode;
+    }
+  }
 
   // Procedures from line items (display names + CPT/HCPCS/NDC codes, kept parallel)
   const procedureEntries = (eob.item ?? [])
@@ -235,6 +266,12 @@ export function transformEOB(eob: FhirEOB): ClaimSummary {
 
   // P1: PDE info (Part D claims)
   const pdeInfo = extractPDEInfo(eob);
+
+  // P4: NDC codes from PDE item.productOrService
+  const ndcCodes = extractNDCCodes(eob, typeCode);
+
+  // P4: Network status from adjudication
+  const networkStatus = extractNetworkStatus(eob);
 
   // P2: Care team + place of service
   const careTeam = extractCareTeam(eob);
@@ -269,6 +306,11 @@ export function transformEOB(eob: FhirEOB): ClaimSummary {
     admissionType: isInpatientType(typeCode) ? admissionType : undefined,
     drgCode: isInpatientType(typeCode) ? drgCode : undefined,
     dischargeStatus: isInpatientType(typeCode) ? dischargeStatus : undefined,
+    primaryDiagnosis,
+    diagnosisTypes: Object.keys(diagnosisTypes).length > 0 ? diagnosisTypes : undefined,
+    presentOnAdmission: Object.keys(presentOnAdmission).length > 0 ? presentOnAdmission : undefined,
+    networkStatus,
+    ndcCodes: ndcCodes.length > 0 ? ndcCodes : undefined,
   };
 }
 
@@ -289,6 +331,7 @@ export interface DiagnosisSummary {
   name: string;        // "Type 2 diabetes mellitus"
   category: "type1" | "type2" | "pre-diabetic" | "other-diabetes" | "obesity" | "other";
   recordedDate: string;
+  isPrimary?: boolean; // from diagnosis type extraction (principal/primary)
 }
 
 export interface MedicationSummary {
@@ -307,6 +350,7 @@ export interface MedicationSummary {
   lastFillDate?: string;
   estimatedRunOutDate?: string;
   gapDays?: number;     // positive = overdue by this many days
+  ndcCode?: string;     // 11-digit NDC for precise drug identification
 }
 
 export type DiabetesClassification = "diabetic" | "pre-diabetic" | "at-risk" | "none";
@@ -345,6 +389,19 @@ export interface HospitalizationSummary {
   youOwe: string;
   daysSinceDischarge: number;
   needsFollowUp: boolean;     // < 30 days since discharge
+}
+
+export interface DMESummary {
+  category: string;         // "glucose-monitor", "cpap", "insulin-pump", "oxygen", "test-strips", "wheelchair"
+  items: string[];          // HCPCS codes matched
+  isRelevantToDiabetes: boolean;
+  isRelevantToObesity: boolean;
+}
+
+export interface WeightMeasurement {
+  weight: number;           // in lbs
+  unit: "lb";
+  date: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -611,6 +668,39 @@ function extractDischargeStatus(eob: FhirEOB): string | undefined {
     }
   }
   return undefined;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P4: NDC + Network Status Extraction
+// ─────────────────────────────────────────────────────────────────────────────
+
+function extractNDCCodes(eob: FhirEOB, typeCode: string): string[] {
+  // NDC codes are primarily on PDE (Part D) claims
+  if (typeCode.toUpperCase() !== "PDE") return [];
+  const ndcs = new Set<string>();
+  for (const item of eob.item ?? []) {
+    for (const coding of item.productOrService?.coding ?? []) {
+      const system = coding.system ?? "";
+      if (system.includes("ndc") || (coding.code && /^\d{11}$/.test(coding.code))) {
+        if (coding.code) ndcs.add(coding.code);
+      }
+    }
+  }
+  return [...ndcs];
+}
+
+function extractNetworkStatus(eob: FhirEOB): "in" | "out" | null {
+  for (const item of eob.item ?? []) {
+    for (const adj of item.adjudication ?? []) {
+      const catCode = adj.category?.coding?.[0]?.code?.toLowerCase() ?? "";
+      if (catCode === "billingnetworkstatus" || catCode === "billingnetworkcontractingstatus") {
+        const reasonCode = adj.reason?.coding?.[0]?.code?.toLowerCase() ?? "";
+        if (reasonCode.includes("innetwork") || reasonCode === "contracted") return "in";
+        if (reasonCode.includes("outofnetwork") || reasonCode === "noncontracted" || reasonCode === "other") return "out";
+      }
+    }
+  }
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

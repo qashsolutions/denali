@@ -190,6 +190,18 @@ export async function GET(request: NextRequest) {
       request,
     }).catch(() => {});
 
+    // Fire-and-forget: trigger health report generation after sync completes
+    // The /api/health-report/generate endpoint will wait for cached FHIR data
+    const reportUrl = `${publicOrigin || getBaseUrl(request.nextUrl.origin)}/api/health-report/generate`;
+    fetch(reportUrl, {
+      method: "POST",
+      headers: {
+        Cookie: `access_token=${refreshedAccessToken || request.cookies.get("access_token")?.value || ""}`,
+      },
+    }).catch((err) => {
+      console.warn("[FHIR callback] Failed to trigger report generation:", err);
+    });
+
     // Clear OAuth cookies and redirect to health page
     const response = NextResponse.redirect(
       new URL("/app/health?connected=true", redirectBase)

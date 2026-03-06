@@ -21,6 +21,7 @@ import {
   type ScreeningHistory,
   type ProviderDetail,
   type HospitalizationSummary,
+  type DMESummary,
 } from "./transforms";
 import {
   extractConditionsFromClaims,
@@ -28,6 +29,8 @@ import {
   extractScreeningsFromClaims,
   extractProvidersFromClaims,
   extractHospitalizationsFromClaims,
+  extractDMEFromClaims,
+  detectHospiceStatus,
 } from "./eob-clinical";
 
 export interface HealthData {
@@ -40,6 +43,8 @@ export interface HealthData {
   screenings: ScreeningHistory[];
   providers: ProviderDetail[];
   hospitalizations: HospitalizationSummary[];
+  dme: DMESummary[];
+  isHospice: boolean;
   lastSynced: string | null;
 }
 
@@ -92,6 +97,8 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
   const screenings = extractScreeningsFromClaims(claims);
   const providers = extractProvidersFromClaims(claims);
   const hospitalizations = extractHospitalizationsFromClaims(claims);
+  const dme = extractDMEFromClaims(claims);
+  const isHospice = detectHospiceStatus(claims);
 
   // Cache transformed data
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -104,6 +111,10 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
     query(UPSERT_FHIR_CACHE, [userId, "screenings", JSON.stringify(screenings), now, expires]),
     query(UPSERT_FHIR_CACHE, [userId, "providers", JSON.stringify(providers), now, expires]),
     query(UPSERT_FHIR_CACHE, [userId, "hospitalizations", JSON.stringify(hospitalizations), now, expires]),
+    query(UPSERT_FHIR_CACHE, [userId, "dme", JSON.stringify(dme), now, expires]),
+    query(UPSERT_FHIR_CACHE, [userId, "hospice_status", JSON.stringify(isHospice), now, expires]),
+    // Store sync metadata for incremental sync
+    query(UPSERT_FHIR_CACHE, [userId, "sync_meta", JSON.stringify({ lastSyncTimestamp: now }), now, expires]),
   ]);
 
   // Update last_synced_at on the connection
@@ -113,7 +124,7 @@ export async function syncHealthData(userId: string): Promise<HealthData> {
     [now, userId]
   );
 
-  return { patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, lastSynced: now };
+  return { patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, dme, isHospice, lastSynced: now };
 }
 
 /**
@@ -136,6 +147,8 @@ export async function getCachedHealthData(userId: string): Promise<HealthData | 
   let screenings: ScreeningHistory[] = [];
   let providers: ProviderDetail[] = [];
   let hospitalizations: HospitalizationSummary[] = [];
+  let dme: DMESummary[] = [];
+  let isHospice = false;
   let lastSynced: string | null = null;
 
   for (const row of result.rows) {
@@ -162,6 +175,10 @@ export async function getCachedHealthData(userId: string): Promise<HealthData | 
       providers = data as ProviderDetail[];
     } else if (row.resource_type === "hospitalizations") {
       hospitalizations = data as HospitalizationSummary[];
+    } else if (row.resource_type === "dme") {
+      dme = data as DMESummary[];
+    } else if (row.resource_type === "hospice_status") {
+      isHospice = data as boolean;
     }
 
     if (row.cached_at && (!lastSynced || row.cached_at > lastSynced)) {
@@ -171,5 +188,5 @@ export async function getCachedHealthData(userId: string): Promise<HealthData | 
 
   if (!patient && coverage.length === 0 && claims.length === 0) return null;
 
-  return { patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, lastSynced };
+  return { patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, dme, isHospice, lastSynced };
 }

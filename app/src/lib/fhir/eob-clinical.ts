@@ -15,6 +15,8 @@ import type {
   ScreeningHistory,
   ProviderDetail,
   HospitalizationSummary,
+  DMESummary,
+  WeightMeasurement,
 } from "./transforms";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,18 +67,24 @@ export function extractConditionsFromClaims(claims: ClaimSummary[]): DiagnosisSu
       const match = DIABETES_ICD10_PREFIXES.find(([prefix]) => code.startsWith(prefix));
       if (!match) continue;
 
+      // Check if this diagnosis is primary on this claim
+      const isPrimary = claim.diagnosisTypes?.[code] === "principal" || claim.primaryDiagnosis === code;
+
       const existing = seen.get(code);
       if (existing) {
         // Keep the most recent date
         if (parseDate(claim.serviceDate) > parseDate(existing.recordedDate)) {
           existing.recordedDate = claim.serviceDate;
         }
+        // Promote to primary if seen as primary on any claim
+        if (isPrimary) existing.isPrimary = true;
       } else {
         seen.set(code, {
           code,
           name: display,
           category: match[1],
           recordedDate: claim.serviceDate,
+          isPrimary: isPrimary || undefined,
         });
       }
     }
@@ -135,6 +143,8 @@ export function extractMedicationsFromClaims(claims: ClaimSummary[]): Medication
           }
         }
       } else {
+        // Pick first NDC code from claim if available
+        const ndcCode = claim.ndcCodes?.[0] ?? undefined;
         medMap.set(normalized, {
           name: proc, // Keep original casing
           status: isRecent ? "Active" : "Completed",
@@ -148,6 +158,7 @@ export function extractMedicationsFromClaims(claims: ClaimSummary[]): Medication
           quantityDispensed: pde?.quantityDispensed,
           isBrandName: pde?.isBrandName,
           lastFillDate: claim.serviceDate,
+          ndcCode,
         });
       }
     }
@@ -361,6 +372,108 @@ export function extractHospitalizationsFromClaims(claims: ClaimSummary[]): Hospi
       };
     })
     .sort((a, b) => parseDate(b.dischargeDate).getTime() - parseDate(a.dischargeDate).getTime());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DME Extraction (P4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface DMECodeSpec {
+  category: string;
+  isRelevantToDiabetes: boolean;
+  isRelevantToObesity: boolean;
+}
+
+const DME_CODE_MAP: Record<string, DMECodeSpec> = {
+  // Glucose monitors
+  E0607: { category: "glucose-monitor", isRelevantToDiabetes: true, isRelevantToObesity: false },
+  E2100: { category: "glucose-monitor", isRelevantToDiabetes: true, isRelevantToObesity: false },
+  E2101: { category: "glucose-monitor", isRelevantToDiabetes: true, isRelevantToObesity: false },
+  // Test strips/lancets
+  A4253: { category: "test-strips", isRelevantToDiabetes: true, isRelevantToObesity: false },
+  A4259: { category: "test-strips", isRelevantToDiabetes: true, isRelevantToObesity: false },
+  // CPAP — sleep apnea indicator (obesity comorbidity + bariatric qualifier)
+  E0601: { category: "cpap", isRelevantToDiabetes: false, isRelevantToObesity: true },
+  E0470: { category: "cpap", isRelevantToDiabetes: false, isRelevantToObesity: true },
+  // Insulin pump/supplies
+  E0784: { category: "insulin-pump", isRelevantToDiabetes: true, isRelevantToObesity: false },
+  A9274: { category: "insulin-pump", isRelevantToDiabetes: true, isRelevantToObesity: false },
+  // Oxygen
+  E1390: { category: "oxygen", isRelevantToDiabetes: false, isRelevantToObesity: false },
+  // Wheelchairs
+  E0260: { category: "wheelchair", isRelevantToDiabetes: false, isRelevantToObesity: false },
+  K0001: { category: "wheelchair", isRelevantToDiabetes: false, isRelevantToObesity: false },
+};
+
+/**
+ * Extract DME supplies from DME claims.
+ * Groups by category (glucose monitors, CPAP, insulin pumps, etc.)
+ */
+export function extractDMEFromClaims(claims: ClaimSummary[]): DMESummary[] {
+  const dmeClaims = claims.filter((c) => c.type.includes("DME") || c.type.includes("Equipment"));
+  const categoryMap = new Map<string, { items: Set<string>; spec: DMECodeSpec }>();
+
+  for (const claim of dmeClaims) {
+    const codes = claim.procedureCodes;
+    if (!codes || codes.length === 0) continue;
+
+    for (const code of codes) {
+      if (!code) continue;
+      const spec = DME_CODE_MAP[code.toUpperCase()];
+      if (!spec) continue;
+
+      const existing = categoryMap.get(spec.category);
+      if (existing) {
+        existing.items.add(code);
+      } else {
+        categoryMap.set(spec.category, { items: new Set([code]), spec });
+      }
+    }
+  }
+
+  return Array.from(categoryMap.entries()).map(([category, { items, spec }]) => ({
+    category,
+    items: [...items],
+    isRelevantToDiabetes: spec.isRelevantToDiabetes,
+    isRelevantToObesity: spec.isRelevantToObesity,
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Patient Weight Extraction (P4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Extract patient weight measurements from Professional/Carrier claims.
+ * Blue Button includes supportingInfo with category "patientweight" on some claims.
+ * Note: This field may be empty in real Blue Button responses (CARIN IG defined, CMS may not populate).
+ */
+export function extractPatientWeight(claims: ClaimSummary[]): WeightMeasurement[] {
+  // Weight is on Professional (Carrier) claims' supportingInfo
+  // We don't have raw FHIR here — weight would need to be extracted during transformEOB.
+  // For now, return empty. Weight extraction from supportingInfo is handled in transformEOB
+  // and would be stored on ClaimSummary if available.
+  // This function serves as the aggregation point.
+  const weights: WeightMeasurement[] = [];
+  // Future: if we add `patientWeight` to ClaimSummary from transformEOB supportingInfo,
+  // we'd aggregate here by date and return sorted.
+  void claims; // suppress unused
+  return weights;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hospice Detection (P4 — SAFETY)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Detect if patient has any hospice claims.
+ * SAFETY: Hospice patients should NOT get aggressive treatment/specialist recommendations.
+ */
+export function detectHospiceStatus(claims: ClaimSummary[]): boolean {
+  return claims.some((c) => {
+    const t = c.type.toLowerCase();
+    return t.includes("hospice");
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

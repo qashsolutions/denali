@@ -26,6 +26,12 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
     "",
   ];
 
+  // SAFETY: Hospice detection — suppress aggressive recommendations
+  if (sessionState.isHospice) {
+    lines.push("⚠️ HOSPICE: This patient has hospice claims. Do NOT recommend aggressive treatment, new specialist referrals, or screening follow-ups. Focus on comfort, symptom management, and Medicare hospice benefit coverage.");
+    lines.push("");
+  }
+
   // Active coverage
   if (sessionState.activeCoverage && sessionState.activeCoverage.length > 0) {
     lines.push("**Active Coverage:**");
@@ -244,6 +250,19 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
         lines.push("");
       }
     }
+  }
+
+  // DME supplies
+  if (sessionState.dme && sessionState.dme.length > 0) {
+    lines.push("**DME Supplies:**");
+    for (const d of sessionState.dme) {
+      const relevance: string[] = [];
+      if (d.isRelevantToDiabetes) relevance.push("diabetes");
+      if (d.isRelevantToObesity) relevance.push("obesity");
+      const relStr = relevance.length > 0 ? ` (relevant to ${relevance.join(", ")})` : "";
+      lines.push(`- ${d.category}: ${d.items.join(", ")}${relStr}`);
+    }
+    lines.push("");
   }
 
   // Recent denials

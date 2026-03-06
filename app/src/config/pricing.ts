@@ -20,7 +20,7 @@ export const PRICING = {
     /** Rolling window in days for anonymous cap */
     ANON_ROLLING_WINDOW: 14 as number,
     /** Trial users (active trial) */
-    TRIAL: 2 as number,
+    TRIAL: 10 as number,
     /** Starter subscribers */
     STARTER: 2 as number,
     /** Plus subscribers */
