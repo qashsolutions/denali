@@ -18,7 +18,7 @@ const PLANS: Plan[] = [
     period: "14 days",
     features: [
       "10 messages per day, 1 day/week",
-      "Medicare coverage lookups",
+      "Coverage, diabetes & obesity guidance",
       "No appeal letters",
       "No credit card required",
     ],
@@ -33,7 +33,7 @@ const PLANS: Plan[] = [
       "20 messages per day, 1 day/week",
       "1 appeal credit per month",
       "Appeal letters with citations",
-      "Diabetes & obesity guidance",
+      "Coverage, diabetes & obesity guidance",
     ],
     cta: "Get Started",
     href: "/app",
@@ -46,8 +46,8 @@ const PLANS: Plan[] = [
     features: [
       "20 messages per day, every day",
       "2 appeal credits per month",
-      "Full diabetes & obesity coaching",
-      "Priority coverage guidance",
+      "Appeal letters with citations",
+      "Coverage, diabetes & obesity guidance",
     ],
     cta: "Subscribe",
     href: "/app",
@@ -59,8 +59,8 @@ const PLANS: Plan[] = [
     features: [
       "Unlimited messages every day",
       "Unlimited appeal letters",
-      "Full diabetes & obesity coaching",
-      "Priority coverage guidance",
+      "Coverage, diabetes & obesity guidance",
+      "No daily or weekly limits",
     ],
     cta: "Go Unlimited",
     href: "/app",
@@ -140,8 +140,8 @@ export function LandingPricing() {
 
         {/* Note */}
         <p className="text-center text-sm text-[var(--text-muted)] mt-8">
-          All plans include coverage guidance and Medicare policy lookups. No
-          credit card required for trial.
+          All plans include coverage guidance, diabetes & obesity support, and
+          Medicare policy lookups. No credit card required for trial.
         </p>
       </div>
     </section>

@@ -1,7 +1,7 @@
 /**
  * Pricing Configuration
  *
- * 5-tier model: Anonymous → Trial → Starter → Plus → Unlimited
+ * 4-tier model: Trial → Starter → Plus → Unlimited
  * Chat uses Sonnet 4.6; appeals always use Opus 4.6.
  * All paid plans are monthly subscriptions (no one-time payments).
  */
@@ -15,7 +15,7 @@ export const PRICING = {
 
   /** Daily chat message limits per plan (0 = unlimited) */
   CHAT_LIMITS: {
-    /** Free trial users (no sign-in required) */
+    /** Free trial users (sign-in required) */
     TRIAL: 10 as number,
     /** Starter subscribers */
     STARTER: 20 as number,
