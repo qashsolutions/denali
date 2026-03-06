@@ -2,6 +2,7 @@ import { getLandingPageData } from "@/lib/cms";
 import {
   LandingHero,
   LandingFeatures,
+  LandingConditions,
   LandingHowItWorks,
   LandingPricing,
   LandingTestimonials,
@@ -26,6 +27,7 @@ export default async function LandingPage() {
       <main className="flex-1">
         <LandingHero section={heroSection} />
         <LandingFeatures section={featuresSection} />
+        <LandingConditions />
         <LandingHowItWorks section={howItWorksSection} />
         <LandingPricing />
         <LandingTestimonials testimonials={data.testimonials} />

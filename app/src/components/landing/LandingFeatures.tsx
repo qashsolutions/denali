@@ -16,7 +16,7 @@ const FEATURES = [
   {
     step: "01",
     audience: "DIABETES",
-    title: "Diabetes Care",
+    title: "Pre-Diabetes & Diabetes Care",
     kicker: "Track A1C over time.",
     href: "/app/chat?topic=diabetes",
     Illustration: DiabetesCareIllustration,
@@ -96,12 +96,13 @@ export function LandingFeatures({ section: _section }: LandingFeaturesProps) {
         {/* Section Header */}
         <div className="text-center mb-12 sm:mb-16">
           <h2 className="font-[var(--font-serif)] text-3xl sm:text-4xl lg:text-5xl font-normal text-[var(--text-primary)] mb-4">
-            Personalized support for{" "}
+            Personalized guidance for{" "}
+            <span className="text-[var(--accent-primary)]">pre-diabetes</span>,{" "}
             <span className="text-[var(--accent-primary)]">diabetes</span> and{" "}
             <span className="text-[var(--accent-primary)]">obesity</span>
           </h2>
           <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-            Tailored guidance with your Medicare data — direct assistance when appropriate, direction to your doctor when needed.
+            Guidance tailored with your Medicare data.
           </p>
         </div>
 
