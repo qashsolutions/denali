@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-05 (Health Summary Report: auto-generated after BB connect, shareable via public link + email, 12-section ReportView; BB data gap closure: DME, hospice safety gate, diagnosis types, NDC, network status; trial limit 2→10 msgs/day; previous: 5-tier pricing restructure)
+     Last updated: 2026-03-06 (Landing page: LandingConditions section with alternating image/text for pre-diabetes/diabetes/obesity, Features header restructured, HowItWorks hint updated, CMS naming compliance; previous: Health Summary Report, BB data gap closure, trial limit 10)
      Maintainer: @cvr
 -->
 
@@ -850,12 +850,13 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 
 **Landing Page** (`src/components/landing/`) — premium warm medical reference design:
 - **Hero** (`LandingHero.tsx`): Typographic hero with subtle mountain silhouette SVG (two path layers at opacity 0.08/0.12). Serif heading, decorative accent line, refined pill CTAs, uppercase trust line. Tagline: diabetes + obesity + coverage + denials + appeals. Primary CTA defaults to `/app/chat` (not `/app`) so anonymous users land on chat directly.
-- **Features** (`LandingFeatures.tsx`): 3 health-first cards prioritizing CMS diabetes/obesity categories: (1) Diabetes Care — A1C, screenings, meds, coverage; (2) Obesity Care — GLP-1s, bariatric, counseling, coverage; (3) Claims & Appeals — Medicare data + appeal letters. Section header uses CMS language: "Personalized support for **diabetes** and **obesity**". Cards: `rounded-xl`, monospace step labels (`01`/`02`/`03`), monochromatic tags, subtle border hover.
+- **Features** (`LandingFeatures.tsx`): 3 health-first cards prioritizing CMS diabetes/obesity categories: (1) Pre-Diabetes & Diabetes Care — A1C screenings, meds, coverage; (2) Obesity Care — GLP-1s, bariatric, counseling, coverage; (3) Claims & Appeals — Medicare data + appeal letters. Section header: "Tailored guidance from your Medicare data" + "Pre-diabetes, Diabetes and Obesity" (accent color). Cards: `rounded-xl`, monospace step labels (`01`/`02`/`03`), monochromatic tags, subtle border hover.
+- **Conditions** (`LandingConditions.tsx`): 2-column × 3-row alternating image/text section. Header: "Analysis grounded in your **Medicare** data". Three rows: Pre-Diabetes (image left), Diabetes (image right), Obesity (image left). ~30-word descriptions grounded in actual Blue Button data capabilities (R73 codes, Part D meds, DME, screening CPTs, GLP-1 tracking, obesity counseling). Images: `PreDiabetes.png`, `Diabetes.png`, `Obesity.png` in `public/`. Next.js `Image` with `fill` + `object-cover`, intersection observer fade-in.
 - **Illustrations** (`illustrations/`): Static SVGs (no animation classes). `DiabetesCareIllustration`, `WeightManagementIllustration` (scale + gauge + trend + capsule), `HealthRecordsIllustration`.
-- **HowItWorks** (`LandingHowItWorks.tsx`): Clean typographic steps with monospace numbers, serif labels, sans hints. Vertical separators on desktop, horizontal on mobile. Hover `-translate-y-1`.
+- **HowItWorks** (`LandingHowItWorks.tsx`): Clean typographic steps with monospace numbers, serif labels, sans hints. Steps: Connect Medicare, Ask Denali ("Grounded analysis"), Appeal Denials. Vertical separators on desktop, horizontal on mobile. Hover `-translate-y-1`.
 - **Pricing** (`LandingPricing.tsx`): Hardcoded 4 tiers (Free Trial / Starter $10 / Plus $20 / Unlimited $60). No DB dependency. Free Trial CTA → `/app/chat` (anonymous access). Plus has "Most Popular" badge + accent ring. Features show msgs/day + days/week limits. Serif plan names, monospace prices (`--font-mono`), warm amber check icons.
 - **Testimonials** (`LandingTestimonials.tsx`): Serif italic quotes, warm amber stars, flat avatars.
-- Section bg alternation: Hero `bg-primary`, Features `bg-secondary`, HowItWorks `bg-secondary`, Pricing `bg-primary`, Testimonials `bg-secondary`, Footer `bg-secondary`.
+- Section bg alternation: Hero `bg-primary`, Features `bg-secondary`, Conditions `bg-primary`, HowItWorks `bg-secondary`, Pricing default, Testimonials `bg-secondary`, Footer `bg-secondary`.
 
 **Health Hub** (`src/app/app/health/page.tsx`) — 7 collapsible accordion cards replacing 11-section scroll:
 - Each card: `HealthHubCard` — status dot (red/amber/green) + title + one-line summary + chevron toggle
