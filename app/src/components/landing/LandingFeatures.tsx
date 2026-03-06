@@ -95,14 +95,11 @@ export function LandingFeatures({ section: _section }: LandingFeaturesProps) {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-12 sm:mb-16">
-          <h2 className="font-[var(--font-serif)] text-3xl sm:text-4xl lg:text-5xl font-normal text-[var(--text-primary)] mb-4">
-            Personalized guidance for{" "}
-            <span className="text-[var(--accent-primary)]">pre-diabetes</span>,{" "}
-            <span className="text-[var(--accent-primary)]">diabetes</span> and{" "}
-            <span className="text-[var(--accent-primary)]">obesity</span>
+          <h2 className="font-[var(--font-serif)] text-3xl sm:text-4xl lg:text-5xl font-normal text-[var(--text-primary)] mb-2">
+            Tailored guidance from your Medicare data
           </h2>
-          <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-            Guidance tailored with your Medicare data.
+          <p className="font-[var(--font-serif)] text-2xl sm:text-3xl lg:text-4xl font-normal text-[var(--accent-primary)]">
+            Pre-diabetes, Diabetes and Obesity
           </p>
         </div>
 
