@@ -98,6 +98,24 @@ describe("PUT /api/consent", () => {
     expect(body.error).toBe("Invalid consent type");
   });
 
+  it("returns 400 when consentType is missing", async () => {
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+
+    const req = makeRequest("PUT", { granted: true });
+    const res = await PUT(req);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Invalid consent type");
+  });
+
+  it("returns 400 when consentType is empty string", async () => {
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+
+    const req = makeRequest("PUT", { consentType: "", granted: true });
+    const res = await PUT(req);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Invalid consent type");
+  });
+
   it("returns 400 when granted is not a boolean", async () => {
     mockGetAuthUser.mockResolvedValue(MOCK_USER);
 
@@ -107,6 +125,24 @@ describe("PUT /api/consent", () => {
 
     expect(res.status).toBe(400);
     expect(body.error).toBe("granted must be a boolean");
+  });
+
+  it("returns 400 when granted is null", async () => {
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+
+    const req = makeRequest("PUT", { consentType: "analytics", granted: null });
+    const res = await PUT(req);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("granted must be a boolean");
+  });
+
+  it("returns 400 when granted is number 1", async () => {
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+
+    const req = makeRequest("PUT", { consentType: "analytics", granted: 1 });
+    const res = await PUT(req);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("granted must be a boolean");
   });
 
   it("accepts health_data_ai with granted=true and calls query", async () => {

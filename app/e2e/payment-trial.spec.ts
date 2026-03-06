@@ -50,6 +50,40 @@ test.describe("Checkout API access control", () => {
     const body = await response.json();
     expect(body.error).toBe("Invalid plan type");
   });
+
+  test("POST /api/checkout rejects empty plan string", async ({
+    request,
+  }) => {
+    const response = await request.post("/api/checkout", {
+      data: { plan: "" },
+    });
+    expect(response.status()).toBe(400);
+    const body = await response.json();
+    expect(body.error).toBe("Invalid plan type");
+  });
+
+  test("POST /api/checkout rejects missing plan field", async ({
+    request,
+  }) => {
+    const response = await request.post("/api/checkout", {
+      data: {},
+    });
+    expect(response.status()).toBe(400);
+    const body = await response.json();
+    expect(body.error).toBe("Invalid plan type");
+  });
+
+  test("POST /api/checkout rejects trial as plan type", async ({
+    request,
+  }) => {
+    // Trial is a free tier — should not be purchasable via checkout
+    const response = await request.post("/api/checkout", {
+      data: { plan: "trial" },
+    });
+    expect(response.status()).toBe(400);
+    const body = await response.json();
+    expect(body.error).toBe("Invalid plan type");
+  });
 });
 
 test.describe("Stripe webhook access control", () => {
