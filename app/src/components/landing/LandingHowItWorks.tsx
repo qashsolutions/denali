@@ -18,7 +18,7 @@ const STEPS = [
   {
     number: "02",
     label: "Ask Denali",
-    hint: "Coverage, Diabetes, Obesity, Denials",
+    hint: "Grounded analysis",
     href: "/app/chat",
   },
   {
@@ -74,10 +74,10 @@ export function LandingHowItWorks({ section: _section }: LandingHowItWorksProps)
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-12 sm:mb-16">
-          <h2 className="font-[var(--font-serif)] text-2xl sm:text-3xl lg:text-4xl font-normal text-[var(--text-primary)] mb-3">
+          <h2 className="font-[var(--font-serif)] text-3xl sm:text-4xl lg:text-5xl font-normal text-[var(--text-primary)] mb-3">
             How It Works
           </h2>
-          <p className="text-base sm:text-lg text-[var(--text-secondary)]">
+          <p className="text-lg sm:text-xl text-[var(--text-secondary)]">
             Three steps. One app.
           </p>
         </div>
