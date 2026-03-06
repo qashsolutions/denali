@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ sent: true });
   } catch (error) {
     console.error("[HealthReport] Email error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to send the email. Please try again." }, { status: 500 });
   }
 }
 

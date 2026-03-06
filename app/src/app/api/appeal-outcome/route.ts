@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     if (!success) {
       return NextResponse.json(
-        { error: "Failed to record outcome. Please try again." },
+        { error: "Unable to save your appeal outcome. Please try again." },
         { status: 500 }
       );
     }
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Appeal outcome error:", error);
     return NextResponse.json(
-      { error: "An error occurred. Please try again." },
+      { error: "Something went wrong saving your outcome. Please try again." },
       { status: 500 }
     );
   }

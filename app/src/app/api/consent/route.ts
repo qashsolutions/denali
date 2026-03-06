@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ consent });
   } catch (error) {
     console.error("[Consent] GET error:", error);
-    return NextResponse.json({ error: "Failed to load consent" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to load your preferences. Please refresh the page." }, { status: 500 });
   }
 }
 
@@ -94,6 +94,6 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: true, consentType, granted });
   } catch (error) {
     console.error("[Consent] PUT error:", error);
-    return NextResponse.json({ error: "Failed to update consent" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to save your preference. Please try again." }, { status: 500 });
   }
 }

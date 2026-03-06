@@ -103,13 +103,13 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof Error && error.message.includes("No such price")) {
       return NextResponse.json(
-        { error: "Stripe prices not configured. Please set up price IDs." },
+        { error: "Payment system is being set up. Please try again later." },
         { status: 500 }
       );
     }
 
     return NextResponse.json(
-      { error: "Failed to create checkout session" },
+      { error: "Unable to start checkout. Please try again or contact support." },
       { status: 500 }
     );
   }

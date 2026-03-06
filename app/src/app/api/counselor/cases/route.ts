@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ cases: result.rows });
   } catch (err) {
     console.error("[counselor/cases] GET failed:", err);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }
 
@@ -56,6 +56,6 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[counselor/cases] PATCH failed:", err);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }

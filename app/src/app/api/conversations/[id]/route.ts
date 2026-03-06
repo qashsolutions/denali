@@ -90,6 +90,6 @@ export async function GET(
     });
   } catch (err) {
     console.error("[Conversations/[id] API] Error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to load this conversation. Please try again." }, { status: 500 });
   }
 }

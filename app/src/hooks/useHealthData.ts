@@ -80,7 +80,7 @@ export function useHealthData(): UseHealthDataReturn {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? "Failed to load health data");
+        setError(data.error ?? "Unable to load your health data. Please refresh the page.");
         return;
       }
 
@@ -150,7 +150,7 @@ export function useHealthData(): UseHealthDataReturn {
         setIsHospice(d.isHospice ?? false);
         setLastSynced(d.lastSynced ? new Date(d.lastSynced) : null);
       } else {
-        setError("Unable to connect. Please try again.");
+        setError("Unable to load your health data. Please check your connection and try again.");
       }
     } finally {
       setIsLoading(false);
@@ -185,7 +185,7 @@ export function useHealthData(): UseHealthDataReturn {
         setLastSynced(null);
       }
     } catch {
-      setError("Failed to disconnect. Please try again.");
+      setError("Unable to disconnect Medicare right now. Please try again.");
     }
   }, []);
 

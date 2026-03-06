@@ -36,6 +36,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ claimed });
   } catch (err) {
     console.error("[Conversations/claim API] Error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }

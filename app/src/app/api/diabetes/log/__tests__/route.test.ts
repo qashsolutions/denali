@@ -173,7 +173,7 @@ describe("POST /api/diabetes/log", () => {
     mockQuery.mockRejectedValueOnce(new Error("DB error"));
     const res = await POST(makeRequest("POST", { entry_type: "glucose" }));
     expect(res.status).toBe(500);
-    expect((await res.json()).error).toBe("Internal error");
+    expect((await res.json()).error).toBe("Something went wrong. Please try again.");
   });
 });
 

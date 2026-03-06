@@ -56,6 +56,6 @@ export async function GET(
     });
   } catch (error) {
     console.error("[HealthReport] Share error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to load this report. Please try again." }, { status: 500 });
   }
 }

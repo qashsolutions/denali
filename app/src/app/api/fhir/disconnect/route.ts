@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[FHIR disconnect] Error:", error);
     return NextResponse.json(
-      { error: "Failed to disconnect" },
+      { error: "Unable to disconnect Medicare right now. Please try again." },
       { status: 500 }
     );
   }

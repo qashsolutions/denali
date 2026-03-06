@@ -230,7 +230,7 @@ export async function POST(request: NextRequest) {
       // Validate base64 data present
       if (!body.attachment.base64Data) {
         return NextResponse.json(
-          { error: "File data is missing." },
+          { error: "File could not be read. Please try uploading again." },
           { status: 400 }
         );
       }
@@ -531,14 +531,14 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error) {
       if (error.message.includes("API key")) {
         return NextResponse.json(
-          { error: "API configuration error" },
+          { error: "Something went wrong on our end. Please try again in a few minutes." },
           { status: 500 }
         );
       }
     }
 
     return NextResponse.json(
-      { error: "An error occurred processing your message. Please try again." },
+      { error: "Something went wrong. Please try again — it usually works on the second try." },
       { status: 500 }
     );
   }

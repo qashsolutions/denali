@@ -291,7 +291,7 @@ test.describe("Consent toggle UI", () => {
         await route.fulfill({
           status: 500,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ error: "Failed to update consent" }),
+          body: JSON.stringify({ error: "Unable to save your preference. Please try again." }),
         });
       }
     });

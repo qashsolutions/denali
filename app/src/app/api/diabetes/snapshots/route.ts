@@ -40,6 +40,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ snapshots });
   } catch (err) {
     console.error("[Diabetes/snapshots API] Error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to load your lab history. Please try again." }, { status: 500 });
   }
 }

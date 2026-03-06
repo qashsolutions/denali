@@ -20,6 +20,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ stats: result.rows[0] ?? null });
   } catch (err) {
     console.error("[counselor/stats] Failed:", err);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to load stats. Please try again." }, { status: 500 });
   }
 }

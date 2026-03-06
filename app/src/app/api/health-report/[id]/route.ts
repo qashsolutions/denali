@@ -51,6 +51,6 @@ export async function GET(
     });
   } catch (error) {
     console.error("[HealthReport] GET by ID error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to load your health report. Please try again." }, { status: 500 });
   }
 }

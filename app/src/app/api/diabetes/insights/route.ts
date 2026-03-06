@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ insight: result.rows[0] ?? null });
   } catch {
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to load your health insights. Please try again." }, { status: 500 });
   }
 }
 

@@ -94,7 +94,7 @@ export function PaywallModal({
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Failed to create checkout session");
+        throw new Error(data.error || "Unable to start checkout. Please try again.");
       }
 
       const { url } = await response.json();
@@ -102,10 +102,10 @@ export function PaywallModal({
       if (url) {
         window.location.href = url;
       } else {
-        throw new Error("No checkout URL returned");
+        throw new Error("Unable to start checkout. Please try again.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Payment failed");
+      setError(err instanceof Error ? err.message : "Something went wrong with payment. Please try again.");
       setIsProcessing(false);
     }
   };

@@ -202,6 +202,6 @@ describe("PUT /api/consent", () => {
     const body = await res.json();
 
     expect(res.status).toBe(500);
-    expect(body.error).toBe("Failed to update consent");
+    expect(body.error).toBe("Unable to save your preference. Please try again.");
   });
 });

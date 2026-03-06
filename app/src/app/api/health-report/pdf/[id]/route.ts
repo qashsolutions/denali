@@ -48,7 +48,7 @@ export async function GET(
     });
   } catch (error) {
     console.error("[HealthReport] PDF error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to generate the PDF. Please try again." }, { status: 500 });
   }
 }
 

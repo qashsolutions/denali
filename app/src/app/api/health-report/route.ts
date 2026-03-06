@@ -50,6 +50,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("[HealthReport] GET error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to load your health report. Please try again." }, { status: 500 });
   }
 }

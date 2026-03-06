@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   const resendApiKey = process.env.RESEND_API_KEY;
   if (!resendApiKey) {
     console.error("[email/checklist] RESEND_API_KEY not configured");
-    return NextResponse.json({ error: "Email service not configured" }, { status: 500 });
+    return NextResponse.json({ error: "Email is temporarily unavailable. Please try again later." }, { status: 500 });
   }
 
   const html = buildEmailHTML(checklist);
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
   if (!resendRes.ok) {
     const err = await resendRes.text();
     console.error("[email/checklist] Resend error:", err);
-    return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to send the email. Please try again or use the print option." }, { status: 500 });
   }
 
   const result = await resendRes.json();

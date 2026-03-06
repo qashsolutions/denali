@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     if (!clientId) {
       console.error("[FHIR authorize] Missing BLUEBUTTON_CLIENT_ID");
       return NextResponse.json(
-        { error: "Medicare data connection not configured" },
+        { error: "Medicare connection is temporarily unavailable. Please try again later." },
         { status: 500 }
       );
     }
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("[FHIR authorize] Error:", error);
     return NextResponse.json(
-      { error: "Failed to initiate Medicare connection" },
+      { error: "Unable to connect to Medicare right now. Please try again in a few minutes." },
       { status: 500 }
     );
   }
