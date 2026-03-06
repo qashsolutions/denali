@@ -44,7 +44,7 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
       result.push({
         severity: "red",
         title: "Urgent: Very high A1C",
-        chatMessage: `My A1C is ${latestA1C.value}%. What should I do?`,
+        chatMessage: `My A1C is ${latestA1C.value}%. Can you find an endocrinologist near me who accepts Medicare?`,
       });
     }
 
@@ -59,7 +59,7 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
       result.push({
         severity: "amber",
         title: "No diabetes medications found",
-        chatMessage: "I have a diabetes diagnosis but no active medications. What should I ask my doctor?",
+        chatMessage: "I have a diabetes diagnosis but no active medications. Can you find an endocrinologist near me who accepts Medicare?",
       });
     }
 
@@ -72,7 +72,7 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
       result.push({
         severity: "amber",
         title: "Medication refill may be overdue",
-        chatMessage: `My ${medName} refill may be overdue. Can you help me understand my options?`,
+        chatMessage: `My ${medName} refill may be overdue. Can you find a doctor near me who can help with my diabetes medications?`,
       });
     }
 
@@ -84,7 +84,7 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
         result.push({
           severity: "amber",
           title: "A1C trending up",
-          chatMessage: `My A1C went from ${previous.value}% to ${latest.value}%. What should I do?`,
+          chatMessage: `My A1C went from ${previous.value}% to ${latest.value}%. Can you find an endocrinologist near me who accepts Medicare?`,
         });
       }
     }
@@ -112,7 +112,7 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
         result.push({
           severity: "red",
           title: "Post-discharge follow-up needed",
-          chatMessage: `I was discharged from ${h.provider} ${h.daysSinceDischarge} days ago. What follow-up care should I schedule?`,
+          chatMessage: `I was discharged from ${h.provider} ${h.daysSinceDischarge} days ago. Can you find a doctor near me for follow-up care?`,
         });
       }
     }
@@ -142,7 +142,7 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
       result.push({
         severity: "amber",
         title: "Weight management medication refill may be overdue",
-        chatMessage: `My ${medName} refill may be overdue. Can you help me understand my options?`,
+        chatMessage: `My ${medName} refill may be overdue. Can you find a weight management specialist near me who accepts Medicare?`,
       });
     }
 
@@ -195,7 +195,7 @@ export function RiskAlerts({ labs, conditions, medications, classification, a1cH
                 onClick={() => router.push(`/app/chat?message=${encodeURIComponent(alert.chatMessage)}`)}
                 className="text-xs font-medium text-[var(--accent-primary)] hover:underline mt-1"
               >
-                {alert.ctaLabel || "Talk to Denali"}
+                {alert.ctaLabel || "Find a specialist"}
               </button>
             </div>
           </div>
