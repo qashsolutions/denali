@@ -67,15 +67,15 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "Is Denali free?",
-        a: "Coverage guidance is available without an account — 4 free messages over 14 days, no signup required. Every new account gets a 14-day free trial (2 messages/day, 1 day/week). After the trial, chat access is locked until you subscribe: Starter ($10/month, 1 appeal credit), Plus ($20/month, 2 appeal credits, 5 days/week), or Unlimited ($60/month, unlimited everything).",
+        a: "Yes — sign up with your email to get a 14-day free trial with 10 messages per day, 1 day per week. After the trial, chat access is locked until you subscribe: Starter ($10/month, 20 msgs/day, 1 day/week, 1 appeal credit), Plus ($20/month, 20 msgs/day, every day, 2 appeal credits), or Unlimited ($60/month, unlimited everything).",
       },
       {
         q: "Is there a free trial?",
-        a: "Yes. Every new account gets a 14-day trial with 2 messages/day, 1 day per week. After the trial period, chat access is locked — choose Starter ($10/month), Plus ($20/month), or Unlimited ($60/month) to continue. Trial does not include appeal letters.",
+        a: "Yes. Every new account gets a 14-day trial with 10 messages/day, 1 day per week. After the trial period, chat access is locked — choose Starter ($10/month), Plus ($20/month), or Unlimited ($60/month) to continue. Trial does not include appeal letters.",
       },
       {
         q: "How many free messages do I get?",
-        a: "Without an account: 4 messages total over 14 days. With a free trial: 2 messages per day, 1 day per week. Starter plan: 2 messages/day, 1 day/week. Plus plan: 5 messages/day, 5 days/week. Unlimited plan: unlimited messages every day.",
+        a: "Free trial: 10 messages per day, 1 day per week for 14 days. Starter plan: 20 messages/day, 1 day/week. Plus plan: 20 messages/day, every day. Unlimited plan: unlimited messages every day.",
       },
     ],
   },

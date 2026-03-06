@@ -289,11 +289,11 @@ export default function AppSettingsPage() {
                     : authState.plan === "unlimited"
                     ? `${formatPrice(PRICING.UNLIMITED.amount)}/month \u00b7 Unlimited appeals \u00b7 Unlimited messages`
                     : authState.plan === "plus"
-                    ? `${formatPrice(PRICING.PLUS.amount)}/month \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""}/month \u00b7 5 msgs/day, 5 days/week`
+                    ? `${formatPrice(PRICING.PLUS.amount)}/month \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""}/month \u00b7 20 msgs/day, every day`
                     : authState.plan === "starter"
-                    ? `${formatPrice(PRICING.STARTER.amount)}/month \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""}/month \u00b7 2 msgs/day, 1 day/week`
+                    ? `${formatPrice(PRICING.STARTER.amount)}/month \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""}/month \u00b7 20 msgs/day, 1 day/week`
                     : authState.plan === "trial" && authState.trialStatus === "active"
-                    ? `${authState.trialDaysRemaining} days remaining \u00b7 2 msgs/day, 1 day/week`
+                    ? `${authState.trialDaysRemaining} days remaining \u00b7 10 msgs/day, 1 day/week`
                     : authState.plan === "trial" && authState.trialStatus === "expired"
                     ? "Trial ended \u2014 upgrade to continue"
                     : "No active plan"}

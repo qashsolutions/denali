@@ -208,7 +208,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
 
             {!authState.isEmailVerified && (
               <p className="mt-3 text-sm text-slate-500">
-                Includes a 14-day trial with 1 free appeal letter.
+                Includes a 14-day free trial with 10 messages per day.
               </p>
             )}
           </div>

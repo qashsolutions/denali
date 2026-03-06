@@ -337,6 +337,21 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
 
+        // Handle auth required (401) — user must sign in to chat
+        if (response.status === 401 && errorData.code === "AUTH_REQUIRED") {
+          const authMsg: Message = {
+            id: generateId(),
+            role: "assistant",
+            content: errorData.error || "Sign up for a free trial to start chatting with Denali.",
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, authMsg]);
+          setSuggestions(["Sign up"]);
+          setIsLoading(false);
+          clearTimeout(timeoutId);
+          return;
+        }
+
         // Handle trial expired / locked out (403)
         if (response.status === 403 && errorData.code === "TRIAL_EXPIRED") {
           const expiredMsg: Message = {
@@ -347,21 +362,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           };
           setMessages((prev) => [...prev, expiredMsg]);
           setSuggestions(["Upgrade plan"]);
-          setIsLoading(false);
-          clearTimeout(timeoutId);
-          return;
-        }
-
-        // Handle rolling cap for anonymous (429)
-        if (response.status === 429 && errorData.code === "ROLLING_LIMIT") {
-          const rollingMsg: Message = {
-            id: generateId(),
-            role: "assistant",
-            content: `You've used all 4 free messages. **Sign up** for a free 14-day trial to keep chatting.`,
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, rollingMsg]);
-          setSuggestions(["Sign up"]);
           setIsLoading(false);
           clearTimeout(timeoutId);
           return;
@@ -387,17 +387,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           const rateLimitMsg: Message = {
             id: generateId(),
             role: "assistant",
-            content: errorData.isAuthenticated
-              ? `You've reached your daily limit of ${errorData.limit} messages. You can continue tomorrow, or **upgrade** for more access.`
-              : `You've used your free messages. **Sign up** for a free trial to continue.`,
+            content: `You've reached your daily limit of ${errorData.limit} messages. You can continue tomorrow, or **upgrade** for more access.`,
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, rateLimitMsg]);
-          setSuggestions(
-            errorData.isAuthenticated
-              ? ["Upgrade plan"]
-              : ["Sign up"]
-          );
+          setSuggestions(["Upgrade plan"]);
           setIsLoading(false);
           clearTimeout(timeoutId);
           return;
@@ -495,10 +489,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                   }
                   return prev;
                 });
-                // Soft signup prompt on anonymous user's last free message
-                if (parsed.signupPrompt) {
-                  setSuggestions((prev) => [...(parsed.suggestions || prev), "Sign up for free"]);
-                }
               } else if (eventType === "error") {
                 throw new Error(parsed.error || "Stream error");
               }

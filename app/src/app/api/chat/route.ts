@@ -55,7 +55,6 @@ import { getUploadLimitForPlan, formatFileSize } from "@/config/pricing";
 import { logAudit } from "@/lib/audit";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
-import { createHash } from "crypto";
 import type { FileAttachment } from "@/types/attachment";
 import { ALLOWED_MEDIA_TYPES } from "@/types/attachment";
 
@@ -95,62 +94,57 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // --- Rate limiting: multi-dimensional check (rolling cap, weekly frequency, daily limit) ---
+    // --- Auth required: sign-in enforced for all chat ---
     const authUser = await getAuthUser(request);
 
-    let chatLimit: number = PRICING.CHAT_LIMITS.ANON_ROLLING_MAX; // fallback
-    let weeklyLimit: number = 0;
-    let chatIdentifier: string;
-    let userProfile: { plan: string | null; is_admin: boolean | null } | null = null;
-    let signupPrompt = false;
-
-    if (authUser) {
-      chatIdentifier = authUser.userId;
-
-      // Fetch profile once — reused for rate limiting AND attachment validation
-      const profileResult = await query<{ plan: string | null; is_admin: boolean | null }>(
-        `SELECT plan, is_admin FROM users WHERE id = $1 LIMIT 1`,
-        [authUser.userId]
+    if (!authUser) {
+      return NextResponse.json(
+        {
+          error: "Sign up for a free trial to start chatting with Denali.",
+          code: "AUTH_REQUIRED",
+        },
+        { status: 401 }
       );
-      userProfile = profileResult.rows[0] ?? null;
+    }
 
-      if (userProfile?.is_admin) {
-        chatLimit = 0; // Admin: unlimited
-        weeklyLimit = 0;
-      } else {
-        const plan = userProfile?.plan || "trial";
-        if (plan === "unlimited") {
-          chatLimit = PRICING.CHAT_LIMITS.UNLIMITED;
-          weeklyLimit = PRICING.WEEKLY_LIMITS.UNLIMITED;
-        } else if (plan === "plus") {
-          chatLimit = PRICING.CHAT_LIMITS.PLUS;
-          weeklyLimit = PRICING.WEEKLY_LIMITS.PLUS;
-        } else if (plan === "starter") {
-          chatLimit = PRICING.CHAT_LIMITS.STARTER;
-          weeklyLimit = PRICING.WEEKLY_LIMITS.STARTER;
-        } else if (plan === "trial") {
-          // Check trial expiry
-          const subResult = await query<{ trial_end: string | null }>(
-            `SELECT trial_end FROM subscriptions WHERE user_id = $1 LIMIT 1`,
-            [authUser.userId]
-          );
-          const trialEnd = subResult.rows[0]?.trial_end ? new Date(subResult.rows[0].trial_end) : null;
-          if (trialEnd && trialEnd > new Date()) {
-            chatLimit = PRICING.CHAT_LIMITS.TRIAL;
-            weeklyLimit = PRICING.WEEKLY_LIMITS.TRIAL;
-          } else {
-            // Trial expired — locked out
-            return NextResponse.json(
-              {
-                error: "Your free trial has ended. Upgrade to keep using Denali.",
-                code: "TRIAL_EXPIRED",
-                upsell: true,
-              },
-              { status: 403 }
-            );
-          }
+    let chatLimit: number = PRICING.CHAT_LIMITS.TRIAL;
+    let weeklyLimit: number = PRICING.WEEKLY_LIMITS.TRIAL;
+    const chatIdentifier: string = authUser.userId;
+    let userProfile: { plan: string | null; is_admin: boolean | null } | null = null;
+
+    // Fetch profile once — reused for rate limiting AND attachment validation
+    const profileResult = await query<{ plan: string | null; is_admin: boolean | null }>(
+      `SELECT plan, is_admin FROM users WHERE id = $1 LIMIT 1`,
+      [authUser.userId]
+    );
+    userProfile = profileResult.rows[0] ?? null;
+
+    if (userProfile?.is_admin) {
+      chatLimit = 0; // Admin: unlimited
+      weeklyLimit = 0;
+    } else {
+      const plan = userProfile?.plan || "trial";
+      if (plan === "unlimited") {
+        chatLimit = PRICING.CHAT_LIMITS.UNLIMITED;
+        weeklyLimit = PRICING.WEEKLY_LIMITS.UNLIMITED;
+      } else if (plan === "plus") {
+        chatLimit = PRICING.CHAT_LIMITS.PLUS;
+        weeklyLimit = PRICING.WEEKLY_LIMITS.PLUS;
+      } else if (plan === "starter") {
+        chatLimit = PRICING.CHAT_LIMITS.STARTER;
+        weeklyLimit = PRICING.WEEKLY_LIMITS.STARTER;
+      } else if (plan === "trial") {
+        // Check trial expiry
+        const subResult = await query<{ trial_end: string | null }>(
+          `SELECT trial_end FROM subscriptions WHERE user_id = $1 LIMIT 1`,
+          [authUser.userId]
+        );
+        const trialEnd = subResult.rows[0]?.trial_end ? new Date(subResult.rows[0].trial_end) : null;
+        if (trialEnd && trialEnd > new Date()) {
+          chatLimit = PRICING.CHAT_LIMITS.TRIAL;
+          weeklyLimit = PRICING.WEEKLY_LIMITS.TRIAL;
         } else {
-          // Unknown plan — locked out
+          // Trial expired — locked out
           return NextResponse.json(
             {
               error: "Your free trial has ended. Upgrade to keep using Denali.",
@@ -160,46 +154,21 @@ export async function POST(request: NextRequest) {
             { status: 403 }
           );
         }
-      }
-    } else {
-      // Anonymous — hash IP for privacy
-      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-        || request.headers.get("x-real-ip")
-        || "unknown";
-      chatIdentifier = `ip:${createHash("sha256").update(ip).digest("hex").slice(0, 16)}`;
-    }
-
-    // --- Anonymous rolling cap: 4 messages in 14-day window ---
-    if (!authUser) {
-      try {
-        const rollingResult = await query<{ allowed: boolean; total: number; is_last: boolean }>(
-          `SELECT * FROM check_rolling_chat_limit($1, $2, $3)`,
-          [chatIdentifier, PRICING.CHAT_LIMITS.ANON_ROLLING_MAX, PRICING.CHAT_LIMITS.ANON_ROLLING_WINDOW]
+      } else {
+        // Unknown plan — locked out
+        return NextResponse.json(
+          {
+            error: "Your free trial has ended. Upgrade to keep using Denali.",
+            code: "TRIAL_EXPIRED",
+            upsell: true,
+          },
+          { status: 403 }
         );
-        const rolling = rollingResult.rows[0];
-        if (rolling && !rolling.allowed) {
-          return NextResponse.json(
-            {
-              error: `You've used all ${PRICING.CHAT_LIMITS.ANON_ROLLING_MAX} free messages. Sign up for a free trial to continue.`,
-              code: "ROLLING_LIMIT",
-              isAuthenticated: false,
-            },
-            { status: 429 }
-          );
-        }
-        if (rolling?.is_last) {
-          signupPrompt = true;
-        }
-      } catch (rollingError) {
-        console.warn("[Chat API] Rolling limit check failed:", rollingError);
       }
-
-      // Anonymous uses a high daily limit (the rolling cap is the real gate)
-      chatLimit = PRICING.CHAT_LIMITS.ANON_ROLLING_MAX;
     }
 
-    // --- Weekly frequency check (authenticated plans with weekly limits) ---
-    if (authUser && weeklyLimit > 0) {
+    // --- Weekly frequency check ---
+    if (weeklyLimit > 0) {
       try {
         const weeklyResult = await query<{ allowed: boolean; days_used: number }>(
           `SELECT * FROM check_weekly_frequency($1, $2)`,
@@ -213,7 +182,6 @@ export async function POST(request: NextRequest) {
               code: "WEEKLY_LIMIT",
               weeklyLimit,
               daysUsed: weekly.days_used,
-              isAuthenticated: true,
             },
             { status: 429 }
           );
@@ -232,16 +200,12 @@ export async function POST(request: NextRequest) {
         );
         const usageRow = usageResult.rows[0];
         if (usageRow && !usageRow.allowed) {
-          const isAuthed = !!authUser;
-          return NextResponse.json(
+            return NextResponse.json(
             {
-              error: isAuthed
-                ? `You've reached your daily limit of ${chatLimit} messages. Upgrade for more access.`
-                : `You've used your free messages. Sign up for a free trial to continue.`,
+              error: `You've reached your daily limit of ${chatLimit} messages. Upgrade for more access.`,
               code: "RATE_LIMITED",
               limit: chatLimit,
               count: usageRow.count,
-              isAuthenticated: isAuthed,
             },
             { status: 429 }
           );
@@ -255,14 +219,6 @@ export async function POST(request: NextRequest) {
     // --- Attachment validation ---
     let attachment: FileAttachment | undefined;
     if (body.attachment) {
-      // Must be authenticated to upload files
-      if (!authUser) {
-        return NextResponse.json(
-          { error: "Sign in to upload files." },
-          { status: 401 }
-        );
-      }
-
       // Validate media type
       if (!ALLOWED_MEDIA_TYPES.includes(body.attachment.mediaType)) {
         return NextResponse.json(
@@ -548,8 +504,7 @@ export async function POST(request: NextRequest) {
           toolsUsed: result.toolsUsed,
           appealId,
           appealLetter: result.appealLetter,
-          ...(signupPrompt ? { signupPrompt: true } : {}),
-        } satisfies ChatResponseBody & { signupPrompt?: boolean });
+        } satisfies ChatResponseBody);
 
         console.log("[Chat API] Stream complete with", result.suggestions.length, "suggestions");
         await writer.close();

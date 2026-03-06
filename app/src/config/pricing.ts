@@ -15,16 +15,12 @@ export const PRICING = {
 
   /** Daily chat message limits per plan (0 = unlimited) */
   CHAT_LIMITS: {
-    /** Anonymous: 4 messages total in rolling 14-day window (daily limit unused) */
-    ANON_ROLLING_MAX: 4 as number,
-    /** Rolling window in days for anonymous cap */
-    ANON_ROLLING_WINDOW: 14 as number,
-    /** Trial users (active trial) */
+    /** Free trial users (no sign-in required) */
     TRIAL: 10 as number,
     /** Starter subscribers */
-    STARTER: 2 as number,
+    STARTER: 20 as number,
     /** Plus subscribers */
-    PLUS: 5 as number,
+    PLUS: 20 as number,
     /** Unlimited subscribers (0 = unlimited) */
     UNLIMITED: 0 as number,
   },
@@ -33,7 +29,7 @@ export const PRICING = {
   WEEKLY_LIMITS: {
     TRIAL: 1 as number,
     STARTER: 1 as number,
-    PLUS: 5 as number,
+    PLUS: 0 as number,
     UNLIMITED: 0 as number,
   },
 

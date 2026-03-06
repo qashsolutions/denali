@@ -287,6 +287,9 @@ function ChatContent() {
     router.push("/app/chat");
   }, [resetChat, router]);
 
+  // Auth gate: require sign-in to use chat.
+  const needsSignIn = !authState.isLoading && !authState.email;
+
   // MFA gate: require MFA enrollment to use chat features.
   // Admins bypass. Users without MFA can still access /app/health (Blue Button) and /app/settings.
   if (!authState.isLoading && authState.isEmailVerified && !authState.isMfaEnrolled && !authState.isAdmin) {
@@ -400,21 +403,37 @@ function ChatContent() {
         {/* Chat Input */}
         <div className="flex-shrink-0 p-4 bg-[var(--bg-primary)] border-t border-[var(--border)]">
           <Container>
-            <div className="flex justify-center mb-2">
-              <CmsPledge type="ai" />
-            </div>
-            <ChatInput
-              onSend={handleSendMessage}
-              disabled={isLoading || !isOnline}
-              placeholder={isOnline ? "Ask about Medicare, coverage, or health..." : "Chat requires an internet connection"}
-              externalValue={pendingInput}
-              onExternalValueUsed={handlePendingInputUsed}
-              suggestions={
-                currentAction.type === "none" ? suggestions : []
-              }
-              onSuggestionClick={handleSuggestionSelect}
-              maxFileSizeBytes={uploadLimit}
-            />
+            {needsSignIn ? (
+              <div className="flex flex-col items-center gap-3 py-2">
+                <p className="text-sm text-[var(--text-secondary)]">
+                  Sign up for a free trial to start chatting with Denali.
+                </p>
+                <button
+                  onClick={() => router.push("/app/settings")}
+                  className="px-6 py-2.5 rounded-lg bg-[var(--accent-primary)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                >
+                  Sign up free
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-center mb-2">
+                  <CmsPledge type="ai" />
+                </div>
+                <ChatInput
+                  onSend={handleSendMessage}
+                  disabled={isLoading || !isOnline}
+                  placeholder={isOnline ? "Ask about Medicare, coverage, or health..." : "Chat requires an internet connection"}
+                  externalValue={pendingInput}
+                  onExternalValueUsed={handlePendingInputUsed}
+                  suggestions={
+                    currentAction.type === "none" ? suggestions : []
+                  }
+                  onSuggestionClick={handleSuggestionSelect}
+                  maxFileSizeBytes={uploadLimit}
+                />
+              </>
+            )}
           </Container>
         </div>
 

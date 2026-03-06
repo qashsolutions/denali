@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-06 (Landing page: LandingConditions section with alternating image/text for pre-diabetes/diabetes/obesity, Features header restructured, HowItWorks hint updated, CMS naming compliance; previous: Health Summary Report, BB data gap closure, trial limit 10)
+     Last updated: 2026-03-06 (Sign-in enforced for all chat — no anonymous access. 4-tier: Trial 10/day 1d/wk, Starter $10 20/day 1d/wk, Plus $20 20/day every day, Unlimited $60; previous: Pricing restructure, prompt caching, Landing page)
      Maintainer: @cvr
 -->
 
@@ -60,10 +60,9 @@
 | **Target User** | Original Medicare & Medicare Advantage patients & caregivers |
 | **NOT for** | Commercial payers, Medicaid, billers, coders |
 | **Tone** | Warm, simple, no jargon, empathetic, 8th grade reading level |
-| **Anonymous** | 4 messages total in 14-day window, no signup |
-| **Trial** | 14-day free trial, 10 msgs/day, 1 day/week, no appeals (email OTP) |
-| **Starter** | $10/month, 2 msgs/day, 1 day/week, 1 appeal credit |
-| **Plus** | $20/month, 5 msgs/day, 5 days/week, 2 appeal credits |
+| **Trial** | 14-day free trial, 10 msgs/day, 1 day/week, no appeals (email OTP required) |
+| **Starter** | $10/month, 20 msgs/day, 1 day/week, 1 appeal credit |
+| **Plus** | $20/month, 20 msgs/day, every day, 2 appeal credits |
 | **Unlimited** | $60/month, unlimited msgs, unlimited appeals |
 | **Tech Stack** | Next.js PWA, AWS RDS+Cognito (auth+DB), Claude via Bedrock (agentic), Stripe |
 | **AI Model** | Sonnet 4.6 (chat) / Opus 4.6 (appeals) via AWS Bedrock |
@@ -189,7 +188,7 @@ Where to find specific logic in the codebase.
 | `src/components/landing/LandingFooter.tsx` | Shared footer across ALL pages (landing, blog, legal, app layout). Brand left, legal links right (FAQ, Privacy, Terms, HIPAA). HIPAA/BAA notice + disclaimer. Import directly (NOT from barrel) in `"use client"` components to avoid pulling `pg` into client bundle |
 | `src/lib/dashboard-context.ts` | Dashboard personalization data layer. Types: `DashboardContext`, `DashboardUser`, `DashboardCoverage`, `DashboardMedicare`, `DashboardDiabetes`, `DashboardObesity`, `DashboardAppeals`, `Badge`, `Nudge`. `buildDashboardContext(input)` constructs context from real hook data (useAuth + useHealthData). Helpers: `getTimeOfDay()`, `getPersonalizedGreeting()`, `buildStatusSummary()`, `selectNudge()` (priority-sorted), badge getters per card (`getCoverageBadge`, `getDashboardBadge`, `getDiabetesBadge`, `getObesityBadge`, `getAppealsBadge`). Mock factory `getMockDashboardContext()` for tests only |
 | `src/app/app/page.tsx` | Authenticated dashboard home page. **Auth-gated via middleware** (anonymous → redirect to `/`). Uses `useAuth()` + `useHealthData()` for real data via `buildDashboardContext()`. 5 UX enhancements: (1) `HeroSection` — time-aware greeting + contextual status summary + time-of-day gradient, (2) `StatusBadge` + per-card badge logic (pill-shaped, solid/outline variants), (3) `NudgeStrip` — priority-sorted contextual message with CTA + dismiss, (4) `WalkthroughBar` — 4-step guided tour (first visit only, sessionStorage flag), (5) `AnimatedFeatureCard` — staggered fade-up + hover lift + SVG ambient animations. 5 feature cards: Coverage Check (green), Medicare Dashboard (coral), Diabetes Care (blue, conditional on `hasContext`), Weight Management (amber, conditional on `obesity.classification !== "none"`), Appeals (purple) |
-| `src/app/app/chat/page.tsx` | Ask Denali chat page. 6 suggestion cards on empty state: Check Coverage (blue), Appeal a Denial (red), Understand My Bill (amber), Preventive Care (green), Diabetes Care (purple), Weight Management (orange). Intercepts "Upgrade plan" → opens `PaywallModal` (Starter $10 / Plus $20 / Unlimited $60 subscriptions). Intercepts "Sign up" → navigates to `/app/settings` (email OTP flow). **Consent-gated health data bridge**: when `consent.health_data_ai` is OFF, `initialSessionState` returns minimal state (`healthDataAvailable: false`, `blueButtonConnected: true`, no health fields). Grey consent banner shown when Blue Button connected but AI toggle OFF, with link to Settings. MFA gate for authenticated non-admin users. Payment toast on `?payment=success` |
+| `src/app/app/chat/page.tsx` | Ask Denali chat page. **Sign-in gate**: unauthenticated users see empty state cards but ChatInput replaced with "Sign up free" prompt + button → `/app/settings`. 6 suggestion cards on empty state: Check Coverage (blue), Appeal a Denial (red), Understand My Bill (amber), Preventive Care (green), Diabetes Care (purple), Weight Management (orange). Intercepts "Upgrade plan" → opens `PaywallModal` (Starter $10 / Plus $20 / Unlimited $60 subscriptions). Intercepts "Sign up" → navigates to `/app/settings` (email OTP flow). **Consent-gated health data bridge**: when `consent.health_data_ai` is OFF, `initialSessionState` returns minimal state (`healthDataAvailable: false`, `blueButtonConnected: true`, no health fields). Grey consent banner shown when Blue Button connected but AI toggle OFF, with link to Settings. MFA gate for authenticated non-admin users. Payment toast on `?payment=success` |
 | `src/lib/cms.ts` | CMS content queries via `query()`: `getBlogPosts(category?)`, `getBlogPost(slug)`, `getBlogSlugs()`, `getUserTopics(userId)`, `getPersonalizedBlogPosts(topics?)`, `getDefaultBlogPosts()` (weekly-rotating: 1 post per topic via ISO week number), `getLandingPageData()`, `getSiteSettings()`, `getPricingPlans()`, `getTestimonials()`. All have try/catch with empty defaults for build-time resilience |
 | `src/app/blog/page.tsx` | Blog listing page. SSR with `revalidate = 3600`. Three display modes: (1) `?category=` or `?view=all` → all posts with category tabs, (2) signed-in user with topic prefs → personalized grouped view, (3) default (anonymous/no prefs) → 3 weekly-rotating posts (one per topic) with "Browse all" link. Reads JWT from cookie (lightweight decode, no full auth). Falls back gracefully on any error |
 | `src/app/blog/[slug]/page.tsx` | Individual blog post page. Dynamic route, ISR. Uses `getBlogPost(slug)` + `BlogArticle`. `generateStaticParams()` via `getBlogSlugs()` |
@@ -202,7 +201,7 @@ Where to find specific logic in the codebase.
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table. Default all OFF. Three enforcement points: `health_data_ai` → chat/page.tsx strips health data from sessionState + context.ts blocks prompt injection; `health_data_storage` → useHealthData.ts gates IndexedDB caching; `analytics` → conversation-service.ts gates trackEvent calls |
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations. IndexedDB write-through + offline fallback |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path) |
-| `src/config/pricing.ts` | 5-tier pricing: `TRIAL_APPEAL_CREDITS: 0`, daily chat limits (`TRIAL: 10`, `STARTER: 2`, `PLUS: 5`, `UNLIMITED: 0`), weekly limits (`TRIAL: 1`, `STARTER: 1`, `PLUS: 5`, `UNLIMITED: 0`), anonymous rolling cap (`ANON_ROLLING_MAX: 4`, window 14 days), Stripe price IDs for 3 subscriptions (`STARTER/PLUS/UNLIMITED`) |
+| `src/config/pricing.ts` | 4-tier pricing: `TRIAL_APPEAL_CREDITS: 0`, daily chat limits (`TRIAL: 10`, `STARTER: 20`, `PLUS: 20`, `UNLIMITED: 0`), weekly limits (`TRIAL: 1`, `STARTER: 1`, `PLUS: 0`, `UNLIMITED: 0`), Stripe price IDs for 3 subscriptions (`STARTER/PLUS/UNLIMITED`). Sign-in required for all chat (no anonymous access) |
 | `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade + credit add), `handleSubscriptionEvent()` (lifecycle + monthly credit reset). Uses admin client |
 | `src/components/payment/PaywallModal.tsx` | Paywall UI: 3-plan selector (Starter/Plus/Unlimited), Stripe subscription checkout. CSS variables for theme. No dev bypass |
 | `src/components/appeal/AppealGate.tsx` | Appeal access orchestration: email OTP → TOTP → access check → PaywallModal pipeline |
@@ -539,17 +538,14 @@ Reuses existing `sessionState` (ICD-10, CPT, policy refs from earlier coverage f
 
 | Plan | Price | Appeals/30d | Chat Messages/Day | Weekly Frequency | Auth Required |
 |------|-------|-------------|-------------------|-----------------|---------------|
-| Anonymous | $0 | — | N/A | N/A | None |
 | Trial (14 days) | $0 | 0 | 10 | 1 day/week | Email OTP |
 | Expired (post-trial) | — | — | 0 (locked) | — | Email OTP |
-| Starter | $10/month | 1 credit | 2 | 1 day/week | Email OTP |
-| Plus | $20/month | 2 credits | 5 | 5 days/week | Email OTP |
+| Starter | $10/month | 1 credit | 20 | 1 day/week | Email OTP |
+| Plus | $20/month | 2 credits | 20 | Every day | Email OTP |
 | Unlimited | $60/month | Unlimited | Unlimited | Unlimited | Email OTP |
 | **Admin** | — | Unlimited | Unlimited | Unlimited | `is_admin = TRUE` on `users` row |
 
-**Anonymous**: 4 messages total in a rolling 14-day window. On the 4th message, a signup prompt is shown. After 4 messages, blocked until the window rolls forward.
-
-Every signup = automatic 14-day trial. After trial expires → locked (0 chats, must pay). Plan values are `trial`, `starter`, `plus`, `unlimited` only. All paid plans are monthly subscriptions (no one-time payments). Appeal access is credit-based via `usage.appeal_credits` column; `unlimited` plan bypasses credit checks entirely. `AppealAccessStatus` returns `"available"` (has credits), `"paywall"` (no credits), or `"allowed"` (admin/counselor/unlimited). Chat rate limiting enforced via three layers: (1) `check_rolling_chat_limit` for anonymous rolling cap, (2) `check_weekly_frequency` for weekly day limits, (3) `check_and_increment_chat` for daily limits. Returns 429 `ROLLING_LIMIT` / `WEEKLY_LIMIT` / `RATE_LIMITED`; returns 403 `TRIAL_EXPIRED` when expired trial users try to chat. **Admin users** (`users.is_admin`) bypass all rate limits and appeal paywalls.
+**Sign-in required for all chat.** No anonymous access — users must sign up (email OTP) before chatting. Every signup = automatic 14-day trial. After trial expires → locked (0 chats, must pay). Plan values are `trial`, `starter`, `plus`, `unlimited` only. All paid plans are monthly subscriptions (no one-time payments). Appeal access is credit-based via `usage.appeal_credits` column; `unlimited` plan bypasses credit checks entirely. `AppealAccessStatus` returns `"available"` (has credits), `"paywall"` (no credits), or `"allowed"` (admin/counselor/unlimited). Chat rate limiting enforced via two layers: (1) `check_weekly_frequency` for weekly day limits, (2) `check_and_increment_chat` for daily limits. Returns 429 `WEEKLY_LIMIT` / `RATE_LIMITED`; returns 401 `AUTH_REQUIRED` for unauthenticated users; returns 403 `TRIAL_EXPIRED` when expired trial users try to chat. **Admin users** (`users.is_admin`) bypass all rate limits and appeal paywalls.
 
 **AI Model**: Sonnet 4.6 for all chat messages (cost-efficient). Opus 4.6 for appeal letter generation only (higher quality for formal letters).
 
@@ -557,7 +553,6 @@ Every signup = automatic 14-day trial. After trial expires → locked (0 chats, 
 
 | Feature | Auth Required |
 |---------|---------------|
-| Anonymous chat (4 msgs/14-day rolling) | None |
 | 14-day trial (10 msgs/day, 1 day/week) | Email OTP |
 | Post-trial (locked) | Email OTP + Subscription to continue |
 | Starter (2 msgs/day, 1 day/week, 1 appeal) | Email OTP + $10/month |
@@ -849,12 +844,12 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 - Tabs: Home, Health, Ask Denali, Settings (4 tabs, fixed bottom)
 
 **Landing Page** (`src/components/landing/`) — premium warm medical reference design:
-- **Hero** (`LandingHero.tsx`): Typographic hero with subtle mountain silhouette SVG (two path layers at opacity 0.08/0.12). Serif heading, decorative accent line, refined pill CTAs, uppercase trust line. Tagline: diabetes + obesity + coverage + denials + appeals. Primary CTA defaults to `/app/chat` (not `/app`) so anonymous users land on chat directly.
+- **Hero** (`LandingHero.tsx`): Typographic hero with subtle mountain silhouette SVG (two path layers at opacity 0.08/0.12). Serif heading, decorative accent line, refined pill CTAs, uppercase trust line. Tagline: diabetes + obesity + coverage + denials + appeals. Primary CTA defaults to `/app/chat` (not `/app`) so users land on chat directly (sign-in required to send messages).
 - **Features** (`LandingFeatures.tsx`): 3 health-first cards prioritizing CMS diabetes/obesity categories: (1) Pre-Diabetes & Diabetes Care — A1C screenings, meds, coverage; (2) Obesity Care — GLP-1s, bariatric, counseling, coverage; (3) Claims & Appeals — Medicare data + appeal letters. Section header: "Tailored guidance from your Medicare data" + "Pre-diabetes, Diabetes and Obesity" (accent color). Cards: `rounded-xl`, monospace step labels (`01`/`02`/`03`), monochromatic tags, subtle border hover.
 - **Conditions** (`LandingConditions.tsx`): 2-column × 3-row alternating image/text section. Header: "Analysis grounded in your **Medicare** data". Three rows: Pre-Diabetes (image left), Diabetes (image right), Obesity (image left). ~30-word descriptions grounded in actual Blue Button data capabilities (R73 codes, Part D meds, DME, screening CPTs, GLP-1 tracking, obesity counseling). Images: `PreDiabetes.png`, `Diabetes.png`, `Obesity.png` in `public/`. Next.js `Image` with `fill` + `object-cover`, intersection observer fade-in.
 - **Illustrations** (`illustrations/`): Static SVGs (no animation classes). `DiabetesCareIllustration`, `WeightManagementIllustration` (scale + gauge + trend + capsule), `HealthRecordsIllustration`.
 - **HowItWorks** (`LandingHowItWorks.tsx`): Clean typographic steps with monospace numbers, serif labels, sans hints. Steps: Connect Medicare, Ask Denali ("Grounded analysis"), Appeal Denials. Vertical separators on desktop, horizontal on mobile. Hover `-translate-y-1`.
-- **Pricing** (`LandingPricing.tsx`): Hardcoded 4 tiers (Free Trial / Starter $10 / Plus $20 / Unlimited $60). No DB dependency. Free Trial CTA → `/app/chat` (anonymous access). Plus has "Most Popular" badge + accent ring. Features show msgs/day + days/week limits. Serif plan names, monospace prices (`--font-mono`), warm amber check icons.
+- **Pricing** (`LandingPricing.tsx`): Hardcoded 4 tiers (Free Trial / Starter $10 / Plus $20 / Unlimited $60). No DB dependency. Free Trial CTA → `/app/chat` (sign-in required). Plus has "Most Popular" badge + accent ring. Features show msgs/day + days/week limits. Serif plan names, monospace prices (`--font-mono`), warm amber check icons.
 - **Testimonials** (`LandingTestimonials.tsx`): Serif italic quotes, warm amber stars, flat avatars.
 - Section bg alternation: Hero `bg-primary`, Features `bg-secondary`, Conditions `bg-primary`, HowItWorks `bg-secondary`, Pricing default, Testimonials `bg-secondary`, Footer `bg-secondary`.
 

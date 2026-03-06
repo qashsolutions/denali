@@ -74,16 +74,9 @@ const SECTIONS = [
     title: "7. Payment Terms",
     subsections: [
       {
-        title: "Anonymous Access",
+        title: "Free Trial",
         items: [
-          "Coverage guidance is available without an account — 1 message per day, no signup required",
-          "Anonymous users cannot generate appeal letters or access health data features",
-        ],
-      },
-      {
-        title: "Trial",
-        items: [
-          "Every new account receives a 14-day free trial with 2 messages per day, 1 chat day per week",
+          "Sign up with your email to start a 14-day free trial — 10 messages per day, 1 chat day per week",
           "The free trial does not include appeal letter generation",
           "After the trial period, chat access is locked until you subscribe to a plan",
         ],
@@ -91,8 +84,8 @@ const SECTIONS = [
       {
         title: "Paid Plans",
         items: [
-          "Starter: $10 per month (1 appeal credit, 2 messages/day, 1 chat day/week)",
-          "Plus: $20 per month (2 appeal credits, 5 messages/day, 5 chat days/week)",
+          "Starter: $10 per month (1 appeal credit, 20 messages/day, 1 chat day/week)",
+          "Plus: $20 per month (2 appeal credits, 20 messages/day, every day)",
           "Unlimited: $60 per month (unlimited appeal letters and messages)",
         ],
       },

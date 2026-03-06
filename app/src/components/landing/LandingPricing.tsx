@@ -30,7 +30,7 @@ const PLANS: Plan[] = [
     price: "$10",
     period: "/month",
     features: [
-      "2 messages per day, 1 day/week",
+      "20 messages per day, 1 day/week",
       "1 appeal credit per month",
       "Appeal letters with citations",
       "Diabetes & obesity guidance",
@@ -44,7 +44,7 @@ const PLANS: Plan[] = [
     period: "/month",
     popular: true,
     features: [
-      "5 messages per day, 5 days/week",
+      "20 messages per day, every day",
       "2 appeal credits per month",
       "Full diabetes & obesity coaching",
       "Priority coverage guidance",

@@ -24,7 +24,7 @@ const STEPS = [
   {
     number: "03",
     label: "Appeal Denials",
-    hint: "Auto-built letters with citations",
+    hint: "Letters with citations",
     href: "/app/chat",
   },
 ];
