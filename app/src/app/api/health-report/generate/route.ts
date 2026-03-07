@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
 
       logAudit("HEALTH_REPORT_GENERATED", {
         userId: user.userId,
-        resourceType: "ehr_connection",
+        resourceType: "health_report",
         resourceId: reportId,
         request,
       }).catch(() => {});
