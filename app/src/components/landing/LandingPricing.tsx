@@ -58,8 +58,9 @@ const PLANS: Plan[] = [
     period: "/month",
     features: [
       "Unlimited messages every day",
-      "Unlimited appeal letters",
+      "Unlimited appeal letters with citations",
       "Email alerts for all Medicare updates",
+      "Coverage, diabetes & obesity guidance",
       "No daily or weekly limits",
     ],
     cta: "Go Unlimited",
@@ -77,8 +78,7 @@ export function LandingPricing() {
             Simple, Transparent Pricing
           </h2>
           <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-            Start with a free 14-day trial. Upgrade when you need appeal
-            letters or more access.
+            Coverage guidance, appeal letters, and proactive email alerts — choose the plan that fits your needs.
           </p>
         </div>
 
