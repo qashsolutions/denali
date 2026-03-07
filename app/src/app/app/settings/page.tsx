@@ -9,6 +9,8 @@ import { useTopicPreferences } from "@/hooks/useTopicPreferences";
 import { HEALTH_TOPICS } from "@/types/cms";
 import type { HealthTopic } from "@/types/cms";
 import { useAuth } from "@/hooks/useAuth";
+import { useAlertPreferences } from "@/hooks/useAlertPreferences";
+import { ALERT_TYPES, ALERT_LABELS } from "@/config/alerts";
 import { TOTPEnrollModal } from "@/components/auth";
 import { PaywallModal } from "@/components/payment/PaywallModal";
 import { PRICING, formatPrice } from "@/config/pricing";
@@ -20,6 +22,7 @@ export default function AppSettingsPage() {
   const { consent, isLoading: consentLoading, updateConsent } = useConsent();
   const { topics: selectedTopics, isLoading: topicsLoading, toggleTopic } = useTopicPreferences();
   const { authState, sendEmailOTP, verifyEmailOTP, enrollTOTP, unenrollTOTP, challengeAndVerifyTOTP, confirmTOTPEnrollment, signOut, clearError } = useAuth();
+  const { preferences: alertPrefs, eligibility: alertEligibility, isLoading: alertsLoading, updatePreference: updateAlertPref } = useAlertPreferences();
   const [showTOTPEnroll, setShowTOTPEnroll] = useState(false);
   const [showTOTPRemoveConfirm, setShowTOTPRemoveConfirm] = useState(false);
   const [unenrollLoading, setUnenrollLoading] = useState(false);
@@ -429,6 +432,68 @@ export default function AppSettingsPage() {
         </section>
       )}
 
+      {/* Email Alerts */}
+      {authState.email && (
+        <section className="mb-8">
+          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">
+            Email Alerts
+          </h2>
+          <p className="text-xs text-[var(--text-muted)] mb-4">
+            Get notified about important Medicare updates. No health details are included in emails.
+          </p>
+          <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)] space-y-4">
+            {alertsLoading ? (
+              <div className="flex items-center gap-3 py-2">
+                <div className="w-5 h-5 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-[var(--text-muted)]">Loading alert preferences...</p>
+              </div>
+            ) : (
+              <>
+                {ALERT_TYPES.map((type) => {
+                  const label = ALERT_LABELS[type];
+                  const isEligible = alertEligibility[type];
+                  const isEnabled = alertPrefs[type];
+
+                  if (!isEligible) {
+                    return (
+                      <div key={type} className="flex items-start justify-between gap-4 opacity-60">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-[var(--text-primary)]">{label.name}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{label.description}</p>
+                        </div>
+                        <span className="shrink-0 px-2 py-1 rounded text-xs font-medium bg-[var(--bg-tertiary)] text-[var(--text-muted)]">
+                          {authState.plan === "plus" ? "Unlimited" : "Plus"}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <AlertToggle
+                      key={type}
+                      label={label.name}
+                      description={label.description}
+                      checked={isEnabled}
+                      onChange={(v) => updateAlertPref(type, v)}
+                    />
+                  );
+                })}
+                {!alertEligibility.appeal_deadline && !authState.isAdmin && (
+                  <div className="pt-3 border-t border-[var(--border)]">
+                    <button
+                      onClick={() => setShowPaywall(true)}
+                      className="w-full py-2.5 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
+                    >
+                      {authState.plan === "plus" ? "Upgrade to Unlimited" : "Upgrade to Plus"}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
       <PaywallModal
         isOpen={showPaywall}
         onClose={() => setShowPaywall(false)}
@@ -689,6 +754,41 @@ function formatRelativeTime(dateStr: string | null): string {
   const diffDay = Math.floor(diffHr / 24);
   if (diffDay < 30) return `${diffDay}d ago`;
   return new Date(dateStr).toLocaleDateString();
+}
+
+function AlertToggle({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-[var(--text-primary)]">{label}</p>
+        <p className="text-xs text-[var(--text-muted)] mt-0.5">{description}</p>
+      </div>
+      <button
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${
+          checked ? "bg-[var(--accent-primary)]" : "bg-[var(--bg-tertiary)]"
+        }`}
+      >
+        <span
+          className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
+            checked ? "translate-x-[22px]" : "translate-x-[2px]"
+          }`}
+        />
+      </button>
+    </div>
+  );
 }
 
 function ConsentToggle({

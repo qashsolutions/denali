@@ -47,7 +47,7 @@ const PLANS: Plan[] = [
       "20 messages per day, every day",
       "2 appeal credits per month",
       "Appeal letters with citations",
-      "Coverage, diabetes & obesity guidance",
+      "Email alerts for deadlines & denials",
     ],
     cta: "Subscribe",
     href: "/app",
@@ -59,7 +59,7 @@ const PLANS: Plan[] = [
     features: [
       "Unlimited messages every day",
       "Unlimited appeal letters",
-      "Coverage, diabetes & obesity guidance",
+      "Email alerts for all Medicare updates",
       "No daily or weekly limits",
     ],
     cta: "Go Unlimited",
@@ -141,7 +141,7 @@ export function LandingPricing() {
         {/* Note */}
         <p className="text-center text-sm text-[var(--text-muted)] mt-8">
           All plans include coverage guidance, diabetes & obesity support, and
-          Medicare policy lookups. No credit card required for trial.
+          Medicare policy lookups. Plus and Unlimited plans include proactive email alerts. No credit card required for trial.
         </p>
       </div>
     </section>

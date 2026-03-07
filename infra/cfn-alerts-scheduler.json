@@ -1,0 +1,100 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Denali email alerts scheduler - Lambda + EventBridge (daily 8am CT)",
+  "Parameters": {
+    "AlertProcessSecret": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Secret header value for /api/alerts/process authentication"
+    },
+    "AppUrl": {
+      "Type": "String",
+      "Default": "https://denali.health",
+      "Description": "Base URL of the Denali app"
+    }
+  },
+  "Resources": {
+    "AlertTriggerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "denali-alert-trigger-role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": {"Service": "lambda.amazonaws.com"},
+            "Action": "sts:AssumeRole"
+          }]
+        },
+        "Policies": [{
+          "PolicyName": "denali-alert-trigger-policy",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+                "Resource": "arn:aws:logs:us-east-1:236823123138:log-group:/aws/lambda/denali-alert-trigger:*"
+              }
+            ]
+          }
+        }],
+        "Tags": [{"Key": "Project", "Value": "Denali"}]
+      }
+    },
+    "AlertTriggerFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "denali-alert-trigger",
+        "Runtime": "python3.12",
+        "Handler": "index.lambda_handler",
+        "Role": {"Fn::GetAtt": ["AlertTriggerRole", "Arn"]},
+        "Timeout": 60,
+        "MemorySize": 128,
+        "Description": "Triggers daily email alert processing via /api/alerts/process",
+        "Tags": [{"Key": "Project", "Value": "Denali"}],
+        "Environment": {
+          "Variables": {
+            "APP_URL": {"Ref": "AppUrl"},
+            "ALERT_SECRET": {"Ref": "AlertProcessSecret"}
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport urllib.request\n\ndef lambda_handler(event, context):\n    url = f\"{os.environ['APP_URL']}/api/alerts/process\"\n    secret = os.environ['ALERT_SECRET']\n    data = json.dumps({}).encode('utf-8')\n    req = urllib.request.Request(url, data=data, method='POST')\n    req.add_header('Content-Type', 'application/json')\n    req.add_header('X-Alert-Secret', secret)\n    try:\n        with urllib.request.urlopen(req, timeout=55) as resp:\n            body = json.loads(resp.read().decode('utf-8'))\n            print(json.dumps(body))\n            return {'statusCode': 200, 'body': body}\n    except Exception as e:\n        print(f'Error: {str(e)}')\n        return {'statusCode': 500, 'body': str(e)}\n"
+        }
+      }
+    },
+    "DailyAlertRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": "denali-daily-alerts",
+        "Description": "Daily 8:00 AM CT (14:00 UTC) alert processing",
+        "ScheduleExpression": "cron(0 14 * * ? *)",
+        "State": "ENABLED",
+        "Targets": [{
+          "Arn": {"Fn::GetAtt": ["AlertTriggerFunction", "Arn"]},
+          "Id": "DailyAlerts"
+        }]
+      }
+    },
+    "DailyAlertPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Ref": "AlertTriggerFunction"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {"Fn::GetAtt": ["DailyAlertRule", "Arn"]}
+      }
+    }
+  },
+  "Outputs": {
+    "LambdaArn": {
+      "Value": {"Fn::GetAtt": ["AlertTriggerFunction", "Arn"]},
+      "Description": "Alert trigger Lambda ARN"
+    },
+    "RuleArn": {
+      "Value": {"Fn::GetAtt": ["DailyAlertRule", "Arn"]},
+      "Description": "EventBridge rule ARN"
+    }
+  }
+}

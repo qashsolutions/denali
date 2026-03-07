@@ -63,6 +63,10 @@ export async function DELETE(request: NextRequest) {
     // 0d. Delete consent preferences
     await query(`DELETE FROM consent_preferences WHERE user_id = $1`, [userId]);
 
+    // 0e. Delete alert data
+    await query(`DELETE FROM alert_log WHERE user_id = $1`, [userId]);
+    await query(`DELETE FROM alert_preferences WHERE user_id = $1`, [userId]);
+
     // 1. Delete user feedback
     await query(`DELETE FROM user_feedback WHERE user_id = $1`, [userId]);
 

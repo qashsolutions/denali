@@ -27,7 +27,10 @@ export type AuditAction =
   | "POLICY_CHANGE_EMAIL"
   | "HEALTH_REPORT_GENERATED"
   | "REPORT_SHARED_ACCESS"
-  | "REPORT_EMAILED";
+  | "REPORT_EMAILED"
+  | "ALERT_BATCH_PROCESSED"
+  | "ALERT_SENT"
+  | "ALERT_PREFERENCE_UPDATED";
 
 type ResourceType =
   | "ehr_connection"
