@@ -70,7 +70,7 @@ function StepNode({
 
 export function LandingHowItWorks({ section: _section }: LandingHowItWorksProps) {
   return (
-    <section id="how-it-works" className="py-24 sm:py-36 bg-[var(--bg-secondary)]">
+    <section id="how-it-works" className="py-24 sm:py-36 bg-[var(--bg-tertiary)]">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-12 sm:mb-16">
