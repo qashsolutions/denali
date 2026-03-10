@@ -11,7 +11,8 @@ import type { HealthTopic } from "@/types/cms";
 import { useAuth } from "@/hooks/useAuth";
 import { useAlertPreferences } from "@/hooks/useAlertPreferences";
 import { ALERT_TYPES, ALERT_LABELS } from "@/config/alerts";
-import { TOTPEnrollModal } from "@/components/auth";
+// TOTP disabled (2026-03-10) — ID.me is the CMS-mandated verification path
+// import { TOTPEnrollModal } from "@/components/auth";
 import { PaywallModal } from "@/components/payment/PaywallModal";
 import { PRICING, formatPrice } from "@/config/pricing";
 
@@ -137,8 +138,21 @@ function AppSettingsPageInner() {
                 </button>
               </div>
 
-              {/* Authenticator status — inline in Account section */}
-              <div className="pt-3 border-t border-[var(--border)]">
+              {/* ---------------------------------------------------------------
+                 TOTP Authenticator App — DISABLED (2026-03-10)
+
+                 CMS Medicare App Library requires ID.me (IAL2/AAL2) for
+                 identity verification, which is now the primary auth gate
+                 for Blue Button access. TOTP MFA is optional extra security
+                 not mandated by CMS. Commented out to simplify the settings
+                 page — ID.me is the single verification step users see.
+
+                 To re-enable: uncomment this block + the <TOTPEnrollModal>
+                 below + the TOTP state variables at the top of this component.
+                 All TOTP API routes (/api/auth/mfa/*) and hooks (useAuth
+                 enrollTOTP/unenrollTOTP/confirmTOTPEnrollment) remain intact.
+                 --------------------------------------------------------------- */}
+              {/* <div className="pt-3 border-t border-[var(--border)]">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-[var(--text-primary)]">Authenticator App</p>
@@ -165,7 +179,6 @@ function AppSettingsPageInner() {
                   )}
                 </div>
 
-                {/* TOTP removal confirmation */}
                 {showTOTPRemoveConfirm && (
                   <div className="mt-3 p-3 rounded-lg bg-red-500/5 border border-red-500/20">
                     <p className="text-sm text-[var(--text-primary)] mb-1 font-medium">
@@ -199,9 +212,9 @@ function AppSettingsPageInner() {
                     </div>
                   </div>
                 )}
-              </div>
+              </div> */}
 
-              {/* Identity Verification (ID.me) */}
+              {/* Identity Verification (ID.me) — CMS-mandated IAL2/AAL2 */}
               <div className="pt-3 border-t border-[var(--border)]">
                 <div className="flex items-center justify-between">
                   <div>
@@ -570,7 +583,8 @@ function AppSettingsPageInner() {
         trialExpired={authState.trialStatus === "expired"}
       />
 
-      <TOTPEnrollModal
+      {/* TOTP Enroll Modal — DISABLED (2026-03-10), see TOTP comment above */}
+      {/* <TOTPEnrollModal
         isOpen={showTOTPEnroll}
         onClose={() => setShowTOTPEnroll(false)}
         onEnrolled={() => setTotpEnrolled(true)}
@@ -580,7 +594,7 @@ function AppSettingsPageInner() {
         isLoading={authState.isLoading}
         error={authState.error}
         clearError={clearError}
-      />
+      /> */}
 
       {/* Privacy & Data */}
       <section className="mb-8">

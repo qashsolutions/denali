@@ -3,8 +3,18 @@
 import { useState, useEffect } from "react";
 import { useAuth, type AppealAccessStatus } from "@/hooks/useAuth";
 import { EmailOTPModal } from "@/components/auth/EmailOTPModal";
-import { TOTPChallengeModal } from "@/components/auth/TOTPChallengeModal";
-import { TOTPEnrollModal } from "@/components/auth/TOTPEnrollModal";
+// ---------------------------------------------------------------
+// TOTP modals — DISABLED (2026-03-10)
+//
+// CMS Medicare App Library requires ID.me (IAL2/AAL2) for identity
+// verification. TOTP MFA was optional extra security not mandated
+// by CMS. ID.me now gates Blue Button access via /api/fhir/authorize.
+//
+// To re-enable: uncomment imports below + TOTP state/handlers/modals
+// in this component. All TOTP API routes and hooks remain intact.
+// ---------------------------------------------------------------
+// import { TOTPChallengeModal } from "@/components/auth/TOTPChallengeModal";
+// import { TOTPEnrollModal } from "@/components/auth/TOTPEnrollModal";
 import { PaywallModal } from "@/components/payment/PaywallModal";
 
 interface AppealGateProps {
@@ -18,20 +28,20 @@ interface AppealGateProps {
  * Controls access to appeal letter generation based on user's auth and payment status.
  *
  * Flow:
- * 1. If MFA enrolled → Show TOTPChallengeModal (with email fallback)
- * 2. If not authenticated → Show EmailOTPModal
- * 3. If authenticated + has credits → Allow access + offer TOTP enrollment
- * 4. If authenticated + no credits → Show PaywallModal
- * 5. If has monthly subscription → Allow access
+ * 1. If not authenticated → Show EmailOTPModal
+ * 2. If authenticated + has credits → Allow access
+ * 3. If authenticated + no credits → Show PaywallModal
+ * 4. If has monthly subscription → Allow access
+ *
+ * Note: TOTP challenge step removed (2026-03-10) — ID.me is the CMS-mandated
+ * identity verification path. TOTP code preserved in comments for future use.
  */
 export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
   const {
     authState,
     sendEmailOTP,
     verifyEmailOTP,
-    enrollTOTP,
-    challengeAndVerifyTOTP,
-    confirmTOTPEnrollment,
+    // TOTP disabled — enrollTOTP, challengeAndVerifyTOTP, confirmTOTPEnrollment,
     checkAppealAccess,
     clearError,
   } = useAuth();
@@ -40,8 +50,9 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
     null
   );
   const [showEmailModal, setShowEmailModal] = useState(false);
-  const [showTOTPChallenge, setShowTOTPChallenge] = useState(false);
-  const [showTOTPEnroll, setShowTOTPEnroll] = useState(false);
+  // TOTP disabled (2026-03-10) — see comment at top of file
+  // const [showTOTPChallenge, setShowTOTPChallenge] = useState(false);
+  // const [showTOTPEnroll, setShowTOTPEnroll] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
@@ -77,42 +88,32 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
 
     if (status === "available" || status === "allowed") {
       onAccessGranted?.();
-      // Offer TOTP enrollment after first appeal (skippable)
-      if (status === "available" && !authState.isMfaEnrolled) {
-        setShowTOTPEnroll(true);
-      }
+      // TOTP enrollment after first appeal — disabled (2026-03-10)
+      // if (status === "available" && !authState.isMfaEnrolled) {
+      //   setShowTOTPEnroll(true);
+      // }
     } else if (status === "paywall") {
       setShowPaywallModal(true);
     }
   };
 
-  // Handle successful TOTP challenge
-  const handleTOTPVerified = async () => {
-    setShowTOTPChallenge(false);
-    const status = await checkAppealAccess();
-    setAccessStatus(status);
-
-    if (status === "available" || status === "allowed") {
-      onAccessGranted?.();
-    } else if (status === "paywall") {
-      setShowPaywallModal(true);
-    }
-  };
-
-  // Handle TOTP enrollment completed or skipped
-  const handleTOTPEnrolled = () => {
-    setShowTOTPEnroll(false);
-  };
-
-  const handleTOTPSkip = () => {
-    setShowTOTPEnroll(false);
-  };
-
-  // Handle TOTP fallback to email
-  const handleFallbackToEmail = () => {
-    setShowTOTPChallenge(false);
-    setShowEmailModal(true);
-  };
+  // TOTP handlers — disabled (2026-03-10), preserved for future use
+  // const handleTOTPVerified = async () => {
+  //   setShowTOTPChallenge(false);
+  //   const status = await checkAppealAccess();
+  //   setAccessStatus(status);
+  //   if (status === "available" || status === "allowed") {
+  //     onAccessGranted?.();
+  //   } else if (status === "paywall") {
+  //     setShowPaywallModal(true);
+  //   }
+  // };
+  // const handleTOTPEnrolled = () => setShowTOTPEnroll(false);
+  // const handleTOTPSkip = () => setShowTOTPEnroll(false);
+  // const handleFallbackToEmail = () => {
+  //   setShowTOTPChallenge(false);
+  //   setShowEmailModal(true);
+  // };
 
   // Handle successful payment
   const handlePaymentSuccess = () => {
@@ -124,11 +125,12 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
   // Request access (triggered by user action)
   const requestAccess = () => {
     if (!authState.isEmailVerified) {
-      if (authState.isMfaEnrolled) {
-        setShowTOTPChallenge(true);
-      } else {
-        setShowEmailModal(true);
-      }
+      // TOTP challenge disabled (2026-03-10) — go straight to email OTP
+      // if (authState.isMfaEnrolled) {
+      //   setShowTOTPChallenge(true);
+      // } else {
+      setShowEmailModal(true);
+      // }
     } else if (accessStatus === "paywall") {
       setShowPaywallModal(true);
     }
@@ -140,8 +142,8 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
       <>
         {children}
 
-        {/* TOTP enrollment modal (shown after first appeal) */}
-        <TOTPEnrollModal
+        {/* TOTP enrollment modal — disabled (2026-03-10) */}
+        {/* <TOTPEnrollModal
           isOpen={showTOTPEnroll}
           onClose={() => setShowTOTPEnroll(false)}
           onEnrolled={handleTOTPEnrolled}
@@ -151,7 +153,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
           isLoading={authState.isLoading}
           error={authState.error}
           clearError={clearError}
-        />
+        /> */}
       </>
     );
   }
@@ -227,8 +229,8 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
         clearError={clearError}
       />
 
-      {/* TOTP Challenge Modal (returning users with MFA) */}
-      <TOTPChallengeModal
+      {/* TOTP Challenge Modal — disabled (2026-03-10) */}
+      {/* <TOTPChallengeModal
         isOpen={showTOTPChallenge}
         onClose={() => setShowTOTPChallenge(false)}
         onVerified={handleTOTPVerified}
@@ -237,7 +239,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
         isLoading={authState.isLoading}
         error={authState.error}
         clearError={clearError}
-      />
+      /> */}
 
       {/* Paywall Modal */}
       <PaywallModal

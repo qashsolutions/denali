@@ -34,7 +34,8 @@ import {
 import { getGreeting } from "@/lib/utils";
 import type { SessionState } from "@/lib/session-state";
 import { getUploadLimitForPlan } from "@/config/pricing";
-import { MFARequiredGate } from "@/components/auth/MFARequiredGate";
+// TOTP MFA gate disabled (2026-03-10) — ID.me is the CMS-mandated verification path
+// import { MFARequiredGate } from "@/components/auth/MFARequiredGate";
 
 
 function ChatContent() {
@@ -290,15 +291,25 @@ function ChatContent() {
   // Auth gate: require sign-in to use chat.
   const needsSignIn = !authState.isLoading && !authState.email;
 
-  // MFA gate: require MFA enrollment to use chat features.
-  // Admins bypass. Users without MFA can still access /app/health (Blue Button) and /app/settings.
-  if (!authState.isLoading && authState.isEmailVerified && !authState.isMfaEnrolled && !authState.isAdmin) {
-    return (
-      <div className="fixed top-[72px] sm:top-[88px] bottom-16 md:bottom-0 left-0 right-0 flex bg-[var(--bg-primary)]">
-        <MFARequiredGate />
-      </div>
-    );
-  }
+  // ---------------------------------------------------------------
+  // TOTP MFA gate — DISABLED (2026-03-10)
+  //
+  // Previously required TOTP enrollment before allowing chat access.
+  // Now superseded by ID.me IAL2/AAL2 verification, which is the
+  // CMS-mandated identity verification path for the Medicare App
+  // Library. ID.me gates Blue Button access (in /api/fhir/authorize),
+  // not chat — so this gate is no longer needed.
+  //
+  // To re-enable: uncomment the block below + restore the
+  // MFARequiredGate import at the top of this file.
+  // ---------------------------------------------------------------
+  // if (!authState.isLoading && authState.isEmailVerified && !authState.isMfaEnrolled && !authState.isAdmin) {
+  //   return (
+  //     <div className="fixed top-[72px] sm:top-[88px] bottom-16 md:bottom-0 left-0 right-0 flex bg-[var(--bg-primary)]">
+  //       <MFARequiredGate />
+  //     </div>
+  //   );
+  // }
 
   return (
     <div className="fixed top-[72px] sm:top-[88px] bottom-16 md:bottom-0 left-0 right-0 flex bg-[var(--bg-primary)]">
