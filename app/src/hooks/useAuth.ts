@@ -7,6 +7,7 @@ export interface AuthState {
   userId: string | null;
   email: string | null;
   isEmailVerified: boolean;
+  isIdmeVerified: boolean;
   isMfaEnrolled: boolean;
   isMfaVerified: boolean;
   currentAAL: string | null;
@@ -40,6 +41,7 @@ const DEFAULT_AUTH_STATE: AuthState = {
   userId: null,
   email: null,
   isEmailVerified: false,
+  isIdmeVerified: false,
   isMfaEnrolled: false,
   isMfaVerified: false,
   currentAAL: null,
@@ -113,6 +115,7 @@ export function useAuth(): UseAuthReturn {
         const appealCount = profileData?.appealCount || 0;
         const appealCredits = profileData?.appealCredits || 0;
         const isAdmin = profileData?.isAdmin || false;
+        const isIdmeVerified = profileData?.idmeVerified || false;
 
         let trialStatus: AuthState["trialStatus"] = "none";
         let trialDaysRemaining = 0;
@@ -123,6 +126,7 @@ export function useAuth(): UseAuthReturn {
 
         setAuthState((prev) => ({
           ...prev,
+          isIdmeVerified,
           isMfaEnrolled,
           isMfaVerified,
           currentAAL: isMfaVerified ? "aal2" : "aal1",
@@ -141,6 +145,7 @@ export function useAuth(): UseAuthReturn {
           appealCount,
           appealCredits,
           isAdmin,
+          isIdmeVerified,
           trialStatus,
           trialDaysRemaining,
         });
@@ -153,6 +158,7 @@ export function useAuth(): UseAuthReturn {
           appealCount: number;
           appealCredits: number;
           isAdmin: boolean;
+          isIdmeVerified: boolean;
           trialStatus: string;
           trialDaysRemaining: number;
         }>(STORES.PROFILE, "profile", TTL.PROFILE);
@@ -165,6 +171,7 @@ export function useAuth(): UseAuthReturn {
             appealCount: d.appealCount,
             appealCredits: d.appealCredits || 0,
             isAdmin: d.isAdmin,
+            isIdmeVerified: d.isIdmeVerified || false,
             trialStatus: d.trialStatus as AuthState["trialStatus"],
             trialDaysRemaining: d.trialDaysRemaining,
           }));

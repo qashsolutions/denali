@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
 import { useSettings } from "@/hooks/useSettings";
 import { useConsent, type ConsentState } from "@/hooks/useConsent";
@@ -16,7 +16,16 @@ import { PaywallModal } from "@/components/payment/PaywallModal";
 import { PRICING, formatPrice } from "@/config/pricing";
 
 export default function AppSettingsPage() {
+  return (
+    <Suspense>
+      <AppSettingsPageInner />
+    </Suspense>
+  );
+}
+
+function AppSettingsPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isDark, setTheme } = useTheme();
   const { settings, setTextScale, resetSettings } = useSettings();
   const { consent, isLoading: consentLoading, updateConsent } = useConsent();
@@ -41,6 +50,23 @@ export default function AppSettingsPage() {
   const [auditLimit, setAuditLimit] = useState(50);
   const [auditHasMore, setAuditHasMore] = useState(false);
   const [auditExpanded, setAuditExpanded] = useState(false);
+  const [idmeMessage, setIdmeMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
+
+  // Handle ID.me callback query params
+  useEffect(() => {
+    const idmeParam = searchParams.get("idme");
+    const idmeRequired = searchParams.get("idme_required");
+
+    if (idmeParam === "verified") {
+      setIdmeMessage({ text: "Identity verified successfully! You can now connect Medicare.", type: "success" });
+    } else if (idmeParam === "denied") {
+      setIdmeMessage({ text: "Identity verification was cancelled. You can try again anytime.", type: "info" });
+    } else if (idmeParam && idmeParam !== "verified" && idmeParam !== "denied") {
+      setIdmeMessage({ text: "Identity verification failed. Please try again.", type: "error" });
+    } else if (idmeRequired === "true") {
+      setIdmeMessage({ text: "Identity verification is required before connecting Medicare. Please verify below.", type: "info" });
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!authState.email) return;
@@ -171,6 +197,45 @@ export default function AppSettingsPage() {
                         {unenrollLoading ? "Removing..." : "Yes, Remove"}
                       </button>
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Identity Verification (ID.me) */}
+              <div className="pt-3 border-t border-[var(--border)]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">Identity Verification</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                      {authState.isIdmeVerified
+                        ? "IAL2 \u2014 Identity verified via ID.me"
+                        : "Required to connect Medicare health data"}
+                    </p>
+                  </div>
+                  {authState.isIdmeVerified ? (
+                    <span className="px-4 py-2 rounded-lg text-sm font-medium bg-green-500/10 text-green-600">
+                      Verified
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        window.location.href = "/api/auth/idme/authorize";
+                      }}
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
+                    >
+                      Verify with ID.me
+                    </button>
+                  )}
+                </div>
+                {idmeMessage && (
+                  <div className={`mt-3 p-3 rounded-lg text-sm ${
+                    idmeMessage.type === "success"
+                      ? "bg-green-500/10 text-green-600 border border-green-500/20"
+                      : idmeMessage.type === "error"
+                      ? "bg-red-500/10 text-red-600 border border-red-500/20"
+                      : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                  }`}>
+                    {idmeMessage.text}
                   </div>
                 )}
               </div>

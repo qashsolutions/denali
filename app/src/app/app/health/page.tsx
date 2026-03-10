@@ -643,6 +643,22 @@ function HealthPageInner() {
             <p className="text-sm text-amber-600 dark:text-amber-400">{oauthErrorMessage}</p>
           </div>
         )}
+        {!authState.isIdmeVerified && !authState.isAdmin && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6 text-center">
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-400 mb-1">
+              Identity verification required
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400/80 mb-3">
+              To protect your Medicare data, identity verification via ID.me is required before connecting.
+            </p>
+            <Link
+              href="/app/settings?idme_required=true"
+              className="inline-flex px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
+            >
+              Verify Identity in Settings
+            </Link>
+          </div>
+        )}
         <ConnectMedicare onConnect={connect} />
       </div>
     );

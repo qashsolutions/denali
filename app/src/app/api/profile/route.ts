@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ authenticated: false });
   }
 
-  const [profileResult, usageResult] = await Promise.all([
+  const [profileResult, usageResult, verificationResult] = await Promise.all([
     query<{ plan: string; role: string; is_admin: boolean }>(
       `SELECT plan, role, is_admin FROM users WHERE id = $1 LIMIT 1`,
       [user.userId]
@@ -27,10 +27,15 @@ export async function GET(request: NextRequest) {
       `SELECT appeal_count, appeal_credits FROM usage WHERE email = $1 LIMIT 1`,
       [user.email]
     ),
+    query<{ idme_verified: boolean }>(
+      `SELECT COALESCE(idme_verified, false) as idme_verified FROM user_verification WHERE user_id = $1 LIMIT 1`,
+      [user.userId]
+    ),
   ]);
 
   const profile = profileResult.rows[0];
   const usage = usageResult.rows[0];
+  const verification = verificationResult.rows[0];
 
   return NextResponse.json({
     authenticated: true,
@@ -41,5 +46,6 @@ export async function GET(request: NextRequest) {
     isAdmin: profile?.is_admin || false,
     appealCount: usage?.appeal_count || 0,
     appealCredits: usage?.appeal_credits || 0,
+    idmeVerified: verification?.idme_verified || false,
   });
 }

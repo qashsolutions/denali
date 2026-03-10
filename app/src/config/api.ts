@@ -36,6 +36,15 @@ export const API_CONFIG = {
     callbackPath: "/api/fhir/callback",
   },
 
+  /** ID.me OIDC identity verification */
+  idme: {
+    baseUrl: process.env.IDME_BASE_URL || "https://api.idmelabs.com",
+    clientId: process.env.IDME_CLIENT_ID || "",
+    clientSecret: process.env.IDME_CLIENT_SECRET || "",
+    scope: "openid nist_ial2_aal2",
+    callbackPath: "/api/auth/idme/callback",
+  },
+
   /** Default pagination limits */
   defaults: {
     pageLimit: parseInt(process.env.DEFAULT_PAGE_LIMIT || "10", 10),

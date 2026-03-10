@@ -1641,6 +1641,10 @@ export type Database = {
           email_verified: boolean
           email_verified_at: string | null
           id: string
+          idme_verified: boolean
+          idme_verified_at: string | null
+          idme_uuid: string | null
+          idme_ial_level: string | null
           phone_verified: boolean
           phone_verified_at: string | null
           user_id: string
@@ -1650,6 +1654,10 @@ export type Database = {
           email_verified?: boolean
           email_verified_at?: string | null
           id?: string
+          idme_verified?: boolean
+          idme_verified_at?: string | null
+          idme_uuid?: string | null
+          idme_ial_level?: string | null
           phone_verified?: boolean
           phone_verified_at?: string | null
           user_id: string
@@ -1659,6 +1667,10 @@ export type Database = {
           email_verified?: boolean
           email_verified_at?: string | null
           id?: string
+          idme_verified?: boolean
+          idme_verified_at?: string | null
+          idme_uuid?: string | null
+          idme_ial_level?: string | null
           phone_verified?: boolean
           phone_verified_at?: string | null
           user_id?: string

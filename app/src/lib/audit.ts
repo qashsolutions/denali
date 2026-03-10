@@ -30,7 +30,8 @@ export type AuditAction =
   | "REPORT_EMAILED"
   | "ALERT_BATCH_PROCESSED"
   | "ALERT_SENT"
-  | "ALERT_PREFERENCE_UPDATED";
+  | "ALERT_PREFERENCE_UPDATED"
+  | "IDME_VERIFY";
 
 type ResourceType =
   | "ehr_connection"
@@ -43,7 +44,9 @@ type ResourceType =
   | "diabetes_insight"
   | "diabetes_log"
   | "topic_preferences"
-  | "policy_notification";
+  | "policy_notification"
+  | "identity"
+  | "health_report";
 
 // Actions with a dedup window (ms). Same user+action within this window → skip insert.
 // Only high-frequency, low-value actions belong here. Sensitive actions (appeals, consent, etc.)
