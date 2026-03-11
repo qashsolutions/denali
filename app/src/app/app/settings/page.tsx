@@ -214,14 +214,18 @@ function AppSettingsPageInner() {
                 )}
               </div> */}
 
-              {/* Identity Verification (ID.me) — CMS-mandated IAL2/AAL2 */}
+              {/* Identity Verification (ID.me) — CMS-mandated IAL2/AAL2
+                  Button uses official ID.me brand green (#2D844A) per brand guidelines:
+                  https://docs.id.me/brand-assets/brand-assets/brand-guidelines
+                  "Verify with ID.me" is the approved button text for pre-verification state.
+                  Post-verification shows green "Verified" badge. */}
               <div className="pt-3 border-t border-[var(--border)]">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-[var(--text-primary)]">Identity Verification</p>
                     <p className="text-xs text-[var(--text-muted)] mt-0.5">
                       {authState.isIdmeVerified
-                        ? "IAL2 \u2014 Identity verified via ID.me"
+                        ? "Identity verified via ID.me"
                         : "Required to connect Medicare health data"}
                     </p>
                   </div>
@@ -234,12 +238,26 @@ function AppSettingsPageInner() {
                       onClick={() => {
                         window.location.href = "/api/auth/idme/authorize";
                       }}
-                      className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
+                      className="px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-colors"
+                      style={{ backgroundColor: "#2D844A" }}
                     >
-                      Verify with ID.me
+                      {/* ID.me brand logo (white, inline SVG) + approved button text */}
+                      <span className="flex items-center gap-2">
+                        <svg width="40" height="15" viewBox="0 0 100 38" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                          <text x="0" y="28" fill="white" fontFamily="system-ui, -apple-system, sans-serif" fontSize="28" fontWeight="700">ID.me</text>
+                        </svg>
+                        <span>Verify with ID.me</span>
+                      </span>
                     </button>
                   )}
                 </div>
+                {!authState.isIdmeVerified && !idmeMessage && (
+                  <p className="mt-2 text-xs text-[var(--text-muted)]">
+                    You&apos;ll be redirected to{" "}
+                    <a href="https://www.id.me" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-primary)] hover:underline">ID.me</a>
+                    , a CMS-approved identity verification service, to confirm your identity. This is a one-time step required by Medicare. You&apos;ll return here automatically once verified.
+                  </p>
+                )}
                 {idmeMessage && (
                   <div className={`mt-3 p-3 rounded-lg text-sm ${
                     idmeMessage.type === "success"
