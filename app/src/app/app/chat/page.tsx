@@ -372,7 +372,7 @@ function ChatContent() {
         <div className="flex-1 overflow-y-auto flex flex-col">
           {messages.length === 0 && !isLoading ? (
             <Container className="py-4">
-              <EmptyState onSuggestionSelect={handleInitialCardSelect} topic={topic} email={authState.email} />
+              <EmptyState onSuggestionSelect={handleInitialCardSelect} topic={topic} email={authState.email} verifiedName={authState.firstName} />
             </Container>
           ) : (
             <Container className="py-4 mt-auto">
@@ -559,13 +559,16 @@ const EMPTY_STATE_CARDS = [
 function EmptyState({
   onSuggestionSelect,
   email,
+  verifiedName,
 }: {
   onSuggestionSelect: (suggestion: string) => void;
   topic?: string | null;
   email?: string | null;
+  verifiedName?: string | null;
 }) {
   const greeting = getGreeting();
-  const firstName = email ? email.split("@")[0].replace(/[._+]/g, " ").split(" ")[0] : null;
+  // Prefer verified name from ID.me, fall back to email-derived name
+  const firstName = verifiedName || (email ? email.split("@")[0].replace(/[._+]/g, " ").split(" ")[0] : null);
   const displayGreeting = firstName
     ? `${greeting}, ${firstName.charAt(0).toUpperCase() + firstName.slice(1)}`
     : greeting;

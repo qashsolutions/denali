@@ -115,9 +115,9 @@ export function buildDashboardContext(input: BuildContextInput): DashboardContex
     claims,
   } = input;
 
-  // Extract first name from email (before @) — best effort without full name
+  // Use verified name from ID.me if available, fall back to email-derived name
   const email = authState.email ?? "";
-  const firstName = email.split("@")[0] || "there";
+  const firstName = authState.firstName || email.split("@")[0] || "there";
 
   // Diabetes context
   const hasDiabetesCondition = conditions.some(
