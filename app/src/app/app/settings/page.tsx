@@ -52,6 +52,7 @@ function AppSettingsPageInner() {
   const [auditHasMore, setAuditHasMore] = useState(false);
   const [auditExpanded, setAuditExpanded] = useState(false);
   const [idmeMessage, setIdmeMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
+  const [showIdmeConfirm, setShowIdmeConfirm] = useState(false);
 
   // Handle ID.me callback query params
   useEffect(() => {
@@ -218,7 +219,8 @@ function AppSettingsPageInner() {
                   Button uses official ID.me brand green (#2D844A) per brand guidelines:
                   https://docs.id.me/brand-assets/brand-assets/brand-guidelines
                   "Verify with ID.me" is the approved button text for pre-verification state.
-                  Post-verification shows green "Verified" badge. */}
+                  Post-verification shows green "Verified" badge.
+                  Two-step UX: button → confirmation panel → redirect (reduces surprise). */}
               <div className="pt-3 border-t border-[var(--border)]">
                 <div className="flex items-center justify-between">
                   <div>
@@ -235,29 +237,54 @@ function AppSettingsPageInner() {
                     </span>
                   ) : (
                     <button
-                      onClick={() => {
-                        window.location.href = "/api/auth/idme/authorize";
-                      }}
+                      onClick={() => setShowIdmeConfirm(true)}
                       className="px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-colors"
                       style={{ backgroundColor: "#2D844A" }}
                     >
-                      {/* ID.me brand logo (white, inline SVG) + approved button text */}
-                      <span className="flex items-center gap-2">
-                        <svg width="40" height="15" viewBox="0 0 100 38" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                          <text x="0" y="28" fill="white" fontFamily="system-ui, -apple-system, sans-serif" fontSize="28" fontWeight="700">ID.me</text>
-                        </svg>
-                        <span>Verify with ID.me</span>
-                      </span>
+                      Verify with ID.me
                     </button>
                   )}
                 </div>
-                {!authState.isIdmeVerified && !idmeMessage && (
-                  <p className="mt-2 text-xs text-[var(--text-muted)]">
-                    You&apos;ll be redirected to{" "}
-                    <a href="https://www.id.me" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-primary)] hover:underline">ID.me</a>
-                    , a CMS-approved identity verification service, to confirm your identity. This is a one-time step required by Medicare. You&apos;ll return here automatically once verified.
-                  </p>
+
+                {/* Confirmation panel — shown before redirect to set expectations */}
+                {showIdmeConfirm && !authState.isIdmeVerified && (
+                  <div className="mt-3 p-4 rounded-lg bg-[var(--bg-primary)] border border-[var(--border)]">
+                    <div className="flex items-start gap-3 mb-3">
+                      <svg className="w-5 h-5 shrink-0 mt-0.5 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
+                      </svg>
+                      <div>
+                        <p className="text-sm font-medium text-[var(--text-primary)] mb-1">
+                          You&apos;ll be redirected to ID.me
+                        </p>
+                        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                          <a href="https://www.id.me" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-primary)] hover:underline font-medium">ID.me</a>{" "}
+                          is a trusted, CMS-approved identity verification service used by the VA, SSA, and other federal agencies.
+                          This is a one-time step required by Medicare to protect your health data.
+                          You&apos;ll return to Denali automatically once verified.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowIdmeConfirm(false)}
+                        className="flex-1 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-tertiary)] hover:bg-[var(--bg-tertiary)]/80 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          window.location.href = "/api/auth/idme/authorize";
+                        }}
+                        className="flex-1 px-3 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-colors"
+                        style={{ backgroundColor: "#2D844A" }}
+                      >
+                        Continue to ID.me
+                      </button>
+                    </div>
+                  </div>
                 )}
+
                 {idmeMessage && (
                   <div className={`mt-3 p-3 rounded-lg text-sm ${
                     idmeMessage.type === "success"
