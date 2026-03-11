@@ -27,8 +27,8 @@ export async function GET(request: NextRequest) {
       `SELECT appeal_count, appeal_credits FROM usage WHERE email = $1 LIMIT 1`,
       [user.email]
     ),
-    query<{ idme_verified: boolean }>(
-      `SELECT COALESCE(idme_verified, false) as idme_verified FROM user_verification WHERE user_id = $1 LIMIT 1`,
+    query<{ idme_verified: boolean; idme_first_name: string | null; idme_gender: string | null }>(
+      `SELECT COALESCE(idme_verified, false) as idme_verified, idme_first_name, idme_gender FROM user_verification WHERE user_id = $1 LIMIT 1`,
       [user.userId]
     ),
   ]);
@@ -47,5 +47,7 @@ export async function GET(request: NextRequest) {
     appealCount: usage?.appeal_count || 0,
     appealCredits: usage?.appeal_credits || 0,
     idmeVerified: verification?.idme_verified || false,
+    firstName: verification?.idme_first_name || null,
+    gender: verification?.idme_gender || null,
   });
 }

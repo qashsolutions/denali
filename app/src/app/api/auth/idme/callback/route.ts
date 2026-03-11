@@ -138,7 +138,11 @@ export async function GET(request: NextRequest) {
 
     const userinfo = await userinfoRes.json();
 
-    // Data minimization: extract ONLY the uuid (no name, DOB, SSN, address)
+    // Data minimization: extract uuid + first name + gender only.
+    // We do NOT store: last name, DOB, SSN, address, phone, middle name.
+    // First name personalizes the AI chat; gender provides clinical context.
+    // ID.me sandbox returns `fname`/`lname`/`gender`; OIDC standard uses
+    // `given_name`/`family_name`/`gender` — we check both.
     const idmeUuid = userinfo.uuid || userinfo.sub;
     if (!idmeUuid) {
       console.error("[ID.me callback] No UUID in userinfo response");
@@ -147,6 +151,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const idmeFirstName: string | null = userinfo.fname || userinfo.given_name || null;
+    const idmeGender: string | null = userinfo.gender || null;
+
+    console.log("[ID.me callback] Extracted: uuid, firstName:", idmeFirstName ? "present" : "null", "gender:", idmeGender || "null");
+
     // Upsert user_verification with ID.me status
     try {
       await query(
@@ -154,9 +163,11 @@ export async function GET(request: NextRequest) {
          SET idme_verified = true,
              idme_verified_at = NOW(),
              idme_uuid = $2,
-             idme_ial_level = 'ial2'
+             idme_ial_level = 'ial2',
+             idme_first_name = $3,
+             idme_gender = $4
          WHERE user_id = $1`,
-        [user.userId, idmeUuid]
+        [user.userId, idmeUuid, idmeFirstName, idmeGender]
       );
     } catch (upsertError) {
       console.error("[ID.me callback] Failed to save verification:", upsertError);

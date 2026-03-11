@@ -66,7 +66,17 @@ function ChatContent() {
   }, [authState.plan, authState.isAdmin, authState.email]);
 
   const initialSessionState = useMemo(() => {
-    if (!isConnected) return undefined;
+    // Always pass user's verified name from ID.me (if available) so Claude
+    // can greet them by name without asking. Gender provides clinical context.
+    const baseState: Partial<SessionState> = {};
+    if (authState.firstName) {
+      baseState.userName = authState.firstName;
+    }
+
+    if (!isConnected) {
+      // Even without Blue Button, pass the name so onboarding skips "What's your name?"
+      return Object.keys(baseState).length > 0 ? baseState : undefined;
+    }
 
     const aiConsent = consent.health_data_ai === true;
 
@@ -74,6 +84,7 @@ function ChatContent() {
     // and connection status — no actual health data leaves the client.
     if (!aiConsent) {
       return {
+        ...baseState,
         healthDataAvailable: false,
         consentHealthDataAi: false,
         blueButtonConnected: true,
@@ -95,6 +106,7 @@ function ChatContent() {
     const { classification: obesityClassification } = classifyObesityStatus(conditions, medications);
 
     const partial: Partial<SessionState> = {
+      ...baseState,
       healthDataAvailable: true,
       consentHealthDataAi: true,
       activeCoverage: coverage.filter(c => c.status === "Active").map(c => c.type),
@@ -169,7 +181,7 @@ function ChatContent() {
     }
 
     return partial;
-  }, [isConnected, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, a1cHistory, consent.health_data_ai]);
+  }, [isConnected, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, a1cHistory, consent.health_data_ai, authState.firstName]);
 
   useEffect(() => {
     const payment = searchParams.get("payment");

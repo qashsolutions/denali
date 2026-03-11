@@ -1645,6 +1645,8 @@ export type Database = {
           idme_verified_at: string | null
           idme_uuid: string | null
           idme_ial_level: string | null
+          idme_first_name: string | null
+          idme_gender: string | null
           phone_verified: boolean
           phone_verified_at: string | null
           user_id: string
@@ -1658,6 +1660,8 @@ export type Database = {
           idme_verified_at?: string | null
           idme_uuid?: string | null
           idme_ial_level?: string | null
+          idme_first_name?: string | null
+          idme_gender?: string | null
           phone_verified?: boolean
           phone_verified_at?: string | null
           user_id: string
@@ -1671,6 +1675,8 @@ export type Database = {
           idme_verified_at?: string | null
           idme_uuid?: string | null
           idme_ial_level?: string | null
+          idme_first_name?: string | null
+          idme_gender?: string | null
           phone_verified?: boolean
           phone_verified_at?: string | null
           user_id?: string

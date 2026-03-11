@@ -6,6 +6,8 @@ import { cacheSet, cacheGetIfFresh, STORES, TTL } from "@/lib/offline-cache";
 export interface AuthState {
   userId: string | null;
   email: string | null;
+  firstName: string | null;    // From ID.me identity verification (personalizes AI chat)
+  gender: string | null;       // From ID.me identity verification (clinical context)
   isEmailVerified: boolean;
   isIdmeVerified: boolean;
   isMfaEnrolled: boolean;
@@ -40,6 +42,8 @@ interface UseAuthReturn {
 const DEFAULT_AUTH_STATE: AuthState = {
   userId: null,
   email: null,
+  firstName: null,
+  gender: null,
   isEmailVerified: false,
   isIdmeVerified: false,
   isMfaEnrolled: false,
@@ -116,6 +120,8 @@ export function useAuth(): UseAuthReturn {
         const appealCredits = profileData?.appealCredits || 0;
         const isAdmin = profileData?.isAdmin || false;
         const isIdmeVerified = profileData?.idmeVerified || false;
+        const firstName = profileData?.firstName || null;
+        const gender = profileData?.gender || null;
 
         let trialStatus: AuthState["trialStatus"] = "none";
         let trialDaysRemaining = 0;
@@ -127,6 +133,8 @@ export function useAuth(): UseAuthReturn {
         setAuthState((prev) => ({
           ...prev,
           isIdmeVerified,
+          firstName,
+          gender,
           isMfaEnrolled,
           isMfaVerified,
           currentAAL: isMfaVerified ? "aal2" : "aal1",
@@ -146,6 +154,8 @@ export function useAuth(): UseAuthReturn {
           appealCredits,
           isAdmin,
           isIdmeVerified,
+          firstName,
+          gender,
           trialStatus,
           trialDaysRemaining,
         });
@@ -159,6 +169,8 @@ export function useAuth(): UseAuthReturn {
           appealCredits: number;
           isAdmin: boolean;
           isIdmeVerified: boolean;
+          firstName?: string | null;
+          gender?: string | null;
           trialStatus: string;
           trialDaysRemaining: number;
         }>(STORES.PROFILE, "profile", TTL.PROFILE);
@@ -172,6 +184,8 @@ export function useAuth(): UseAuthReturn {
             appealCredits: d.appealCredits || 0,
             isAdmin: d.isAdmin,
             isIdmeVerified: d.isIdmeVerified || false,
+            firstName: d.firstName || null,
+            gender: d.gender || null,
             trialStatus: d.trialStatus as AuthState["trialStatus"],
             trialDaysRemaining: d.trialDaysRemaining,
           }));
