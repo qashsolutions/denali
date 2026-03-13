@@ -28,29 +28,32 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Gate on ID.me identity verification (skip for admins)
-    const adminCheck = await query<{ is_admin: boolean }>(
-      `SELECT is_admin FROM users WHERE id = $1 LIMIT 1`,
-      [user.userId]
-    );
-    const isAdmin = adminCheck.rows[0]?.is_admin || false;
-
-    if (!isAdmin) {
-      const idmeCheck = await query<{ idme_verified: boolean }>(
-        `SELECT COALESCE(idme_verified, false) as idme_verified FROM user_verification WHERE user_id = $1 LIMIT 1`,
+    // Gate on ID.me identity verification — only when REQUIRE_IDENTITY_VERIFICATION=true
+    // (Medicare App Library requires ID.me; Connected Apps Directory does not)
+    if (process.env.REQUIRE_IDENTITY_VERIFICATION === "true") {
+      const adminCheck = await query<{ is_admin: boolean }>(
+        `SELECT is_admin FROM users WHERE id = $1 LIMIT 1`,
         [user.userId]
       );
-      const idmeVerified = idmeCheck.rows[0]?.idme_verified || false;
+      const isAdmin = adminCheck.rows[0]?.is_admin || false;
 
-      if (!idmeVerified) {
-        // Build public redirect URL (ALB-aware)
-        const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
-        const proto = request.headers.get("x-forwarded-proto") || "https";
-        const detectedOrigin = host ? `${proto}://${host}` : null;
-        const baseUrl = detectedOrigin || getBaseUrl(request.nextUrl.origin);
-        return NextResponse.redirect(
-          new URL("/app/settings?idme_required=true", baseUrl)
+      if (!isAdmin) {
+        const idmeCheck = await query<{ idme_verified: boolean }>(
+          `SELECT COALESCE(idme_verified, false) as idme_verified FROM user_verification WHERE user_id = $1 LIMIT 1`,
+          [user.userId]
         );
+        const idmeVerified = idmeCheck.rows[0]?.idme_verified || false;
+
+        if (!idmeVerified) {
+          // Build public redirect URL (ALB-aware)
+          const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+          const proto = request.headers.get("x-forwarded-proto") || "https";
+          const detectedOrigin = host ? `${proto}://${host}` : null;
+          const baseUrl = detectedOrigin || getBaseUrl(request.nextUrl.origin);
+          return NextResponse.redirect(
+            new URL("/app/settings?idme_required=true", baseUrl)
+          );
+        }
       }
     }
 

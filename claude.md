@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-10 (ID.me OIDC identity verification gates Blue Button access; previous: Sign-in enforced for all chat, 4-tier pricing, prompt caching, Landing page)
+     Last updated: 2026-03-13 (ID.me gate feature-flagged — not required for BB Connected Apps Directory; previous: ID.me name/gender extraction + TOTP UI disabled)
      Maintainer: @cvr
 -->
 
@@ -197,14 +197,14 @@ Where to find specific logic in the codebase.
 | `src/app/api/preferences/topics/route.ts` | GET/PUT user topic preferences. Validates max 2, allowlist check. Audit-logged. Auth required |
 | `scripts/migrate-blog.js` | Blog migration script (runs inside ECS container via S3 relay). ALTER TABLE + seed 10 posts. Idempotent via ON CONFLICT (slug) DO NOTHING |
 | `scripts/migrate-blog-topics.js` | Topic preferences migration: creates `user_topic_preferences` table, tags existing 10 posts with `medicare-general`, seeds 6 new posts (3 diabetes, 3 obesity). Idempotent |
-| `src/hooks/useAuth.ts` | Auth state: email OTP via `/api/auth/send-otp`+`verify-otp`, TOTP MFA via `/api/auth/mfa/*`, AAL tracking, ID.me verification status (`isIdmeVerified`), plan/role/trial/admin detection, credit-based appeal access gating (`appealCredits`), auto-trial on signup. Dispatches `auth-state-change` custom event. Profile from `/api/profile`. |
+| `src/hooks/useAuth.ts` | Auth state: email OTP via `/api/auth/send-otp`+`verify-otp`, TOTP MFA via `/api/auth/mfa/*` (UI disabled, code preserved), AAL tracking, ID.me verification status (`isIdmeVerified`) + verified name (`firstName`) + gender, plan/role/trial/admin detection, credit-based appeal access gating (`appealCredits`), auto-trial on signup. Dispatches `auth-state-change` custom event. Profile from `/api/profile`. |
 | `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table. Default all OFF. Three enforcement points: `health_data_ai` → chat/page.tsx strips health data from sessionState + context.ts blocks prompt injection; `health_data_storage` → useHealthData.ts gates IndexedDB caching; `analytics` → conversation-service.ts gates trackEvent calls |
 | `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations. IndexedDB write-through + offline fallback |
 | `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path), ID.me OIDC config (baseUrl, clientId, clientSecret, scope, callbackPath) |
 | `src/config/pricing.ts` | 4-tier pricing: `TRIAL_APPEAL_CREDITS: 0`, daily chat limits (`TRIAL: 10`, `STARTER: 20`, `PLUS: 20`, `UNLIMITED: 0`), weekly limits (`TRIAL: 1`, `STARTER: 1`, `PLUS: 0`, `UNLIMITED: 0`), Stripe price IDs for 3 subscriptions (`STARTER/PLUS/UNLIMITED`). Sign-in required for all chat (no anonymous access) |
 | `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade + credit add), `handleSubscriptionEvent()` (lifecycle + monthly credit reset). Uses admin client |
 | `src/components/payment/PaywallModal.tsx` | Paywall UI: 3-plan selector (Starter/Plus/Unlimited), Stripe subscription checkout. CSS variables for theme. No dev bypass |
-| `src/components/appeal/AppealGate.tsx` | Appeal access orchestration: email OTP → TOTP → access check → PaywallModal pipeline |
+| `src/components/appeal/AppealGate.tsx` | Appeal access orchestration: email OTP → access check → PaywallModal pipeline (TOTP modals disabled 2026-03-10, code preserved) |
 | `src/middleware.ts` | Cognito JWT middleware + auth redirects. (0) API routes (`/api/*`) get early `NextResponse.next()` — no session enforcement or silent refresh (prevents recursive fetch + mid-request cookie clearing). (1) 7-day session lifetime enforcement via `session_issued_at` cookie. (2) Silent token refresh when `access_token` expired but `refresh_token` exists. (3) Signed-in users on `/` → redirect to `/app`. (4) Anonymous users on `/app` → redirect to `/`. Auth detection: checks `access_token` cookie existence. |
 | `src/lib/offline-cache.ts` | IndexedDB wrapper via `idb`. 6 stores (conversations, health-data, diabetes-log, diabetes-insights, profile, offline-queue). Exports `cacheSet()`, `cacheGet()`, `cacheGetIfFresh()`, `queueOfflineRequest()`, `getOfflineQueue()`, `removeFromQueue()`. TTL constants: profile=4h, everything else=24h |
 | `src/lib/offline-sync.ts` | Client-side offline queue processor. `processQueue()` replays failed POSTs, removes on success, drops after 3 retries. `getQueueCount()` for pending item count |
@@ -228,7 +228,7 @@ src/app/api/
   auth/refresh/route.ts       # Refresh access_token from refresh_token cookie
   auth/mfa/enroll|confirm|challenge|unenroll|status  # TOTP MFA (RFC 6238 via lib/totp.ts)
   auth/idme/authorize/route.ts  # ID.me OIDC initiation (PKCE + state + nonce). Requires auth. Redirects to ID.me sandbox
-  auth/idme/callback/route.ts   # ID.me OIDC callback (token exchange + userinfo → uuid only). Upserts user_verification.idme_verified
+  auth/idme/callback/route.ts   # ID.me OIDC callback (token exchange + userinfo → uuid + fname + gender). Upserts user_verification
   chat/route.ts               # Main chat with Claude + tools. Rate limit → skills → Claude → stream SSE
   conversations/route.ts      # GET conversation history (cookie-auth, RDS)
   conversations/[id]/route.ts # GET single conversation + messages (anon or owner)
@@ -363,7 +363,7 @@ These tools are local executors in `tools/index.ts` that call free public govern
 | Table | Purpose |
 |-------|---------|
 | `users` | Auth, phone (primary), email, plan (`trial`/`starter`/`plus`/`unlimited` — CHECK constraint), `is_admin` (bypass all limits), theme, accessibility settings |
-| `user_verification` | Email + mobile OTP status + ID.me verification (`idme_verified`, `idme_verified_at`, `idme_uuid`, `idme_ial_level`). Unique index on `idme_uuid`. Migration: `scripts/migrate-idme.sql` |
+| `user_verification` | Email + mobile OTP status + ID.me verification (`idme_verified`, `idme_verified_at`, `idme_uuid`, `idme_ial_level`, `idme_first_name`, `idme_gender`). Unique index on `idme_uuid`. Migrations: `scripts/migrate-idme.sql` + `scripts/migrate-idme-name.sql` |
 | `subscriptions` | Plan type (`trial`/`starter`/`plus`/`unlimited` — CHECK constraint), Stripe customer ID, billing status, `trial_start`/`trial_end`/`trial_converted`. RLS: users SELECT/INSERT/UPDATE own rows |
 | `usage` | Appeal count (lifetime) + appeal credits (available) per email. Credits decremented on appeal save, added by Stripe fulfillment |
 | `conversations` | Chat history per user |
@@ -560,13 +560,21 @@ Reuses existing `sessionState` (ICD-10, CPT, policy refs from earlier coverage f
 | Starter (2 msgs/day, 1 day/week, 1 appeal) | Email OTP + $10/month |
 | Plus (5 msgs/day, 5 days/week, 2 appeals) | Email OTP + $20/month |
 | Unlimited (everything unlimited) | Email OTP + $60/month |
-| Medicare health data | Email OTP + **ID.me identity verification (IAL2)** + Blue Button OAuth (+ TOTP challenge if user has opted in) |
+| Medicare health data | Email OTP + Blue Button OAuth. **ID.me verification** only when `REQUIRE_IDENTITY_VERIFICATION=true` (Medicare App Library mode) |
 
 ### AAL2 Compliance Strategy (CMS A1 / NIST 800-63B)
 
-**ID.me provides IAL2/AAL2 identity verification.** Users must verify identity via ID.me OIDC (`nist_ial2_aal2` scope) before connecting Blue Button. ID.me is a CMS-approved NIST 800-63 credential service provider. The verification is one-time — once verified, `user_verification.idme_verified = true` persists. Blue Button OAuth (`/api/fhir/authorize`) gates on this flag (admin bypass). Data minimization: only UUID + verification status stored (no name, DOB, SSN, address). TOTP MFA remains opt-in for additional protection.
+**ID.me provides IAL2/AAL2 identity verification.** Controlled by `REQUIRE_IDENTITY_VERIFICATION` env var:
+- `false` (default) = **Connected Apps Directory** mode — Blue Button works without ID.me. ID.me card hidden in Settings unless already verified.
+- `true` = **Medicare App Library** mode — users must verify identity via ID.me before connecting Blue Button. ID.me card shown as required.
 
-**ID.me OIDC flow**: Settings → "Verify with ID.me" → `GET /api/auth/idme/authorize` (PKCE + state + nonce cookies) → ID.me sandbox (`api.idmelabs.com`) → `GET /api/auth/idme/callback` (token exchange via `client_secret_post`, userinfo fetch → extract UUID only, upsert `user_verification`) → redirect to `/app/settings?idme=verified`.
+ID.me uses OIDC (`nist_ial2_aal2` scope). CMS-approved NIST 800-63 credential service provider. One-time verification persists in `user_verification.idme_verified`. Admin bypass on the gate. Data minimization: UUID + first name + gender stored (no last name, DOB, SSN, address). TOTP MFA UI disabled (2026-03-10) — code preserved for potential re-enablement.
+
+**ID.me OIDC flow**: Settings → "Verify with ID.me" button (ID.me brand green #2D844A) → confirmation panel (explains CMS-approved, used by VA/SSA, one-time, auto-return) → `GET /api/auth/idme/authorize` (PKCE + state + nonce cookies) → ID.me sandbox (`api.idmelabs.com`) → `GET /api/auth/idme/callback` (token exchange via `client_secret_post`, userinfo fetch → extract `uuid` + `fname` + `gender`, upsert `user_verification`) → redirect to `/app/settings?idme=verified`.
+
+**Name/gender personalization flow**: ID.me userinfo `fname`/`given_name` → `user_verification.idme_first_name` → `/api/profile` response `firstName` → `useAuth` AuthState `firstName` → chat `sessionState.userName` (skips AI "What's your name?" onboarding) + dashboard greeting + chat empty state greeting. Gender stored for clinical context in AI conversations.
+
+**CMS clarification (2026-03-13)**: ID.me/CLEAR/Login.gov are NOT required for Blue Button API / Connected Apps Directory. They ARE required for the separate Medicare App Library initiative. `REQUIRE_IDENTITY_VERIFICATION=false` in production until App Library submission.
 
 ### Appeal Gating Logic
 
@@ -641,6 +649,7 @@ STRIPE_PRICE_UNLIMITED=price_...          # Unlimited $60/mo subscription (new)
 IDME_CLIENT_ID=...                        # ID.me OIDC client ID (sandbox)
 IDME_CLIENT_SECRET=...                    # ID.me OIDC client secret (sandbox)
 IDME_BASE_URL=https://api.idmelabs.com    # ID.me sandbox base URL
+REQUIRE_IDENTITY_VERIFICATION=false       # false = Connected Apps Directory (no ID.me gate), true = Medicare App Library (ID.me required)
 
 # Baked into Docker image at build time (GitHub secrets):
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
@@ -653,7 +662,7 @@ NEXT_PUBLIC_APP_URL=https://denali.health  # or https://staging.denali.health
 - **RDS managed secret (`rds!db-...`) only has `username` + `password`** — no `host`/`dbname`/`port`. Use `denali/prod/db` (self-managed) for all DB connection fields.
 - **Audit task def secrets before every manual deployment**: `aws ecs describe-task-definition --task-definition denali:N --query "taskDefinition.containerDefinitions[0].secrets[*].valueFrom" --region us-east-1 --output json | sort -u`
 - **DB credentials**: DB_USER/DB_PASSWORD reference `rds!db-...:username::` / `rds!db-...:password::` (auto-rotates every 7 days). DB_HOST/DB_NAME/DB_PORT are plain env vars.
-- **Current task def**: denali:100, deployed 2026-03-10 (added ID.me secrets: IDME_CLIENT_ID, IDME_CLIENT_SECRET, IDME_BASE_URL). See `memory/aws-ecs.md` and `memory/aws-infra.md` for full details.
+- **Current task def**: denali:101+, deployed 2026-03-11 (ID.me name/gender extraction + TOTP UI disabled). See `memory/aws-ecs.md` and `memory/aws-infra.md` for full details.
 - **RDS is private-only** (2026-02-27): `PubliclyAccessible: false`. ECS→RDS connectivity via security group `sg-018b0bc1ca0f1db14` allowing port 5432 from ECS SG `sg-0c234bbde5efb2d53`. No public endpoint, no EIP on RDS.
 - **CloudWatch log retention**: `/ecs/denali` set to 3 days (was 90). Sufficient for pre-launch debugging. Increase post-launch if needed.
 
@@ -1178,7 +1187,7 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 ### What's Done (by category)
 
-**Identity & Security** (A1, Criteria 3/22/23/24/25): **ID.me OIDC identity verification (IAL2/AAL2)** gates Blue Button access — users must verify via ID.me before connecting Medicare data. Data minimization: only UUID + status stored. Blue Button OAuth (PKCE+encrypted tokens), TOTP MFA opt-in, audit logging on all sensitive ops (`IDME_VERIFY` action type), consent preferences with enforcement, request purpose tagging on FHIR calls.
+**Identity & Security** (A1, Criteria 3/22/23/24/25): **ID.me OIDC identity verification (IAL2/AAL2)** gates Blue Button access — users must verify via ID.me before connecting Medicare data. Data minimization: UUID + first name + gender stored (no last name, DOB, SSN, address). TOTP MFA UI disabled (code preserved — ID.me is CMS-mandated path). Blue Button OAuth (PKCE+encrypted tokens), audit logging on all sensitive ops (`IDME_VERIFY` action type), consent preferences with enforcement, request purpose tagging on FHIR calls.
 
 **Trial & Discovery** (A3/A4/A5): 14-day free trial, `/api/cms-metadata` for CMS directory, `CmsPledge` component (AI + Diabetes pledges).
 
@@ -1264,7 +1273,7 @@ Verified via AWS CLI audit (2026-03-04):
 | **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
 | **CMS security self-assessment** | A3 | **P0** | Docs — data source inventory + security checklist required for CMS review participation. In-app `/terms` (15 sections) and `/privacy` (16 sections) audited against CMS Blue Button ToS + production access checklist on 2026-03-03 — all 13 privacy policy checklist items pass, ToS consistent with Privacy, active opt-in, seven framework principles covered. PDFs generated for CMS submission (`DenaliHealth-Terms-of-Service.pdf`, `DenaliHealth-Privacy-Policy.pdf`). Implementation verification checklist: `terms_privacy.md`. Remaining: submit formal security self-assessment document to CMS. |
 | **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct Medicare.gov communication integration |
-| **CMS credential service integration** | A1 | **DONE** | **ID.me OIDC integrated (2026-03-10)** — IAL2/AAL2 identity verification via ID.me sandbox. Gates Blue Button access. Data minimization (UUID only). ECS task def denali:100 deployed with ID.me secrets. Migration: `scripts/migrate-idme.sql`. Production: switch `IDME_BASE_URL` to `https://api.id.me` and register production redirect URIs. |
+| **CMS credential service integration** | A1 | **DONE** | **ID.me OIDC integrated (2026-03-10)** — IAL2/AAL2 identity verification via ID.me sandbox. Feature-flagged: `REQUIRE_IDENTITY_VERIFICATION=true` enables gate on Blue Button. CMS confirmed (2026-03-13) NOT required for Connected Apps Directory, only for Medicare App Library. Extracts UUID + first name + gender. Login.gov being evaluated as free alternative to ID.me for production. |
 | **CMS review submission** | A3 | **P1** | Docs — submit data source inventory + security self-assessment to CMS |
 | **CMS app directory submission** | A5 | **P1** | Docs — screenshots, descriptions for Medicare.gov listing |
 | **AAL2 app auth** | A1, Criteria 3, 23 | **DONE** | **ID.me provides IAL2/AAL2** (2026-03-10). Email+password + TOTP remains available as additional layer. |

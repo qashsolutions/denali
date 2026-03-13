@@ -49,5 +49,9 @@ export async function GET(request: NextRequest) {
     idmeVerified: verification?.idme_verified || false,
     firstName: verification?.idme_first_name || null,
     gender: verification?.idme_gender || null,
+    // Feature flag: whether app requires ID.me identity verification before Blue Button
+    // false = Connected Apps Directory (BB works without ID.me)
+    // true = Medicare App Library (ID.me required before BB)
+    requireIdentityVerification: process.env.REQUIRE_IDENTITY_VERIFICATION === "true",
   });
 }

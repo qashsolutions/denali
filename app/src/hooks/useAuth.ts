@@ -22,6 +22,7 @@ export interface AuthState {
   isAdmin: boolean;
   isLoading: boolean;
   error: string | null;
+  requireIdentityVerification: boolean; // Feature flag: true = Medicare App Library (ID.me required), false = Connected Apps Directory
 }
 
 export type AppealAccessStatus = "available" | "paywall" | "allowed";
@@ -58,6 +59,7 @@ const DEFAULT_AUTH_STATE: AuthState = {
   isAdmin: false,
   isLoading: true,
   error: null,
+  requireIdentityVerification: false,
 };
 
 // Module-level cache: survives SPA navigations
@@ -122,6 +124,7 @@ export function useAuth(): UseAuthReturn {
         const isIdmeVerified = profileData?.idmeVerified || false;
         const firstName = profileData?.firstName || null;
         const gender = profileData?.gender || null;
+        const requireIdentityVerification = profileData?.requireIdentityVerification || false;
 
         let trialStatus: AuthState["trialStatus"] = "none";
         let trialDaysRemaining = 0;
@@ -145,6 +148,7 @@ export function useAuth(): UseAuthReturn {
           trialStatus,
           trialDaysRemaining,
           isAdmin,
+          requireIdentityVerification,
         }));
 
         cacheSet(STORES.PROFILE, "profile", {
@@ -158,6 +162,7 @@ export function useAuth(): UseAuthReturn {
           gender,
           trialStatus,
           trialDaysRemaining,
+          requireIdentityVerification,
         });
       } catch (error) {
         console.error("Error loading profile data:", error);
@@ -173,6 +178,7 @@ export function useAuth(): UseAuthReturn {
           gender?: string | null;
           trialStatus: string;
           trialDaysRemaining: number;
+          requireIdentityVerification?: boolean;
         }>(STORES.PROFILE, "profile", TTL.PROFILE);
         if (cached) {
           const d = cached.data;
@@ -188,6 +194,7 @@ export function useAuth(): UseAuthReturn {
             gender: d.gender || null,
             trialStatus: d.trialStatus as AuthState["trialStatus"],
             trialDaysRemaining: d.trialDaysRemaining,
+            requireIdentityVerification: d.requireIdentityVerification || false,
           }));
         }
       }

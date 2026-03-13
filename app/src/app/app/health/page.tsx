@@ -643,7 +643,9 @@ function HealthPageInner() {
             <p className="text-sm text-amber-600 dark:text-amber-400">{oauthErrorMessage}</p>
           </div>
         )}
-        {!authState.isIdmeVerified && !authState.isAdmin && (
+        {/* ID.me prompt — only shown when REQUIRE_IDENTITY_VERIFICATION=true (Medicare App Library mode).
+            When false (Connected Apps Directory mode), Blue Button works without ID.me. */}
+        {authState.requireIdentityVerification && !authState.isIdmeVerified && !authState.isAdmin && (
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6 text-center">
             <p className="text-sm font-medium text-amber-700 dark:text-amber-400 mb-1">
               Identity verification required

@@ -215,12 +215,14 @@ function AppSettingsPageInner() {
                 )}
               </div> */}
 
-              {/* Identity Verification (ID.me) — CMS-mandated IAL2/AAL2
-                  Button uses official ID.me brand green (#2D844A) per brand guidelines:
-                  https://docs.id.me/brand-assets/brand-assets/brand-guidelines
-                  "Verify with ID.me" is the approved button text for pre-verification state.
-                  Post-verification shows green "Verified" badge.
-                  Two-step UX: button → confirmation panel → redirect (reduces surprise). */}
+              {/* Identity Verification (ID.me) — shown when REQUIRE_IDENTITY_VERIFICATION=true
+                  (Medicare App Library mode) or when user is already verified.
+                  When REQUIRE_IDENTITY_VERIFICATION=false (Connected Apps Directory mode),
+                  ID.me is not required for Blue Button access, so hide the card unless already verified.
+                  Button uses official ID.me brand green (#2D844A) per brand guidelines.
+                  Two-step UX: button → confirmation panel → redirect (reduces surprise).
+                  To re-enable for all users: set REQUIRE_IDENTITY_VERIFICATION=true in env. */}
+              {(authState.requireIdentityVerification || authState.isIdmeVerified) && (
               <div className="pt-3 border-t border-[var(--border)]">
                 <div className="flex items-center justify-between">
                   <div>
@@ -297,6 +299,7 @@ function AppSettingsPageInner() {
                   </div>
                 )}
               </div>
+              )}
             </>
           ) : (
             <div>
