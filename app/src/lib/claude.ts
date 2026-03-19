@@ -307,30 +307,44 @@ function extractSuggestionsAndClean(content: string, sessionState: SessionState)
   console.log("[extractSuggestions] No [SUGGESTIONS] block found, using question-aware defaults");
 
   // Question-aware fallback: match suggestions to what Claude ASKED the user
-  // This must align with gate-appropriate suggestions from PROMPTING_SKILL
+  // Focus on the LAST question in Claude's response (not earlier context)
   const lowerContent = content.toLowerCase();
+  // Extract last sentence ending with "?" to focus on what was actually asked
+  const questions = content.match(/[^.!?\n]*\?/g);
+  const lastQuestion = questions ? questions[questions.length - 1].toLowerCase().trim() : lowerContent;
+
   let suggestions: string[];
 
   // Onboarding questions
-  if (lowerContent.includes("your name") || lowerContent.includes("address you") || lowerContent.includes("call you")) {
+  if (lastQuestion.includes("your name") || lastQuestion.includes("address you") || lastQuestion.includes("call you")) {
     suggestions = ["Just call me...", "Skip this"];
-  } else if (lowerContent.includes("your zip") || lowerContent.includes("zip code")) {
+  } else if (lastQuestion.includes("your zip") || lastQuestion.includes("zip code")) {
     suggestions = ["Let me type it", "Skip for now"];
 
+  // Specifics follow-up (asking WHICH treatments/meds/etc. — NOT yes/no)
+  } else if (lastQuestion.includes("which one") || lastQuestion.includes("which specific") || /specifically\?/.test(lastQuestion)) {
+    // Claude is asking for specifics — suggest common treatment types
+    if (lowerContent.includes("treatment") || lowerContent.includes("pt") || lowerContent.includes("physical therapy") || lowerContent.includes("injection") || lowerContent.includes("med")) {
+      suggestions = ["Physical therapy", "Medications"];
+    } else {
+      suggestions = ["The first one", "The second one"];
+    }
+
   // Symptom intake questions
-  } else if (lowerContent.includes("which body") || lowerContent.includes("what part") || lowerContent.includes("what body")) {
+  } else if (lastQuestion.includes("which body") || lastQuestion.includes("what part") || lastQuestion.includes("what body")) {
     suggestions = ["It's my back", "It's my knee"];
-  } else if (lowerContent.includes("what's going on") || lowerContent.includes("pain") && lowerContent.includes("numbness")) {
+  } else if (lastQuestion.includes("what's going on") || (lastQuestion.includes("pain") && lastQuestion.includes("numbness"))) {
     suggestions = ["It's pain", "It's numbness"];
-  } else if (lowerContent.includes("how long") || lowerContent.includes("when did") || lowerContent.includes("how many weeks")) {
+  } else if (lastQuestion.includes("how long") || lastQuestion.includes("when did") || lastQuestion.includes("how many weeks")) {
     suggestions = ["A few weeks", "Several months"];
-  } else if (lowerContent.includes("treatment") || lowerContent.includes("tried") || lowerContent.includes("pt") || lowerContent.includes("physical therapy")) {
+  } else if (lastQuestion.includes("tried") || lastQuestion.includes("treatment")) {
+    // Yes/no about whether they've tried treatments (not which ones)
     suggestions = ["Yes, I've tried some", "No, nothing yet"];
 
   // Provider gate questions
-  } else if (lowerContent.includes("have a doctor") || lowerContent.includes("your doctor") || lowerContent.includes("who's your")) {
+  } else if (lastQuestion.includes("have a doctor") || lastQuestion.includes("your doctor") || lastQuestion.includes("who's your")) {
     suggestions = ["Yes, I have a doctor", "Not yet"];
-  } else if (lowerContent.includes("which dr") || lowerContent.includes("which doctor")) {
+  } else if (lastQuestion.includes("which dr") || lastQuestion.includes("which doctor")) {
     suggestions = ["The first one", "The second one"];
 
   // Coverage/guidance delivered
@@ -339,9 +353,7 @@ function extractSuggestionsAndClean(content: string, sessionState: SessionState)
   } else if (lowerContent.includes("checklist") || lowerContent.includes("document")) {
     suggestions = ["Print this checklist", "Start a new question"];
 
-  // Generic fallback — safe options that don't skip gates
-  } else if (lowerContent.includes("help") && lowerContent.includes("?")) {
-    suggestions = ["Tell me more", "Start over"];
+  // Generic fallback
   } else {
     suggestions = ["Tell me more", "Start over"];
   }
