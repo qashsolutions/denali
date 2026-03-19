@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { DiagnosisAggregate } from "@/lib/health-analytics";
 import type { DiagnosisSummary } from "@/lib/fhir/transforms";
 
@@ -127,6 +128,14 @@ export function DiagnosisSummaryCard({ diagnoses, conditions = [] }: DiagnosisSu
                 <p className="text-xs text-[var(--text-muted)]">
                   Last: {dx.lastSeen}
                 </p>
+                {severity.level !== "gray" && (
+                  <Link
+                    href={`/app/chat?message=${encodeURIComponent(`Tell me about Medicare coverage for ${cleanDiagnosisName(dx.name)}`)}`}
+                    className="text-[10px] font-medium text-[var(--accent-primary)] hover:underline"
+                  >
+                    Ask Denali &rarr;
+                  </Link>
+                )}
               </div>
             </div>
           );

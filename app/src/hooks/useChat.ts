@@ -523,6 +523,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       if (data.conversationId && !currentConversationId) {
         currentConversationId = data.conversationId;
         setConversationId(data.conversationId);
+        // Mark as loaded so the URL-sync effect in chat/page.tsx
+        // doesn't re-trigger the conversation load from scratch
+        loadedConversationRef.current = data.conversationId;
       }
       setSuggestions(data.suggestions || []);
 

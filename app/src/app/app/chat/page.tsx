@@ -229,6 +229,14 @@ function ChatContent() {
     initialSessionState,
   });
 
+  // Sync conversationId to URL when a new conversation is created.
+  // Uses replace (not push) so the empty-chat state isn't in browser history.
+  useEffect(() => {
+    if (conversationId && !urlConversationId) {
+      router.replace(`/app/chat?id=${conversationId}`);
+    }
+  }, [conversationId, urlConversationId, router]);
+
   useEffect(() => {
     // Support both ?message= and ?q= (backward compat from diabetes page)
     const initialMessage = searchParams.get("message") || searchParams.get("q");

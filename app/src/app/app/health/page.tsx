@@ -170,13 +170,22 @@ function DiabetesCareExpanded({
         </p>
       )}
 
-      <Link
-        href="/app/diabetes"
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-500 hover:underline mt-1"
-      >
-        <DiabetesIcon className="w-3.5 h-3.5" />
-        Open Diabetes Dashboard &rarr;
-      </Link>
+      <div className="flex items-center gap-4">
+        <Link
+          href="/app/diabetes"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-500 hover:underline mt-1"
+        >
+          <DiabetesIcon className="w-3.5 h-3.5" />
+          Open Diabetes Dashboard &rarr;
+        </Link>
+        <Link
+          href={`/app/chat?message=${encodeURIComponent("What should I know about managing my diabetes with Medicare?")}`}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--accent-primary)] hover:underline mt-1"
+        >
+          <ChatBubbleIcon className="w-3.5 h-3.5" />
+          Ask Denali &rarr;
+        </Link>
+      </div>
     </div>
   );
 }
@@ -728,6 +737,13 @@ function HealthPageInner() {
               hospitalizations={hospitalizations}
             />
             <AlertsSection metrics={metrics} />
+            <Link
+              href={`/app/chat?message=${encodeURIComponent("I have items that need attention in my health records. Can you help me understand what to do?")}`}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--accent-primary)] hover:underline mt-1"
+            >
+              <ChatBubbleIcon className="w-3.5 h-3.5" />
+              Ask Denali about these items &rarr;
+            </Link>
           </HealthHubCard>
         )}
 
@@ -811,6 +827,15 @@ function HealthPageInner() {
           {metrics.claimCount > 0 && <FinancialSummary metrics={metrics} />}
           <ClaimsTimeline claimsByMonth={metrics.claimsByMonth} />
           <ProviderSummary providers={metrics.topProviders} providerDetails={providers} />
+          {metrics.deniedClaims.length > 0 && (
+            <Link
+              href={`/app/chat?message=${encodeURIComponent("I have denied Medicare claims. Can you help me understand why and how to appeal?")}`}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--accent-primary)] hover:underline mt-1"
+            >
+              <ChatBubbleIcon className="w-3.5 h-3.5" />
+              Ask Denali about denied claims &rarr;
+            </Link>
+          )}
         </HealthHubCard>
 
         {/* 7. Medicare Account */}
@@ -853,5 +878,13 @@ function PageHeader() {
       </div>
       <h1 className="text-xl font-bold text-[var(--text-primary)]">My Health</h1>
     </div>
+  );
+}
+
+function ChatBubbleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
   );
 }
