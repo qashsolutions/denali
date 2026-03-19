@@ -5,6 +5,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
+import { sendEmail } from "@/lib/email";
 
 interface ChecklistData {
   title: string;
@@ -32,47 +33,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
   }
 
-  const resendApiKey = process.env.RESEND_API_KEY;
-  if (!resendApiKey) {
-    console.error("[email/checklist] RESEND_API_KEY not configured");
-    return NextResponse.json({ error: "Email is temporarily unavailable. Please try again later." }, { status: 500 });
-  }
-
   const html = buildEmailHTML(checklist);
   const subject = checklist.title || "Your Medicare Coverage Checklist";
 
-  const resendRes = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${resendApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: "denali.health <noreply@denali.health>",
-      to: [email],
-      subject,
-      html,
-    }),
+  const result = await sendEmail({
+    to: [email],
+    subject,
+    html,
+    from: "denali.health <no-reply@denali.health>",
   });
 
-  if (!resendRes.ok) {
-    const err = await resendRes.text();
-    console.error("[email/checklist] Resend error:", err);
+  if (!result.messageId) {
+    console.error("[email/checklist] SES send failed");
     return NextResponse.json({ error: "Unable to send the email. Please try again or use the print option." }, { status: 500 });
   }
-
-  const result = await resendRes.json();
 
   // Log event non-blocking
   if (conversationId) {
     query(
       `INSERT INTO user_events (event_type, conversation_id, event_data)
        VALUES ('email_sent', $1, $2)`,
-      [conversationId, JSON.stringify({ email_id: result.id, to: email })]
+      [conversationId, JSON.stringify({ email_id: result.messageId, to: email })]
     ).catch((err) => console.warn("[email/checklist] log failed:", err));
   }
 
-  return NextResponse.json({ success: true, emailId: result.id });
+  return NextResponse.json({ success: true, emailId: result.messageId });
 }
 
 function buildEmailHTML(checklist: ChecklistData): string {

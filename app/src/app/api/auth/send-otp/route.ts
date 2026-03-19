@@ -5,12 +5,13 @@
  * - Creates or retrieves the Cognito user for this email
  * - Generates a 6-digit OTP, sets it as the Cognito password
  * - Stores OTP + 10-min expiry in user_verification
- * - Sends OTP email via Resend
+ * - Sends OTP email via AWS SES
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { createOrGetCognitoUser, setCognitoPassword } from "@/lib/auth-server";
+import { sendEmail } from "@/lib/email";
 
 const OTP_TTL_MINUTES = 10;
 
@@ -21,38 +22,23 @@ function generateOtp(): string {
 }
 
 async function sendOtpEmail(email: string, otp: string): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.error("[send-otp] RESEND_API_KEY not configured");
-    return;
-  }
-
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: process.env.RESEND_FROM_EMAIL || "Denali <noreply@denali.health>",
-      to: [email],
-      subject: `Your Denali sign-in code: ${otp}`,
-      html: `
-        <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">Your sign-in code</h2>
-          <p style="color: #64748b; margin-bottom: 24px;">Enter this code to sign in to Denali. It expires in ${OTP_TTL_MINUTES} minutes.</p>
-          <div style="background: #f1f5f9; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 24px;">
-            <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${otp}</span>
-          </div>
-          <p style="color: #94a3b8; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
+  const result = await sendEmail({
+    to: [email],
+    subject: `Your Denali sign-in code: ${otp}`,
+    html: `
+      <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+        <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">Your sign-in code</h2>
+        <p style="color: #64748b; margin-bottom: 24px;">Enter this code to sign in to Denali. It expires in ${OTP_TTL_MINUTES} minutes.</p>
+        <div style="background: #f1f5f9; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 24px;">
+          <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${otp}</span>
         </div>
-      `,
-    }),
+        <p style="color: #94a3b8; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
+      </div>
+    `,
   });
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.error("[send-otp] Resend error:", res.status, body);
+  if (!result.messageId) {
+    console.error("[send-otp] SES email failed for:", email);
   }
 }
 

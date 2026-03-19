@@ -2,7 +2,7 @@
  * Alert Processing Engine
  *
  * Daily batch processor that checks eligible users for alert conditions,
- * deduplicates against alert_log, and sends via Resend. Called by
+ * deduplicates against alert_log, and sends via AWS SES. Called by
  * POST /api/alerts/process (EventBridge → Lambda → ALB).
  *
  * NO PHI in emails — generic notifications directing users to log in.
@@ -10,6 +10,7 @@
 
 import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { sendEmail } from "@/lib/email";
 import { ALERT_CONFIG, getEligibleAlertTypes } from "@/config/alerts";
 import type { AlertType } from "@/config/alerts";
 import { buildAlertEmail } from "./templates";
@@ -36,11 +37,7 @@ interface AlertCandidate {
 export async function processAlerts(dryRun: boolean = false): Promise<ProcessResult> {
   const result: ProcessResult = { processed: 0, sent: 0, errors: 0, details: [] };
 
-  const resendApiKey = process.env.RESEND_API_KEY;
-  if (!resendApiKey && !dryRun) {
-    console.error("[Alerts] RESEND_API_KEY not configured");
-    return result;
-  }
+  // SES email sending uses IAM auth — no API key needed
 
   // Get eligible users (Plus, Unlimited, or admin — with email + Blue Button connected)
   const users = await query<{
@@ -123,25 +120,15 @@ export async function processAlerts(dryRun: boolean = false): Promise<ProcessRes
         );
 
         try {
-          const resendRes = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${resendApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              from: "denali.health <noreply@denali.health>",
-              to: [user.email],
-              subject,
-              html,
-            }),
+          const emailResult = await sendEmail({
+            from: "denali.health <no-reply@denali.health>",
+            to: [user.email],
+            subject,
+            html,
           });
 
-          const resendData = await resendRes.json().catch(() => ({}));
-          const resendId = (resendData as { id?: string }).id || null;
-
-          if (!resendRes.ok) {
-            console.error(`[Alerts] Resend error for ${user.email}:`, resendData);
+          if (!emailResult.messageId) {
+            console.error(`[Alerts] SES send failed for ${user.email}`);
             await logAlertSend(user.id, candidate, user.email, null, "failed");
             result.errors++;
             result.details.push({
@@ -152,7 +139,7 @@ export async function processAlerts(dryRun: boolean = false): Promise<ProcessRes
             continue;
           }
 
-          await logAlertSend(user.id, candidate, user.email, resendId, "sent");
+          await logAlertSend(user.id, candidate, user.email, emailResult.messageId, "sent");
 
           // Mark outcome followup as sent if applicable
           if (candidate.alertType === "outcome_followup" && candidate.metadata?.followupId) {
@@ -179,7 +166,7 @@ export async function processAlerts(dryRun: boolean = false): Promise<ProcessRes
           });
         }
 
-        // 100ms delay between sends to avoid Resend rate limits
+        // 100ms delay between sends to avoid SES rate limits
         await new Promise((r) => setTimeout(r, 100));
       }
     } catch (err) {

@@ -1,13 +1,14 @@
 /**
  * Email Report
  *
- * POST /api/health-report/email — sends report via Resend (auth required)
+ * POST /api/health-report/email — sends report via AWS SES (auth required)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { sendEmail } from "@/lib/email";
 import type { HealthReport } from "@/lib/health-report";
 
 export async function POST(request: NextRequest) {
@@ -48,34 +49,18 @@ export async function POST(request: NextRequest) {
       ? JSON.parse(result.rows[0].report_data)
       : result.rows[0].report_data) as HealthReport;
 
-    // Send via Resend
-    const resendKey = process.env.RESEND_API_KEY;
-    const fromEmail = process.env.RESEND_FROM_EMAIL || "no-reply@denali.health";
-
-    if (!resendKey) {
-      return NextResponse.json({ error: "Email service not configured" }, { status: 503 });
-    }
-
+    // Send via AWS SES
     const greeting = recipientName ? `Dear ${recipientName},` : "Hello,";
     const htmlBody = buildEmailHtml(reportData, greeting);
 
-    const emailRes = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: `Denali Health <${fromEmail}>`,
-        to: recipientEmail,
-        subject: "Your Medicare Health Summary Report — Denali Health",
-        html: htmlBody,
-      }),
+    const emailResult = await sendEmail({
+      to: [recipientEmail],
+      subject: "Your Medicare Health Summary Report — Denali Health",
+      html: htmlBody,
     });
 
-    if (!emailRes.ok) {
-      const errText = await emailRes.text();
-      console.error("[HealthReport] Email send failed:", errText);
+    if (!emailResult.messageId) {
+      console.error("[HealthReport] SES email send failed");
       return NextResponse.json({ error: "Failed to send email" }, { status: 502 });
     }
 

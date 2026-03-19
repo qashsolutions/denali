@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-13 (ID.me gate feature-flagged — not required for BB Connected Apps Directory; previous: ID.me name/gender extraction + TOTP UI disabled)
+     Last updated: 2026-03-18 (Resend → AWS SES email migration; previous: ID.me gate feature-flagged)
      Maintainer: @cvr
 -->
 
@@ -173,6 +173,7 @@ Where to find specific logic in the codebase.
 | `src/lib/session-state.ts` | SessionState type definition. Includes `consentHealthDataAi` (toggle state) and `blueButtonConnected` (Blue Button connected even when consent OFF) |
 | `src/lib/denial-patterns.ts` | Async RDS queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
 | `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via `query()` (admin DB user, bypasses no RLS — RDS has none). Non-blocking fire-and-forget. Write-side dedup: `FHIR_DATA_ACCESS` skips insert if same user+action logged within 2h (`DEDUP_WINDOWS` map) |
+| `src/lib/email.ts` | AWS SES email service. `sendEmail({ to, subject, html, from? })` → `{ messageId }`. Uses `@aws-sdk/client-sesv2` with IAM auth (ECS task role in prod, local credentials in dev). Never throws — errors logged, returns null messageId. Replaces Resend |
 | `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformPatient()` extracts ONLY age+gender from FHIR Patient — no name/DOB/address/Medicare ID per Privacy §2 + `transformEOB()` extracts PDE info/careTeam/POS/inpatient/diagnosis-types/NDC/network fields + `classifyDiabetesStatus()` + `DMESummary`/`WeightMeasurement` types), `eob-clinical.ts` (clinical extraction pipeline — 8 extractors including `extractDMEFromClaims()`, `extractPatientWeight()`, `detectHospiceStatus()` — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials + DME + hospice safety gate), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 11 resource types including dme, hospice_status, sync_meta), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
 | `src/lib/diabetes-insights.ts` | Claude-powered diabetes insight generation via `getClaudeClient()` (Bedrock in production). `generateDiabetesInsight(data)` calls Claude for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls |
 | `src/lib/health-report.ts` | Claude-powered health summary report generation. `generateHealthReport()` calls Sonnet 4.6 for structured JSON analysis covering 12 sections (red flags, diabetes, obesity, pre-diabetes resources, conditions, medications, DME, screenings, care team, denials, hospice). `computeReportHash()` for dedup. `HealthReport` type definition |
@@ -222,7 +223,7 @@ Where to find specific logic in the codebase.
 
 ```
 src/app/api/
-  auth/send-otp/route.ts      # Email OTP initiation (Cognito AdminCreateUser + Resend). OTP shown in subject line for notification banner visibility
+  auth/send-otp/route.ts      # Email OTP initiation (Cognito AdminCreateUser + AWS SES). OTP shown in subject line for notification banner visibility
   auth/verify-otp/route.ts    # OTP verification → sets httpOnly access_token + refresh_token cookies. Body: `{email, otp}` (field is `otp`, NOT `code`)
   auth/signout/route.ts       # Global sign out + clear cookies
   auth/refresh/route.ts       # Refresh access_token from refresh_token cookie
@@ -258,7 +259,7 @@ src/app/api/
   health-report/[id]/route.ts  # GET specific report by ID
   health-report/share/[token]/route.ts # GET public share (no auth, 30-day expiry)
   health-report/pdf/[id]/route.ts # GET download report as text file
-  health-report/email/route.ts # POST email report via Resend
+  health-report/email/route.ts # POST email report via AWS SES
   webhooks/stripe/route.ts    # POST Stripe webhook events
   admin/cms/route.ts          # GET/PATCH CMS content tables (admin only)
   admin/email/policy-change/route.ts  # POST 30-day policy change email to all users (admin only, dry-run support)
@@ -635,8 +636,7 @@ COGNITO_USER_POOL_ID=us-east-1_...
 COGNITO_CLIENT_ID=...
 COGNITO_CLIENT_SECRET=...
 AWS_REGION=us-east-1
-RESEND_API_KEY=re_...
-RESEND_FROM_EMAIL=no-reply@denali.health
+SES_FROM_EMAIL=no-reply@denali.health          # AWS SES from address (fallback: RESEND_FROM_EMAIL for backward compat)
 BLUEBUTTON_CLIENT_ID=...
 BLUEBUTTON_CLIENT_SECRET=...
 BLUEBUTTON_BASE_URL=https://sandbox.bluebutton.cms.gov
@@ -1228,7 +1228,7 @@ Verified answers to CMS early adopter questionnaire, backed by code and AWS infr
 DenaliHealth does not share patient health data (PHI) with any third party. All health data processing runs through Claude on AWS Bedrock (Sonnet 4.6 for chat, Opus 4.6 for appeals) — data never leaves AWS. Two service providers receive limited operational data (email address only) under data processing agreements: Stripe (payments) and Resend (email delivery). Patient consent for health data use is obtained through three granular opt-in toggles (all default OFF) in Settings > Privacy & Data: Health Data AI, Health Data Storage, Analytics. Medicare data access requires separate Blue Button OAuth through Medicare.gov. Consent changes take effect immediately (including mid-conversation) and are audit-logged.
 
 **Q: Do third-party vendors commit to data protection requirements?**
-Yes. No third-party vendor has access to patient health data. AWS: BAA executed 2026-02-25, HIPAA-eligible, SOC 2 Type II, FedRAMP High, HITRUST certified. Stripe: PCI DSS Level 1 certified, receives only email + payment identifiers. Resend: SOC 2 Type II certified, receives only email addresses. Public government APIs (NLM, CMS, NPPES) receive only generic search terms — never patient data.
+Yes. No third-party vendor has access to patient health data. AWS: BAA executed 2026-02-25, HIPAA-eligible, SOC 2 Type II, FedRAMP High, HITRUST certified. Email sending via AWS SES (within BAA). Stripe: PCI DSS Level 1 certified, receives only email + payment identifiers. Public government APIs (NLM, CMS, NPPES) receive only generic search terms — never patient data.
 
 **Q: What happens when a user withdraws consent?**
 Consent toggles take effect immediately. Health Data AI → OFF: data stripped client-side before any API call. Disconnecting Medicare: all cached health data + encrypted OAuth tokens permanently deleted. Account deletion: 11-step cascade deletes all user data, Cognito credentials removed as final step. Only audit logs (6-year HIPAA) and anonymized learning patterns survive.
@@ -1263,7 +1263,7 @@ Verified via AWS CLI audit (2026-03-04):
 | ID.me | OIDC auth code (identity verification) | No — UUID only, no PII stored |
 | Cognito | Email address | No |
 | Stripe | Email, internal user ID | No |
-| Resend | Email address | No |
+| AWS SES | Email address (within AWS/BAA) | No |
 
 ### Remaining Gaps
 

@@ -11,6 +11,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { sendEmail } from "@/lib/email";
 
 interface PolicyChangeRequest {
   effectiveDate: string;
@@ -54,12 +55,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "changes must be a non-empty array" }, { status: 400 });
   }
 
-  const resendApiKey = process.env.RESEND_API_KEY;
-  if (!resendApiKey) {
-    console.error("[admin/email/policy-change] RESEND_API_KEY not configured");
-    return NextResponse.json({ error: "Email service not configured" }, { status: 500 });
-  }
-
   // Get all registered users
   const users = await query<{ id: string; email: string }>(
     `SELECT id, email FROM users WHERE email IS NOT NULL`
@@ -81,25 +76,17 @@ export async function POST(request: NextRequest) {
 
   for (const user of users.rows) {
     try {
-      const resendRes = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${resendApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: "denali.health <noreply@denali.health>",
-          to: [user.email],
-          subject: `Policy Update Notice — Effective ${effectiveDate}`,
-          html,
-        }),
+      const result = await sendEmail({
+        from: "denali.health <no-reply@denali.health>",
+        to: [user.email],
+        subject: `Policy Update Notice — Effective ${effectiveDate}`,
+        html,
       });
 
-      if (!resendRes.ok) {
-        const err = await resendRes.text();
-        console.error(`[admin/email/policy-change] Failed for ${user.email}:`, err);
+      if (!result.messageId) {
+        console.error(`[admin/email/policy-change] Failed for ${user.email}`);
         failed++;
-        errors.push({ email: user.email, error: err });
+        errors.push({ email: user.email, error: "SES send failed" });
       } else {
         sent++;
       }
@@ -109,7 +96,7 @@ export async function POST(request: NextRequest) {
       errors.push({ email: user.email, error: String(err) });
     }
 
-    // Small delay to avoid Resend rate limits
+    // Small delay to avoid SES rate limits
     if (users.rows.indexOf(user) < users.rows.length - 1) {
       await new Promise((r) => setTimeout(r, 100));
     }
