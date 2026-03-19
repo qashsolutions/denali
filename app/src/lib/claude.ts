@@ -916,16 +916,27 @@ export function extractUserInfo(
 
     // Extract name (if user responded with just a name or "I'm X" / "call me X")
     if (!updatedState.userName) {
+      // Common words that follow "I'm" but are NOT names
+      const NOT_NAMES = new Set([
+        "having", "going", "looking", "trying", "dealing", "getting", "feeling",
+        "wondering", "thinking", "asking", "checking", "interested", "concerned",
+        "worried", "calling", "writing", "experiencing", "suffering", "taking",
+        "using", "seeing", "waiting", "scheduled", "told", "being", "about",
+        "not", "very", "really", "just", "also", "still", "already", "here",
+        "new", "the", "that", "this", "with", "from", "over", "under",
+      ]);
       // Match "I'm John", "call me John", "my name is John", "it's John"
       const namePatterns = content.match(
         /(?:i'm|i am|call me|my name is|it's|this is|name's)\s+([a-zA-Z]{2,20})/i
       );
-      if (namePatterns) {
+      if (namePatterns && !NOT_NAMES.has(namePatterns[1].toLowerCase())) {
         updatedState.userName = namePatterns[1].charAt(0).toUpperCase() + namePatterns[1].slice(1).toLowerCase();
       } else if (content.trim().length < 25 && /^[a-zA-Z]{2,20}$/i.test(content.trim())) {
         // Short message that's just a name (e.g., "John")
         const name = content.trim();
-        updatedState.userName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+        if (!NOT_NAMES.has(name.toLowerCase())) {
+          updatedState.userName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+        }
       }
     }
 

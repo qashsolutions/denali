@@ -66,11 +66,16 @@ function ChatContent() {
   }, [authState.plan, authState.isAdmin, authState.email]);
 
   const initialSessionState = useMemo(() => {
-    // Always pass user's verified name from ID.me (if available) so Claude
-    // can greet them by name without asking. Gender provides clinical context.
+    // Pass user's name so Claude can greet them without asking.
+    // Priority: ID.me verified name > email prefix
     const baseState: Partial<SessionState> = {};
     if (authState.firstName) {
       baseState.userName = authState.firstName;
+    } else if (authState.email) {
+      const prefix = authState.email.split("@")[0].replace(/[._+]/g, " ").split(" ")[0];
+      if (prefix.length >= 2) {
+        baseState.userName = prefix.charAt(0).toUpperCase() + prefix.slice(1).toLowerCase();
+      }
     }
 
     if (!isConnected) {
@@ -181,7 +186,7 @@ function ChatContent() {
     }
 
     return partial;
-  }, [isConnected, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, a1cHistory, consent.health_data_ai, authState.firstName]);
+  }, [isConnected, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, a1cHistory, consent.health_data_ai, authState.firstName, authState.email]);
 
   useEffect(() => {
     const payment = searchParams.get("payment");
