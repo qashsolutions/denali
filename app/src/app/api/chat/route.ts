@@ -342,6 +342,16 @@ export async function POST(request: NextRequest) {
       10_000, basePrompt, "buildSystemPromptWithLearning"
     );
     console.log("[Chat API] System prompt length:", systemPrompt.length);
+    console.log("[Chat API] Health context injected:", systemPrompt.includes("PATIENT CHART"));
+    if (triggers.hasHealthData) {
+      console.log("[Chat API] Health data flags:", {
+        conditions: sessionState.conditions?.length ?? 0,
+        medications: sessionState.medications?.length ?? 0,
+        screenings: sessionState.screenings?.length ?? 0,
+        diabetesClass: sessionState.diabetesClassification,
+        obesityClass: sessionState.obesityClassification,
+      });
+    }
 
     // Get tool definitions and create executor map
     const toolDefinitions = getToolDefinitions();

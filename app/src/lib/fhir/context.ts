@@ -19,10 +19,11 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
   if (sessionState.consentHealthDataAi !== true) return null;
 
   const lines: string[] = [
-    "## Medicare Health Data",
+    "## PATIENT CHART — Medicare Health Data (YOU HAVE ALREADY REVIEWED THIS)",
     "",
-    "This user has connected their Medicare account. Use this data to personalize guidance.",
-    "Do NOT ask the user for information you already have from their records.",
+    "CRITICAL: The following is this patient's actual Medicare data. You ALREADY KNOW this information.",
+    "When the patient mentions ANY condition, medication, or service listed below, respond as if you",
+    "have already reviewed their chart. NEVER ask them to confirm what you can see here.",
     "",
   ];
 
@@ -279,6 +280,12 @@ export function buildHealthContextForPrompt(sessionState: SessionState): string 
     );
     lines.push("");
   }
+
+  // Post-amble: repeat instruction at end of health data (positional attention)
+  lines.push("---");
+  lines.push("REMINDER: You have this patient's full Medicare chart above. Use it directly in every response.");
+  lines.push("When they mention a condition, medication, or service from their records, LEAD with what you know.");
+  lines.push("A generic response when you have specific patient data is the worst possible experience.");
 
   const result = lines.join("\n");
 

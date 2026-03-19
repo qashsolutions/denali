@@ -520,6 +520,7 @@ export async function chat(
           system: systemBlocks,
           messages,
           tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+          temperature: 0.4,
           stream: true,
         }, { signal: controller.signal });
 
@@ -595,6 +596,7 @@ export async function chat(
             system: systemBlocks,
             messages,
             tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+            temperature: 0.4,
           }, { signal }) as Promise<Message>,
           timeoutMs,
           `Claude API iteration ${iterations} (fallback)`
@@ -609,6 +611,7 @@ export async function chat(
           system: systemBlocks,
           messages,
           tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+          temperature: 0.4,
         }, { signal }) as Promise<Message>,
         timeoutMs,
         `Claude API iteration ${iterations}`
