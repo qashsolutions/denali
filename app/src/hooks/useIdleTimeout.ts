@@ -8,16 +8,20 @@ interface UseIdleTimeoutReturn {
   secondsRemaining: number;
   staySignedIn: () => void;
   isAuthenticated: boolean;
+  isExpired: boolean;
+  confirmSignOut: () => void;
 }
 
 /**
- * Tracks user inactivity and signs out after SESSION_TIMEOUT.INACTIVITY_MS.
- * Shows a warning banner at SESSION_TIMEOUT.WARNING_MS.
+ * Tracks user inactivity and shows warning at SESSION_TIMEOUT.WARNING_MS.
+ * At SESSION_TIMEOUT.INACTIVITY_MS, shows expired modal — does NOT auto-sign out.
+ * User must click "Okay" (confirmSignOut) to complete sign-out.
  * Auth-gated: no-op for anonymous users.
  */
 export function useIdleTimeout(): UseIdleTimeoutReturn {
   const [showWarning, setShowWarning] = useState(false);
-  const [secondsRemaining, setSecondsRemaining] = useState(120);
+  const [isExpired, setIsExpired] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState(180);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const lastActivityRef = useRef(Date.now());
   const lastUpdateRef = useRef(Date.now());
@@ -25,11 +29,19 @@ export function useIdleTimeout(): UseIdleTimeoutReturn {
   const resetActivity = useCallback(() => {
     lastActivityRef.current = Date.now();
     setShowWarning(false);
+    setIsExpired(false);
+  }, []);
+
+  const confirmSignOut = useCallback(() => {
+    setShowWarning(false);
+    setIsExpired(false);
+    fetch("/api/auth/idle-lock", { method: "POST" }).finally(() => {
+      window.dispatchEvent(new CustomEvent("auth-state-change", { detail: null }));
+    });
   }, []);
 
   // Auth state tracking via custom event
   useEffect(() => {
-    // Check initial auth state
     fetch("/api/profile")
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
@@ -50,9 +62,9 @@ export function useIdleTimeout(): UseIdleTimeoutReturn {
     return () => window.removeEventListener("auth-state-change", handleAuthChange);
   }, [resetActivity]);
 
-  // Activity listeners (throttled to 1s)
+  // Activity listeners (throttled to 1s) — disabled when expired (force modal)
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || isExpired) return;
 
     const handleActivity = () => {
       const now = Date.now();
@@ -69,23 +81,20 @@ export function useIdleTimeout(): UseIdleTimeoutReturn {
     return () => {
       events.forEach((e) => window.removeEventListener(e, handleActivity));
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isExpired]);
 
   // Check interval (every 30s normally, every 1s during warning)
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || isExpired) return;
 
     const check = () => {
       const elapsed = Date.now() - lastActivityRef.current;
 
       if (elapsed >= SESSION_TIMEOUT.INACTIVITY_MS) {
+        // Don't auto-sign out — show expired modal, user must click "Okay"
         setShowWarning(false);
-        // Idle lock — clears access token but keeps refresh token so
-        // the middleware can silently re-authenticate when user returns.
-        // Use /signout for explicit user-initiated sign-out (revokes all tokens).
-        fetch("/api/auth/idle-lock", { method: "POST" }).finally(() => {
-          window.dispatchEvent(new CustomEvent("auth-state-change", { detail: null }));
-        });
+        setIsExpired(true);
+        setSecondsRemaining(0);
         return;
       }
 
@@ -100,13 +109,11 @@ export function useIdleTimeout(): UseIdleTimeoutReturn {
       }
     };
 
-    // Run immediately on mount
     check();
 
-    // Fast interval during warning for countdown, slow otherwise
     const id = setInterval(check, showWarning ? 1000 : 30000);
     return () => clearInterval(id);
-  }, [isAuthenticated, showWarning]);
+  }, [isAuthenticated, showWarning, isExpired]);
 
-  return { showWarning, secondsRemaining, staySignedIn: resetActivity, isAuthenticated };
+  return { showWarning, secondsRemaining, staySignedIn: resetActivity, isAuthenticated, isExpired, confirmSignOut };
 }
