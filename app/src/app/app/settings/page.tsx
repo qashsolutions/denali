@@ -40,19 +40,7 @@ function AppSettingsPageInner() {
   const [emailInput, setEmailInput] = useState("");
   const [otpInput, setOtpInput] = useState("");
   const [otpSent, setOtpSent] = useState(false);
-
-  // Detect Gmail plus addressing for user notification
-  const gmailNormalized = (() => {
-    const trimmed = emailInput.toLowerCase().trim();
-    const atIdx = trimmed.lastIndexOf("@");
-    if (atIdx === -1) return null;
-    const local = trimmed.substring(0, atIdx);
-    const domain = trimmed.substring(atIdx + 1);
-    if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
-      return `${local.substring(0, local.indexOf("+"))}@${domain}`;
-    }
-    return null;
-  })();
+  const [gmailTruncated, setGmailTruncated] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [authMessageType, setAuthMessageType] = useState<"success" | "error" | "">("");
@@ -331,7 +319,22 @@ function AppSettingsPageInner() {
                       id="email-input"
                       type="email"
                       value={emailInput}
-                      onChange={(e) => setEmailInput(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const lower = val.toLowerCase();
+                        const at = lower.lastIndexOf("@");
+                        if (at !== -1) {
+                          const local = lower.substring(0, at);
+                          const domain = lower.substring(at + 1);
+                          if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
+                            setEmailInput(`${local.substring(0, local.indexOf("+"))}@${domain}`);
+                            setGmailTruncated(true);
+                            return;
+                          }
+                        }
+                        setGmailTruncated(false);
+                        setEmailInput(val);
+                      }}
                       placeholder="you@example.com"
                       autoFocus
                       className="flex-1 px-3 py-3 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-transparent transition-colors"
@@ -359,17 +362,17 @@ function AppSettingsPageInner() {
                       {authLoading ? "Sending..." : "Send Code"}
                     </button>
                   </div>
-                  {gmailNormalized && (
-                    <p className="mt-2 text-xs text-[var(--accent-primary)]">
-                      We&apos;ll sign you in as <span className="font-medium">{gmailNormalized}</span>. Only one account is allowed per email.
+                  {gmailTruncated && (
+                    <p className="mt-2 text-xs text-red-600">
+                      We&apos;ll sign you in as <span className="font-semibold">{emailInput}</span>. Only one account is allowed per email.
                     </p>
                   )}
                 </>
               ) : (
                 <>
-                  {gmailNormalized && (
-                    <p className="mb-2 text-xs text-[var(--accent-primary)]">
-                      Signing in as <span className="font-medium">{gmailNormalized}</span>
+                  {gmailTruncated && (
+                    <p className="mb-2 text-xs text-red-600">
+                      Signing in as <span className="font-semibold">{emailInput}</span>
                     </p>
                   )}
                   <div className="flex gap-2">

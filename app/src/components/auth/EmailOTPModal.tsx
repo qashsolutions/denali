@@ -28,6 +28,7 @@ export function EmailOTPModal({
 }: EmailOTPModalProps) {
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
+  const [gmailTruncated, setGmailTruncated] = useState(false);
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -37,6 +38,7 @@ export function EmailOTPModal({
     if (isOpen && !wasOpen.current) {
       setStep("email");
       setEmail("");
+      setGmailTruncated(false);
       setCode(["", "", "", "", "", ""]);
       clearError();
     }
@@ -46,20 +48,21 @@ export function EmailOTPModal({
   const isValidEmail = (value: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
-  // Detect Gmail plus addressing for user notification
-  const getGmailNormalized = (value: string): string | null => {
-    const trimmed = value.toLowerCase().trim();
-    const atIndex = trimmed.lastIndexOf("@");
-    if (atIndex === -1) return null;
-    const local = trimmed.substring(0, atIndex);
-    const domain = trimmed.substring(atIndex + 1);
-    if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
-      return `${local.substring(0, local.indexOf("+"))}@${domain}`;
+  const handleEmailChange = (val: string) => {
+    const lower = val.toLowerCase();
+    const at = lower.lastIndexOf("@");
+    if (at !== -1) {
+      const local = lower.substring(0, at);
+      const domain = lower.substring(at + 1);
+      if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
+        setEmail(`${local.substring(0, local.indexOf("+"))}@${domain}`);
+        setGmailTruncated(true);
+        return;
+      }
     }
-    return null;
+    setGmailTruncated(false);
+    setEmail(val);
   };
-
-  const normalizedEmail = getGmailNormalized(email);
 
   const handleSendCode = async () => {
     if (!isValidEmail(email)) return;
@@ -186,7 +189,7 @@ export function EmailOTPModal({
                   type="email"
                   id="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => handleEmailChange(e.target.value)}
                   placeholder="you@example.com"
                   className={cn(
                     "w-full px-4 py-3 bg-slate-800 border rounded-xl text-slate-100 placeholder-slate-500",
@@ -199,10 +202,10 @@ export function EmailOTPModal({
                 {error && (
                   <p className="mt-2 text-base font-medium text-red-500">{error}</p>
                 )}
-                {normalizedEmail && !error && (
-                  <div className="mt-2 px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                    <p className="text-sm text-blue-300">
-                      We&apos;ll sign you in as <span className="font-medium text-blue-200">{normalizedEmail}</span>. Only one account is allowed per email.
+                {gmailTruncated && !error && (
+                  <div className="mt-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    <p className="text-sm text-red-400">
+                      We&apos;ll sign you in as <span className="font-semibold text-red-300">{email}</span>. Only one account is allowed per email.
                     </p>
                   </div>
                 )}
@@ -254,9 +257,9 @@ export function EmailOTPModal({
                 We sent a 6-digit code to{" "}
                 <span className="text-slate-100 font-medium">{email}</span>
               </p>
-              {normalizedEmail && (
-                <p className="text-blue-300 text-xs">
-                  Signing in as {normalizedEmail}
+              {gmailTruncated && (
+                <p className="text-red-400 text-xs">
+                  Signing in as <span className="font-semibold">{email}</span>
                 </p>
               )}
               <p className="text-slate-400 text-xs">
