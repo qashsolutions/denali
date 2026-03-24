@@ -40,6 +40,19 @@ function AppSettingsPageInner() {
   const [emailInput, setEmailInput] = useState("");
   const [otpInput, setOtpInput] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+
+  // Detect Gmail plus addressing for user notification
+  const gmailNormalized = (() => {
+    const trimmed = emailInput.toLowerCase().trim();
+    const atIdx = trimmed.lastIndexOf("@");
+    if (atIdx === -1) return null;
+    const local = trimmed.substring(0, atIdx);
+    const domain = trimmed.substring(atIdx + 1);
+    if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
+      return `${local.substring(0, local.indexOf("+"))}@${domain}`;
+    }
+    return null;
+  })();
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [authMessageType, setAuthMessageType] = useState<"success" | "error" | "">("");
@@ -312,75 +325,89 @@ function AppSettingsPageInner() {
                 <a href="/privacy" className="text-[var(--accent-primary)] hover:underline">Privacy Policy</a>.
               </p>
               {!otpSent ? (
-                <div className="flex gap-2">
-                  <input
-                    id="email-input"
-                    type="email"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="you@example.com"
-                    autoFocus
-                    className="flex-1 px-3 py-3 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-transparent transition-colors"
-                  />
-                  <button
-                    onClick={async () => {
-                      if (!emailInput) return;
-                      setAuthLoading(true);
-                      setAuthMessage("");
-                      setAuthMessageType("");
-                      const ok = await sendEmailOTP(emailInput);
-                      setAuthLoading(false);
-                      if (ok) {
-                        setOtpSent(true);
-                        setAuthMessage("Check your email for a verification code.");
-                        setAuthMessageType("success");
-                      } else {
-                        setAuthMessage("Failed to send code. Try again.");
-                        setAuthMessageType("error");
-                      }
-                    }}
-                    disabled={authLoading || !emailInput}
-                    className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors disabled:opacity-50"
-                  >
-                    {authLoading ? "Sending..." : "Send Code"}
-                  </button>
-                </div>
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      id="email-input"
+                      type="email"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      placeholder="you@example.com"
+                      autoFocus
+                      className="flex-1 px-3 py-3 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-transparent transition-colors"
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!emailInput) return;
+                        setAuthLoading(true);
+                        setAuthMessage("");
+                        setAuthMessageType("");
+                        const ok = await sendEmailOTP(emailInput);
+                        setAuthLoading(false);
+                        if (ok) {
+                          setOtpSent(true);
+                          setAuthMessage("Check your email for a verification code.");
+                          setAuthMessageType("success");
+                        } else {
+                          setAuthMessage("Failed to send code. Try again.");
+                          setAuthMessageType("error");
+                        }
+                      }}
+                      disabled={authLoading || !emailInput}
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors disabled:opacity-50"
+                    >
+                      {authLoading ? "Sending..." : "Send Code"}
+                    </button>
+                  </div>
+                  {gmailNormalized && (
+                    <p className="mt-2 text-xs text-[var(--accent-primary)]">
+                      We&apos;ll sign you in as <span className="font-medium">{gmailNormalized}</span>. Only one account is allowed per email.
+                    </p>
+                  )}
+                </>
               ) : (
-                <div className="flex gap-2">
-                  <input
-                    id="otp-input"
-                    type="text"
-                    value={otpInput}
-                    onChange={(e) => setOtpInput(e.target.value)}
-                    placeholder="Enter 6-digit code"
-                    maxLength={6}
-                    autoFocus
-                    className="flex-1 px-3 py-3 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-transparent transition-colors"
-                  />
-                  <button
-                    onClick={async () => {
-                      if (!otpInput) return;
-                      setAuthLoading(true);
-                      setAuthMessage("");
-                      setAuthMessageType("");
-                      const result = await verifyEmailOTP(emailInput, otpInput);
-                      setAuthLoading(false);
-                      if (result.success) {
-                        setAuthMessage("Signed in successfully!");
-                        setAuthMessageType("success");
-                        setOtpSent(false);
-                        setOtpInput("");
-                      } else {
-                        setAuthMessage("Invalid code. Try again.");
-                        setAuthMessageType("error");
-                      }
-                    }}
-                    disabled={authLoading || !otpInput}
-                    className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors disabled:opacity-50"
-                  >
-                    {authLoading ? "Verifying..." : "Verify"}
-                  </button>
-                </div>
+                <>
+                  {gmailNormalized && (
+                    <p className="mb-2 text-xs text-[var(--accent-primary)]">
+                      Signing in as <span className="font-medium">{gmailNormalized}</span>
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      id="otp-input"
+                      type="text"
+                      value={otpInput}
+                      onChange={(e) => setOtpInput(e.target.value)}
+                      placeholder="Enter 6-digit code"
+                      maxLength={6}
+                      autoFocus
+                      className="flex-1 px-3 py-3 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-transparent transition-colors"
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!otpInput) return;
+                        setAuthLoading(true);
+                        setAuthMessage("");
+                        setAuthMessageType("");
+                        const result = await verifyEmailOTP(emailInput, otpInput);
+                        setAuthLoading(false);
+                        if (result.success) {
+                          setAuthMessage("Signed in successfully!");
+                          setAuthMessageType("success");
+                          setOtpSent(false);
+                          setOtpInput("");
+                        } else {
+                          setAuthMessage("Invalid code. Try again.");
+                          setAuthMessageType("error");
+                        }
+                      }}
+                      disabled={authLoading || !otpInput}
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors disabled:opacity-50"
+                    >
+                      {authLoading ? "Verifying..." : "Verify"}
+                    </button>
+                  </div>
+                </>
               )}
               {authMessage && (
                 <p className={`mt-2 ${authMessageType === "error" ? "text-sm font-medium text-red-500" : "text-xs text-green-600"}`}>{authMessage}</p>
