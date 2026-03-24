@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { createOrGetCognitoUser, setCognitoPassword } from "@/lib/auth-server";
 import { sendEmail } from "@/lib/email";
+import { normalizeEmail } from "@/lib/normalize-email";
 
 const OTP_TTL_MINUTES = 10;
 
@@ -45,11 +46,15 @@ async function sendOtpEmail(email: string, otp: string): Promise<void> {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const email = (body.email as string | undefined)?.toLowerCase().trim();
+    const rawEmail = (body.email as string | undefined)?.toLowerCase().trim();
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
       return NextResponse.json({ error: "Valid email is required" }, { status: 400 });
     }
+
+    // Normalize Gmail plus addressing: user+tag@gmail.com → user@gmail.com
+    // Prevents duplicate accounts. OTP is sent to the raw address for delivery.
+    const email = normalizeEmail(rawEmail);
 
     // 1. Ensure Cognito user exists → get sub (userId)
     const userId = await createOrGetCognitoUser(email);
@@ -80,8 +85,8 @@ export async function POST(request: NextRequest) {
       [userId, otp, expiresAt.toISOString()]
     );
 
-    // 6. Send OTP email (fire-and-forget log, don't fail request on email error)
-    await sendOtpEmail(email, otp);
+    // 6. Send OTP to the ORIGINAL address (Gmail delivers +tag to the base inbox)
+    await sendOtpEmail(rawEmail, otp);
 
     return NextResponse.json({ success: true });
   } catch (error) {

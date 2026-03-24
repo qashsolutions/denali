@@ -13,20 +13,24 @@ import { query } from "@/lib/db";
 import { initiateCognitoAuth } from "@/lib/auth-server";
 import { logAudit } from "@/lib/audit";
 import { PRICING } from "@/config";
+import { normalizeEmail } from "@/lib/normalize-email";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const email = (body.email as string | undefined)?.toLowerCase().trim();
+    const rawEmail = (body.email as string | undefined)?.toLowerCase().trim();
     const otp = (body.otp as string | undefined)?.trim();
 
-    if (!email || !otp) {
+    if (!rawEmail || !otp) {
       return NextResponse.json({ error: "Email and code are required" }, { status: 400 });
     }
 
     if (!/^\d{6}$/.test(otp)) {
       return NextResponse.json({ error: "Code must be 6 digits" }, { status: 400 });
     }
+
+    // Normalize Gmail plus addressing to match the account created in send-otp
+    const email = normalizeEmail(rawEmail);
 
     // 1. Look up user + OTP from DB
     const verResult = await query<{
