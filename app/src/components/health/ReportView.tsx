@@ -294,7 +294,7 @@ export function ReportView({ report, expiresAt, isPublic }: ReportViewProps) {
       {/* Disclaimers */}
       <footer className="border-t border-[var(--border)] pt-6 space-y-2 text-xs text-[var(--text-secondary)]">
         <p>
-          Generated from Medicare claims data via Blue Button 2.0. Not endorsed or certified by CMS or HHS.
+          Generated from Medicare claims data. This product uses the Blue Button APIs but is not endorsed or certified by CMS or HHS.
         </p>
         <p>
           This is coverage guidance only, not medical advice. Always consult with your healthcare provider for medical decisions.

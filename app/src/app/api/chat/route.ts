@@ -143,6 +143,20 @@ export async function POST(request: NextRequest) {
         if (trialEnd && trialEnd > new Date()) {
           chatLimit = PRICING.CHAT_LIMITS.TRIAL;
           weeklyLimit = PRICING.WEEKLY_LIMITS.TRIAL;
+        } else if (!subResult.rows[0]) {
+          // No subscription row — trial POST in verify-otp must have failed. Auto-create.
+          console.warn("[Chat] No subscription row for trial user", authUser.userId, "— auto-creating trial");
+          const now = new Date();
+          const end = new Date(now);
+          end.setDate(end.getDate() + PRICING.TRIAL_DURATION_DAYS);
+          await query(
+            `INSERT INTO subscriptions (user_id, plan, status, trial_start, trial_end, trial_converted)
+             VALUES ($1, 'trial', 'trialing', $2, $3, false)
+             ON CONFLICT (user_id) DO NOTHING`,
+            [authUser.userId, now.toISOString(), end.toISOString()]
+          );
+          chatLimit = PRICING.CHAT_LIMITS.TRIAL;
+          weeklyLimit = PRICING.WEEKLY_LIMITS.TRIAL;
         } else {
           // Trial expired — locked out
           return NextResponse.json(

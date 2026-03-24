@@ -131,7 +131,7 @@ export function DiagnosisSummaryCard({ diagnoses, conditions = [] }: DiagnosisSu
                 {severity.level !== "gray" && (
                   <Link
                     href={`/app/chat?message=${encodeURIComponent(`Tell me about Medicare coverage for ${cleanDiagnosisName(dx.name)}`)}`}
-                    className="text-[10px] font-medium text-[var(--accent-primary)] hover:underline"
+                    className="text-xs font-medium text-[var(--accent-primary)] hover:underline"
                   >
                     Ask Denali &rarr;
                   </Link>

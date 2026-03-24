@@ -108,9 +108,8 @@ const SECTIONS = [
       "CMS (Medicare API): We exchange data with the Medicare claims API only when you explicitly authorize the connection. Sharing is persistent while your connection is active and ceases immediately when you disconnect.",
       "AWS (Amazon Web Services): Our database (RDS PostgreSQL), application hosting (ECS/Fargate), and AI processing (Bedrock) provider. AWS is HIPAA-eligible and our Business Associate Agreement (BAA) was executed on February 25, 2026. Your account data, conversation history, and cached health data are stored in encrypted AWS RDS databases in us-east-1. Sharing is persistent for the lifetime of your account.",
       "Legal Requirements: We may disclose information if required by law, court order, or government regulation.",
-      "Business Transfers: In the event of a merger, acquisition, or sale of assets, your personal information may be transferred. We will notify you via email at least 30 days before your data is transferred and becomes subject to a different privacy policy. As a holder of CMS Blue Button API production credentials, we will also notify CMS at the earliest practicable time, as production credentials are issued to a specific approved application and entity and a change of ownership requires CMS re-review.",
-      "Resend: Email delivery service for authentication codes and account communications. Resend receives only your email address, transiently for message delivery. SOC 2 Type II certified.",
-      "Vendor Data Protection Commitments: Each third-party service provider we work with is contractually required to protect your information using safeguards appropriate to the sensitivity of the data they handle, consistent with applicable law. All providers handling protected health information are covered by Business Associate Agreements (BAAs). AWS is HIPAA-eligible and SOC 2 Type II certified (BAA executed February 25, 2026); Stripe is PCI DSS certified for payment data; Resend is SOC 2 Type II certified for email delivery.",
+      "Business Transfers: In the event of a merger, acquisition, or sale of assets, your personal information may be transferred. We will notify you via email at least 30 days before your data is transferred and becomes subject to a different privacy policy. As a holder of CMS Medicare API production credentials, we will also notify CMS at the earliest practicable time, as production credentials are issued to a specific approved application and entity and a change of ownership requires CMS re-review.",
+      "Vendor Data Protection Commitments: Each third-party service provider we work with is contractually required to protect your information using safeguards appropriate to the sensitivity of the data they handle, consistent with applicable law. All providers handling protected health information are covered by Business Associate Agreements (BAAs). AWS is HIPAA-eligible and SOC 2 Type II certified (BAA executed February 25, 2026), covering database (RDS), hosting (ECS/Fargate), AI processing (Bedrock), and email delivery (SES); Stripe is PCI DSS certified for payment data.",
     ],
     subsections: [
       {
@@ -174,7 +173,7 @@ const SECTIONS = [
     id: "hipaa",
     title: "9. HIPAA Compliance and Privacy Act",
     paragraphs: [
-      "Medicare data obtained through the Blue Button APIs is subject to the Privacy Act of 1974, the Health Insurance Portability and Accountability Act (HIPAA), and other applicable federal and state laws requiring special safeguarding. We comply with all applicable federal and state laws regarding the protection and disclosure of information obtained through the Blue Button APIs. Our compliance measures include:",
+      "Medicare data obtained through the Medicare APIs is subject to the Privacy Act of 1974, the Health Insurance Portability and Accountability Act (HIPAA), and other applicable federal and state laws requiring special safeguarding. We comply with all applicable federal and state laws regarding the protection and disclosure of information obtained through the Medicare APIs. Our compliance measures include:",
     ],
     items: [
       "Technical safeguards: encryption, access controls, audit logging",
@@ -213,6 +212,7 @@ const SECTIONS = [
       "Providing a 14-day free trial for Medicare beneficiaries",
       "Making our application available for CMS review and directory listing",
       "Clearly marking all AI-generated content and distinguishing it from clinical guidance",
+      "Using 'Medicare' as the data source name in all user-facing communications, consistent with CMS guidance",
     ],
   },
   {

@@ -14,7 +14,7 @@ interface ReportData {
   id: string;
   status: "pending" | "generating" | "ready" | "failed";
   shareToken: string;
-  reportData: HealthReport | null;
+  data: HealthReport | null;
   expiresAt: string | null;
   createdAt: string;
 }
@@ -111,7 +111,7 @@ export function useHealthReport(): UseHealthReportReturn {
                 id: data.id,
                 status: "generating",
                 shareToken: data.shareToken,
-                reportData: null,
+                data: null,
                 expiresAt: null,
                 createdAt: new Date().toISOString(),
               }

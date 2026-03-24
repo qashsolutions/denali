@@ -52,7 +52,7 @@ function ChatContent() {
   const [showPaywall, setShowPaywall] = useState(false);
 
   // Health data → sessionState bridge
-  const { coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, isConnected } = useHealthData();
+  const { coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations, isConnected, isLoading: healthLoading } = useHealthData();
   const { consent } = useConsent();
   const { a1cHistory } = useDiabetesSnapshots();
 
@@ -240,12 +240,12 @@ function ChatContent() {
   useEffect(() => {
     // Support both ?message= and ?q= (backward compat from diabetes page)
     const initialMessage = searchParams.get("message") || searchParams.get("q");
-    if (initialMessage && messages.length === 0) {
+    if (initialMessage && messages.length === 0 && !healthLoading) {
       sendMessage(initialMessage);
-    } else if (topic === "diabetes" && messages.length === 0) {
+    } else if (topic === "diabetes" && messages.length === 0 && !healthLoading) {
       sendMessage("What should I know about diabetes and Medicare coverage?");
     }
-  }, [searchParams, topic, messages.length, sendMessage]);
+  }, [searchParams, topic, messages.length, sendMessage, healthLoading]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

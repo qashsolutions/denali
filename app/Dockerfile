@@ -51,6 +51,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Copy service worker (must stay in public/)
 COPY --from=builder /app/public/sw.js ./public/sw.js
 
+# Copy RDS CA bundle for TLS certificate validation (HIPAA requirement)
+COPY --from=builder /app/certs/rds-global-bundle.pem ./certs/rds-global-bundle.pem
+
 USER nextjs
 
 EXPOSE 3000

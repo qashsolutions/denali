@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-18 (Resend → AWS SES email migration; previous: ID.me gate feature-flagged)
+     Last updated: 2026-03-23 (Legal docs: Resend→SES, Blue Button→Medicare terminology; health report data field bug fix; E2E test coverage: 212 tests across 44 files, Batch 1+2+3 complete)
      Maintainer: @cvr
 -->
 
@@ -173,7 +173,7 @@ Where to find specific logic in the codebase.
 | `src/lib/session-state.ts` | SessionState type definition. Includes `consentHealthDataAi` (toggle state) and `blueButtonConnected` (Blue Button connected even when consent OFF) |
 | `src/lib/denial-patterns.ts` | Async RDS queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
 | `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via `query()` (admin DB user, bypasses no RLS — RDS has none). Non-blocking fire-and-forget. Write-side dedup: `FHIR_DATA_ACCESS` skips insert if same user+action logged within 2h (`DEDUP_WINDOWS` map) |
-| `src/lib/email.ts` | AWS SES email service. `sendEmail({ to, subject, html, from? })` → `{ messageId }`. Uses `@aws-sdk/client-sesv2` with IAM auth (ECS task role in prod, local credentials in dev). Never throws — errors logged, returns null messageId. Replaces Resend |
+| `src/lib/email.ts` | AWS SES email service. `sendEmail({ to, subject, html, from? })` → `{ messageId }`. Uses `@aws-sdk/client-sesv2` with IAM auth (ECS task role in prod, local credentials in dev). Never throws — errors logged, returns null messageId |
 | `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformPatient()` extracts ONLY age+gender from FHIR Patient — no name/DOB/address/Medicare ID per Privacy §2 + `transformEOB()` extracts PDE info/careTeam/POS/inpatient/diagnosis-types/NDC/network fields + `classifyDiabetesStatus()` + `DMESummary`/`WeightMeasurement` types), `eob-clinical.ts` (clinical extraction pipeline — 8 extractors including `extractDMEFromClaims()`, `extractPatientWeight()`, `detectHospiceStatus()` — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials + DME + hospice safety gate), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 11 resource types including dme, hospice_status, sync_meta), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
 | `src/lib/diabetes-insights.ts` | Claude-powered diabetes insight generation via `getClaudeClient()` (Bedrock in production). `generateDiabetesInsight(data)` calls Claude for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls |
 | `src/lib/health-report.ts` | Claude-powered health summary report generation. `generateHealthReport()` calls Sonnet 4.6 for structured JSON analysis covering 12 sections (red flags, diabetes, obesity, pre-diabetes resources, conditions, medications, DME, screenings, care team, denials, hospice). `computeReportHash()` for dedup. `HealthReport` type definition |
@@ -636,7 +636,7 @@ COGNITO_USER_POOL_ID=us-east-1_...
 COGNITO_CLIENT_ID=...
 COGNITO_CLIENT_SECRET=...
 AWS_REGION=us-east-1
-SES_FROM_EMAIL=no-reply@denali.health          # AWS SES from address (fallback: RESEND_FROM_EMAIL for backward compat)
+SES_FROM_EMAIL=no-reply@denali.health          # AWS SES from address
 BLUEBUTTON_CLIENT_ID=...
 BLUEBUTTON_CLIENT_SECRET=...
 BLUEBUTTON_BASE_URL=https://sandbox.bluebutton.cms.gov
@@ -655,6 +655,8 @@ REQUIRE_IDENTITY_VERIFICATION=false       # false = Connected Apps Directory (no
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
 NEXT_PUBLIC_APP_URL=https://denali.health  # or https://staging.denali.health
 ```
+
+> **Note**: `RESEND_API_KEY` and `RESEND_FROM_EMAIL` may still exist in `denali/prod/app` Secrets Manager but are **not used by any code** (replaced by AWS SES with IAM auth, 2026-03-19). Safe to remove from secrets when convenient.
 
 ### ECS Deployment Gotchas
 
@@ -1052,8 +1054,8 @@ Domain skills are implemented via Claude tool calling in `/api/chat`, NOT separa
 
 ```bash
 cd app
-npx vitest run          # 56 unit tests
-npx playwright test     # 31 E2E tests (requires dev server or auto-starts)
+npx vitest run          # 91 unit tests
+npx playwright test     # 212 E2E tests (requires dev server or auto-starts)
 npx tsc --noEmit        # Type check
 ```
 
@@ -1073,18 +1075,104 @@ npx tsc --noEmit        # Type check
 
 ### E2E Tests (Playwright)
 
-**Config**: `app/playwright.config.ts` — Chromium only, `baseURL: localhost:3000`, auto-starts dev server.
+**Config**: `app/playwright.config.ts` — Chromium only, `baseURL: localhost:3000`, auto-starts dev server. **212 tests across 44 spec files** (updated 2026-03-23).
+
+#### Foundation Tests (pre-existing — 19 files, 147 tests)
 
 | Test File | Tests | What It Covers |
 |-----------|-------|----------------|
-| `e2e/coverage-check.spec.ts` | 1 | Full chat flow: send message → SSE response renders → suggestions appear |
-| `e2e/xss-security.spec.ts` | 7 | XSS prevention in paragraphs (4), tables (2), URL params (1) |
-| `e2e/spoofing-security.spec.ts` | 4 | API access control: unauthenticated requests return empty/401 |
-| `e2e/payment-trial.spec.ts` | 6 | Trial GET/POST 401, checkout auth/validation, webhook secret/signature checks |
-| `e2e/rate-limiting.spec.ts` | 5 | Chat 429 rate limit (auth + anon), 403 trial expired, 503 checkout error, suggestion buttons |
-| `e2e/consent-toggles.spec.ts` | 8 | Consent API access control (2) + UI toggle behavior: rendering, initial state, PUT payloads, optimistic revert on failure, toggle OFF sends `granted: false` (6) |
+| `e2e/chat-flow.spec.ts` | 20 | Chat SSE flow, suggestions, empty state cards, greeting, consent banner, ?message= auto-send, ?topic= routing, PaywallModal via "upgrade", XSS in SSE, error states (429/500) |
+| `e2e/health-hub.spec.ts` | 11 | Health page connected (accordion cards, coverage, diabetes, conditions, claims, expansion, attribution, needs-attention) + disconnected + unauth |
+| `e2e/dashboard.spec.ts` | 8 | Feature cards (Coverage/Medicare/Appeals/Diabetes), greeting with name, walkthrough bar, nudge strip |
+| `e2e/diabetes.spec.ts` | 10 | Coverage table 6 items, quick actions, A1C guide, connected states (with/without diabetes), QuickLog visibility, PreDiabetes Risk Card, CMS pledge |
+| `e2e/settings.spec.ts` | 14 | Account email/plan/trial, appearance/accessibility sections, 3 consent toggles + default OFF, topic preferences, audit log, danger zone 2-step delete, unauth sign-in option |
+| `e2e/sidebar.spec.ts` | 3 | New Chat button, conversation history grouped by date (Today/Yesterday), empty state |
+| `e2e/navigation.spec.ts` | 6 | Desktop nav links, Health nav click, gear icon, landing/blog/FAQ public access |
+| `e2e/health-report.spec.ts` | 5 | Report API auth (401s), share token 404, PDF invalid-id error |
+| `e2e/offline-pwa.spec.ts` | 3 | Chat input disabled offline, offline banner, SW registration |
+| `e2e/inactivity.spec.ts` | 2 | No warning for active auth user, no warning for anon |
+| `e2e/auth-api.spec.ts` | 15 | 401 guards on 12 protected routes, profile/conversations data leakage checks |
+| `e2e/api-validation.spec.ts` | 20 | Input validation across consent, checkout, diabetes log, events, feedback, appeal-outcome, topics, health-report email, admin CMS (403) |
+| `e2e/consent-toggles.spec.ts` | 8 | Consent API 401, toggle rendering, initial state, PUT payloads, optimistic revert, toggle OFF |
+| `e2e/payment-trial.spec.ts` | 11 | Trial/checkout/webhook auth guards, invalid plan, Stripe signature |
+| `e2e/xss-security.spec.ts` | 1 | XSS in URL param |
+| `e2e/spoofing-security.spec.ts` | 7 | API access control on 5 routes |
+| `e2e/rate-limiting.spec.ts` | 2 | Unauth sign-up prompt, checkout 503 error |
+| `e2e/coverage-check.spec.ts` | 1 | Full chat flow: send → stream → render → suggestions |
+| `e2e/pages.spec.ts` | 7 | Landing hero/pricing, FAQ, Terms, Privacy |
+| `e2e/utility-api.spec.ts` | 3 | Health check 200, CMS metadata shape + public access |
 
-**SSE Mock Pattern**: All chat E2E tests mock `/api/chat` with `page.route()`, returning `text/event-stream` with `buildSSEResponse()` helper. Also mock `/api/profile` and `/api/conversations`. Trailing `\n\n` required to flush last SSE event from browser parser.
+#### Batch 1 — User Interaction Tests (pendingtests.md #1–#20 — 9 files, 25 tests)
+
+| Test File | Tests | What It Covers |
+|-----------|-------|----------------|
+| `e2e/auth-flows.spec.ts` | 5 | #1 Email OTP sign-in flow, #2 Sign-out clears auth state, #3 Account delete fires DELETE + signs out |
+| `e2e/payment-flows.spec.ts` | 5 | #4 PaywallModal plan selection → POST body, #16 Processing loading state, #17 Settings upgrade opens PaywallModal |
+| `e2e/appeal-gate.spec.ts` | 2 | #5 AppealGate unauth → sign-up overlay, #6 AppealGate no credits → unlock overlay |
+| `e2e/chat-interactions.spec.ts` | 4 | #7 "Sign up free" → /app/settings, #8 "Upgrade plan" → paywall, #18 ?payment=cancelled toast, #20 Consent banner "Enable in Settings" |
+| `e2e/quicklog.spec.ts` | 4 | #9 Glucose form submission POST, #10 Activity/Meal/Note tab forms |
+| `e2e/sidebar-interactions.spec.ts` | 2 | #11 Click → navigate to ?id=, #12 Group collapse/expand |
+| `e2e/health-interactions.spec.ts` | 4 | #13 Disconnect calls POST, #14 Report "ready" banner + View link, #15 Unauth redirect, #19 OAuth error banner |
+
+#### Batch 2 — Data-Driven Tests (pendingtests.md #21–#40 — 10 files, 24 tests)
+
+| Test File | Tests | What It Covers |
+|-----------|-------|----------------|
+| `e2e/health-hub-interactions.spec.ts` | 5 | #21 Accordion expand shows content, #22 "Needs Attention" conditional card, #23 Diabetes card conditional, #24 Obesity card conditional |
+| `e2e/health-report-interactions.spec.ts` | 1 | #25 "Generating" spinner banner |
+| `e2e/appeal-letter.spec.ts` | 1 | #26 Appeal card renders from SSE appealLetter |
+| `e2e/trial-enforcement.spec.ts` | 2 | #27 Trial expired → 403 lock message, #28 Weekly rate limit → 429 message |
+| `e2e/chat-edge-cases.spec.ts` | 3 | #29 ?id= loads existing conversation, #30 New Chat resets state, #31 URL syncs ?id= on new conversation |
+| `e2e/settings-interactions.spec.ts` | 6 | #32 Theme toggle (dark mode), #33 Text size selector, #34 Plan display for 4 tiers (serviceWorkers: "block") |
+| `e2e/landing.spec.ts` | 2 | #35 Hero CTA → /app/chat, #36 Pricing 4 tiers with prices |
+| `e2e/blog.spec.ts` | 2 | #37 Blog listing renders posts, #38 Blog post renders article |
+| `e2e/mobile-nav.spec.ts` | 1 | #39 BottomTabs 4 tabs + navigation |
+| `e2e/dashboard.spec.ts` | 1 | #40 Dashboard renders feature cards for auth user (shared with foundation) |
+
+#### Batch 3 — Integration Tests (pendingtests.md #41–#60 — 9 files, 20 tests)
+
+| Test File | Tests | What It Covers |
+|-----------|-------|----------------|
+| `e2e/health-report-view.spec.ts` | 3 | #41 Report view renders sections, #42 Share link controls visible, #43 Email sends via POST |
+| `e2e/consent-enforcement.spec.ts` | 2 | #44 health_data_ai OFF strips health from sessionState, #45 Grey banner visible |
+| `e2e/appeal-outcome.spec.ts` | 2 | #46 Appeal card renders + outcome form, #47 Credit incentive on approved |
+| `e2e/chat-feedback.spec.ts` | 2 | #48 Thumbs up/down sends POST, #49 Thumbs down shows confirmation |
+| `e2e/diabetes-interactions.spec.ts` | 5 | #50 RiskAlerts + CTA, #51 A1C chart toggle, #52 ScreeningReminders overdue, #53 InsightsCard + refresh, #54 Log delete |
+| `e2e/blog-interactions.spec.ts` | 2 | #55 Category tab filtering, #56 Personalized grouping |
+| `e2e/settings-topic-prefs.spec.ts` | 1 | #57 Topic preferences max 2 + PUT on selection |
+| `e2e/dashboard-interactions.spec.ts` | 1 | #58 Time-aware greeting + nudge strip CTA |
+| `e2e/offline-interactions.spec.ts` | 2 | #59 Offline banner shows/hides, #60 Chat input disabled offline |
+
+**Shared Test Infrastructure** (`e2e/helpers.ts`): `mockAuthenticatedUser` (profile+conversations+trial+mfa, supports `authOverrides` for plan/credits), `mockUnauthenticatedUser`, `mockAdminUser`, `buildSSEResponse` (correct `event: delta\ndata: {text}` + `event: done\ndata: {content,suggestions}` format with optional `conversationId`/`appealLetter`), `mockChatSSE`, `mockChatError`, `mockFHIRData` (connected/disconnected with `MOCK_FHIR_CONNECTED`/`MOCK_FHIR_DISCONNECTED`), `mockConsent`, `mockConversationHistory` (unroutes previous handler, returns `{authenticated, conversations}` shape), `mockHealthReport`, `mockDiabetesSnapshots`, `mockDiabetesLog`, `mockDiabetesInsights`, `mockAuditLog`, `mockTopicPreferences`.
+
+**SSE Mock Pattern**: Chat E2E tests mock `/api/chat` via `page.route()` returning `text/event-stream`. Format: `event: delta\ndata: {"text":"..."}\n\n` + `event: done\ndata: {"content":"...","suggestions":[],...}\n\n`. Trailing `\n\n` required to flush last SSE event from browser parser.
+
+**Key E2E Testing Lessons** (2026-03-23):
+- `page.context().addCookies([{name:"access_token",value:"fake",domain:"localhost",path:"/"}])` required before navigating to `/app` (middleware redirect)
+- Profile mock MUST include `userId` field — dashboard page returns null without it
+- Mock `/api/auth/mfa/status` — `loadProfileData()` calls it and hangs otherwise
+- `page.unroute()` before `page.route()` when overriding a previously-mocked route (e.g., conversation history after mockAuthenticatedUser)
+- Conversation history API expects `{authenticated:true, conversations:[{id,title,isAppeal,createdAt,firstUserMessage,lastAssistantMessage}]}` — NOT a flat array
+- Use `.first()` liberally — text often appears in multiple elements (card title + tooltip, group header + timestamp, nav link + logo)
+- Use `getByRole("navigation", {name:"Main navigation"}).getByRole("link",...)` to scope nav link searches (avoids matching "DenaliHealth" logo)
+- Currency values in FHIR mock must be strings (`"$150.00"`) not numbers — `parseCurrency()` calls `.replace()` on the value
+- `loadConversation()` reads `data.conversation.messages` — messages must be nested inside `conversation` object, not top-level
+- Mock `/api/appeals*` when loading conversations — `useChat` calls `loadAppealsForConversation()` on mount
+- Use `.last()` for mobile bottom nav — both header and BottomTabs share `aria-label="Main navigation"`
+- `{ exact: true }` on `getByRole`/`getByText` to avoid substring matches (e.g., "Default" vs "Reset to Defaults")
+- `test.use({ serviceWorkers: "block" })` prevents SW from caching `/api/profile` between plan display tests
+- `page.waitForFunction()` is more reliable than `waitForResponse` for async state like plan loading (3 sequential fetches)
+- Mock `/api/alerts/preferences` in settings tests — unmocked causes 401 errors
+
+### E2E Coverage Assessment (2026-03-23)
+
+**Strong coverage (80%+):** API auth guards (401s), input validation (400s), XSS prevention, chat SSE flow, consent toggles, payment/checkout validation, page rendering, settings UI, sidebar interactions, health hub accordion cards, rate limiting/trial enforcement.
+
+**Moderate coverage (40-80%):** Chat edge cases (load/reset/URL sync), landing page, blog pages, mobile navigation, QuickLog forms, health disconnect/report banner, appeal gate/letter rendering, plan display per tier, theme/text-size settings.
+
+**Weak coverage (<30%):** Health report full UI (12 sections, PDF, email, share), diabetes dashboard interactions (A1C chart, risk alerts expand, insights refresh), Blue Button OAuth connect flow, ID.me verification, appeal outcome reporting, message feedback (thumbs up/down), offline queue replay, consent enforcement mid-chat, Stripe webhook success path, admin CMS routes, file attachments.
+
+**Pending tests documented in `e2e/pendingtests.md`** — Batch 1 (20/20 done) + Batch 2 (20/20 done). See Batch 3 below for remaining gaps.
 
 ### Security Tests
 
@@ -1211,11 +1299,15 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 **FAQ Cross-Audit vs Terms + Privacy — 6 Deltas Fixed** (2026-02-24, updated 2026-03-04): Full three-way audit of `/faq` against `/terms` and `/privacy`. Six contradictions or omissions corrected: (1) "never store your full name" → now code-accurate: `transformPatient()` only extracts age+gender from FHIR Patient resource, discards name/DOB/Medicare ID/address (Privacy §2); (2) data sharing list omitted Vercel → added (Privacy §5 lists Vercel as data processor, 30-day log retention); (3) "Is Denali free?" had no post-trial lock warning → added "chat access is locked until you purchase a plan" (Terms §7); (4) "Can I delete your account?" said "permanently delete all your data / payment records" → replaced with precise list matching Privacy §7; removed "payment records" (we cancel Stripe subscription, we don't delete Stripe's own records); (5) "What data is retained after deletion?" said "only anonymized data" → added audit logs as second retained category with 6-year HIPAA explanation (contradicted Privacy §7 directly); (6) "Is there a free trial?" said "1 appeal letter" → corrected to "1 appeal credit" (Terms §7 terminology); added post-trial lock notice for consistency.
 
-**HIPAA Page Cross-Audit — 6 Deltas Fixed** (2026-02-24, see below for final pass): Full audit of `/hipaa` against `/faq`, `/terms`, and `/privacy`. Six issues corrected: (1) **PHI deletion claim** — closing paragraph in "PHI Retention" said "all PHI permanently removed on account deletion" with no carve-out; added audit log exception (6-year HIPAA retention) to match Privacy §7 and FAQ; (2) **BAA false claim** (highest risk for CMS) — `hipaa/page.tsx`, `privacy/page.tsx`, and `docs/cmsreview.md` all stated BAAs with Supabase and Vercel were "in place" / "maintained"; BAAs are not yet signed; softened to "BAAs being established / in process" with note that docs will update on execution; (3) **Breach 500+ bullet omitted FTC** — said "HHS and media" only; added FTC to match Privacy §10 and FAQ ("FTC and HHS"); (4) **"Improving our AI models"** — implied model training; Privacy §5 explicitly says Anthropic does not train on API data; changed to "improving our service using anonymized learning patterns" + added "We do not use your data to train AI models"; (5) **"Active session" TTL wording** — said cache retained only for "the active session"; actual behavior is 24-hour TTL surviving across sessions; corrected to "24-hour TTL, deleted on disconnect or account deletion"; (6) **Effective date** — updated Feb 8 → Feb 24, 2026. **Remaining action**: update BAA language in all three files to "in place" once Supabase and Vercel BAAs are signed.
+**HIPAA Page Cross-Audit — 6 Deltas Fixed** (2026-02-24, see below for final pass): Full audit of `/hipaa` against `/faq`, `/terms`, and `/privacy`. Six issues corrected: (1) **PHI deletion claim** — closing paragraph in "PHI Retention" said "all PHI permanently removed on account deletion" with no carve-out; added audit log exception (6-year HIPAA retention) to match Privacy §7 and FAQ; (2) **BAA false claim** (highest risk for CMS) — `hipaa/page.tsx`, `privacy/page.tsx`, and `docs/cmsreview.md` all stated BAAs with Supabase and Vercel were "in place" / "maintained"; BAAs are not yet signed; softened to "BAAs being established / in process" with note that docs will update on execution; (3) **Breach 500+ bullet omitted FTC** — said "HHS and media" only; added FTC to match Privacy §10 and FAQ ("FTC and HHS"); (4) **"Improving our AI models"** — implied model training; Privacy §5 explicitly says Anthropic does not train on API data; changed to "improving our service using anonymized learning patterns" + added "We do not use your data to train AI models"; (5) **"Active session" TTL wording** — said cache retained only for "the active session"; actual behavior is 24-hour TTL surviving across sessions; corrected to "24-hour TTL, deleted on disconnect or account deletion"; (6) **Effective date** — updated Feb 8 → Feb 24, 2026. **Note**: Supabase and Vercel references in these historical audit entries are obsolete — fully migrated to AWS (2026-02-26). No Supabase/Vercel BAAs needed.
 
 **Legal Page Footer Parity** (2026-02-24): All four legal pages (`/faq`, `/terms`, `/privacy`, `/hipaa`) were missing cross-navigation links and the CMS non-endorsement/medical advice disclaimer row present in `LandingFooter`. Each page now shows links to its three sibling legal pages + the disclaimer: "Coverage guidance only, not medical advice. Always consult with healthcare providers for medical decisions. This product is not endorsed or certified by CMS or HHS." Footer structure now matches the landing page. Previously: HIPAA had only Privacy + FAQ links (missing Terms); Privacy and Terms had no nav links at all; FAQ had no nav links and no disclaimer.
 
 **Final 4-Doc Cross-Audit + Automated Checker** (2026-02-24): Exhaustive final pass across all four legal documents (FAQ, Terms, Privacy, HIPAA) using both a human-equivalent agent (23 topics) and a new automated script (`scripts/check-legal-docs.ts`, 28 checks). The script found 4 issues the human audit missed: (1) **Terms §11** — "all your data will be permanently deleted" had no audit log carve-out, contradicting Privacy §7/FAQ/HIPAA; (2) **Terms §13** — "all Medicare data is permanently deleted immediately" had no audit log carve-out; (3) **HIPAA "no model training" phrasing** — "do not use your data to train AI models" didn't literally contain "not train" — rephrased to "do not train AI models on your data" to match Privacy §5; (4) **FAQ audit log check** — case-sensitivity bug in the checker itself ("Audit" vs "audit") — fixed regex to case-insensitive. All 28 checks now green. **Run anytime:** `npx tsx scripts/check-legal-docs.ts` from project root.
+
+**CMS Blue Button Terminology + Vendor Alignment** (2026-03-23): Full audit of Terms and Privacy against CMS Blue Button production access requirements and ToS v3. Two fixes: (1) **"Blue Button" → "Medicare"** in all user-facing legal text (Terms §13, Privacy §9, §5 business transfers) — CMS requires "Medicare" as data source name, not "Blue Button". CMS-mandated attribution notice ("This product uses the Blue Button APIs but is not endorsed...") preserved as-is in CmsPledge, ConnectMedicare, health page, ReportView. (2) **Resend → AWS SES** in Privacy §5 — Resend vendor bullet removed (no longer used), SES folded into AWS bullet explicitly listing RDS+ECS+Bedrock+SES. CMS naming commitment added to Privacy §11. Privacy §5 effective date updated to March 5, 2026.
+
+**Health Report Data Field Bug Fix** (2026-03-23): API returns report content as `data` field, but `useHealthReport.ts` interface expected `reportData` and report page accessed `report.reportData` — always `undefined`, so `<ReportView>` never rendered for authenticated users (public share page worked correctly since it used `report.data`). Fixed: hook interface `reportData` → `data`, report page `report.reportData` → `report.data`. E2E mocks aligned to match API response shape.
 
 ### CMS Submission Q&A (2026-03-04)
 
@@ -1225,7 +1317,7 @@ Verified answers to CMS early adopter questionnaire, backed by code and AWS infr
 > DenaliHealth connects to Medicare claims data through Blue Button 2.0 and uses Claude (Anthropic) on AWS Bedrock to deliver personalized coverage guidance for beneficiaries with diabetes and obesity. The app extracts conditions, medications, screenings, and denial history from a patient's own claims, then provides tailored support — offering direct assistance when appropriate and directing patients to care from a health professional when needed.
 
 **Q: If data is shared with third parties, how will you obtain informed consent?**
-DenaliHealth does not share patient health data (PHI) with any third party. All health data processing runs through Claude on AWS Bedrock (Sonnet 4.6 for chat, Opus 4.6 for appeals) — data never leaves AWS. Two service providers receive limited operational data (email address only) under data processing agreements: Stripe (payments) and Resend (email delivery). Patient consent for health data use is obtained through three granular opt-in toggles (all default OFF) in Settings > Privacy & Data: Health Data AI, Health Data Storage, Analytics. Medicare data access requires separate Blue Button OAuth through Medicare.gov. Consent changes take effect immediately (including mid-conversation) and are audit-logged.
+DenaliHealth does not share patient health data (PHI) with any third party. All health data processing runs through Claude on AWS Bedrock (Sonnet 4.6 for chat, Opus 4.6 for appeals) — data never leaves AWS. Email delivery via AWS SES (within BAA). One service provider receives limited operational data (email address only): Stripe (payments). Patient consent for health data use is obtained through three granular opt-in toggles (all default OFF) in Settings > Privacy & Data: Health Data AI, Health Data Storage, Analytics. Medicare data access requires separate Blue Button OAuth through Medicare.gov. Consent changes take effect immediately (including mid-conversation) and are audit-logged.
 
 **Q: Do third-party vendors commit to data protection requirements?**
 Yes. No third-party vendor has access to patient health data. AWS: BAA executed 2026-02-25, HIPAA-eligible, SOC 2 Type II, FedRAMP High, HITRUST certified. Email sending via AWS SES (within BAA). Stripe: PCI DSS Level 1 certified, receives only email + payment identifiers. Public government APIs (NLM, CMS, NPPES) receive only generic search terms — never patient data.

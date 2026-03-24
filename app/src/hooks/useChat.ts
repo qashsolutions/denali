@@ -177,16 +177,26 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const loadedConversationRef = useRef<string | null>(null);
 
   // Sync initialSessionState when health data loads asynchronously.
-  // Only merge if no messages sent yet (to avoid overwriting server-returned state).
+  // Allows late-arriving health data to merge even after messages are sent.
   useEffect(() => {
-    if (options.initialSessionState && messages.length === 0) {
-      setSessionState(prev => {
-        // Don't overwrite if server already returned a richer state
-        if (prev && prev.userName) return prev;
-        return { ...createDefaultSessionState(), ...prev, ...options.initialSessionState };
-      });
-    }
-  }, [options.initialSessionState, messages.length]);
+    if (!options.initialSessionState) return;
+    setSessionState(prev => {
+      if (!prev) {
+        return { ...createDefaultSessionState(), ...options.initialSessionState };
+      }
+      // Already has health data (from server or earlier merge) — don't overwrite
+      if (prev.healthDataAvailable) return prev;
+      // Health data just arrived — merge it in
+      if (options.initialSessionState!.healthDataAvailable) {
+        return { ...prev, ...options.initialSessionState };
+      }
+      // Merge non-health fields (userName) if not yet set
+      if (!prev.userName && options.initialSessionState!.userName) {
+        return { ...prev, userName: options.initialSessionState!.userName };
+      }
+      return prev;
+    });
+  }, [options.initialSessionState]);
 
   // Load existing conversation if ID provided (or changed via sidebar click)
   useEffect(() => {

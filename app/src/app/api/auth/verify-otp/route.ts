@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { initiateCognitoAuth } from "@/lib/auth-server";
 import { logAudit } from "@/lib/audit";
+import { PRICING } from "@/config";
 
 export async function POST(request: NextRequest) {
   try {
@@ -82,11 +83,29 @@ export async function POST(request: NextRequest) {
       [ver.user_id, email]
     );
 
-    // 7. Start trial on first sign-in (ignore 409 conflict if already started)
-    fetch(`${request.nextUrl.origin}/api/trial`, {
-      method: "POST",
-      headers: { Cookie: `access_token=${tokens.accessToken}` },
-    }).catch(() => {});
+    // 7. Start trial on first sign-in (inline — no self-referencing HTTP fetch)
+    try {
+      const existingSub = await query<{ trial_start: string | null }>(
+        `SELECT trial_start FROM subscriptions WHERE user_id = $1 LIMIT 1`,
+        [ver.user_id]
+      );
+      if (!existingSub.rows[0]?.trial_start) {
+        const now = new Date();
+        const trialEnd = new Date(now);
+        trialEnd.setDate(trialEnd.getDate() + PRICING.TRIAL_DURATION_DAYS);
+        await query(
+          `INSERT INTO subscriptions (user_id, plan, status, trial_start, trial_end, trial_converted)
+           VALUES ($1, 'trial', 'trialing', $2, $3, false)
+           ON CONFLICT (user_id) DO UPDATE
+             SET plan = EXCLUDED.plan, status = EXCLUDED.status,
+                 trial_start = EXCLUDED.trial_start, trial_end = EXCLUDED.trial_end,
+                 trial_converted = EXCLUDED.trial_converted`,
+          [ver.user_id, now.toISOString(), trialEnd.toISOString()]
+        );
+      }
+    } catch (trialErr) {
+      console.error("[verify-otp] Trial creation failed:", trialErr);
+    }
 
     logAudit("LOGIN", {
       userId: ver.user_id,

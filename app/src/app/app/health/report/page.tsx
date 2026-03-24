@@ -195,7 +195,7 @@ export default function HealthReportPage() {
       )}
 
       {/* Report content */}
-      {report.reportData && <ReportView report={report.reportData} />}
+      {report.data && <ReportView report={report.data} />}
     </div>
   );
 }
