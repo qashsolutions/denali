@@ -46,6 +46,21 @@ export function EmailOTPModal({
   const isValidEmail = (value: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
+  // Detect Gmail plus addressing for user notification
+  const getGmailNormalized = (value: string): string | null => {
+    const trimmed = value.toLowerCase().trim();
+    const atIndex = trimmed.lastIndexOf("@");
+    if (atIndex === -1) return null;
+    const local = trimmed.substring(0, atIndex);
+    const domain = trimmed.substring(atIndex + 1);
+    if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
+      return `${local.substring(0, local.indexOf("+"))}@${domain}`;
+    }
+    return null;
+  };
+
+  const normalizedEmail = getGmailNormalized(email);
+
   const handleSendCode = async () => {
     if (!isValidEmail(email)) return;
 
@@ -184,6 +199,13 @@ export function EmailOTPModal({
                 {error && (
                   <p className="mt-2 text-base font-medium text-red-500">{error}</p>
                 )}
+                {normalizedEmail && !error && (
+                  <div className="mt-2 px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                    <p className="text-sm text-blue-300">
+                      We&apos;ll sign you in as <span className="font-medium text-blue-200">{normalizedEmail}</span>. Only one account is allowed per email.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <button
@@ -232,6 +254,11 @@ export function EmailOTPModal({
                 We sent a 6-digit code to{" "}
                 <span className="text-slate-100 font-medium">{email}</span>
               </p>
+              {normalizedEmail && (
+                <p className="text-blue-300 text-xs">
+                  Signing in as {normalizedEmail}
+                </p>
+              )}
               <p className="text-slate-400 text-xs">
                 Check your inbox (and spam folder)
               </p>
