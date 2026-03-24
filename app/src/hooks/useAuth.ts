@@ -315,11 +315,13 @@ export function useAuth(): UseAuthReturn {
         }
 
         const userId = data.user?.userId ?? null;
+        // Use normalized email from server (strips Gmail +tag)
+        const resolvedEmail = data.user?.email ?? email;
 
         setAuthState((prev) => ({
           ...prev,
           userId,
-          email,
+          email: resolvedEmail,
           isEmailVerified: true,
           isLoading: false,
           error: null,
@@ -327,9 +329,9 @@ export function useAuth(): UseAuthReturn {
 
         // Notify other hooks of auth change
         if (userId) {
-          dispatchAuthChange({ email, userId });
+          dispatchAuthChange({ email: resolvedEmail, userId });
           // Load full profile non-blocking
-          loadProfileData(userId, email);
+          loadProfileData(userId, resolvedEmail);
         }
 
         return { success: true, mfaRequired: data.mfaRequired };
