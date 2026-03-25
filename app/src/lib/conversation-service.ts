@@ -11,6 +11,7 @@ export interface ConversationData {
   status: string;
   isAppeal: boolean;
   messages: MessageData[];
+  suggestions: string[];
   createdAt: Date;
   completedAt: Date | null;
 }
@@ -48,6 +49,7 @@ export async function loadConversation(
       title: conv.title,
       status: conv.status,
       isAppeal: conv.isAppeal || false,
+      suggestions: conv.lastSuggestions || [],
       createdAt: new Date(conv.createdAt),
       completedAt: conv.completedAt ? new Date(conv.completedAt) : null,
       messages: (conv.messages || []).map((msg: {

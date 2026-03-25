@@ -210,7 +210,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     setSuggestions([]);
     setChecklistData(null);
     setCurrentAction({ type: "none" });
-    setSessionState(null);
+    // Preserve health data context from initialSessionState (don't null out)
+    setSessionState(
+      options.initialSessionState
+        ? { ...createDefaultSessionState(), ...options.initialSessionState }
+        : null
+    );
     setAppealData(null);
     setAppealId(null);
     setConversationId(options.conversationId);
@@ -229,6 +234,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             policyRefs: msg.policyRefs,
           }))
         );
+        // Restore suggestions from the last response
+        if (data.suggestions && data.suggestions.length > 0) {
+          setSuggestions(data.suggestions);
+        }
       }
     });
 

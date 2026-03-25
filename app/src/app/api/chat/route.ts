@@ -478,6 +478,14 @@ export async function POST(request: NextRequest) {
           }).catch((msgErr: Error) => {
             console.warn("[Chat API] Failed to save messages:", msgErr.message);
           });
+
+          // Persist last suggestions so they can be restored on conversation load (fire-and-forget)
+          if (result.suggestions.length > 0) {
+            query(
+              `UPDATE conversations SET last_suggestions = $2 WHERE id = $1`,
+              [conversationId, JSON.stringify(result.suggestions)]
+            ).catch(() => {});
+          }
         }
 
         // Persist learning (non-blocking)

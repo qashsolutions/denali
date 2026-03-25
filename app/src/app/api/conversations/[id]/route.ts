@@ -32,8 +32,9 @@ export async function GET(
       created_at: string;
       completed_at: string | null;
       user_id: string | null;
+      last_suggestions: string[] | null;
     }>(
-      `SELECT id, title, status, is_appeal, created_at, completed_at, user_id
+      `SELECT id, title, status, is_appeal, created_at, completed_at, user_id, last_suggestions
        FROM conversations
        WHERE id = $1`,
       [conversationId]
@@ -74,6 +75,7 @@ export async function GET(
         title: conv.title,
         status: conv.status,
         isAppeal: conv.is_appeal || false,
+        lastSuggestions: conv.last_suggestions || [],
         createdAt: conv.created_at,
         completedAt: conv.completed_at,
         messages: msgsResult.rows.map((msg) => ({
