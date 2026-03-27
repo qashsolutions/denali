@@ -67,8 +67,16 @@ export function getTimeBasedGreeting(): string {
  * from user-provided data patterns.
  */
 export const MEDICARE_CONSTANTS = {
-  /** First-level appeal deadline in days (42 CFR 405.904) */
+  /** First-level appeal deadline in days (42 CFR 405.904) — Original Medicare */
   APPEAL_DEADLINE_DAYS: 120,
+
+  /** MA Organization Determination deadline in days (42 CFR §422.582) */
+  MA_APPEAL_DEADLINE_DAYS: 60,
+
+  /** Get correct appeal deadline based on Medicare type */
+  getAppealDeadlineDays(medicareType?: string | null): number {
+    return medicareType === "advantage" ? 60 : 120;
+  },
 
   /** Reconsideration deadline in days */
   RECONSIDERATION_DEADLINE_DAYS: 180,
