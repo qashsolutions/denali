@@ -1019,6 +1019,23 @@ export function extractUserInfo(
       }
     }
 
+    // Detect Level 2+ appeal escalation (prior appeal was denied)
+    if (updatedState.isAppeal && !updatedState.appealLevel) {
+      if (/\b(appeal was denied|redetermination denied|level 1 denied|first appeal denied|appeal got denied|lost my appeal|denied again|next level|level 2|reconsideration|qic|ire)\b/i.test(content)) {
+        updatedState.previousAppealOutcome = "denied";
+        updatedState.appealLevel = 2;
+      } else if (/\b(qic denied|reconsideration denied|level 2 denied|second appeal denied|ire denied)\b/i.test(content)) {
+        updatedState.previousAppealOutcome = "denied";
+        updatedState.appealLevel = 3;
+      } else if (/\b(alj denied|hearing denied|judge denied|level 3 denied|third appeal denied)\b/i.test(content)) {
+        updatedState.previousAppealOutcome = "denied";
+        updatedState.appealLevel = 4;
+      } else if (/\b(appeals council denied|council denied|level 4 denied|fourth appeal denied)\b/i.test(content)) {
+        updatedState.previousAppealOutcome = "denied";
+        updatedState.appealLevel = 5;
+      }
+    }
+
     // Extract denial codes from user messages (CARC/RARC patterns)
     // Captures codes like "CO-50", "denial code 96", "CARC 167", "PR-1"
     if (updatedState.isAppeal || /\b(carc|rarc|co-|pr-|oa-|denial.code)\d/i.test(content)) {

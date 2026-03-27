@@ -115,6 +115,7 @@ export type Database = {
       appeals: {
         Row: {
           appeal_letter: string
+          appeal_level: number
           carc_codes: string[] | null
           conversation_id: string
           cpt_codes: string[] | null
@@ -131,6 +132,7 @@ export type Database = {
           outcome_reported_at: string | null
           paid: boolean | null
           phone: string | null
+          prior_appeal_id: string | null
           pubmed_refs: string[] | null
           rarc_codes: string[] | null
           service_description: string | null
@@ -141,6 +143,7 @@ export type Database = {
         }
         Insert: {
           appeal_letter: string
+          appeal_level?: number
           carc_codes?: string[] | null
           conversation_id: string
           cpt_codes?: string[] | null
@@ -153,6 +156,7 @@ export type Database = {
           id?: string
           lcd_refs?: string[] | null
           ncd_refs?: string[] | null
+          prior_appeal_id?: string | null
           outcome_details?: Json | null
           outcome_reported_at?: string | null
           paid?: boolean | null
@@ -167,6 +171,7 @@ export type Database = {
         }
         Update: {
           appeal_letter?: string
+          appeal_level?: number
           carc_codes?: string[] | null
           conversation_id?: string
           cpt_codes?: string[] | null
@@ -183,6 +188,7 @@ export type Database = {
           outcome_reported_at?: string | null
           paid?: boolean | null
           phone?: string | null
+          prior_appeal_id?: string | null
           pubmed_refs?: string[] | null
           rarc_codes?: string[] | null
           service_description?: string | null
@@ -1961,6 +1967,7 @@ export type Database = {
         Args: { p_email: string }
         Returns: {
           appeal_id: string
+          appeal_level: number
           created_at: string
           denial_date: string
           followup_id: string

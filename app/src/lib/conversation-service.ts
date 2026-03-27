@@ -92,6 +92,7 @@ export interface AppealSummary {
   lcdRefs: string[];
   ncdRefs: string[];
   status: string;
+  appealLevel: number;
   createdAt: Date;
 }
 
@@ -118,9 +119,11 @@ export async function loadAppealsForConversation(
       lcdRefs: string[];
       ncdRefs: string[];
       status: string;
+      appealLevel: number;
       createdAt: string;
     }) => ({
       ...a,
+      appealLevel: a.appealLevel || 1,
       createdAt: new Date(a.createdAt),
     }));
   } catch (err) {

@@ -22,6 +22,11 @@ export interface AppealLetterData {
   denialDate: string | null;
   appealDeadline: string | null;
   conversationId: string | null;
+  appealLevel: number;
+  isInformational: boolean;
+  levelName?: string;
+  guidance?: string;
+  nextSteps?: string[];
 }
 
 export interface UseChatOptions {
@@ -252,6 +257,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           denialDate: latest.denialDate,
           appealDeadline: latest.deadline,
           conversationId: options.conversationId || null,
+          appealLevel: latest.appealLevel || 1,
+          isInformational: false,
         });
         setAppealId(latest.id);
       }
@@ -556,10 +563,25 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       // Check if response generated an appeal letter
       if (data.toolsUsed?.includes("generate_appeal_letter") && data.sessionState) {
         const ss = data.sessionState as SessionState;
+        const level = ss.appealLevel || 1;
+
+        // Check if this is an informational response (Levels 4-5, no letter)
+        const isInformational = data.appealLetter === null || data.appealLetter === undefined;
+        // Try to parse informational data from content if no letter
+        let levelName: string | undefined;
+        let guidance: string | undefined;
+        let nextSteps: string[] | undefined;
+
+        // Level 4-5 returns informational JSON in the tool result which Claude relays in content
+        // We don't need to parse it — Claude will have described it in natural language
+
         let deadline: string | null = null;
-        if (ss.denialDate) {
+        if (ss.denialDate && !isInformational) {
+          const deadlineDays = level === 1
+            ? MEDICARE_CONSTANTS.getAppealDeadlineDays(ss.medicareType)
+            : level === 2 ? 180 : 60;
           const deadlineDate = new Date(ss.denialDate);
-          deadlineDate.setDate(deadlineDate.getDate() + MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS);
+          deadlineDate.setDate(deadlineDate.getDate() + deadlineDays);
           deadline = deadlineDate.toISOString();
         }
         const appeal: AppealLetterData = {
@@ -569,6 +591,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           denialDate: ss.denialDate || null,
           appealDeadline: deadline,
           conversationId: currentConversationId || null,
+          appealLevel: level,
+          isInformational: isInformational && level >= 4,
+          levelName,
+          guidance,
+          nextSteps,
         };
         setAppealData(appeal);
         trackEvent("appeal_completed", {

@@ -119,6 +119,7 @@ export interface SkillTriggers {
   hasUnreportedOutcome: boolean;
   unreportedAppealId?: string;
   unreportedProcedure?: string;
+  unreportedAppealLevel?: number;
   // Role-based
   isCounselor: boolean;
   isProvider: boolean;
@@ -328,8 +329,13 @@ export function buildSystemPrompt(
   // ─────────────────────────────────────────────────────────────────────────
   if (triggers.hasUnreportedOutcome) {
     const procedure = triggers.unreportedProcedure || "your recent procedure";
+    const level = triggers.unreportedAppealLevel || 1;
+    const nextLevel = Math.min(level + 1, 5);
     sections.push(
-      OUTCOME_PROMPTING_SKILL.replace("{procedure}", procedure)
+      OUTCOME_PROMPTING_SKILL
+        .replace(/{procedure}/g, procedure)
+        .replace(/{appealLevel}/g, String(level))
+        .replace(/{nextLevel}/g, String(nextLevel))
     );
   }
 
@@ -650,7 +656,17 @@ function buildSessionContext(state: SessionState): string {
 
   // Mode
   if (state.isAppeal) {
-    context.push(`**Mode:** Appeal assistance`);
+    const levelLabel = state.appealLevel ? ` (Level ${state.appealLevel})` : "";
+    context.push(`**Mode:** Appeal assistance${levelLabel}`);
+    if (state.appealLevel && state.appealLevel > 1) {
+      context.push(`**Appeal Level:** ${state.appealLevel} — escalation from prior denied appeal`);
+      if (state.previousAppealOutcome) {
+        context.push(`**Prior appeal outcome:** ${state.previousAppealOutcome}`);
+      }
+      if (state.priorAppealId) {
+        context.push(`**Prior appeal ID:** ${state.priorAppealId}`);
+      }
+    }
   }
 
   // Denial info

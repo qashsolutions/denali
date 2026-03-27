@@ -3,7 +3,7 @@
  * ONLY import from API routes (server context) — uses Node.js pg driver.
  */
 
-import { query } from "@/lib/db";
+import { query, transaction } from "@/lib/db";
 import { MEDICARE_CONSTANTS } from "@/config";
 
 export async function saveAppeal(
@@ -20,6 +20,9 @@ export async function saveAppeal(
     lcdRefs?: string[];
     pubmedRefs?: string[];
     userId?: string;
+    medicareType?: string;
+    appealLevel?: number;
+    priorAppealId?: string;
   }
 ): Promise<string | null> {
   // Resolve email from conversation's user if not provided
@@ -34,58 +37,73 @@ export async function saveAppeal(
     resolvedEmail = convResult.rows[0]?.email || "";
   }
 
-  // Calculate appeal deadline
+  const level = appealData.appealLevel || 1;
+
+  // Calculate appeal deadline based on level
+  // Level 1: denial_date + 120/60 days; Level 2: 180 days; Level 3+: 60 days
   let deadline: string | null = null;
   if (appealData.denialDate) {
+    const deadlineDays = level === 1
+      ? MEDICARE_CONSTANTS.getAppealDeadlineDays(appealData.medicareType)
+      : level === 2 ? 180 : 60;
     const deadlineDate = new Date(appealData.denialDate);
-    deadlineDate.setDate(deadlineDate.getDate() + MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS);
+    deadlineDate.setDate(deadlineDate.getDate() + deadlineDays);
     deadline = deadlineDate.toISOString();
   }
 
+  // Atomic: INSERT appeal + decrement credit in a single transaction.
+  // If either fails, both roll back — prevents free appeals from decrement failures.
+  // Level 2+ appeals for the same denial are FREE (no credit decrement).
   let appealId: string;
   try {
-    const result = await query<{ id: string }>(
-      `INSERT INTO appeals (
-        conversation_id, email, user_id, appeal_letter, denial_date, denial_reason,
-        service_description, icd10_codes, cpt_codes, ncd_refs, lcd_refs, pubmed_refs,
-        deadline, status, paid
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-      RETURNING id`,
-      [
-        conversationId,
-        resolvedEmail,
-        appealData.userId || null,
-        appealData.appealLetter,
-        appealData.denialDate || null,
-        appealData.denialReason || null,
-        appealData.serviceDescription || null,
-        appealData.icd10Codes || null,
-        appealData.cptCodes || null,
-        appealData.ncdRefs || null,
-        appealData.lcdRefs || null,
-        appealData.pubmedRefs || null,
-        deadline,
-        "draft",
-        false,
-      ]
-    );
-    appealId = result.rows[0]?.id;
-    if (!appealId) {
-      console.error("[saveAppeal] No ID returned from insert");
-      return null;
-    }
+    appealId = await transaction(async (txQuery) => {
+      const result = await txQuery<{ id: string }>(
+        `INSERT INTO appeals (
+          conversation_id, email, user_id, appeal_letter, denial_date, denial_reason,
+          service_description, icd10_codes, cpt_codes, ncd_refs, lcd_refs, pubmed_refs,
+          deadline, status, paid, appeal_level, prior_appeal_id
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        RETURNING id`,
+        [
+          conversationId,
+          resolvedEmail,
+          appealData.userId || null,
+          appealData.appealLetter,
+          appealData.denialDate || null,
+          appealData.denialReason || null,
+          appealData.serviceDescription || null,
+          appealData.icd10Codes || null,
+          appealData.cptCodes || null,
+          appealData.ncdRefs || null,
+          appealData.lcdRefs || null,
+          appealData.pubmedRefs || null,
+          deadline,
+          "draft",
+          false,
+          level,
+          appealData.priorAppealId || null,
+        ]
+      );
+      const id = result.rows[0]?.id;
+      if (!id) throw new Error("No ID returned from insert");
+
+      // Only charge credit for Level 1 (new appeal).
+      // Level 2+ for the same denial = free escalation.
+      if (resolvedEmail && level === 1) {
+        await txQuery(`SELECT decrement_appeal_credit($1)`, [resolvedEmail]);
+      }
+
+      return id;
+    });
   } catch (err) {
-    console.error("[saveAppeal] Failed to insert appeal:", err);
+    console.error("[saveAppeal] Transaction failed (insert + credit decrement):", err);
     return null;
   }
 
-  // Increment lifetime count + decrement available credit (non-blocking)
+  // Non-critical follow-ups outside the transaction (fire-and-forget)
   if (resolvedEmail) {
     query(`SELECT increment_appeal_count($1, $2)`, [resolvedEmail, appealData.userId || null])
       .catch((err) => console.warn("[saveAppeal] increment_appeal_count failed:", err));
-
-    query(`SELECT decrement_appeal_credit($1)`, [resolvedEmail])
-      .catch((err) => console.warn("[saveAppeal] decrement_appeal_credit failed:", err));
 
     scheduleOutcomeFollowups(appealId, resolvedEmail)
       .catch((err) => console.warn("[saveAppeal] scheduleOutcomeFollowups failed:", err));
@@ -112,6 +130,7 @@ export async function getUnreportedOutcome(email: string | null): Promise<{
   followupId: string;
   serviceDescription: string | null;
   denialDate: string | null;
+  appealLevel: number;
 } | null> {
   if (!email) return null;
 
@@ -121,6 +140,7 @@ export async function getUnreportedOutcome(email: string | null): Promise<{
       followup_id: string;
       service_description: string | null;
       denial_date: string | null;
+      appeal_level: number;
     }>(`SELECT * FROM get_unreported_outcome($1)`, [email]);
 
     if (result.rows.length === 0) return null;
@@ -131,6 +151,7 @@ export async function getUnreportedOutcome(email: string | null): Promise<{
       followupId: row.followup_id,
       serviceDescription: row.service_description,
       denialDate: row.denial_date,
+      appealLevel: row.appeal_level || 1,
     };
   } catch (err) {
     console.warn("[getUnreportedOutcome] Failed:", err);

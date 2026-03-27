@@ -46,10 +46,11 @@ export async function GET(request: NextRequest) {
       lcd_refs: string[] | null;
       ncd_refs: string[] | null;
       status: string | null;
+      appeal_level: number;
       created_at: string;
     }>(
       `SELECT id, appeal_letter, denial_reason, denial_date, deadline,
-              carc_codes, cpt_codes, lcd_refs, ncd_refs, status, created_at
+              carc_codes, cpt_codes, lcd_refs, ncd_refs, status, appeal_level, created_at
        FROM appeals
        WHERE conversation_id = $1
        ORDER BY created_at DESC`,
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
       lcdRefs: a.lcd_refs || [],
       ncdRefs: a.ncd_refs || [],
       status: a.status || "draft",
+      appealLevel: a.appeal_level || 1,
       createdAt: a.created_at,
     }));
 

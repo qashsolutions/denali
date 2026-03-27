@@ -370,6 +370,18 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           type: "string",
           description: "Medicare Advantage plan name (e.g., 'Humana Gold Plus'). Used when medicare_type is 'advantage'.",
         },
+        appeal_level: {
+          type: "number",
+          description: "Medicare appeal level (1-5). Default: 1. Level 2: QIC/IRE reconsideration. Level 3: ALJ hearing. Level 4-5: informational only.",
+        },
+        prior_appeal_date: {
+          type: "string",
+          description: "Date of prior level's denial decision (for Level 2+ deadline calculation). YYYY-MM-DD format.",
+        },
+        amount_in_controversy: {
+          type: "number",
+          description: "Dollar amount at stake. Required for Level 3 (ALJ) and Level 5 (Federal Court) threshold check.",
+        },
       },
       required: ["denial_reason", "procedure_description", "diagnosis_description"],
     },
@@ -944,24 +956,109 @@ const COVERAGE_REQUIREMENTS: Record<string, { requirements: string[] }> = {
 
 const generateAppealLetterExecutor: ToolExecutor = async (input) => {
   try {
+    // Pre-flight validation: denial_date and denial_reason are required for accurate letters
+    if (!input.denial_date) {
+      return {
+        success: false,
+        error: "denial_date is required. Ask the user: 'When did you receive the denial letter?' The date is on their Explanation of Benefits (EOB) or denial notice. This is needed to calculate the appeal deadline.",
+      };
+    }
     const denialReason = input.denial_reason as string;
+    if (!denialReason || denialReason.trim().length < 5) {
+      return {
+        success: false,
+        error: "denial_reason is required and must be descriptive. Ask the user: 'What reason did they give for the denial?' It's usually on the denial letter or EOB — something like 'not medically necessary' or 'missing documentation'.",
+      };
+    }
+
     const procedureDescription = input.procedure_description as string;
     const diagnosisDescription = input.diagnosis_description as string;
     const patientHistory = (input.patient_history as string) || "";
     const priorTreatments = (input.prior_treatments as string[]) || [];
     const patientName = (input.patient_name as string) || "";
     const providerName = (input.provider_name as string) || "[Provider Name]";
-    const denialDate = (input.denial_date as string) || new Date().toISOString().split("T")[0];
+    const denialDate = input.denial_date as string;
     const policyReferences = (input.policy_references as string[]) || [];
     const pubmedCitations = (input.pubmed_citations as string[]) || [];
     const medicareType = (input.medicare_type as string) || "original";
     const planName = (input.plan_name as string) || "";
     const isMA = medicareType === "advantage";
+    const appealLevel = (input.appeal_level as number) || 1;
+    const priorAppealDate = (input.prior_appeal_date as string) || "";
+    const amountInControversy = input.amount_in_controversy as number | undefined;
 
-    // Calculate appeal deadline and days remaining
-    const denialDateObj = new Date(denialDate);
-    const deadlineDate = new Date(denialDateObj);
-    deadlineDate.setDate(deadlineDate.getDate() + MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS);
+    // --- Level 4-5: Informational only (no letter) ---
+    if (appealLevel === 4) {
+      return {
+        success: true,
+        data: {
+          letter: null,
+          informational: true,
+          appeal_level: 4,
+          level_name: "Medicare Appeals Council Review",
+          guidance: "Filed with the Departmental Appeals Board (DAB) within HHS. This is a paper review — no hearing. The Council can review, reverse, or remand the ALJ decision. Legal representation is strongly recommended at this level.",
+          deadline_days: 60,
+          next_steps: [
+            "Gather the ALJ decision letter and all prior denial notices",
+            "Write a brief statement explaining why the ALJ decision was wrong",
+            "Contact your State Health Insurance Assistance Program (SHIP) for free help: 1-877-839-2675",
+            "Consider consulting a Medicare rights attorney",
+            "File within 60 days of the ALJ decision",
+          ],
+        },
+      };
+    }
+    if (appealLevel === 5) {
+      const t = MEDICARE_CONSTANTS.getCurrentThresholds();
+      return {
+        success: true,
+        data: {
+          letter: null,
+          informational: true,
+          appeal_level: 5,
+          level_name: "Federal District Court Review",
+          guidance: `This is a lawsuit filed in Federal District Court. The ${t.year} amount-in-controversy threshold is $${t.FEDERAL_COURT_THRESHOLD.toLocaleString()}. You have 60 days from the Appeals Council decision to file. An attorney is required.`,
+          deadline_days: 60,
+          threshold: t.FEDERAL_COURT_THRESHOLD,
+          threshold_year: t.year,
+          next_steps: [
+            `Verify the amount in controversy exceeds $${t.FEDERAL_COURT_THRESHOLD.toLocaleString()} (${t.year} threshold)`,
+            "Consult a healthcare or Medicare appeals attorney",
+            "Contact SHIP for referrals: 1-877-839-2675",
+            "File within 60 days of the Appeals Council decision",
+          ],
+        },
+      };
+    }
+
+    // --- Level 3: Amount-in-controversy gate ---
+    if (appealLevel >= 3) {
+      const thresholds = MEDICARE_CONSTANTS.getCurrentThresholds();
+      const required = thresholds.ALJ_THRESHOLD;
+      if (!amountInControversy) {
+        return {
+          success: false,
+          error: `Amount in controversy is required for Level ${appealLevel} appeals. Ask the user: "What is the total dollar amount of the denied service(s)?" The ${thresholds.year} ALJ hearing threshold is $${required}.`,
+        };
+      }
+      if (amountInControversy < required) {
+        // Warn but don't block — user may combine claims to meet threshold
+        console.warn(`[generate_appeal_letter] Amount $${amountInControversy} below ALJ threshold $${required}. Proceeding with warning.`);
+      }
+    }
+
+    // --- Calculate deadline based on level ---
+    // Level 1: denial_date + 120/60 days (FFS/MA)
+    // Level 2: prior_appeal_date + 180 days
+    // Level 3: prior_appeal_date + 60 days
+    const deadlineDays = appealLevel === 1
+      ? MEDICARE_CONSTANTS.getAppealDeadlineDays(medicareType)
+      : appealLevel === 2 ? 180 : 60;
+    const baseDate = appealLevel === 1 ? denialDate : (priorAppealDate || denialDate);
+
+    const baseDateObj = new Date(baseDate);
+    const deadlineDate = new Date(baseDateObj);
+    deadlineDate.setDate(deadlineDate.getDate() + deadlineDays);
     const deadlineStr = deadlineDate.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
@@ -987,21 +1084,205 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
 
     const requirements = COVERAGE_REQUIREMENTS[coveragePattern] || COVERAGE_REQUIREMENTS.default;
 
-    // Generate letter content
+    // --- Generate letter based on level ---
     const beneficiaryLine = patientName
       ? `Beneficiary Name: ${patientName} _______________`
       : "Beneficiary Name: _______________";
 
-    const letterTitle = isMA ? "Organization Determination Appeal" : "Level 1 Redetermination";
-    const addressee = isMA
-      ? `${planName || "Medicare Advantage Plan"} Appeals Department`
-      : "Medicare Administrative Contractor";
+    const todayStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const denialDateFormatted = new Date(denialDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
-    const letter = `
+    let letter: string;
+
+    if (appealLevel === 2) {
+      // --- Level 2: QIC/IRE Reconsideration ---
+      const letterTitle = isMA ? "Request for Independent Review" : "Request for Reconsideration";
+      const addressee = isMA
+        ? "Independent Review Entity (IRE)"
+        : "Qualified Independent Contractor (QIC)";
+      const legalCitation = isMA ? "42 CFR §422.590" : "42 CFR §405.960";
+      const priorAppealDateFormatted = priorAppealDate
+        ? new Date(priorAppealDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+        : "[Date of Level 1 Decision]";
+
+      letter = `IMPORTANT: This is a DRAFT letter generated by AI. It is NOT legal advice.
+Review all details carefully before submitting. Verify dates, codes, and
+facts with your healthcare provider. Fill in all blank fields before mailing.
+─────────────────────────────────────────────────────────────────────────
+
+MEDICARE APPEAL REQUEST
+${letterTitle}
+(Level 2 — ${legalCitation})
+
+Date: ${todayStr}
+
+To: ${addressee}
+Re: Request for Reconsideration of Level 1 Denial
+
+${beneficiaryLine}
+Medicare Number: _______________
+Date of Service: _______________
+Claim Number: _______________
+Level 1 Decision Date: ${priorAppealDateFormatted}
+
+Dear ${addressee},
+
+I am writing to request reconsideration of the Level 1 ${isMA ? "Organization Determination" : "Redetermination"} decision dated ${priorAppealDateFormatted}, which upheld the denial of coverage for ${procedureDescription}.
+
+The original denial on ${denialDateFormatted} stated: "${denialReason}"
+
+The Level 1 review did not adequately consider the following:
+
+1. MEDICAL NECESSITY
+
+The patient has been diagnosed with ${diagnosisDescription}. ${patientHistory ? `The patient's history includes: ${patientHistory}.` : ""}
+
+${priorTreatments.length > 0 ? `Prior conservative treatments attempted include:
+${priorTreatments.map((t) => `• ${t}`).join("\n")}
+
+Despite these treatments, the patient's condition has not adequately improved, necessitating ${procedureDescription}.` : ""}
+${isMA ? `
+Under federal law (42 CFR §422.101), Medicare Advantage plans must cover all services that Original Medicare covers when medically necessary.
+` : ""}
+2. ADDITIONAL EVIDENCE
+
+${pubmedCitations.length > 0 ? `The following peer-reviewed evidence supports the medical necessity of this service:
+${pubmedCitations.map((cite) => `• ${cite}`).join("\n")}` : "I am submitting additional clinical evidence and documentation that was not fully considered in the Level 1 review."}
+
+3. COVERAGE CRITERIA
+
+${policyReferences.length > 0 ? `The following Medicare coverage policies support coverage:
+${policyReferences.map((ref) => `• ${ref}`).join("\n")}` : "Medicare coverage guidelines support this service when medically necessary."}
+
+${diagnosisCodes.length > 0 ? `Diagnosis codes: ${diagnosisCodes.map((c) => `${c.code} (${c.description})`).join(", ")}` : ""}
+${procedureCodes.length > 0 ? `Procedure codes: ${procedureCodes.map((c) => `${c.code} (${c.description})`).join(", ")}` : ""}
+
+REQUESTED ACTION:
+
+I respectfully request that you reverse the Level 1 decision and approve coverage for ${procedureDescription}.
+
+Enclosed please find:
+□ Copy of the Level 1 denial decision
+□ Copy of the original denial notice
+□ Relevant medical records
+□ Additional supporting documentation
+□ Physician's letter of medical necessity
+
+If you require additional information, please contact the ordering physician:
+${providerName}
+
+Sincerely,
+
+_______________
+${patientName || "_______________"}`.trim();
+
+    } else if (appealLevel === 3) {
+      // --- Level 3: ALJ Hearing ---
+      const thresholds = MEDICARE_CONSTANTS.getCurrentThresholds();
+      const addressee = "Office of Medicare Hearings and Appeals (OMHA)";
+      const legalCitation = isMA ? "42 CFR §422.600" : "42 CFR §405.1000";
+
+      const priorAppealDateFormatted = priorAppealDate
+        ? new Date(priorAppealDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+        : "[Date of Level 2 Decision]";
+
+      const amountWarning = amountInControversy && amountInControversy < thresholds.ALJ_THRESHOLD
+        ? `\nNOTE: The amount in controversy ($${amountInControversy.toLocaleString()}) is below the ${thresholds.year} threshold of $${thresholds.ALJ_THRESHOLD}. You may need to combine claims or aggregate amounts to meet the threshold.\n`
+        : "";
+
+      letter = `IMPORTANT: This is a DRAFT letter generated by AI. It is NOT legal advice.
+Review all details carefully before submitting. Verify dates, codes, and
+facts with your healthcare provider. Fill in all blank fields before mailing.
+─────────────────────────────────────────────────────────────────────────
+${amountWarning}
+MEDICARE APPEAL REQUEST
+Request for Administrative Law Judge (ALJ) Hearing
+(Level 3 — ${legalCitation})
+
+Date: ${todayStr}
+
+To: ${addressee}
+Re: Request for ALJ Hearing — Denied Claim
+
+${beneficiaryLine}
+Medicare Number: _______________
+Date of Service: _______________
+Claim Number: _______________
+Level 2 Decision Date: ${priorAppealDateFormatted}
+Amount in Controversy: $${amountInControversy ? amountInControversy.toLocaleString() : "_______________"} (${thresholds.year} threshold: $${thresholds.ALJ_THRESHOLD})
+
+Hearing Preference: □ In-person  □ Telephone  □ Video
+
+Dear Administrative Law Judge,
+
+I am writing to request a hearing before an Administrative Law Judge regarding the denial of coverage for ${procedureDescription}, which was upheld at both Level 1 and Level 2 of the Medicare appeals process.
+
+Original denial date: ${denialDateFormatted}
+Denial reason: "${denialReason}"
+Level 2 (${isMA ? "IRE" : "QIC"}) decision date: ${priorAppealDateFormatted}
+
+STATEMENT OF THE CASE:
+
+1. MEDICAL NECESSITY
+
+The patient has been diagnosed with ${diagnosisDescription}. ${patientHistory ? `Patient history: ${patientHistory}.` : ""}
+
+${priorTreatments.length > 0 ? `Conservative treatments attempted:
+${priorTreatments.map((t) => `• ${t}`).join("\n")}
+
+These treatments were insufficient, making ${procedureDescription} medically necessary.` : ""}
+
+2. ERRORS IN PRIOR DECISIONS
+
+The Level 1 and Level 2 reviews failed to adequately consider the clinical evidence supporting medical necessity for this service.
+
+3. SUPPORTING EVIDENCE
+
+${policyReferences.length > 0 ? `Medicare coverage policies supporting this service:
+${policyReferences.map((ref) => `• ${ref}`).join("\n")}` : ""}
+
+${pubmedCitations.length > 0 ? `Peer-reviewed clinical evidence:
+${pubmedCitations.map((cite) => `• ${cite}`).join("\n")}` : ""}
+
+${diagnosisCodes.length > 0 ? `Diagnosis codes: ${diagnosisCodes.map((c) => `${c.code} (${c.description})`).join(", ")}` : ""}
+${procedureCodes.length > 0 ? `Procedure codes: ${procedureCodes.map((c) => `${c.code} (${c.description})`).join(", ")}` : ""}
+
+REQUESTED RELIEF:
+
+I respectfully request that the ALJ reverse the prior denials and approve coverage for ${procedureDescription}.
+
+Enclosed please find:
+□ Copy of the Level 1 denial decision
+□ Copy of the Level 2 (${isMA ? "IRE" : "QIC"}) denial decision
+□ Original denial notice
+□ Relevant medical records
+□ Physician's letter of medical necessity
+□ Supporting clinical evidence
+
+If you require additional information, please contact the ordering physician:
+${providerName}
+
+Sincerely,
+
+_______________
+${patientName || "_______________"}`.trim();
+
+    } else {
+      // --- Level 1: Original letter (Redetermination / Organization Determination) ---
+      const letterTitle = isMA ? "Organization Determination Appeal" : "Level 1 Redetermination";
+      const addressee = isMA
+        ? `${planName || "Medicare Advantage Plan"} Appeals Department`
+        : "Medicare Administrative Contractor";
+
+      letter = `IMPORTANT: This is a DRAFT letter generated by AI. It is NOT legal advice.
+Review all details carefully before submitting. Verify dates, codes, and
+facts with your healthcare provider. Fill in all blank fields before mailing.
+─────────────────────────────────────────────────────────────────────────
+
 MEDICARE APPEAL REQUEST
 ${letterTitle}
 
-Date: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+Date: ${todayStr}
 
 To: ${addressee}
 Re: Appeal of Denied Claim
@@ -1013,7 +1294,7 @@ Claim Number: _______________
 
 Dear ${addressee},
 
-I am writing to formally appeal the denial of coverage for ${procedureDescription} that was denied on ${new Date(denialDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}.
+I am writing to formally appeal the denial of coverage for ${procedureDescription} that was denied on ${denialDateFormatted}.
 
 REASON FOR APPEAL:
 
@@ -1071,35 +1352,62 @@ ${providerName}
 Sincerely,
 
 _______________
-${patientName || "_______________"}
-`.trim();
+${patientName || "_______________"}`.trim();
+    }
+
+    // Build level-specific instructions
+    const levelInstructions = [
+      `Write in your ${patientName ? "last name, " : ""}Medicare number, claim number, and date of service on the blank lines`,
+      "Sign and date the letter",
+      "Add your phone number and mailing address below your signature",
+    ];
+
+    if (appealLevel === 1) {
+      levelInstructions.push(
+        "Attach a copy of the denial notice",
+        "Include relevant medical records and physician's notes",
+        isMA
+          ? `Mail to the appeals address on your denial notice or the back of your ${planName || "plan"} card`
+          : `Mail to the address on your denial notice by ${deadlineStr}`,
+      );
+    } else if (appealLevel === 2) {
+      levelInstructions.push(
+        "Attach a copy of the Level 1 denial decision",
+        "Attach the original denial notice",
+        "Include any new medical records or evidence",
+        isMA
+          ? "The IRE address will be on your Level 1 decision letter"
+          : `Mail to the QIC address on your Level 1 decision by ${deadlineStr}`,
+      );
+    } else if (appealLevel === 3) {
+      levelInstructions.push(
+        "Attach copies of BOTH the Level 1 and Level 2 denial decisions",
+        "Include the original denial notice",
+        "Include all supporting medical records",
+        "Choose your hearing preference (in-person, telephone, or video)",
+        `Mail to OMHA by ${deadlineStr}`,
+        "Consider getting help from a SHIP counselor (free): 1-877-839-2675",
+      );
+    }
 
     return {
       success: true,
       data: {
         letter,
+        appeal_level: appealLevel,
         denial_date: denialDate,
         appeal_deadline: deadlineStr,
         days_remaining: daysRemaining,
         deadline_expired: deadlineExpired,
         deadline_warning: deadlineExpired
-          ? `WARNING: The 120-day appeal deadline passed ${Math.abs(daysRemaining)} days ago. The beneficiary may still file with "good cause" for late filing, but success is less likely. Inform the user clearly.`
+          ? `WARNING: The ${deadlineDays}-day appeal deadline passed ${Math.abs(daysRemaining)} days ago. The beneficiary may still file with "good cause" for late filing, but success is less likely. Inform the user clearly.`
           : daysRemaining <= 14
             ? `URGENT: Only ${daysRemaining} days remaining to file this appeal. The user must act immediately.`
             : null,
         diagnosis_codes: diagnosisCodes.map((c) => ({ code: c.code, description: c.description })),
         procedure_codes: procedureCodes.map((c) => ({ code: c.code, description: c.description })),
         requirements: requirements.requirements,
-        instructions: [
-          `Write in your ${patientName ? "last name, " : ""}Medicare number, claim number, and date of service on the blank lines`,
-          "Sign and date the letter",
-          "Add your phone number and mailing address below your signature",
-          "Attach a copy of the denial notice",
-          "Include relevant medical records and physician's notes",
-          isMA
-            ? `Mail to the appeals address on your denial notice or the back of your ${planName || "plan"} card`
-            : `Mail to the address on your denial notice by ${deadlineStr}`,
-        ],
+        instructions: levelInstructions,
       },
     };
   } catch (error) {

@@ -292,6 +292,7 @@ export async function POST(request: NextRequest) {
           triggers.hasUnreportedOutcome = true;
           triggers.unreportedAppealId = unreported.appealId;
           triggers.unreportedProcedure = unreported.serviceDescription || undefined;
+          triggers.unreportedAppealLevel = unreported.appealLevel || 1;
         }
       } catch (err) {
         console.warn("[Chat API] Failed to check unreported outcomes:", err);
@@ -510,6 +511,9 @@ export async function POST(request: NextRequest) {
               cptCodes: ss.procedureCodes.length > 0 ? ss.procedureCodes : undefined,
               lcdRefs: lcdRefs.length > 0 ? lcdRefs : undefined,
               ncdRefs: ncdRefs.length > 0 ? ncdRefs : undefined,
+              medicareType: ss.medicareType || undefined,
+              appealLevel: ss.appealLevel || 1,
+              priorAppealId: ss.priorAppealId || undefined,
             });
             if (savedAppealId) {
               appealId = savedAppealId;

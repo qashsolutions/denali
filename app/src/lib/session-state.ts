@@ -70,6 +70,11 @@ export interface SessionState {
   // Denial codes (CARC/RARC from denial letters)
   denialCodes: string[];                       // CARC/RARC codes mentioned in conversation
 
+  // Multi-level appeals (Level 1-5)
+  appealLevel: number | null;                  // Current appeal level (1-5)
+  previousAppealOutcome: string | null;        // "denied"/"partial" from prior level
+  priorAppealId: string | null;                // Links Level 2 to Level 1 appeal
+
   // User identity (set by client from auth context)
   email?: string | null;                       // For outcome followup checks
   userRole?: "patient" | "counselor" | "provider";  // Role from users table
@@ -227,5 +232,10 @@ export function createDefaultSessionState(): SessionState {
 
     // Denial codes
     denialCodes: [],
+
+    // Multi-level appeals
+    appealLevel: null,
+    previousAppealOutcome: null,
+    priorAppealId: null,
   };
 }
