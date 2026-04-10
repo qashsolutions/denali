@@ -159,12 +159,6 @@ async function _GET(request: NextRequest) {
       );
     }
 
-    logAudit("FHIR_DATA_ACCESS", {
-      userId: user.userId,
-      resourceType: "ehr_connection",
-      request,
-    }).catch(() => {});
-
     // Check if user has an active connection
     const connected = await hasActiveConnection(user.userId);
     if (!connected) {
@@ -187,6 +181,11 @@ async function _GET(request: NextRequest) {
     // Try cache first
     const cached = await getCachedHealthData(user.userId);
     if (cached) {
+      logAudit("FHIR_DATA_ACCESS", {
+        userId: user.userId,
+        resourceType: "ehr_connection",
+        request,
+      }).catch(() => {});
       return NextResponse.json({
         connected: true,
         ...cached,
@@ -196,6 +195,12 @@ async function _GET(request: NextRequest) {
     // Cache miss — sync fresh data
     try {
       const fresh = await syncHealthData(user.userId);
+
+      logAudit("FHIR_DATA_ACCESS", {
+        userId: user.userId,
+        resourceType: "ehr_connection",
+        request,
+      }).catch(() => {});
 
       // Auto-trigger insight refresh if diabetes data exists (fire-and-forget)
       const hasDiabetesData =
@@ -210,6 +215,11 @@ async function _GET(request: NextRequest) {
       });
     } catch (syncError) {
       console.error("[FHIR data] Sync failed:", syncError);
+      logAudit("FHIR_DATA_ACCESS_FAILED", {
+        userId: user.userId,
+        resourceType: "ehr_connection",
+        request,
+      }).catch(() => {});
       return NextResponse.json(
         {
           connected: true,

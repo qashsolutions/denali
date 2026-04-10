@@ -13,6 +13,7 @@ export type AuditAction =
   | "FHIR_CONNECT"
   | "FHIR_DISCONNECT"
   | "FHIR_DATA_ACCESS"
+  | "FHIR_DATA_ACCESS_FAILED"
   | "APPEAL_GENERATED"
   | "APPEAL_OUTCOME"
   | "CONSENT_UPDATED"
@@ -53,7 +54,8 @@ type ResourceType =
 // Only high-frequency, low-value actions belong here. Sensitive actions (appeals, consent, etc.)
 // must always log every occurrence for audit compliance.
 const DEDUP_WINDOWS: Partial<Record<AuditAction, number>> = {
-  FHIR_DATA_ACCESS: 2 * 60 * 60 * 1000, // 2 hours
+  FHIR_DATA_ACCESS: 5 * 60 * 1000, // 5 minutes — deduplicates rapid page navigation, not sessions
+  FHIR_DATA_ACCESS_FAILED: 5 * 60 * 1000, // 5 minutes — rapid failures shouldn't flood the log
 };
 
 /**
