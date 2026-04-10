@@ -7,10 +7,22 @@
 
 import AnthropicBedrock from "@anthropic-ai/bedrock-sdk";
 import Anthropic from "@anthropic-ai/sdk";
-import type { MessageParam, ContentBlock, ToolUseBlock, ToolResultBlockParam, ImageBlockParam, DocumentBlockParam, TextBlockParam, Message } from "@anthropic-ai/sdk/resources/messages";
+import type {
+  MessageParam,
+  ContentBlock,
+  ToolUseBlock,
+  ToolResultBlockParam,
+  ImageBlockParam,
+  DocumentBlockParam,
+  TextBlockParam,
+  Message,
+} from "@anthropic-ai/sdk/resources/messages";
 import { API_CONFIG } from "@/config";
 import type { FileAttachment } from "@/types/attachment";
-import { type SessionState, createDefaultSessionState } from "@/lib/session-state";
+import {
+  type SessionState,
+  createDefaultSessionState,
+} from "@/lib/session-state";
 export type { SessionState };
 export { createDefaultSessionState };
 
@@ -31,7 +43,9 @@ export interface ToolResult {
   error?: string;
 }
 
-export type ToolExecutor = (input: Record<string, unknown>) => Promise<ToolResult>;
+export type ToolExecutor = (
+  input: Record<string, unknown>,
+) => Promise<ToolResult>;
 
 export interface ChatRequest {
   messages: MessageParam[];
@@ -47,6 +61,7 @@ export interface ChatResult {
   suggestions: string[];
   sessionState: SessionState;
   toolsUsed: string[];
+  iterations: number;
   appealLetter?: string;
 }
 
@@ -65,21 +80,34 @@ export function getClaudeClient(): ClaudeClient {
       client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     } else {
       console.log("[CLAUDE] Using AWS Bedrock (IAM auth)");
-      client = new AnthropicBedrock({ awsRegion: process.env.AWS_REGION || "us-east-1" });
+      client = new AnthropicBedrock({
+        awsRegion: process.env.AWS_REGION || "us-east-1",
+      });
     }
   }
   return client;
 }
 
 // Extract [MEDICARE_TYPE] block from Claude's response
-function extractMedicareType(content: string, sessionState: SessionState): string {
-  const match = content.match(/\[MEDICARE_TYPE\]\s*(original|advantage|supplement)\s*\[\/MEDICARE_TYPE\]/i);
+function extractMedicareType(
+  content: string,
+  sessionState: SessionState,
+): string {
+  const match = content.match(
+    /\[MEDICARE_TYPE\]\s*(original|advantage|supplement)\s*\[\/MEDICARE_TYPE\]/i,
+  );
   if (!match) return content;
 
-  const type = match[1].toLowerCase() as "original" | "advantage" | "supplement";
+  const type = match[1].toLowerCase() as
+    | "original"
+    | "advantage"
+    | "supplement";
   // Supplement maps to original (they have Original Medicare + Medigap)
   sessionState.medicareType = type === "supplement" ? "original" : type;
-  console.log("[extractMedicareType] Set type:", sessionState.medicareType);
+  console.log(
+    "[extractMedicareType] Type detected:",
+    sessionState.medicareType,
+  );
 
   // Remove block from content
   return content
@@ -90,11 +118,16 @@ function extractMedicareType(content: string, sessionState: SessionState): strin
 
 // Extract [REQUIREMENTS] block from Claude's response
 // Claude emits this after coverage tools return with LCD/NCD results
-function extractRequirementsAndClean(content: string, sessionState: SessionState): {
+function extractRequirementsAndClean(
+  content: string,
+  sessionState: SessionState,
+): {
   cleanContent: string;
   requirements: string[];
 } {
-  const match = content.match(/\[REQUIREMENTS\]\s*([\s\S]*?)\s*\[\/REQUIREMENTS\]/i);
+  const match = content.match(
+    /\[REQUIREMENTS\]\s*([\s\S]*?)\s*\[\/REQUIREMENTS\]/i,
+  );
 
   if (!match) {
     return { cleanContent: content, requirements: [] };
@@ -114,7 +147,11 @@ function extractRequirementsAndClean(content: string, sessionState: SessionState
   if (requirements.length > 0) {
     // Populate session state with requirements
     sessionState.requirementsToVerify = requirements;
-    console.log("[extractRequirements] Found requirements:", requirements);
+    console.log(
+      "[extractRequirements] Found",
+      requirements.length,
+      "requirements",
+    );
 
     // Auto-verify requirements that are already met based on session data
     autoVerifyRequirements(sessionState);
@@ -134,36 +171,58 @@ function autoVerifyRequirements(sessionState: SessionState): void {
     if (requirementAnswers[req] !== undefined) continue;
 
     // Duration check
-    if (sessionState.duration && (lower.includes("duration") || lower.includes("weeks") || lower.includes("months"))) {
+    if (
+      sessionState.duration &&
+      (lower.includes("duration") ||
+        lower.includes("weeks") ||
+        lower.includes("months"))
+    ) {
       const reqWeeks = extractWeeksFromText(req);
       const userWeeks = extractWeeksFromText(sessionState.duration);
       if (reqWeeks !== null && userWeeks !== null && userWeeks >= reqWeeks) {
         requirementAnswers[req] = true;
-        console.log("[autoVerify] Duration met:", req);
+        console.log("[autoVerify] Duration requirement met");
       }
     }
 
     // Conservative treatment check
-    if (sessionState.priorTreatments.length > 0 &&
-        (lower.includes("conservative") || lower.includes("treatment") || lower.includes("therapy") || lower.includes("medication"))) {
+    if (
+      sessionState.priorTreatments.length > 0 &&
+      (lower.includes("conservative") ||
+        lower.includes("treatment") ||
+        lower.includes("therapy") ||
+        lower.includes("medication"))
+    ) {
       requirementAnswers[req] = true;
-      console.log("[autoVerify] Treatment met:", req);
+      console.log("[autoVerify] Treatment requirement met");
     }
 
     // Prior imaging check
-    if (sessionState.priorImagingDone === true &&
-        (lower.includes("imaging") || lower.includes("x-ray") || lower.includes("xray") || lower.includes("radiograph"))) {
+    if (
+      sessionState.priorImagingDone === true &&
+      (lower.includes("imaging") ||
+        lower.includes("x-ray") ||
+        lower.includes("xray") ||
+        lower.includes("radiograph"))
+    ) {
       requirementAnswers[req] = true;
-      console.log("[autoVerify] Prior imaging met:", req);
+      console.log("[autoVerify] Prior imaging requirement met");
     }
   }
 
   // Check if all verified
-  const allAnswered = requirementsToVerify.every((r) => requirementAnswers[r] !== undefined);
+  const allAnswered = requirementsToVerify.every(
+    (r) => requirementAnswers[r] !== undefined,
+  );
   if (allAnswered) {
     sessionState.verificationComplete = true;
-    sessionState.meetsAllRequirements = requirementsToVerify.every((r) => requirementAnswers[r] === true);
-    console.log("[autoVerify] All requirements verified:", sessionState.meetsAllRequirements);
+    sessionState.meetsAllRequirements = requirementsToVerify.every(
+      (r) => requirementAnswers[r] === true,
+    );
+    console.log(
+      "[autoVerify] All requirements verified:",
+      sessionState.meetsAllRequirements,
+    );
   }
 }
 
@@ -173,17 +232,25 @@ function extractWeeksFromText(text: string): number | null {
   if (!match) return null;
   const num = parseInt(match[1], 10);
   switch (match[2].toLowerCase()) {
-    case "day": return num / 7;
-    case "week": return num;
-    case "month": return num * 4.33;
-    case "year": return num * 52;
-    default: return null;
+    case "day":
+      return num / 7;
+    case "week":
+      return num;
+    case "month":
+      return num * 4.33;
+    case "year":
+      return num * 52;
+    default:
+      return null;
   }
 }
 
 // Extract [VERIFIED] blocks from Claude's response
 // Claude emits these after user answers verification questions
-function extractVerificationUpdates(content: string, sessionState: SessionState): string {
+function extractVerificationUpdates(
+  content: string,
+  sessionState: SessionState,
+): string {
   const pattern = /\[VERIFIED\]([\s\S]*?)\[\/VERIFIED\]/gi;
   let match;
   let cleanContent = content;
@@ -195,44 +262,54 @@ function extractVerificationUpdates(content: string, sessionState: SessionState)
     if (pipeIdx === -1) continue;
 
     const reqText = block.substring(0, pipeIdx).trim();
-    const metStr = block.substring(pipeIdx + 1).trim().toLowerCase();
+    const metStr = block
+      .substring(pipeIdx + 1)
+      .trim()
+      .toLowerCase();
     const met = metStr === "true" || metStr === "yes" || metStr === "met";
 
     // Fuzzy-match to requirementsToVerify entries
     const bestMatch = sessionState.requirementsToVerify.find((r) => {
       const rLower = r.toLowerCase();
       const reqLower = reqText.toLowerCase();
-      return rLower === reqLower ||
+      return (
+        rLower === reqLower ||
         rLower.includes(reqLower) ||
         reqLower.includes(rLower) ||
         // Word overlap: at least 60% of words match
-        wordOverlap(rLower, reqLower) >= 0.6;
+        wordOverlap(rLower, reqLower) >= 0.6
+      );
     });
 
     if (bestMatch) {
       sessionState.requirementAnswers[bestMatch] = met;
-      console.log("[extractVerification] Matched:", bestMatch, "→", met);
+      console.log("[extractVerification] Requirement matched:", met);
     } else {
-      console.log("[extractVerification] No match for:", reqText);
+      console.log("[extractVerification] No match found for requirement");
     }
   }
 
   // Remove all [VERIFIED] blocks from content
-  cleanContent = cleanContent.replace(/\[VERIFIED\][\s\S]*?\[\/VERIFIED\]/gi, "")
+  cleanContent = cleanContent
+    .replace(/\[VERIFIED\][\s\S]*?\[\/VERIFIED\]/gi, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
   // Check if all requirements now answered
   if (sessionState.requirementsToVerify.length > 0) {
     const allAnswered = sessionState.requirementsToVerify.every(
-      (r) => sessionState.requirementAnswers[r] !== undefined
+      (r) => sessionState.requirementAnswers[r] !== undefined,
     );
     if (allAnswered) {
       sessionState.verificationComplete = true;
-      sessionState.meetsAllRequirements = sessionState.requirementsToVerify.every(
-        (r) => sessionState.requirementAnswers[r] === true
+      sessionState.meetsAllRequirements =
+        sessionState.requirementsToVerify.every(
+          (r) => sessionState.requirementAnswers[r] === true,
+        );
+      console.log(
+        "[extractVerification] All verified:",
+        sessionState.meetsAllRequirements,
       );
-      console.log("[extractVerification] All verified:", sessionState.meetsAllRequirements);
     }
   }
 
@@ -253,8 +330,13 @@ function wordOverlap(a: string, b: string): number {
 
 // Extract [PRIOR_AUTH_LCD] block from Claude's response
 // Claude emits this when LCD text indicates prior auth is required
-function extractPriorAuthFromLCD(content: string, sessionState: SessionState): string {
-  const match = content.match(/\[PRIOR_AUTH_LCD\]\s*(true|false)\s*\[\/PRIOR_AUTH_LCD\]/i);
+function extractPriorAuthFromLCD(
+  content: string,
+  sessionState: SessionState,
+): string {
+  const match = content.match(
+    /\[PRIOR_AUTH_LCD\]\s*(true|false)\s*\[\/PRIOR_AUTH_LCD\]/i,
+  );
   if (!match) return content;
 
   const required = match[1].toLowerCase() === "true";
@@ -272,15 +354,21 @@ function extractPriorAuthFromLCD(content: string, sessionState: SessionState): s
 
 // Extract suggestions from Claude's response and return cleaned content
 // Claude includes suggestions in [SUGGESTIONS]...[/SUGGESTIONS] block
-function extractSuggestionsAndClean(content: string, sessionState: SessionState): {
+function extractSuggestionsAndClean(
+  content: string,
+  sessionState: SessionState,
+): {
   cleanContent: string;
-  suggestions: string[]
+  suggestions: string[];
 } {
-  console.log("[extractSuggestions] Parsing content for [SUGGESTIONS] block...");
+  console.log(
+    "[extractSuggestions] Parsing content for [SUGGESTIONS] block...",
+  );
 
   // Try to extract [SUGGESTIONS] block (with or without closing tag)
-  const suggestionsMatch = content.match(/\[SUGGESTIONS\]\s*([\s\S]*?)\s*\[\/SUGGESTIONS\]/i)
-    || content.match(/\[SUGGESTIONS\]\s*([\s\S]+)$/i); // Fallback: unclosed block at end
+  const suggestionsMatch =
+    content.match(/\[SUGGESTIONS\]\s*([\s\S]*?)\s*\[\/SUGGESTIONS\]/i) ||
+    content.match(/\[SUGGESTIONS\]\s*([\s\S]+)$/i); // Fallback: unclosed block at end
 
   if (suggestionsMatch) {
     const suggestionsBlock = suggestionsMatch[1];
@@ -298,110 +386,171 @@ function extractSuggestionsAndClean(content: string, sessionState: SessionState)
       .trim();
 
     if (suggestions.length >= 1) {
-      console.log("[extractSuggestions] Found suggestions:", suggestions);
-      console.log("[extractSuggestions] Clean content length:", cleanContent.length);
+      console.log(
+        "[extractSuggestions] Found",
+        suggestions.length,
+        "suggestions",
+      );
+      console.log(
+        "[extractSuggestions] Clean content length:",
+        cleanContent.length,
+      );
       return { cleanContent, suggestions };
     }
   }
 
-  console.log("[extractSuggestions] No [SUGGESTIONS] block found, using question-aware defaults");
+  console.log(
+    "[extractSuggestions] No [SUGGESTIONS] block found, using question-aware defaults",
+  );
 
   // Question-aware fallback: match suggestions to what Claude ASKED the user
   // Focus on the LAST question in Claude's response (not earlier context)
   const lowerContent = content.toLowerCase();
   // Extract last sentence ending with "?" to focus on what was actually asked
   const questions = content.match(/[^.!?\n]*\?/g);
-  const lastQuestion = questions ? questions[questions.length - 1].toLowerCase().trim() : lowerContent;
+  const lastQuestion = questions
+    ? questions[questions.length - 1].toLowerCase().trim()
+    : lowerContent;
 
   let suggestions: string[];
 
   // Onboarding questions
-  if (lastQuestion.includes("your name") || lastQuestion.includes("address you") || lastQuestion.includes("call you")) {
+  if (
+    lastQuestion.includes("your name") ||
+    lastQuestion.includes("address you") ||
+    lastQuestion.includes("call you")
+  ) {
     suggestions = ["Just call me...", "Skip this"];
-  } else if (lastQuestion.includes("your zip") || lastQuestion.includes("zip code")) {
+  } else if (
+    lastQuestion.includes("your zip") ||
+    lastQuestion.includes("zip code")
+  ) {
     suggestions = ["Let me type it", "Skip for now"];
 
-  // Specifics follow-up (asking WHICH treatments/meds/etc. — NOT yes/no)
-  } else if (lastQuestion.includes("which one") || lastQuestion.includes("which specific") || /specifically\?/.test(lastQuestion)) {
+    // Specifics follow-up (asking WHICH treatments/meds/etc. — NOT yes/no)
+  } else if (
+    lastQuestion.includes("which one") ||
+    lastQuestion.includes("which specific") ||
+    /specifically\?/.test(lastQuestion)
+  ) {
     // Claude is asking for specifics — suggest common treatment types
-    if (lowerContent.includes("treatment") || lowerContent.includes("pt") || lowerContent.includes("physical therapy") || lowerContent.includes("injection") || lowerContent.includes("med")) {
+    if (
+      lowerContent.includes("treatment") ||
+      lowerContent.includes("pt") ||
+      lowerContent.includes("physical therapy") ||
+      lowerContent.includes("injection") ||
+      lowerContent.includes("med")
+    ) {
       suggestions = ["Physical therapy", "Medications"];
     } else {
       suggestions = ["The first one", "The second one"];
     }
 
-  // Symptom intake questions
-  } else if (lastQuestion.includes("which body") || lastQuestion.includes("what part") || lastQuestion.includes("what body")) {
+    // Symptom intake questions
+  } else if (
+    lastQuestion.includes("which body") ||
+    lastQuestion.includes("what part") ||
+    lastQuestion.includes("what body")
+  ) {
     suggestions = ["It's my back", "It's my knee"];
-  } else if (lastQuestion.includes("what's going on") || (lastQuestion.includes("pain") && lastQuestion.includes("numbness"))) {
+  } else if (
+    lastQuestion.includes("what's going on") ||
+    (lastQuestion.includes("pain") && lastQuestion.includes("numbness"))
+  ) {
     suggestions = ["It's pain", "It's numbness"];
-  } else if (lastQuestion.includes("how long") || lastQuestion.includes("when did") || lastQuestion.includes("how many weeks")) {
+  } else if (
+    lastQuestion.includes("how long") ||
+    lastQuestion.includes("when did") ||
+    lastQuestion.includes("how many weeks")
+  ) {
     suggestions = ["A few weeks", "Several months"];
-  } else if (lastQuestion.includes("tried") || lastQuestion.includes("treatment")) {
+  } else if (
+    lastQuestion.includes("tried") ||
+    lastQuestion.includes("treatment")
+  ) {
     // Yes/no about whether they've tried treatments (not which ones)
     suggestions = ["Yes, I've tried some", "No, nothing yet"];
 
-  // Provider gate questions
-  } else if (lastQuestion.includes("have a doctor") || lastQuestion.includes("your doctor") || lastQuestion.includes("who's your")) {
+    // Provider gate questions
+  } else if (
+    lastQuestion.includes("have a doctor") ||
+    lastQuestion.includes("your doctor") ||
+    lastQuestion.includes("who's your")
+  ) {
     suggestions = ["Yes, I have a doctor", "Not yet"];
-  } else if (lastQuestion.includes("which dr") || lastQuestion.includes("which doctor")) {
+  } else if (
+    lastQuestion.includes("which dr") ||
+    lastQuestion.includes("which doctor")
+  ) {
     suggestions = ["The first one", "The second one"];
 
-  // Coverage/guidance delivered
-  } else if (lowerContent.includes("denied") || lowerContent.includes("denial")) {
+    // Coverage/guidance delivered
+  } else if (
+    lowerContent.includes("denied") ||
+    lowerContent.includes("denial")
+  ) {
     suggestions = ["Help me appeal", "Explain the denial"];
-  } else if (lowerContent.includes("checklist") || lowerContent.includes("document")) {
+  } else if (
+    lowerContent.includes("checklist") ||
+    lowerContent.includes("document")
+  ) {
     suggestions = ["Print this checklist", "Start a new question"];
 
-  // Generic fallback
+    // Generic fallback
   } else {
     suggestions = ["Tell me more", "Start over"];
   }
 
-  console.log("[extractSuggestions] Fallback matched:", suggestions);
+  console.log(
+    "[extractSuggestions] Fallback matched:",
+    suggestions.length,
+    "suggestions",
+  );
   return { cleanContent: content, suggestions };
 }
 
 // Process tool calls and execute them in parallel
 async function processToolCalls(
   toolBlocks: ToolUseBlock[],
-  toolExecutors: Map<string, ToolExecutor>
+  toolExecutors: Map<string, ToolExecutor>,
 ): Promise<ToolResultBlockParam[]> {
-  const promises = toolBlocks.map(async (block): Promise<ToolResultBlockParam> => {
-    const executor = toolExecutors.get(block.name);
+  const promises = toolBlocks.map(
+    async (block): Promise<ToolResultBlockParam> => {
+      const executor = toolExecutors.get(block.name);
 
-    if (!executor) {
-      return {
-        type: "tool_result",
-        tool_use_id: block.id,
-        content: JSON.stringify({
-          success: false,
-          error: `Unknown tool: ${block.name}`,
-        }),
-        is_error: true,
-      };
-    }
+      if (!executor) {
+        return {
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify({
+            success: false,
+            error: `Unknown tool: ${block.name}`,
+          }),
+          is_error: true,
+        };
+      }
 
-    try {
-      const result = await executor(block.input as Record<string, unknown>);
-      return {
-        type: "tool_result",
-        tool_use_id: block.id,
-        content: JSON.stringify(result),
-        is_error: !result.success,
-      };
-    } catch (error) {
-      return {
-        type: "tool_result",
-        tool_use_id: block.id,
-        content: JSON.stringify({
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        }),
-        is_error: true,
-      };
-    }
-  });
+      try {
+        const result = await executor(block.input as Record<string, unknown>);
+        return {
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify(result),
+          is_error: !result.success,
+        };
+      } catch (error) {
+        return {
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+          }),
+          is_error: true,
+        };
+      }
+    },
+  );
 
   return Promise.all(promises);
 }
@@ -410,19 +559,21 @@ async function processToolCalls(
 function withTimeout<T>(
   promiseFactory: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
-  label: string
+  label: string,
 ): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => {
     controller.abort();
   }, timeoutMs);
 
-  return promiseFactory(controller.signal).finally(() => clearTimeout(timer)).catch((err) => {
-    if (controller.signal.aborted) {
-      throw new Error(`${label} timed out after ${timeoutMs / 1000}s`);
-    }
-    throw err;
-  });
+  return promiseFactory(controller.signal)
+    .finally(() => clearTimeout(timer))
+    .catch((err) => {
+      if (controller.signal.aborted) {
+        throw new Error(`${label} timed out after ${timeoutMs / 1000}s`);
+      }
+      throw err;
+    });
 }
 
 // Main chat function with tool calling loop
@@ -435,7 +586,7 @@ export async function chat(
   callbacks?: {
     onDelta?: (text: string) => void;
     onToolProgress?: (toolName: string) => void;
-  }
+  },
 ): Promise<ChatResult> {
   const claude = getClaudeClient();
   const sessionState = request.sessionState ?? createDefaultSessionState();
@@ -454,7 +605,9 @@ export async function chat(
     name: tool.name,
     description: tool.description,
     input_schema: tool.input_schema,
-    ...(idx === request.tools.length - 1 ? { cache_control: { type: "ephemeral" as const } } : {}),
+    ...(idx === request.tools.length - 1
+      ? { cache_control: { type: "ephemeral" as const } }
+      : {}),
   }));
 
   // Build system prompt as cacheable content blocks
@@ -472,9 +625,11 @@ export async function chat(
     iterations++;
 
     // Build system blocks for this iteration — base is always cached
-    const systemBlocks: Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }> = [
-      baseSystemBlock,
-    ];
+    const systemBlocks: Array<{
+      type: "text";
+      text: string;
+      cache_control?: { type: "ephemeral" };
+    }> = [baseSystemBlock];
 
     // Appeal mode soft cap: by iteration 4, Claude has denial codes, ICD-10, CPT, coverage, PubMed
     // Force letter generation instead of continuing to search
@@ -499,9 +654,21 @@ export async function chat(
     console.log("[CLAUDE API] Iteration:", iterations, "of", maxIterations);
     console.log("[CLAUDE API] Model:", model);
     console.log("[CLAUDE API] Timeout:", timeoutMs / 1000, "s per iteration");
-    console.log("[CLAUDE API] Tools:", anthropicTools.map(t => t.name).join(", ") || "none");
-    console.log("[CLAUDE API] System blocks:", systemBlocks.length, "(cached:", systemBlocks.filter(b => b.cache_control).length, ")");
-    console.log("[CLAUDE API] Tools cached:", anthropicTools.length > 0 ? "yes (last tool)" : "no tools");
+    console.log(
+      "[CLAUDE API] Tools:",
+      anthropicTools.map((t) => t.name).join(", ") || "none",
+    );
+    console.log(
+      "[CLAUDE API] System blocks:",
+      systemBlocks.length,
+      "(cached:",
+      systemBlocks.filter((b) => b.cache_control).length,
+      ")",
+    );
+    console.log(
+      "[CLAUDE API] Tools cached:",
+      anthropicTools.length > 0 ? "yes (last tool)" : "no tools",
+    );
     console.log("========================================");
 
     // Call Claude via AWS Bedrock (IAM auth from ECS task role)
@@ -514,15 +681,18 @@ export async function chat(
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-        const streamResult = await (claude.messages.create as Function)({
-          model,
-          max_tokens: API_CONFIG.claude.maxTokens,
-          system: systemBlocks,
-          messages,
-          tools: anthropicTools.length > 0 ? anthropicTools : undefined,
-          temperature: 0.4,
-          stream: true,
-        }, { signal: controller.signal });
+        const streamResult = await (claude.messages.create as Function)(
+          {
+            model,
+            max_tokens: API_CONFIG.claude.maxTokens,
+            system: systemBlocks,
+            messages,
+            tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+            temperature: 0.4,
+            stream: true,
+          },
+          { signal: controller.signal },
+        );
 
         // Collect response from stream events
         const contentBlocks: Array<Record<string, unknown>> = [];
@@ -532,7 +702,9 @@ export async function chat(
 
         for await (const event of streamResult) {
           if (event.type === "content_block_start") {
-            contentBlocks[event.index] = { ...(event.content_block as unknown as Record<string, unknown>) };
+            contentBlocks[event.index] = {
+              ...(event.content_block as unknown as Record<string, unknown>),
+            };
             if ((event.content_block as { type: string }).type === "tool_use") {
               hasLocalToolUse = true;
             }
@@ -548,11 +720,15 @@ export async function chat(
               if (block && block.type === "text") {
                 block.text = ((block.text as string) || "") + delta.text;
               }
-            } else if (delta.type === "input_json_delta" && typeof delta.partial_json === "string") {
+            } else if (
+              delta.type === "input_json_delta" &&
+              typeof delta.partial_json === "string"
+            ) {
               // Accumulate tool input JSON
               const block = contentBlocks[event.index];
               if (block && block.type === "tool_use") {
-                block._inputJson = ((block._inputJson as string) || "") + delta.partial_json;
+                block._inputJson =
+                  ((block._inputJson as string) || "") + delta.partial_json;
               }
             }
           } else if (event.type === "content_block_stop") {
@@ -569,10 +745,12 @@ export async function chat(
             const delta = event.delta as unknown as Record<string, unknown>;
             stopReason = (delta.stop_reason as string) || "";
             // Capture usage stats including cache metrics
-            const eventUsage = (event as unknown as Record<string, unknown>).usage as Record<string, number> | undefined;
+            const eventUsage = (event as unknown as Record<string, unknown>)
+              .usage as Record<string, number> | undefined;
             if (eventUsage) streamUsage = { ...streamUsage, ...eventUsage };
           } else if (event.type === "message_start") {
-            const msg = (event as unknown as Record<string, unknown>).message as Record<string, unknown> | undefined;
+            const msg = (event as unknown as Record<string, unknown>)
+              .message as Record<string, unknown> | undefined;
             const msgUsage = msg?.usage as Record<string, number> | undefined;
             if (msgUsage) streamUsage = { ...streamUsage, ...msgUsage };
           }
@@ -585,64 +763,92 @@ export async function chat(
           usage: streamUsage,
         } as unknown as Message;
 
-        console.log("[CLAUDE API] Streaming iteration complete, stop_reason:", stopReason);
+        console.log(
+          "[CLAUDE API] Streaming iteration complete, stop_reason:",
+          stopReason,
+        );
       } catch (streamErr) {
         // Streaming failed — fall back to non-streaming
-        console.warn("[CLAUDE API] Streaming failed, falling back to non-streaming:", streamErr);
+        console.warn(
+          "[CLAUDE API] Streaming failed, falling back to non-streaming:",
+          streamErr,
+        );
         response = await withTimeout(
-          (signal) => (claude.messages.create as Function)({
-            model,
-            max_tokens: API_CONFIG.claude.maxTokens,
-            system: systemBlocks,
-            messages,
-            tools: anthropicTools.length > 0 ? anthropicTools : undefined,
-            temperature: 0.4,
-          }, { signal }) as Promise<Message>,
+          (signal) =>
+            (claude.messages.create as Function)(
+              {
+                model,
+                max_tokens: API_CONFIG.claude.maxTokens,
+                system: systemBlocks,
+                messages,
+                tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+                temperature: 0.4,
+              },
+              { signal },
+            ) as Promise<Message>,
           timeoutMs,
-          `Claude API iteration ${iterations} (fallback)`
+          `Claude API iteration ${iterations} (fallback)`,
         );
       }
     } else {
       // Non-streaming path
       response = await withTimeout(
-        (signal) => (claude.messages.create as Function)({
-          model,
-          max_tokens: API_CONFIG.claude.maxTokens,
-          system: systemBlocks,
-          messages,
-          tools: anthropicTools.length > 0 ? anthropicTools : undefined,
-          temperature: 0.4,
-        }, { signal }) as Promise<Message>,
+        (signal) =>
+          (claude.messages.create as Function)(
+            {
+              model,
+              max_tokens: API_CONFIG.claude.maxTokens,
+              system: systemBlocks,
+              messages,
+              tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+              temperature: 0.4,
+            },
+            { signal },
+          ) as Promise<Message>,
         timeoutMs,
-        `Claude API iteration ${iterations}`
+        `Claude API iteration ${iterations}`,
       );
     }
 
     // DEBUG: Log response content block types + cache usage
     console.log("[CLAUDE API] Response stop_reason:", response.stop_reason);
-    console.log("[CLAUDE API] Response content blocks:", response.content.map(b => b.type).join(", "));
+    console.log(
+      "[CLAUDE API] Response content blocks:",
+      response.content.map((b) => b.type).join(", "),
+    );
     // Log prompt caching stats when available
-    const usage = (response as unknown as Record<string, unknown>).usage as Record<string, number> | undefined;
+    const usage = (response as unknown as Record<string, unknown>).usage as
+      | Record<string, number>
+      | undefined;
     if (usage) {
       const cacheWrite = usage.cache_creation_input_tokens || 0;
       const cacheRead = usage.cache_read_input_tokens || 0;
       const inputTokens = usage.input_tokens || 0;
       const outputTokens = usage.output_tokens || 0;
-      console.log(`[CLAUDE API] Tokens — input: ${inputTokens}, output: ${outputTokens}, cache_write: ${cacheWrite}, cache_read: ${cacheRead}`);
+      console.log(
+        `[CLAUDE API] Tokens — input: ${inputTokens}, output: ${outputTokens}, cache_write: ${cacheWrite}, cache_read: ${cacheRead}`,
+      );
       if (cacheRead > 0) {
-        console.log(`[CLAUDE API] ✓ Cache HIT — saved ${cacheRead} tokens at 90% discount`);
+        console.log(
+          `[CLAUDE API] ✓ Cache HIT — saved ${cacheRead} tokens at 90% discount`,
+        );
       } else if (cacheWrite > 0) {
-        console.log(`[CLAUDE API] ○ Cache WRITE — ${cacheWrite} tokens cached for next call`);
+        console.log(
+          `[CLAUDE API] ○ Cache WRITE — ${cacheWrite} tokens cached for next call`,
+        );
       }
     }
 
     // Check if Claude wants to use tools
     const toolUseBlocks = response.content.filter(
-      (block): block is ToolUseBlock => block.type === "tool_use"
+      (block): block is ToolUseBlock => block.type === "tool_use",
     );
 
     if (toolUseBlocks.length > 0) {
-      console.log("[CLAUDE API] Tools called:", toolUseBlocks.map(b => b.name).join(", "));
+      console.log(
+        "[CLAUDE API] Tools called:",
+        toolUseBlocks.map((b) => b.name).join(", "),
+      );
     }
 
     if (toolUseBlocks.length > 0) {
@@ -664,9 +870,16 @@ export async function chat(
         if (typeof resultContent === "string") {
           try {
             const parsed = JSON.parse(resultContent) as ToolResult;
-            updateSessionFromToolResults(sessionState, toolUseBlocks[i].name, parsed);
+            updateSessionFromToolResults(
+              sessionState,
+              toolUseBlocks[i].name,
+              parsed,
+            );
             // Capture the formal letter from generate_appeal_letter
-            if (toolUseBlocks[i].name === "generate_appeal_letter" && parsed.success) {
+            if (
+              toolUseBlocks[i].name === "generate_appeal_letter" &&
+              parsed.success
+            ) {
               const toolData = parsed.data as { letter?: string } | undefined;
               if (toolData?.letter) {
                 appealLetter = toolData.letter;
@@ -694,7 +907,7 @@ export async function chat(
 
     // No tool use - extract text response
     const textBlocks = response.content.filter(
-      (block): block is Anthropic.TextBlock => block.type === "text"
+      (block): block is Anthropic.TextBlock => block.type === "text",
     );
     const rawContent = textBlocks.map((block) => block.text).join("\n");
 
@@ -705,52 +918,71 @@ export async function chat(
     // 1. Extract [MEDICARE_TYPE] → set medicareType
     const afterMedicare = extractMedicareType(rawContent, sessionState);
     // 2. Extract [REQUIREMENTS] → populate requirementsToVerify + auto-verify
-    const { cleanContent: afterReqs } = extractRequirementsAndClean(afterMedicare, sessionState);
+    const { cleanContent: afterReqs } = extractRequirementsAndClean(
+      afterMedicare,
+      sessionState,
+    );
     // 3. Extract [VERIFIED] blocks → update requirementAnswers
     const afterVerify = extractVerificationUpdates(afterReqs, sessionState);
     // 4. Extract [PRIOR_AUTH_LCD] → set priorAuthRequired from LCD
     const afterPA = extractPriorAuthFromLCD(afterVerify, sessionState);
     // 5. Extract [SUGGESTIONS] → always last
-    const { cleanContent, suggestions } = extractSuggestionsAndClean(afterPA, sessionState);
+    const { cleanContent, suggestions } = extractSuggestionsAndClean(
+      afterPA,
+      sessionState,
+    );
 
     console.log("[chat] Raw content length:", rawContent.length);
     console.log("[chat] Clean content length:", cleanContent.length);
-    console.log("[chat] Suggestions:", suggestions);
+    console.log("[chat] Suggestions count:", suggestions.length);
 
     return {
       content: cleanContent,
       suggestions,
       sessionState,
       toolsUsed,
+      iterations,
       appealLetter,
     };
   }
 
   // Graceful fallback: extract any text from the last assistant message
   // instead of crashing with an error
-  console.warn(`[CLAUDE API] Hit max iterations (${maxIterations}). Returning best available content.`);
+  console.warn(
+    `[CLAUDE API] Hit max iterations (${maxIterations}). Returning best available content.`,
+  );
 
   // Walk backwards through messages to find the last assistant response with text
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
     if (msg.role === "assistant" && Array.isArray(msg.content)) {
       const textBlocks = (msg.content as ContentBlock[]).filter(
-        (block): block is Anthropic.TextBlock => block.type === "text"
+        (block): block is Anthropic.TextBlock => block.type === "text",
       );
       if (textBlocks.length > 0) {
         const partialContent = textBlocks.map((b) => b.text).join("\n");
         updateSessionState(sessionState, partialContent, toolsUsed);
         const afterMedicare = extractMedicareType(partialContent, sessionState);
-        const { cleanContent: afterReqs } = extractRequirementsAndClean(afterMedicare, sessionState);
+        const { cleanContent: afterReqs } = extractRequirementsAndClean(
+          afterMedicare,
+          sessionState,
+        );
         const afterVerify = extractVerificationUpdates(afterReqs, sessionState);
         const afterPA = extractPriorAuthFromLCD(afterVerify, sessionState);
-        const { cleanContent, suggestions } = extractSuggestionsAndClean(afterPA, sessionState);
+        const { cleanContent, suggestions } = extractSuggestionsAndClean(
+          afterPA,
+          sessionState,
+        );
 
         return {
-          content: cleanContent || "I gathered some information but ran out of processing time. Here's what I have so far — could you try asking again so I can finish?",
-          suggestions: suggestions.length > 0 ? suggestions : ["Try again", "Start over"],
+          content:
+            cleanContent ||
+            "I gathered some information but ran out of processing time. Here's what I have so far — could you try asking again so I can finish?",
+          suggestions:
+            suggestions.length > 0 ? suggestions : ["Try again", "Start over"],
           sessionState,
           toolsUsed,
+          iterations,
           appealLetter,
         };
       }
@@ -759,10 +991,12 @@ export async function chat(
 
   // Absolute last resort: no text found anywhere
   return {
-    content: "I wasn't able to complete the lookup in time. Could you try again? If you're appealing a denial, try giving me the denial code directly (like CO-50).",
+    content:
+      "I wasn't able to complete the lookup in time. Could you try again? If you're appealing a denial, try giving me the denial code directly (like CO-50).",
     suggestions: ["Try again", "Start over"],
     sessionState,
     toolsUsed,
+    iterations,
   };
 }
 
@@ -770,7 +1004,7 @@ export async function chat(
 function updateSessionFromToolResults(
   state: SessionState,
   toolName: string,
-  toolResult: ToolResult
+  toolResult: ToolResult,
 ): void {
   if (!toolResult.success || !toolResult.data) return;
   const data = toolResult.data as Record<string, unknown>;
@@ -790,7 +1024,9 @@ function updateSessionFromToolResults(
     }
     case "check_prior_auth": {
       // Extract prior auth requirement
-      const requiresAuth = data.commonly_requires_prior_auth as boolean | undefined;
+      const requiresAuth = data.commonly_requires_prior_auth as
+        | boolean
+        | undefined;
       if (requiresAuth !== undefined) {
         state.priorAuthRequired = requiresAuth;
       }
@@ -825,8 +1061,12 @@ function updateSessionFromToolResults(
     }
     case "generate_appeal_letter": {
       // Extract codes from appeal letter generation
-      const dxCodes = data.diagnosis_codes as Array<{ code: string }> | undefined;
-      const pxCodes = data.procedure_codes as Array<{ code: string }> | undefined;
+      const dxCodes = data.diagnosis_codes as
+        | Array<{ code: string }>
+        | undefined;
+      const pxCodes = data.procedure_codes as
+        | Array<{ code: string }>
+        | undefined;
       if (dxCodes) {
         for (const c of dxCodes) {
           if (!state.diagnosisCodes.includes(c.code)) {
@@ -850,7 +1090,7 @@ function updateSessionFromToolResults(
 function updateSessionState(
   state: SessionState,
   content: string,
-  toolsUsed: string[]
+  toolsUsed: string[],
 ): void {
   const lowerContent = content.toLowerCase();
 
@@ -920,7 +1160,7 @@ function updateSessionState(
 // Parse user messages to extract name, ZIP, etc.
 export function extractUserInfo(
   messages: Array<{ role: string; content: string }>,
-  currentState: SessionState
+  currentState: SessionState,
 ): SessionState {
   const updatedState = { ...currentState };
 
@@ -933,24 +1173,66 @@ export function extractUserInfo(
     if (!updatedState.userName) {
       // Common words that follow "I'm" but are NOT names
       const NOT_NAMES = new Set([
-        "having", "going", "looking", "trying", "dealing", "getting", "feeling",
-        "wondering", "thinking", "asking", "checking", "interested", "concerned",
-        "worried", "calling", "writing", "experiencing", "suffering", "taking",
-        "using", "seeing", "waiting", "scheduled", "told", "being", "about",
-        "not", "very", "really", "just", "also", "still", "already", "here",
-        "new", "the", "that", "this", "with", "from", "over", "under",
+        "having",
+        "going",
+        "looking",
+        "trying",
+        "dealing",
+        "getting",
+        "feeling",
+        "wondering",
+        "thinking",
+        "asking",
+        "checking",
+        "interested",
+        "concerned",
+        "worried",
+        "calling",
+        "writing",
+        "experiencing",
+        "suffering",
+        "taking",
+        "using",
+        "seeing",
+        "waiting",
+        "scheduled",
+        "told",
+        "being",
+        "about",
+        "not",
+        "very",
+        "really",
+        "just",
+        "also",
+        "still",
+        "already",
+        "here",
+        "new",
+        "the",
+        "that",
+        "this",
+        "with",
+        "from",
+        "over",
+        "under",
       ]);
       // Match "I'm John", "call me John", "my name is John", "it's John"
       const namePatterns = content.match(
-        /(?:i'm|i am|call me|my name is|it's|this is|name's)\s+([a-zA-Z]{2,20})/i
+        /(?:i'm|i am|call me|my name is|it's|this is|name's)\s+([a-zA-Z]{2,20})/i,
       );
       if (namePatterns && !NOT_NAMES.has(namePatterns[1].toLowerCase())) {
-        updatedState.userName = namePatterns[1].charAt(0).toUpperCase() + namePatterns[1].slice(1).toLowerCase();
-      } else if (content.trim().length < 25 && /^[a-zA-Z]{2,20}$/i.test(content.trim())) {
+        updatedState.userName =
+          namePatterns[1].charAt(0).toUpperCase() +
+          namePatterns[1].slice(1).toLowerCase();
+      } else if (
+        content.trim().length < 25 &&
+        /^[a-zA-Z]{2,20}$/i.test(content.trim())
+      ) {
         // Short message that's just a name (e.g., "John")
         const name = content.trim();
         if (!NOT_NAMES.has(name.toLowerCase())) {
-          updatedState.userName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+          updatedState.userName =
+            name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
         }
       }
     }
@@ -968,7 +1250,9 @@ export function extractUserInfo(
     }
 
     // Extract doctor name patterns (Dr. X, Doctor X)
-    const doctorMatch = content.match(/(?:dr\.?|doctor)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i);
+    const doctorMatch = content.match(
+      /(?:dr\.?|doctor)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,
+    );
     if (doctorMatch && !updatedState.providerName) {
       updatedState.providerName = doctorMatch[1];
     }
@@ -977,15 +1261,27 @@ export function extractUserInfo(
     if (!updatedState.medicareType) {
       const lower = content.toLowerCase();
       // Medicare Advantage / Part C
-      if (/medicare\s*advantage|part\s*c\b|\b(humana|unitedhealth|aetna|cigna|anthem|kaiser|wellcare|centene|molina|devoted|clover|oscar|alignment)\b/i.test(content)) {
+      if (
+        /medicare\s*advantage|part\s*c\b|\b(humana|unitedhealth|aetna|cigna|anthem|kaiser|wellcare|centene|molina|devoted|clover|oscar|alignment)\b/i.test(
+          content,
+        )
+      ) {
         updatedState.medicareType = "advantage";
       }
       // Original Medicare / Fee-for-service
-      else if (/original\s*medicare|parts?\s*a\s*(and|&)\s*b|fee.for.service|traditional\s*medicare/i.test(content)) {
+      else if (
+        /original\s*medicare|parts?\s*a\s*(and|&)\s*b|fee.for.service|traditional\s*medicare/i.test(
+          content,
+        )
+      ) {
         updatedState.medicareType = "original";
       }
       // Supplement / Medigap → maps to original (they have both)
-      else if (/medigap|medicare\s*supplement|supplemental?\s*(plan|insurance|coverage)/i.test(lower)) {
+      else if (
+        /medigap|medicare\s*supplement|supplemental?\s*(plan|insurance|coverage)/i.test(
+          lower,
+        )
+      ) {
         updatedState.medicareType = "original";
       }
     }
@@ -993,8 +1289,12 @@ export function extractUserInfo(
     // Detect requirement verification skip (explicit or implicit)
     if (!updatedState.verificationComplete) {
       // Explicit skip: user says "skip", "just show me", etc.
-      if (updatedState.requirementsToVerify.length > 0 &&
-          /\b(skip|just show me|move on|don't need|go ahead|show checklist)\b/i.test(content)) {
+      if (
+        updatedState.requirementsToVerify.length > 0 &&
+        /\b(skip|just show me|move on|don't need|go ahead|show checklist)\b/i.test(
+          content,
+        )
+      ) {
         updatedState.verificationComplete = true;
         // Leave meetsAllRequirements as null to indicate skipped
         console.log("[extractUserInfo] User skipped requirement verification");
@@ -1002,35 +1302,59 @@ export function extractUserInfo(
 
       // Implicit skip: user asks for checklist/guidance directly when coverage exists
       // but requirements haven't been extracted yet (Claude didn't emit [REQUIREMENTS])
-      if (updatedState.coverageCriteria.length > 0 &&
-          updatedState.requirementsToVerify.length === 0 &&
-          /\b(checklist|coverage|what do i need|am i covered|show me|give me)\b/i.test(content)) {
+      if (
+        updatedState.coverageCriteria.length > 0 &&
+        updatedState.requirementsToVerify.length === 0 &&
+        /\b(checklist|coverage|what do i need|am i covered|show me|give me)\b/i.test(
+          content,
+        )
+      ) {
         updatedState.verificationComplete = true;
         updatedState.meetsAllRequirements = null; // Unknown — skipped extraction
-        console.log("[extractUserInfo] Implicit skip: user requesting guidance, no requirements extracted");
+        console.log(
+          "[extractUserInfo] Implicit skip: user requesting guidance, no requirements extracted",
+        );
       }
     }
 
     // Detect appeal intent from USER messages only
     // (not from assistant responses which mention "denial" in prevention context)
     if (!updatedState.isAppeal) {
-      if (/\b(appeal|appealing|denied|denial|rejected|refused)\b/i.test(content)) {
+      if (
+        /\b(appeal|appealing|denied|denial|rejected|refused)\b/i.test(content)
+      ) {
         updatedState.isAppeal = true;
       }
     }
 
     // Detect Level 2+ appeal escalation (prior appeal was denied)
     if (updatedState.isAppeal && !updatedState.appealLevel) {
-      if (/\b(appeal was denied|redetermination denied|level 1 denied|first appeal denied|appeal got denied|lost my appeal|denied again|next level|level 2|reconsideration|qic|ire)\b/i.test(content)) {
+      if (
+        /\b(appeal was denied|redetermination denied|level 1 denied|first appeal denied|appeal got denied|lost my appeal|denied again|next level|level 2|reconsideration|qic|ire)\b/i.test(
+          content,
+        )
+      ) {
         updatedState.previousAppealOutcome = "denied";
         updatedState.appealLevel = 2;
-      } else if (/\b(qic denied|reconsideration denied|level 2 denied|second appeal denied|ire denied)\b/i.test(content)) {
+      } else if (
+        /\b(qic denied|reconsideration denied|level 2 denied|second appeal denied|ire denied)\b/i.test(
+          content,
+        )
+      ) {
         updatedState.previousAppealOutcome = "denied";
         updatedState.appealLevel = 3;
-      } else if (/\b(alj denied|hearing denied|judge denied|level 3 denied|third appeal denied)\b/i.test(content)) {
+      } else if (
+        /\b(alj denied|hearing denied|judge denied|level 3 denied|third appeal denied)\b/i.test(
+          content,
+        )
+      ) {
         updatedState.previousAppealOutcome = "denied";
         updatedState.appealLevel = 4;
-      } else if (/\b(appeals council denied|council denied|level 4 denied|fourth appeal denied)\b/i.test(content)) {
+      } else if (
+        /\b(appeals council denied|council denied|level 4 denied|fourth appeal denied)\b/i.test(
+          content,
+        )
+      ) {
         updatedState.previousAppealOutcome = "denied";
         updatedState.appealLevel = 5;
       }
@@ -1038,13 +1362,16 @@ export function extractUserInfo(
 
     // Extract denial codes from user messages (CARC/RARC patterns)
     // Captures codes like "CO-50", "denial code 96", "CARC 167", "PR-1"
-    if (updatedState.isAppeal || /\b(carc|rarc|co-|pr-|oa-|denial.code)\d/i.test(content)) {
+    if (
+      updatedState.isAppeal ||
+      /\b(carc|rarc|co-|pr-|oa-|denial.code)\d/i.test(content)
+    ) {
       const codePatterns = [
-        /\b(?:CO|PR|OA|PI)-?(\d{1,4})\b/gi,                       // CO-50, PR-1, OA-23
-        /\b(?:CARC|RARC)\s*[:#-]?\s*(\d{1,4})\b/gi,               // CARC 50, RARC N123
-        /\bcode\s*[:#]?\s*(\d{1,4})\b/gi,                          // code 50, code: 96
-        /\bdenial\s*code\s*[:#]?\s*(\d{1,4})\b/gi,                 // denial code 50
-        /\b(?:RARC)\s*[:#-]?\s*([A-Z]\d{1,4})\b/gi,               // RARC N56, RARC M144
+        /\b(?:CO|PR|OA|PI)-?(\d{1,4})\b/gi, // CO-50, PR-1, OA-23
+        /\b(?:CARC|RARC)\s*[:#-]?\s*(\d{1,4})\b/gi, // CARC 50, RARC N123
+        /\bcode\s*[:#]?\s*(\d{1,4})\b/gi, // code 50, code: 96
+        /\bdenial\s*code\s*[:#]?\s*(\d{1,4})\b/gi, // denial code 50
+        /\b(?:RARC)\s*[:#-]?\s*([A-Z]\d{1,4})\b/gi, // RARC N56, RARC M144
       ];
 
       for (const pattern of codePatterns) {
@@ -1053,7 +1380,7 @@ export function extractUserInfo(
           const code = codeMatch[1].toUpperCase();
           if (!updatedState.denialCodes.includes(code)) {
             updatedState.denialCodes.push(code);
-            console.log("[extractUserInfo] Extracted denial code:", code);
+            console.log("[extractUserInfo] Denial code extracted");
           }
         }
       }
@@ -1063,7 +1390,7 @@ export function extractUserInfo(
     if (updatedState.isAppeal && !updatedState.denialDate) {
       // Match common date formats: Jan 15, January 15, 1/15/2026, 2026-01-15
       const dateMatch = content.match(
-        /(?:denied|denial|rejected).*?(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2}(?:,?\s*\d{4})?)/i
+        /(?:denied|denial|rejected).*?(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2}(?:,?\s*\d{4})?)/i,
       );
       if (dateMatch) {
         updatedState.denialDate = dateMatch[1];
@@ -1077,9 +1404,10 @@ export function extractUserInfo(
 // Build multimodal content blocks for a message with a file attachment
 function buildMultimodalContent(
   text: string,
-  attachment: FileAttachment
+  attachment: FileAttachment,
 ): Array<ImageBlockParam | DocumentBlockParam | TextBlockParam> {
-  const blocks: Array<ImageBlockParam | DocumentBlockParam | TextBlockParam> = [];
+  const blocks: Array<ImageBlockParam | DocumentBlockParam | TextBlockParam> =
+    [];
 
   if (attachment.mediaType === "application/pdf") {
     blocks.push({
@@ -1103,7 +1431,9 @@ function buildMultimodalContent(
 
   blocks.push({
     type: "text",
-    text: text || `Please analyze this ${attachment.mediaType === "application/pdf" ? "document" : "image"}. Extract any denial codes, dates, procedure names, and coverage details you can find.`,
+    text:
+      text ||
+      `Please analyze this ${attachment.mediaType === "application/pdf" ? "document" : "image"}. Extract any denial codes, dates, procedure names, and coverage details you can find.`,
   });
 
   return blocks;
@@ -1112,7 +1442,7 @@ function buildMultimodalContent(
 // Format messages for Claude API
 export function formatMessages(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
-  attachment?: FileAttachment
+  attachment?: FileAttachment,
 ): MessageParam[] {
   return messages.map((msg, idx) => {
     // Only attach file to the last user message

@@ -15,6 +15,7 @@ import { query } from "@/lib/db";
 import { API_CONFIG, getBaseUrl } from "@/config";
 import { randomBytes, createHash } from "crypto";
 import { logAudit } from "@/lib/audit";
+import { AUTH, SYSTEM } from "@/config/messages";
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,8 +24,8 @@ export async function GET(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { error: "You must be logged in to connect Medicare" },
-        { status: 401 }
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
       );
     }
 
@@ -33,25 +34,27 @@ export async function GET(request: NextRequest) {
     if (process.env.REQUIRE_IDENTITY_VERIFICATION === "true") {
       const adminCheck = await query<{ is_admin: boolean }>(
         `SELECT is_admin FROM users WHERE id = $1 LIMIT 1`,
-        [user.userId]
+        [user.userId],
       );
       const isAdmin = adminCheck.rows[0]?.is_admin || false;
 
       if (!isAdmin) {
         const idmeCheck = await query<{ idme_verified: boolean }>(
           `SELECT COALESCE(idme_verified, false) as idme_verified FROM user_verification WHERE user_id = $1 LIMIT 1`,
-          [user.userId]
+          [user.userId],
         );
         const idmeVerified = idmeCheck.rows[0]?.idme_verified || false;
 
         if (!idmeVerified) {
           // Build public redirect URL (ALB-aware)
-          const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+          const host =
+            request.headers.get("x-forwarded-host") ||
+            request.headers.get("host");
           const proto = request.headers.get("x-forwarded-proto") || "https";
           const detectedOrigin = host ? `${proto}://${host}` : null;
           const baseUrl = detectedOrigin || getBaseUrl(request.nextUrl.origin);
           return NextResponse.redirect(
-            new URL("/app/settings?idme_required=true", baseUrl)
+            new URL("/app/settings?idme_required=true", baseUrl),
           );
         }
       }
@@ -61,8 +64,8 @@ export async function GET(request: NextRequest) {
     if (!clientId) {
       console.error("[FHIR authorize] Missing BLUEBUTTON_CLIENT_ID");
       return NextResponse.json(
-        { error: "Medicare connection is temporarily unavailable. Please try again later." },
-        { status: 500 }
+        { error: SYSTEM.MEDICARE_CONNECT_UNAVAILABLE },
+        { status: 500 },
       );
     }
 
@@ -80,15 +83,19 @@ export async function GET(request: NextRequest) {
     // Build callback URL — must match EXACTLY what's registered at CMS
     // Behind ALB, request.nextUrl.origin may reflect internal container URL,
     // so prefer the Host header (which ALB forwards correctly) or x-forwarded-host.
-    const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+    const host =
+      request.headers.get("x-forwarded-host") || request.headers.get("host");
     const proto = request.headers.get("x-forwarded-proto") || "https";
     // Do NOT strip www — cookies must be set on the same domain the user is on.
     // www.denali.health is a registered CMS callback URL, so it works as-is.
     const detectedOrigin = host ? `${proto}://${host}` : null;
-    const redirectUri = process.env.BLUEBUTTON_CALLBACK_URL
-      || `${detectedOrigin || getBaseUrl(request.nextUrl.origin)}${blueButton.callbackPath}`;
+    const redirectUri =
+      process.env.BLUEBUTTON_CALLBACK_URL ||
+      `${detectedOrigin || getBaseUrl(request.nextUrl.origin)}${blueButton.callbackPath}`;
 
-    console.log("[FHIR authorize] redirect_uri:", redirectUri, "| host:", host, "| proto:", proto, "| nextUrl.origin:", request.nextUrl.origin);
+    if (process.env.NODE_ENV === "development") {
+      console.log("[FHIR authorize] redirect_uri:", redirectUri);
+    }
 
     // Build authorization URL
     const params = new URLSearchParams({
@@ -127,8 +134,8 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("[FHIR authorize] Error:", error);
     return NextResponse.json(
-      { error: "Unable to connect to Medicare right now. Please try again in a few minutes." },
-      { status: 500 }
+      { error: SYSTEM.MEDICARE_CONNECT_FAILED },
+      { status: 500 },
     );
   }
 }

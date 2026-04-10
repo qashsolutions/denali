@@ -32,7 +32,7 @@ export async function getValidToken(userId: string): Promise<TokenPair | null> {
     `SELECT * FROM ehr_connections
      WHERE user_id = $1 AND provider = 'bluebutton' AND status = 'active'
      LIMIT 1`,
-    [userId]
+    [userId],
   );
   const conn = result.rows[0] ?? null;
   if (!conn) return null;
@@ -42,7 +42,10 @@ export async function getValidToken(userId: string): Promise<TokenPair | null> {
 
   // Refresh if expiring within 5 minutes
   if (expiresAt.getTime() - now.getTime() < 5 * 60 * 1000) {
-    const refreshed = await refreshAccessToken(conn.id, conn.refresh_token_encrypted);
+    const refreshed = await refreshAccessToken(
+      conn.id,
+      conn.refresh_token_encrypted,
+    );
     if (!refreshed) return null;
     return { accessToken: refreshed, fhirPatientId: conn.fhir_patient_id };
   }
@@ -59,7 +62,7 @@ export async function getValidToken(userId: string): Promise<TokenPair | null> {
  */
 async function refreshAccessToken(
   connectionId: string,
-  refreshTokenEncrypted: string
+  refreshTokenEncrypted: string,
 ): Promise<string | null> {
   const refreshToken = decrypt(refreshTokenEncrypted);
   const { blueButton } = API_CONFIG;
@@ -67,7 +70,9 @@ async function refreshAccessToken(
   const clientId = process.env.BLUEBUTTON_CLIENT_ID;
   const clientSecret = process.env.BLUEBUTTON_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
-    console.error("[FHIR tokens] Missing BLUEBUTTON_CLIENT_ID or BLUEBUTTON_CLIENT_SECRET");
+    console.error(
+      "[FHIR tokens] Missing BLUEBUTTON_CLIENT_ID or BLUEBUTTON_CLIENT_SECRET",
+    );
     return null;
   }
 
@@ -87,16 +92,20 @@ async function refreshAccessToken(
   });
 
   if (!res.ok) {
-    console.error("[FHIR tokens] Refresh failed:", res.status, await res.text());
+    console.error("[FHIR tokens] Refresh failed:", res.status);
     // Mark connection as expired
     await query(
       `UPDATE ehr_connections SET status = 'expired', updated_at = $1 WHERE id = $2`,
-      [new Date().toISOString(), connectionId]
+      [new Date().toISOString(), connectionId],
     );
     return null;
   }
 
-  const tokens = await res.json() as { access_token: string; refresh_token: string; expires_in: number };
+  const tokens = (await res.json()) as {
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+  };
 
   await query(
     `UPDATE ehr_connections
@@ -111,7 +120,7 @@ async function refreshAccessToken(
       new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
       new Date().toISOString(),
       connectionId,
-    ]
+    ],
   );
 
   return tokens.access_token;
@@ -125,7 +134,7 @@ export async function hasActiveConnection(userId: string): Promise<boolean> {
     `SELECT id FROM ehr_connections
      WHERE user_id = $1 AND provider = 'bluebutton' AND status = 'active'
      LIMIT 1`,
-    [userId]
+    [userId],
   );
   return result.rows.length > 0;
 }

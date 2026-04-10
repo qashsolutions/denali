@@ -31,7 +31,8 @@ export type AuditAction =
   | "ALERT_BATCH_PROCESSED"
   | "ALERT_SENT"
   | "ALERT_PREFERENCE_UPDATED"
-  | "IDME_VERIFY";
+  | "IDME_VERIFY"
+  | "LOGOUT";
 
 type ResourceType =
   | "ehr_connection"
@@ -67,7 +68,7 @@ export async function logAudit(
     resourceId?: string;
     metadata?: Record<string, unknown>;
     request?: Request;
-  } = {}
+  } = {},
 ): Promise<void> {
   try {
     // Dedup check: skip if same user+action logged recently
@@ -78,7 +79,7 @@ export async function logAudit(
         `SELECT id FROM audit_logs
          WHERE user_id = $1 AND action = $2 AND created_at >= $3
          LIMIT 1`,
-        [options.userId, action, cutoff]
+        [options.userId, action, cutoff],
       );
       if (recent.rows.length > 0) return;
     }
@@ -106,7 +107,7 @@ export async function logAudit(
         JSON.stringify(options.metadata ?? {}),
         ipAddress,
         userAgent,
-      ]
+      ],
     );
   } catch (error) {
     // Audit logging should never break the main flow

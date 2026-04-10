@@ -13,6 +13,8 @@ import { query } from "@/lib/db";
 import { getCachedHealthData, syncHealthData } from "@/lib/fhir/sync";
 import { hasActiveConnection } from "@/lib/fhir/tokens";
 import { logAudit } from "@/lib/audit";
+import { withMetrics } from "@/lib/metrics";
+import { AUTH, SYSTEM } from "@/config/messages";
 
 /**
  * Fire-and-forget: refresh diabetes insights if user has consented.
@@ -21,25 +23,38 @@ async function triggerInsightRefreshIfConsented(userId: string): Promise<void> {
   // Check consent
   const consentResult = await query<{ granted: boolean }>(
     `SELECT granted FROM consent_preferences WHERE user_id = $1 AND consent_type = 'health_data_ai'`,
-    [userId]
+    [userId],
   );
   if (!consentResult.rows[0]?.granted) return;
 
-  const { computeDataHash, generateDiabetesInsight } = await import("@/lib/diabetes-insights");
+  const { computeDataHash, generateDiabetesInsight } =
+    await import("@/lib/diabetes-insights");
 
   // Gather data
   const [snapshotsResult, cacheResult, logResult] = await Promise.all([
-    query<{ loinc_code: string; lab_name: string; value: string; unit: string; observed_date: string }>(
+    query<{
+      loinc_code: string;
+      lab_name: string;
+      value: string;
+      unit: string;
+      observed_date: string;
+    }>(
       `SELECT loinc_code, lab_name, value, unit, observed_date FROM diabetes_snapshots WHERE user_id = $1 ORDER BY observed_date ASC`,
-      [userId]
+      [userId],
     ),
     query<{ resource_type: string; data: unknown }>(
       `SELECT resource_type, data FROM fhir_cache WHERE user_id = $1`,
-      [userId]
+      [userId],
     ),
-    query<{ entry_type: string; logged_at: string; glucose_value: string | null; activity_minutes: number | null; note: string | null }>(
+    query<{
+      entry_type: string;
+      logged_at: string;
+      glucose_value: string | null;
+      activity_minutes: number | null;
+      note: string | null;
+    }>(
       `SELECT entry_type, logged_at, glucose_value, activity_minutes, note FROM diabetes_log WHERE user_id = $1 ORDER BY logged_at DESC LIMIT 10`,
-      [userId]
+      [userId],
     ),
   ]);
 
@@ -49,9 +64,25 @@ async function triggerInsightRefreshIfConsented(userId: string): Promise<void> {
     cacheMap.set(row.resource_type, data);
   }
 
-  const labs = (cacheMap.get("labs") as Array<{ name: string; value: number; unit: string; date: string }>) ?? [];
-  const conditions = (cacheMap.get("conditions") as Array<{ code: string; name: string; category: string }>) ?? [];
-  const medications = (cacheMap.get("medications") as Array<{ name: string; status: string; isDiabetesMed: boolean }>) ?? [];
+  const labs =
+    (cacheMap.get("labs") as Array<{
+      name: string;
+      value: number;
+      unit: string;
+      date: string;
+    }>) ?? [];
+  const conditions =
+    (cacheMap.get("conditions") as Array<{
+      code: string;
+      name: string;
+      category: string;
+    }>) ?? [];
+  const medications =
+    (cacheMap.get("medications") as Array<{
+      name: string;
+      status: string;
+      isDiabetesMed: boolean;
+    }>) ?? [];
 
   const a1cHistory = snapshotsResult.rows
     .filter((r) => r.lab_name.toLowerCase().includes("a1c"))
@@ -61,7 +92,7 @@ async function triggerInsightRefreshIfConsented(userId: string): Promise<void> {
   const { classification } = classifyDiabetesStatus(
     conditions as Parameters<typeof classifyDiabetesStatus>[0],
     labs as Parameters<typeof classifyDiabetesStatus>[1],
-    medications as Parameters<typeof classifyDiabetesStatus>[2]
+    medications as Parameters<typeof classifyDiabetesStatus>[2],
   );
 
   const inputData = {
@@ -84,7 +115,7 @@ async function triggerInsightRefreshIfConsented(userId: string): Promise<void> {
   // Check existing hash
   const existingResult = await query<{ data_hash: string }>(
     `SELECT data_hash FROM diabetes_insights WHERE user_id = $1 LIMIT 1`,
-    [userId]
+    [userId],
   );
   if (existingResult.rows[0]?.data_hash === dataHash) return;
 
@@ -114,31 +145,43 @@ async function triggerInsightRefreshIfConsented(userId: string): Promise<void> {
       dataHash,
       now,
       now,
-    ]
+    ],
   );
 }
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
       );
     }
 
     logAudit("FHIR_DATA_ACCESS", {
       userId: user.userId,
       resourceType: "ehr_connection",
+      request,
     }).catch(() => {});
 
     // Check if user has an active connection
     const connected = await hasActiveConnection(user.userId);
     if (!connected) {
-      return NextResponse.json(
-        { connected: false, patient: null, coverage: [], claims: [], labs: [], conditions: [], medications: [], screenings: [], providers: [], hospitalizations: [], dme: [], isHospice: false }
-      );
+      return NextResponse.json({
+        connected: false,
+        patient: null,
+        coverage: [],
+        claims: [],
+        labs: [],
+        conditions: [],
+        medications: [],
+        screenings: [],
+        providers: [],
+        hospitalizations: [],
+        dme: [],
+        isHospice: false,
+      });
     }
 
     // Try cache first
@@ -155,7 +198,8 @@ export async function GET(request: NextRequest) {
       const fresh = await syncHealthData(user.userId);
 
       // Auto-trigger insight refresh if diabetes data exists (fire-and-forget)
-      const hasDiabetesData = fresh.labs.length > 0 || fresh.conditions.length > 0;
+      const hasDiabetesData =
+        fresh.labs.length > 0 || fresh.conditions.length > 0;
       if (hasDiabetesData) {
         triggerInsightRefreshIfConsented(user.userId).catch(() => {});
       }
@@ -167,15 +211,20 @@ export async function GET(request: NextRequest) {
     } catch (syncError) {
       console.error("[FHIR data] Sync failed:", syncError);
       return NextResponse.json(
-        { connected: true, error: "Failed to fetch health data. Try refreshing." },
-        { status: 502 }
+        {
+          connected: true,
+          error: "Failed to fetch health data. Try refreshing.",
+        },
+        { status: 502 },
       );
     }
   } catch (error) {
     console.error("[FHIR data] Error:", error);
     return NextResponse.json(
-      { error: "Failed to load health data" },
-      { status: 500 }
+      { error: SYSTEM.LOAD_HEALTH_DATA },
+      { status: 500 },
     );
   }
 }
+
+export const GET = withMetrics(_GET, "/api/fhir/data");

@@ -20,7 +20,8 @@ import { logAudit } from "@/lib/audit";
 export async function GET(request: NextRequest) {
   // Behind ALB, request.url is the internal container URL (e.g. http://ip-172-31-27-29.ec2.internal:3000/...).
   // All redirects must use the public origin from Host/x-forwarded-host headers.
-  const fwdHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  const fwdHost =
+    request.headers.get("x-forwarded-host") || request.headers.get("host");
   const fwdProto = request.headers.get("x-forwarded-proto") || "https";
   // Do NOT strip www — cookies are domain-scoped, must match the user's actual domain
   const publicOrigin = fwdHost ? `${fwdProto}://${fwdHost}` : null;
@@ -36,22 +37,27 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.warn("[FHIR callback] CMS returned error:", error);
       return NextResponse.redirect(
-        new URL("/app/health?error=denied", redirectBase)
+        new URL("/app/health?error=denied", redirectBase),
       );
     }
 
     if (!code || !state) {
       return NextResponse.redirect(
-        new URL("/app/health?error=missing_params", redirectBase)
+        new URL("/app/health?error=missing_params", redirectBase),
       );
     }
 
     // Validate state against cookie
     const savedState = request.cookies.get("bb_oauth_state")?.value;
     if (!savedState || savedState !== state) {
-      console.error("[FHIR callback] State mismatch — savedState:", savedState ? "present" : "missing", "| publicOrigin:", publicOrigin);
+      console.error(
+        "[FHIR callback] State mismatch — savedState:",
+        savedState ? "present" : "missing",
+        "| publicOrigin:",
+        publicOrigin,
+      );
       return NextResponse.redirect(
-        new URL("/app/health?error=invalid_state", redirectBase)
+        new URL("/app/health?error=invalid_state", redirectBase),
       );
     }
 
@@ -60,7 +66,7 @@ export async function GET(request: NextRequest) {
     if (!codeVerifier) {
       console.error("[FHIR callback] Missing PKCE code verifier");
       return NextResponse.redirect(
-        new URL("/app/health?error=missing_pkce", redirectBase)
+        new URL("/app/health?error=missing_pkce", redirectBase),
       );
     }
 
@@ -82,7 +88,10 @@ export async function GET(request: NextRequest) {
           headers.set("Authorization", `Bearer ${refreshedAccessToken}`);
           const refreshedRequest = new NextRequest(request.url, { headers });
           user = await getAuthUser(refreshedRequest);
-          console.log("[FHIR callback] Token refreshed successfully for user:", user?.userId);
+          console.log(
+            "[FHIR callback] Token refreshed successfully for user:",
+            user?.userId,
+          );
         } catch (refreshErr) {
           console.error("[FHIR callback] Token refresh failed:", refreshErr);
         }
@@ -90,9 +99,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (!user) {
-      console.error("[FHIR callback] User not authenticated after refresh attempt");
+      console.error(
+        "[FHIR callback] User not authenticated after refresh attempt",
+      );
       return NextResponse.redirect(
-        new URL("/app/health?error=not_authenticated", redirectBase)
+        new URL("/app/health?error=not_authenticated", redirectBase),
       );
     }
 
@@ -103,14 +114,15 @@ export async function GET(request: NextRequest) {
     if (!clientId || !clientSecret) {
       console.error("[FHIR callback] Missing BLUEBUTTON credentials");
       return NextResponse.redirect(
-        new URL("/app/health?error=config", redirectBase)
+        new URL("/app/health?error=config", redirectBase),
       );
     }
     // Must match EXACTLY what was sent in authorize — use same origin detection
     // Behind ALB, prefer Host/x-forwarded-host headers over request.nextUrl.origin
     // Do NOT strip www — must match authorize route's behavior exactly
-    const redirectUri = process.env.BLUEBUTTON_CALLBACK_URL
-      || `${publicOrigin || getBaseUrl(request.nextUrl.origin)}${blueButton.callbackPath}`;
+    const redirectUri =
+      process.env.BLUEBUTTON_CALLBACK_URL ||
+      `${publicOrigin || getBaseUrl(request.nextUrl.origin)}${blueButton.callbackPath}`;
 
     const tokenUrl = `${blueButton.baseUrl}/${blueButton.version}/o/token/`;
     const body = new URLSearchParams({
@@ -131,14 +143,18 @@ export async function GET(request: NextRequest) {
 
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
-      console.error("[FHIR callback] Token exchange failed:", tokenRes.status, errText);
+      console.error(
+        "[FHIR callback] Token exchange failed:",
+        tokenRes.status,
+        errText,
+      );
       return NextResponse.redirect(
-        new URL("/app/health?error=token_exchange", redirectBase)
+        new URL("/app/health?error=token_exchange", redirectBase),
       );
     }
 
     const tokens = await tokenRes.json();
-    console.log("[FHIR callback] Token exchange succeeded, patient:", tokens.patient);
+    console.log("[FHIR callback] Token exchange succeeded");
 
     // Extract FHIR patient ID from token response
     // Blue Button includes patient ID in the token response
@@ -147,7 +163,9 @@ export async function GET(request: NextRequest) {
     // Encrypt tokens
     const accessTokenEncrypted = encrypt(tokens.access_token);
     const refreshTokenEncrypted = encrypt(tokens.refresh_token);
-    const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+    const expiresAt = new Date(
+      Date.now() + tokens.expires_in * 1000,
+    ).toISOString();
 
     // Upsert connection into RDS
     try {
@@ -172,12 +190,12 @@ export async function GET(request: NextRequest) {
           tokens.scope ?? blueButton.scopes,
           "active",
           new Date().toISOString(),
-        ]
+        ],
       );
     } catch (upsertError) {
       console.error("[FHIR callback] Failed to save connection:", upsertError);
       return NextResponse.redirect(
-        new URL("/app/health?error=save_failed", redirectBase)
+        new URL("/app/health?error=save_failed", redirectBase),
       );
     }
 
@@ -204,7 +222,7 @@ export async function GET(request: NextRequest) {
 
     // Clear OAuth cookies and redirect to health page
     const response = NextResponse.redirect(
-      new URL("/app/health?connected=true", redirectBase)
+      new URL("/app/health?connected=true", redirectBase),
     );
     response.cookies.delete("bb_oauth_state");
     response.cookies.delete("bb_code_verifier");
@@ -225,7 +243,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("[FHIR callback] Error:", error);
     return NextResponse.redirect(
-      new URL("/app/health?error=unknown", redirectBase)
+      new URL("/app/health?error=unknown", redirectBase),
     );
   }
 }

@@ -17,11 +17,7 @@ import {
   isPreventiveCode,
   commonlyRequiresPriorAuth,
 } from "../medicare-lookup";
-import {
-  checkSADList,
-  getCoverageByRoute,
-  explainCoverage,
-} from "../sad-list";
+import { checkSADList, getCoverageByRoute, explainCoverage } from "../sad-list";
 import { pubmedCache } from "../cache";
 import {
   createRateLimitedFetcher,
@@ -58,7 +54,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       properties: {
         query: {
           type: "string",
-          description: "Description of the condition or symptom to search for (e.g., 'type 2 diabetes', 'low back pain')",
+          description:
+            "Description of the condition or symptom to search for (e.g., 'type 2 diabetes', 'low back pain')",
         },
         limit: {
           type: "number",
@@ -81,11 +78,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       properties: {
         query: {
           type: "string",
-          description: "The procedure, service, or condition to search coverage for (e.g., 'MRI lumbar spine', 'CPAP')",
+          description:
+            "The procedure, service, or condition to search coverage for (e.g., 'MRI lumbar spine', 'CPAP')",
         },
         contractor_id: {
           type: "string",
-          description: "Medicare Administrative Contractor ID for geographic filtering (optional)",
+          description:
+            "Medicare Administrative Contractor ID for geographic filtering (optional)",
         },
         limit: {
           type: "number",
@@ -104,7 +103,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       properties: {
         query: {
           type: "string",
-          description: "The procedure, service, or condition to search coverage for",
+          description:
+            "The procedure, service, or condition to search coverage for",
         },
         limit: {
           type: "number",
@@ -123,7 +123,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       properties: {
         document_id: {
           type: "string",
-          description: "The LCD or NCD document ID (e.g., 'L33788' for LCD, or NCD tracking number)",
+          description:
+            "The LCD or NCD document ID (e.g., 'L33788' for LCD, or NCD tracking number)",
         },
         document_type: {
           type: "string",
@@ -155,7 +156,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         organization_name: {
           type: "string",
-          description: "Organization or practice name (use instead of first/last for groups)",
+          description:
+            "Organization or practice name (use instead of first/last for groups)",
         },
         city: {
           type: "string",
@@ -167,7 +169,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         taxonomy_description: {
           type: "string",
-          description: "Provider specialty (e.g., 'Internal Medicine', 'Orthopedic Surgery')",
+          description:
+            "Provider specialty (e.g., 'Internal Medicine', 'Orthopedic Surgery')",
         },
         limit: {
           type: "number",
@@ -292,7 +295,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       properties: {
         query: {
           type: "string",
-          description: "Search query (e.g., 'MRI lumbar radiculopathy diagnosis')",
+          description:
+            "Search query (e.g., 'MRI lumbar radiculopathy diagnosis')",
         },
         condition: {
           type: "string",
@@ -355,35 +359,46 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         policy_references: {
           type: "array",
           items: { type: "string" },
-          description: "LCD/NCD policy numbers and text from coverage lookup (e.g., 'LCD L35936 - MRI of the Spine'). Include relevant coverage criteria text.",
+          description:
+            "LCD/NCD policy numbers and text from coverage lookup (e.g., 'LCD L35936 - MRI of the Spine'). Include relevant coverage criteria text.",
         },
         pubmed_citations: {
           type: "array",
           items: { type: "string" },
-          description: "PubMed citations supporting medical necessity (from search_pubmed results)",
+          description:
+            "PubMed citations supporting medical necessity (from search_pubmed results)",
         },
         medicare_type: {
           type: "string",
-          description: "Medicare type: 'original' or 'advantage'. If advantage, letter addresses the plan.",
+          description:
+            "Medicare type: 'original' or 'advantage'. If advantage, letter addresses the plan.",
         },
         plan_name: {
           type: "string",
-          description: "Medicare Advantage plan name (e.g., 'Humana Gold Plus'). Used when medicare_type is 'advantage'.",
+          description:
+            "Medicare Advantage plan name (e.g., 'Humana Gold Plus'). Used when medicare_type is 'advantage'.",
         },
         appeal_level: {
           type: "number",
-          description: "Medicare appeal level (1-5). Default: 1. Level 2: QIC/IRE reconsideration. Level 3: ALJ hearing. Level 4-5: informational only.",
+          description:
+            "Medicare appeal level (1-5). Default: 1. Level 2: QIC/IRE reconsideration. Level 3: ALJ hearing. Level 4-5: informational only.",
         },
         prior_appeal_date: {
           type: "string",
-          description: "Date of prior level's denial decision (for Level 2+ deadline calculation). YYYY-MM-DD format.",
+          description:
+            "Date of prior level's denial decision (for Level 2+ deadline calculation). YYYY-MM-DD format.",
         },
         amount_in_controversy: {
           type: "number",
-          description: "Dollar amount at stake. Required for Level 3 (ALJ) and Level 5 (Federal Court) threshold check.",
+          description:
+            "Dollar amount at stake. Required for Level 3 (ALJ) and Level 5 (Federal Court) threshold check.",
         },
       },
-      required: ["denial_reason", "procedure_description", "diagnosis_description"],
+      required: [
+        "denial_reason",
+        "procedure_description",
+        "diagnosis_description",
+      ],
     },
   },
 
@@ -401,7 +416,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         route: {
           type: "string",
-          description: "Route of administration (e.g., 'oral', 'IV', 'subcutaneous', 'injection')",
+          description:
+            "Route of administration (e.g., 'oral', 'IV', 'subcutaneous', 'injection')",
         },
       },
       required: ["drug_name"],
@@ -422,11 +438,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         description_search: {
           type: "string",
-          description: "Free-text search of denial code descriptions (e.g., 'medically necessary', 'documentation')",
+          description:
+            "Free-text search of denial code descriptions (e.g., 'medically necessary', 'documentation')",
         },
         eob_code: {
           type: "string",
-          description: "EOB code from patient's Explanation of Benefits document",
+          description:
+            "EOB code from patient's Explanation of Benefits document",
         },
       },
     },
@@ -442,7 +460,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       properties: {
         procedure_description: {
           type: "string",
-          description: "Plain English procedure description (e.g., 'lumbar MRI', 'knee replacement', 'sleep study')",
+          description:
+            "Plain English procedure description (e.g., 'lumbar MRI', 'knee replacement', 'sleep study')",
         },
         cpt_code: {
           type: "string",
@@ -467,22 +486,29 @@ const searchICD10Executor: ToolExecutor = async (input) => {
     const limit = Math.min((input.limit as number) || 10, 20);
     console.log("[Tool:search_icd10] Searching:", query);
 
-    const url = new URL("https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search");
+    const url = new URL(
+      "https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search",
+    );
     url.searchParams.set("terms", query);
     url.searchParams.set("maxList", String(limit));
     url.searchParams.set("sf", "code,name");
     url.searchParams.set("df", "code,name");
 
-    const resp = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+    const resp = await fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+    });
     if (!resp.ok) throw new Error(`NLM API error: ${resp.status}`);
-    const json = await resp.json() as [number, string[], null, string[][]];
+    const json = (await resp.json()) as [number, string[], null, string[][]];
 
     const [total, , , rows] = json;
     const codes = (rows || []).map(([code, name]) => ({ code, name }));
     return { success: true, data: { query, total, codes } };
   } catch (error) {
     console.error("[Tool:search_icd10] Error:", error);
-    return { success: false, error: error instanceof Error ? error.message : "ICD-10 search failed" };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "ICD-10 search failed",
+    };
   }
 };
 
@@ -500,11 +526,17 @@ const searchLocalCoverageExecutor: ToolExecutor = async (input) => {
     const url = new URL(`${CMS_COVERAGE_API}/lcd`);
     url.searchParams.set("keyword", query);
     url.searchParams.set("pageSize", String(limit));
-    if (input.contractor_id) url.searchParams.set("contractorId", input.contractor_id as string);
+    if (input.contractor_id)
+      url.searchParams.set("contractorId", input.contractor_id as string);
 
-    const resp = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+    const resp = await fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+    });
     if (!resp.ok) throw new Error(`CMS Coverage API error: ${resp.status}`);
-    const json = await resp.json() as { totalCount?: number; items?: unknown[] };
+    const json = (await resp.json()) as {
+      totalCount?: number;
+      items?: unknown[];
+    };
 
     return {
       success: true,
@@ -517,7 +549,10 @@ const searchLocalCoverageExecutor: ToolExecutor = async (input) => {
     };
   } catch (error) {
     console.error("[Tool:search_local_coverage] Error:", error);
-    return { success: false, error: error instanceof Error ? error.message : "LCD search failed" };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "LCD search failed",
+    };
   }
 };
 
@@ -531,9 +566,14 @@ const searchNationalCoverageExecutor: ToolExecutor = async (input) => {
     url.searchParams.set("keyword", query);
     url.searchParams.set("pageSize", String(limit));
 
-    const resp = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+    const resp = await fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+    });
     if (!resp.ok) throw new Error(`CMS Coverage API error: ${resp.status}`);
-    const json = await resp.json() as { totalCount?: number; items?: unknown[] };
+    const json = (await resp.json()) as {
+      totalCount?: number;
+      items?: unknown[];
+    };
 
     return {
       success: true,
@@ -546,7 +586,10 @@ const searchNationalCoverageExecutor: ToolExecutor = async (input) => {
     };
   } catch (error) {
     console.error("[Tool:search_national_coverage] Error:", error);
-    return { success: false, error: error instanceof Error ? error.message : "NCD search failed" };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "NCD search failed",
+    };
   }
 };
 
@@ -554,19 +597,32 @@ const getCoverageDocumentExecutor: ToolExecutor = async (input) => {
   try {
     const documentId = (input.document_id as string).trim();
     const documentType = (input.document_type as string).toLowerCase();
-    console.log("[Tool:get_coverage_document] Fetching:", documentType, documentId);
+    console.log(
+      "[Tool:get_coverage_document] Fetching:",
+      documentType,
+      documentId,
+    );
 
     const path = documentType === "lcd" ? "lcd" : "ncd";
     const url = `${CMS_COVERAGE_API}/${path}/${encodeURIComponent(documentId)}`;
 
     const resp = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!resp.ok) throw new Error(`CMS Coverage API error: ${resp.status} for ${documentId}`);
+    if (!resp.ok)
+      throw new Error(
+        `CMS Coverage API error: ${resp.status} for ${documentId}`,
+      );
     const json = await resp.json();
 
     return { success: true, data: json };
   } catch (error) {
     console.error("[Tool:get_coverage_document] Error:", error);
-    return { success: false, error: error instanceof Error ? error.message : "Coverage document fetch failed" };
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Coverage document fetch failed",
+    };
   }
 };
 
@@ -577,19 +633,26 @@ const NPPES_API = "https://npiregistry.cms.hhs.gov/api";
 
 const npiSearchExecutor: ToolExecutor = async (input) => {
   try {
-    console.log("[Tool:npi_search] Searching:", JSON.stringify(input));
+    console.log("[Tool:npi_search] Searching:", input.state || "nationwide");
     const params = new URLSearchParams({ version: "2.1" });
     if (input.first_name) params.set("first_name", input.first_name as string);
     if (input.last_name) params.set("last_name", input.last_name as string);
-    if (input.organization_name) params.set("organization_name", input.organization_name as string);
+    if (input.organization_name)
+      params.set("organization_name", input.organization_name as string);
     if (input.city) params.set("city", input.city as string);
     if (input.state) params.set("state", input.state as string);
-    if (input.taxonomy_description) params.set("taxonomy_description", input.taxonomy_description as string);
+    if (input.taxonomy_description)
+      params.set("taxonomy_description", input.taxonomy_description as string);
     params.set("limit", String(Math.min((input.limit as number) || 10, 200)));
 
-    const resp = await fetch(`${NPPES_API}/?${params}`, { headers: { Accept: "application/json" } });
+    const resp = await fetch(`${NPPES_API}/?${params}`, {
+      headers: { Accept: "application/json" },
+    });
     if (!resp.ok) throw new Error(`NPPES API error: ${resp.status}`);
-    const json = await resp.json() as { result_count?: number; results?: unknown[] };
+    const json = (await resp.json()) as {
+      result_count?: number;
+      results?: unknown[];
+    };
 
     return {
       success: true,
@@ -601,7 +664,10 @@ const npiSearchExecutor: ToolExecutor = async (input) => {
     };
   } catch (error) {
     console.error("[Tool:npi_search] Error:", error);
-    return { success: false, error: error instanceof Error ? error.message : "NPI search failed" };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "NPI search failed",
+    };
   }
 };
 
@@ -610,19 +676,31 @@ const npiLookupExecutor: ToolExecutor = async (input) => {
     const npiNumber = (input.npi_number as string).trim();
     console.log("[Tool:npi_lookup] Looking up NPI:", npiNumber);
 
-    const resp = await fetch(`${NPPES_API}/?version=2.1&number=${encodeURIComponent(npiNumber)}`, {
-      headers: { Accept: "application/json" },
-    });
+    const resp = await fetch(
+      `${NPPES_API}/?version=2.1&number=${encodeURIComponent(npiNumber)}`,
+      {
+        headers: { Accept: "application/json" },
+      },
+    );
     if (!resp.ok) throw new Error(`NPPES API error: ${resp.status}`);
-    const json = await resp.json() as { result_count?: number; results?: unknown[] };
+    const json = (await resp.json()) as {
+      result_count?: number;
+      results?: unknown[];
+    };
 
     if (!json.results || json.results.length === 0) {
-      return { success: false, error: `No provider found for NPI ${npiNumber}` };
+      return {
+        success: false,
+        error: `No provider found for NPI ${npiNumber}`,
+      };
     }
     return { success: true, data: json.results[0] };
   } catch (error) {
     console.error("[Tool:npi_lookup] Error:", error);
-    return { success: false, error: error instanceof Error ? error.message : "NPI lookup failed" };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "NPI lookup failed",
+    };
   }
 };
 
@@ -643,7 +721,12 @@ const searchCPTExecutor: ToolExecutor = async (input) => {
       results = results.slice(0, limit);
     }
 
-    console.log("[Tool:search_cpt] Found", results.length, "codes:", results.map(r => r.code).join(", "));
+    console.log(
+      "[Tool:search_cpt] Found",
+      results.length,
+      "codes:",
+      results.map((r) => r.code).join(", "),
+    );
 
     return {
       success: true,
@@ -661,7 +744,8 @@ const searchCPTExecutor: ToolExecutor = async (input) => {
     console.error("[Tool:search_cpt] Error:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to search CPT codes",
+      error:
+        error instanceof Error ? error.message : "Failed to search CPT codes",
     };
   }
 };
@@ -685,7 +769,10 @@ const getRelatedDiagnosesExecutor: ToolExecutor = async (input) => {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to get related diagnoses",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to get related diagnoses",
     };
   }
 };
@@ -709,7 +796,10 @@ const getRelatedProceduresExecutor: ToolExecutor = async (input) => {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to get related procedures",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to get related procedures",
     };
   }
 };
@@ -722,16 +812,32 @@ const checkPriorAuthExecutor: ToolExecutor = async (input) => {
 
     // Determine source detail for CMS PA Model vs general list
     const CMS_PA_MODEL_CODES = [
-      "15820", "15821", "15822", "15823",  // Blepharoplasty
-      "64615",                              // Botulinum toxin
-      "22551", "22552", "22554",            // Cervical fusion
-      "64490", "64491", "64492", "64493", "64494", "64495",  // Facet joint
-      "27130", "27132", "27447",            // Hip/knee replacement
-      "63650", "63685", "63688",            // Spinal neurostimulators
+      "15820",
+      "15821",
+      "15822",
+      "15823", // Blepharoplasty
+      "64615", // Botulinum toxin
+      "22551",
+      "22552",
+      "22554", // Cervical fusion
+      "64490",
+      "64491",
+      "64492",
+      "64493",
+      "64494",
+      "64495", // Facet joint
+      "27130",
+      "27132",
+      "27447", // Hip/knee replacement
+      "63650",
+      "63685",
+      "63688", // Spinal neurostimulators
     ];
     const isCmsModel = CMS_PA_MODEL_CODES.includes(cptCode);
     const sourceDetail = requiresAuth
-      ? (isCmsModel ? "CMS Prior Authorization Model" : "Common prior auth list")
+      ? isCmsModel
+        ? "CMS Prior Authorization Model"
+        : "Common prior auth list"
       : "Not on prior auth lists";
 
     return {
@@ -740,7 +846,9 @@ const checkPriorAuthExecutor: ToolExecutor = async (input) => {
         cpt_code: cptCode,
         description: codeDetails?.description || "Unknown procedure",
         commonly_requires_prior_auth: requiresAuth,
-        source: requiresAuth ? "CMS Prior Authorization Model / common list" : "common list (not found)",
+        source: requiresAuth
+          ? "CMS Prior Authorization Model / common list"
+          : "common list (not found)",
         source_detail: sourceDetail,
         recommendation: requiresAuth
           ? "Prior authorization is commonly required. The provider should submit the request BEFORE scheduling the service."
@@ -756,7 +864,8 @@ const checkPriorAuthExecutor: ToolExecutor = async (input) => {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to check prior auth",
+      error:
+        error instanceof Error ? error.message : "Failed to check prior auth",
     };
   }
 };
@@ -781,7 +890,10 @@ const checkPreventiveExecutor: ToolExecutor = async (input) => {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to check preventive status",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to check preventive status",
     };
   }
 };
@@ -807,7 +919,8 @@ const searchPubMedExecutor: ToolExecutor = async (input) => {
     }
 
     // Add Medicare/coverage relevance terms
-    searchTerm += " AND (Medicare OR coverage OR medical necessity OR clinical evidence)";
+    searchTerm +=
+      " AND (Medicare OR coverage OR medical necessity OR clinical evidence)";
 
     // Check cache first
     const cacheKey = { type: "pubmed", searchTerm, limit };
@@ -821,7 +934,10 @@ const searchPubMedExecutor: ToolExecutor = async (input) => {
       Promise.race([
         pubmedFetch(url),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("PubMed request timed out after 15s")), 15000)
+          setTimeout(
+            () => reject(new Error("PubMed request timed out after 15s")),
+            15000,
+          ),
         ),
       ]);
 
@@ -893,7 +1009,8 @@ const searchPubMedExecutor: ToolExecutor = async (input) => {
     if (error instanceof CircuitOpenError) {
       return {
         success: false,
-        error: "PubMed service is temporarily unavailable. Please try again later.",
+        error:
+          "PubMed service is temporarily unavailable. Please try again later.",
       };
     }
     if (error instanceof RateLimitError) {
@@ -960,14 +1077,16 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
     if (!input.denial_date) {
       return {
         success: false,
-        error: "denial_date is required. Ask the user: 'When did you receive the denial letter?' The date is on their Explanation of Benefits (EOB) or denial notice. This is needed to calculate the appeal deadline.",
+        error:
+          "denial_date is required. Ask the user: 'When did you receive the denial letter?' The date is on their Explanation of Benefits (EOB) or denial notice. This is needed to calculate the appeal deadline.",
       };
     }
     const denialReason = input.denial_reason as string;
     if (!denialReason || denialReason.trim().length < 5) {
       return {
         success: false,
-        error: "denial_reason is required and must be descriptive. Ask the user: 'What reason did they give for the denial?' It's usually on the denial letter or EOB — something like 'not medically necessary' or 'missing documentation'.",
+        error:
+          "denial_reason is required and must be descriptive. Ask the user: 'What reason did they give for the denial?' It's usually on the denial letter or EOB — something like 'not medically necessary' or 'missing documentation'.",
       };
     }
 
@@ -985,7 +1104,9 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
     const isMA = medicareType === "advantage";
     const appealLevel = (input.appeal_level as number) || 1;
     const priorAppealDate = (input.prior_appeal_date as string) || "";
-    const amountInControversy = input.amount_in_controversy as number | undefined;
+    const amountInControversy = input.amount_in_controversy as
+      | number
+      | undefined;
 
     // --- Level 4-5: Informational only (no letter) ---
     if (appealLevel === 4) {
@@ -996,7 +1117,8 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
           informational: true,
           appeal_level: 4,
           level_name: "Medicare Appeals Council Review",
-          guidance: "Filed with the Departmental Appeals Board (DAB) within HHS. This is a paper review — no hearing. The Council can review, reverse, or remand the ALJ decision. Legal representation is strongly recommended at this level.",
+          guidance:
+            "Filed with the Departmental Appeals Board (DAB) within HHS. This is a paper review — no hearing. The Council can review, reverse, or remand the ALJ decision. Legal representation is strongly recommended at this level.",
           deadline_days: 60,
           next_steps: [
             "Gather the ALJ decision letter and all prior denial notices",
@@ -1043,32 +1165,49 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
       }
       if (amountInControversy < required) {
         // Warn but don't block — user may combine claims to meet threshold
-        console.warn(`[generate_appeal_letter] Amount $${amountInControversy} below ALJ threshold $${required}. Proceeding with warning.`);
+        console.warn(
+          `[generate_appeal_letter] Amount $${amountInControversy} below ALJ threshold $${required}. Proceeding with warning.`,
+        );
       }
     }
 
     // --- Calculate deadline based on level ---
     // Level 1: denial_date + 120/60 days (FFS/MA)
-    // Level 2: prior_appeal_date + 180 days
-    // Level 3: prior_appeal_date + 60 days
-    const deadlineDays = appealLevel === 1
-      ? MEDICARE_CONSTANTS.getAppealDeadlineDays(medicareType)
-      : appealLevel === 2 ? 180 : 60;
-    const baseDate = appealLevel === 1 ? denialDate : (priorAppealDate || denialDate);
+    // Level 2 FFS: prior_appeal_date + 180 days (42 CFR 405.962)
+    // Level 2 MA: no beneficiary deadline — plan auto-forwards to IRE (42 CFR 422.590)
+    // Level 3+: prior_appeal_date + 60 days
+    const deadlineDays: number | null =
+      appealLevel === 1
+        ? MEDICARE_CONSTANTS.getAppealDeadlineDays(medicareType)
+        : appealLevel === 2
+          ? isMA
+            ? null
+            : 180
+          : 60;
+    const baseDate =
+      appealLevel === 1 ? denialDate : priorAppealDate || denialDate;
 
-    const baseDateObj = new Date(baseDate);
-    const deadlineDate = new Date(baseDateObj);
-    deadlineDate.setDate(deadlineDate.getDate() + deadlineDays);
-    const deadlineStr = deadlineDate.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    deadlineDate.setHours(0, 0, 0, 0);
-    const daysRemaining = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    const deadlineExpired = daysRemaining < 0;
+    let deadlineStr: string | null = null;
+    let daysRemaining: number | null = null;
+    let deadlineExpired = false;
+
+    if (deadlineDays !== null) {
+      const baseDateObj = new Date(baseDate);
+      const deadlineDate = new Date(baseDateObj);
+      deadlineDate.setDate(deadlineDate.getDate() + deadlineDays);
+      deadlineStr = deadlineDate.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      deadlineDate.setHours(0, 0, 0, 0);
+      daysRemaining = Math.ceil(
+        (deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      deadlineExpired = daysRemaining < 0;
+    }
 
     // Search for supporting codes
     const diagnosisCodes = searchICD10(diagnosisDescription, 3);
@@ -1079,33 +1218,50 @@ const generateAppealLetterExecutor: ToolExecutor = async (input) => {
     const procLower = procedureDescription.toLowerCase();
     if (procLower.includes("mri")) coveragePattern = "mri";
     else if (procLower.includes("ct")) coveragePattern = "ct";
-    else if (procLower.includes("replacement")) coveragePattern = "joint_replacement";
-    else if (procLower.includes("therapy")) coveragePattern = "physical_therapy";
+    else if (procLower.includes("replacement"))
+      coveragePattern = "joint_replacement";
+    else if (procLower.includes("therapy"))
+      coveragePattern = "physical_therapy";
 
-    const requirements = COVERAGE_REQUIREMENTS[coveragePattern] || COVERAGE_REQUIREMENTS.default;
+    const requirements =
+      COVERAGE_REQUIREMENTS[coveragePattern] || COVERAGE_REQUIREMENTS.default;
 
     // --- Generate letter based on level ---
     const beneficiaryLine = patientName
       ? `Beneficiary Name: ${patientName} _______________`
       : "Beneficiary Name: _______________";
 
-    const todayStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-    const denialDateFormatted = new Date(denialDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const todayStr = new Date().toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    const denialDateFormatted = new Date(denialDate).toLocaleDateString(
+      "en-US",
+      { year: "numeric", month: "long", day: "numeric" },
+    );
 
     let letter: string;
 
     if (appealLevel === 2) {
       // --- Level 2: QIC/IRE Reconsideration ---
-      const letterTitle = isMA ? "Request for Independent Review" : "Request for Reconsideration";
+      const letterTitle = isMA
+        ? "Supplementary Statement for Independent Review"
+        : "Request for Reconsideration";
       const addressee = isMA
         ? "Independent Review Entity (IRE)"
         : "Qualified Independent Contractor (QIC)";
       const legalCitation = isMA ? "42 CFR §422.590" : "42 CFR §405.960";
       const priorAppealDateFormatted = priorAppealDate
-        ? new Date(priorAppealDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+        ? new Date(priorAppealDate).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })
         : "[Date of Level 1 Decision]";
 
-      letter = `IMPORTANT: This is a DRAFT letter generated by AI. It is NOT legal advice.
+      letter =
+        `IMPORTANT: This is a DRAFT letter generated by AI. It is NOT legal advice.
 Review all details carefully before submitting. Verify dates, codes, and
 facts with your healthcare provider. Fill in all blank fields before mailing.
 ─────────────────────────────────────────────────────────────────────────
@@ -1127,32 +1283,52 @@ Level 1 Decision Date: ${priorAppealDateFormatted}
 
 Dear ${addressee},
 
-I am writing to request reconsideration of the Level 1 ${isMA ? "Organization Determination" : "Redetermination"} decision dated ${priorAppealDateFormatted}, which upheld the denial of coverage for ${procedureDescription}.
+${
+  isMA
+    ? `Pursuant to 42 CFR §422.590, ${planName || "the Medicare Advantage plan"} was required to automatically forward this case to the Independent Review Entity after upholding the Level 1 Reconsideration decision dated ${priorAppealDateFormatted}. I am writing to provide additional evidence and argument in support of reversing the denial of coverage for ${procedureDescription}.`
+    : `I am writing to request reconsideration of the Level 1 Redetermination decision dated ${priorAppealDateFormatted}, which upheld the denial of coverage for ${procedureDescription}.`
+}
 
 The original denial on ${denialDateFormatted} stated: "${denialReason}"
 
-The Level 1 review did not adequately consider the following:
+The ${isMA ? "prior reviews did" : "Level 1 review did"} not adequately consider the following:
 
 1. MEDICAL NECESSITY
 
 The patient has been diagnosed with ${diagnosisDescription}. ${patientHistory ? `The patient's history includes: ${patientHistory}.` : ""}
 
-${priorTreatments.length > 0 ? `Prior conservative treatments attempted include:
+${
+  priorTreatments.length > 0
+    ? `Prior conservative treatments attempted include:
 ${priorTreatments.map((t) => `• ${t}`).join("\n")}
 
-Despite these treatments, the patient's condition has not adequately improved, necessitating ${procedureDescription}.` : ""}
-${isMA ? `
+Despite these treatments, the patient's condition has not adequately improved, necessitating ${procedureDescription}.`
+    : ""
+}
+${
+  isMA
+    ? `
 Under federal law (42 CFR §422.101), Medicare Advantage plans must cover all services that Original Medicare covers when medically necessary.
-` : ""}
+`
+    : ""
+}
 2. ADDITIONAL EVIDENCE
 
-${pubmedCitations.length > 0 ? `The following peer-reviewed evidence supports the medical necessity of this service:
-${pubmedCitations.map((cite) => `• ${cite}`).join("\n")}` : "I am submitting additional clinical evidence and documentation that was not fully considered in the Level 1 review."}
+${
+  pubmedCitations.length > 0
+    ? `The following peer-reviewed evidence supports the medical necessity of this service:
+${pubmedCitations.map((cite) => `• ${cite}`).join("\n")}`
+    : "I am submitting additional clinical evidence and documentation that was not fully considered in the Level 1 review."
+}
 
 3. COVERAGE CRITERIA
 
-${policyReferences.length > 0 ? `The following Medicare coverage policies support coverage:
-${policyReferences.map((ref) => `• ${ref}`).join("\n")}` : "Medicare coverage guidelines support this service when medically necessary."}
+${
+  policyReferences.length > 0
+    ? `The following Medicare coverage policies support coverage:
+${policyReferences.map((ref) => `• ${ref}`).join("\n")}`
+    : "Medicare coverage guidelines support this service when medically necessary."
+}
 
 ${diagnosisCodes.length > 0 ? `Diagnosis codes: ${diagnosisCodes.map((c) => `${c.code} (${c.description})`).join(", ")}` : ""}
 ${procedureCodes.length > 0 ? `Procedure codes: ${procedureCodes.map((c) => `${c.code} (${c.description})`).join(", ")}` : ""}
@@ -1175,7 +1351,6 @@ Sincerely,
 
 _______________
 ${patientName || "_______________"}`.trim();
-
     } else if (appealLevel === 3) {
       // --- Level 3: ALJ Hearing ---
       const thresholds = MEDICARE_CONSTANTS.getCurrentThresholds();
@@ -1183,14 +1358,20 @@ ${patientName || "_______________"}`.trim();
       const legalCitation = isMA ? "42 CFR §422.600" : "42 CFR §405.1000";
 
       const priorAppealDateFormatted = priorAppealDate
-        ? new Date(priorAppealDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+        ? new Date(priorAppealDate).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })
         : "[Date of Level 2 Decision]";
 
-      const amountWarning = amountInControversy && amountInControversy < thresholds.ALJ_THRESHOLD
-        ? `\nNOTE: The amount in controversy ($${amountInControversy.toLocaleString()}) is below the ${thresholds.year} threshold of $${thresholds.ALJ_THRESHOLD}. You may need to combine claims or aggregate amounts to meet the threshold.\n`
-        : "";
+      const amountWarning =
+        amountInControversy && amountInControversy < thresholds.ALJ_THRESHOLD
+          ? `\nNOTE: The amount in controversy ($${amountInControversy.toLocaleString()}) is below the ${thresholds.year} threshold of $${thresholds.ALJ_THRESHOLD}. You may need to combine claims or aggregate amounts to meet the threshold.\n`
+          : "";
 
-      letter = `IMPORTANT: This is a DRAFT letter generated by AI. It is NOT legal advice.
+      letter =
+        `IMPORTANT: This is a DRAFT letter generated by AI. It is NOT legal advice.
 Review all details carefully before submitting. Verify dates, codes, and
 facts with your healthcare provider. Fill in all blank fields before mailing.
 ─────────────────────────────────────────────────────────────────────────
@@ -1227,10 +1408,14 @@ STATEMENT OF THE CASE:
 
 The patient has been diagnosed with ${diagnosisDescription}. ${patientHistory ? `Patient history: ${patientHistory}.` : ""}
 
-${priorTreatments.length > 0 ? `Conservative treatments attempted:
+${
+  priorTreatments.length > 0
+    ? `Conservative treatments attempted:
 ${priorTreatments.map((t) => `• ${t}`).join("\n")}
 
-These treatments were insufficient, making ${procedureDescription} medically necessary.` : ""}
+These treatments were insufficient, making ${procedureDescription} medically necessary.`
+    : ""
+}
 
 2. ERRORS IN PRIOR DECISIONS
 
@@ -1238,11 +1423,19 @@ The Level 1 and Level 2 reviews failed to adequately consider the clinical evide
 
 3. SUPPORTING EVIDENCE
 
-${policyReferences.length > 0 ? `Medicare coverage policies supporting this service:
-${policyReferences.map((ref) => `• ${ref}`).join("\n")}` : ""}
+${
+  policyReferences.length > 0
+    ? `Medicare coverage policies supporting this service:
+${policyReferences.map((ref) => `• ${ref}`).join("\n")}`
+    : ""
+}
 
-${pubmedCitations.length > 0 ? `Peer-reviewed clinical evidence:
-${pubmedCitations.map((cite) => `• ${cite}`).join("\n")}` : ""}
+${
+  pubmedCitations.length > 0
+    ? `Peer-reviewed clinical evidence:
+${pubmedCitations.map((cite) => `• ${cite}`).join("\n")}`
+    : ""
+}
 
 ${diagnosisCodes.length > 0 ? `Diagnosis codes: ${diagnosisCodes.map((c) => `${c.code} (${c.description})`).join(", ")}` : ""}
 ${procedureCodes.length > 0 ? `Procedure codes: ${procedureCodes.map((c) => `${c.code} (${c.description})`).join(", ")}` : ""}
@@ -1266,15 +1459,17 @@ Sincerely,
 
 _______________
 ${patientName || "_______________"}`.trim();
-
     } else {
       // --- Level 1: Original letter (Redetermination / Organization Determination) ---
-      const letterTitle = isMA ? "Organization Determination Appeal" : "Level 1 Redetermination";
+      const letterTitle = isMA
+        ? "Request for Reconsideration"
+        : "Level 1 Redetermination";
       const addressee = isMA
         ? `${planName || "Medicare Advantage Plan"} Appeals Department`
         : "Medicare Administrative Contractor";
 
-      letter = `IMPORTANT: This is a DRAFT letter generated by AI. It is NOT legal advice.
+      letter =
+        `IMPORTANT: This is a DRAFT letter generated by AI. It is NOT legal advice.
 Review all details carefully before submitting. Verify dates, codes, and
 facts with your healthcare provider. Fill in all blank fields before mailing.
 ─────────────────────────────────────────────────────────────────────────
@@ -1306,13 +1501,21 @@ I respectfully disagree with this determination for the following reasons:
 
 The patient has been diagnosed with ${diagnosisDescription}. ${patientHistory ? `The patient's history includes: ${patientHistory}.` : ""}
 
-${priorTreatments.length > 0 ? `Prior conservative treatments attempted include:
+${
+  priorTreatments.length > 0
+    ? `Prior conservative treatments attempted include:
 ${priorTreatments.map((t) => `• ${t}`).join("\n")}
 
-Despite these treatments, the patient's condition has not adequately improved, necessitating ${procedureDescription}.` : ""}
-${isMA ? `
+Despite these treatments, the patient's condition has not adequately improved, necessitating ${procedureDescription}.`
+    : ""
+}
+${
+  isMA
+    ? `
 Under federal law (42 CFR §422.101), Medicare Advantage plans must cover all services that Original Medicare covers when medically necessary. This plan is obligated to provide coverage for medically necessary services.
-` : ""}
+`
+    : ""
+}
 2. CLINICAL EVIDENCE
 
 The requested ${procedureDescription} is supported by:
@@ -1320,21 +1523,37 @@ ${requirements.requirements.map((r) => `• ${r}`).join("\n")}
 
 3. MEDICARE COVERAGE CRITERIA
 
-${policyReferences.length > 0 ? `According to the following Medicare coverage policies, this service is covered when medically necessary:
+${
+  policyReferences.length > 0
+    ? `According to the following Medicare coverage policies, this service is covered when medically necessary:
 ${policyReferences.map((ref) => `• ${ref}`).join("\n")}
 
-The documentation in the medical record demonstrates that the patient meets the coverage criteria outlined in these policies.` : "According to Medicare guidelines, this service is covered when medically necessary and properly documented. The documentation in the medical record supports coverage."}
+The documentation in the medical record demonstrates that the patient meets the coverage criteria outlined in these policies.`
+    : "According to Medicare guidelines, this service is covered when medically necessary and properly documented. The documentation in the medical record supports coverage."
+}
 
-${diagnosisCodes.length > 0 ? `Relevant diagnosis codes:
-${diagnosisCodes.map((c) => `• ${c.code} - ${c.description}`).join("\n")}` : ""}
+${
+  diagnosisCodes.length > 0
+    ? `Relevant diagnosis codes:
+${diagnosisCodes.map((c) => `• ${c.code} - ${c.description}`).join("\n")}`
+    : ""
+}
 
-${procedureCodes.length > 0 ? `Procedure codes:
-${procedureCodes.map((c) => `• ${c.code} - ${c.description}`).join("\n")}` : ""}
+${
+  procedureCodes.length > 0
+    ? `Procedure codes:
+${procedureCodes.map((c) => `• ${c.code} - ${c.description}`).join("\n")}`
+    : ""
+}
 
-${pubmedCitations.length > 0 ? `4. SUPPORTING CLINICAL EVIDENCE
+${
+  pubmedCitations.length > 0
+    ? `4. SUPPORTING CLINICAL EVIDENCE
 
 The medical necessity of ${procedureDescription} for this patient's condition is further supported by peer-reviewed literature:
-${pubmedCitations.map((cite) => `• ${cite}`).join("\n")}` : ""}
+${pubmedCitations.map((cite) => `• ${cite}`).join("\n")}`
+    : ""
+}
 
 REQUESTED ACTION:
 
@@ -1371,14 +1590,22 @@ ${patientName || "_______________"}`.trim();
           : `Mail to the address on your denial notice by ${deadlineStr}`,
       );
     } else if (appealLevel === 2) {
-      levelInstructions.push(
-        "Attach a copy of the Level 1 denial decision",
-        "Attach the original denial notice",
-        "Include any new medical records or evidence",
-        isMA
-          ? "The IRE address will be on your Level 1 decision letter"
-          : `Mail to the QIC address on your Level 1 decision by ${deadlineStr}`,
-      );
+      if (isMA) {
+        levelInstructions.push(
+          "Your MA plan is required to auto-forward your case to the IRE (42 CFR §422.590) — you do not need to file separately",
+          "This letter provides additional supporting evidence to strengthen your case at the IRE",
+          "Mail this supplementary evidence to the IRE address on your Level 1 decision letter",
+          "Include any new medical records or evidence not already in the plan's case file",
+          "The IRE (Maximus Federal Services) will contact you with their decision",
+        );
+      } else {
+        levelInstructions.push(
+          "Attach a copy of the Level 1 denial decision",
+          "Attach the original denial notice",
+          "Include any new medical records or evidence",
+          `Mail to the QIC address on your Level 1 decision by ${deadlineStr}`,
+        );
+      }
     } else if (appealLevel === 3) {
       levelInstructions.push(
         "Attach copies of BOTH the Level 1 and Level 2 denial decisions",
@@ -1396,16 +1623,27 @@ ${patientName || "_______________"}`.trim();
         letter,
         appeal_level: appealLevel,
         denial_date: denialDate,
-        appeal_deadline: deadlineStr,
+        appeal_deadline:
+          deadlineStr ??
+          "No beneficiary deadline — your plan auto-forwards to the IRE (42 CFR §422.590)",
         days_remaining: daysRemaining,
         deadline_expired: deadlineExpired,
-        deadline_warning: deadlineExpired
-          ? `WARNING: The ${deadlineDays}-day appeal deadline passed ${Math.abs(daysRemaining)} days ago. The beneficiary may still file with "good cause" for late filing, but success is less likely. Inform the user clearly.`
-          : daysRemaining <= 14
-            ? `URGENT: Only ${daysRemaining} days remaining to file this appeal. The user must act immediately.`
-            : null,
-        diagnosis_codes: diagnosisCodes.map((c) => ({ code: c.code, description: c.description })),
-        procedure_codes: procedureCodes.map((c) => ({ code: c.code, description: c.description })),
+        deadline_warning:
+          deadlineDays === null
+            ? null
+            : deadlineExpired
+              ? `WARNING: The ${deadlineDays}-day appeal deadline passed ${Math.abs(daysRemaining!)} days ago. The beneficiary may still file with "good cause" for late filing, but success is less likely. Inform the user clearly.`
+              : daysRemaining! <= 14
+                ? `URGENT: Only ${daysRemaining} days remaining to file this appeal. The user must act immediately.`
+                : null,
+        diagnosis_codes: diagnosisCodes.map((c) => ({
+          code: c.code,
+          description: c.description,
+        })),
+        procedure_codes: procedureCodes.map((c) => ({
+          code: c.code,
+          description: c.description,
+        })),
         requirements: requirements.requirements,
         instructions: levelInstructions,
       },
@@ -1413,7 +1651,10 @@ ${patientName || "_______________"}`.trim();
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to generate appeal letter",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to generate appeal letter",
     };
   }
 };
@@ -1456,14 +1697,15 @@ const checkSADListExecutor: ToolExecutor = async (input) => {
         guidance: sadResult.partB
           ? "This medication is typically covered under Medicare Part B when administered by a healthcare provider. Check with your doctor's office about coverage."
           : sadResult.partD
-          ? "This medication is typically covered under Medicare Part D (your prescription drug plan). Check your plan's formulary for coverage details and costs."
-          : "Coverage depends on how the medication is administered. Ask your doctor or pharmacist for guidance.",
+            ? "This medication is typically covered under Medicare Part D (your prescription drug plan). Check your plan's formulary for coverage details and costs."
+            : "Coverage depends on how the medication is administered. Ask your doctor or pharmacist for guidance.",
       },
     };
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to check SAD list",
+      error:
+        error instanceof Error ? error.message : "Failed to check SAD list",
     };
   }
 };
@@ -1487,13 +1729,28 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
 
     // If EOB code provided, look up via mapping table
     if (eobCode) {
-      type EobRow = { eob_code: string; eob_description: string | null; carc_code: string | null; rarc_code: string | null };
-      type CarcRow = { code: string; description: string | null; category: string | null; plain_english: string | null };
-      type RarcRow = { code: string; description: string | null; category: string | null; plain_english: string | null };
+      type EobRow = {
+        eob_code: string;
+        eob_description: string | null;
+        carc_code: string | null;
+        rarc_code: string | null;
+      };
+      type CarcRow = {
+        code: string;
+        description: string | null;
+        category: string | null;
+        plain_english: string | null;
+      };
+      type RarcRow = {
+        code: string;
+        description: string | null;
+        category: string | null;
+        plain_english: string | null;
+      };
 
       const mappingsResult = await query<EobRow>(
         `SELECT * FROM eob_denial_mappings WHERE ${latestFilter("eob_denial_mappings")} AND eob_code = $1 LIMIT 5`,
-        [eobCode.trim()]
+        [eobCode.trim()],
       );
       const mappings = mappingsResult.rows;
 
@@ -1502,7 +1759,7 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
         for (const mapping of mappings) {
           const carcResult = await query<CarcRow>(
             `SELECT * FROM carc_codes WHERE ${latestFilter("carc_codes")} AND code = $1 LIMIT 1`,
-            [mapping.carc_code!]
+            [mapping.carc_code!],
           );
           const carc = carcResult.rows[0] ?? null;
 
@@ -1510,12 +1767,14 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
           if (mapping.rarc_code) {
             const rarcResult = await query<RarcRow>(
               `SELECT * FROM rarc_codes WHERE ${latestFilter("rarc_codes")} AND code = $1 LIMIT 1`,
-              [mapping.rarc_code]
+              [mapping.rarc_code],
             );
             rarc = rarcResult.rows[0] ?? null;
           }
 
-          const appealStrategy = await getAppealStrategyForCARC(mapping.carc_code!);
+          const appealStrategy = await getAppealStrategyForCARC(
+            mapping.carc_code!,
+          );
 
           results.push({
             eob_code: mapping.eob_code,
@@ -1541,13 +1800,23 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
     if (code) {
       // Normalize code: strip prefix like "CO-", "PR-" for CARC lookup
       const normalized = code.replace(/^(CO|PR|OA|CR|PI)-?/i, "").trim();
-      type CarcRow = { code: string; description: string | null; category: string | null; plain_english: string | null };
-      type RarcRow = { code: string; description: string | null; category: string | null; plain_english: string | null };
+      type CarcRow = {
+        code: string;
+        description: string | null;
+        category: string | null;
+        plain_english: string | null;
+      };
+      type RarcRow = {
+        code: string;
+        description: string | null;
+        category: string | null;
+        plain_english: string | null;
+      };
 
       // Try CARC first
       const carcResult = await query<CarcRow>(
         `SELECT * FROM carc_codes WHERE ${latestFilter("carc_codes")} AND code = $1 LIMIT 1`,
-        [normalized]
+        [normalized],
       );
       const carc = carcResult.rows[0] ?? null;
 
@@ -1569,7 +1838,7 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
       // Try RARC
       const rarcResult = await query<RarcRow>(
         `SELECT * FROM rarc_codes WHERE ${latestFilter("rarc_codes")} AND code = $1 LIMIT 1`,
-        [code.trim()]
+        [code.trim()],
       );
       const rarc = rarcResult.rows[0] ?? null;
 
@@ -1588,16 +1857,26 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
 
       return {
         success: true,
-        data: { type: "not_found", code, message: "Code not found in CARC or RARC database" },
+        data: {
+          type: "not_found",
+          code,
+          message: "Code not found in CARC or RARC database",
+        },
       };
     }
 
     // Free-text search
     if (descriptionSearch) {
-      type SearchRow = { code_type: string; code: string; description: string; category: string | null; plain_english: string | null };
+      type SearchRow = {
+        code_type: string;
+        code: string;
+        description: string;
+        category: string | null;
+        plain_english: string | null;
+      };
       const searchResult = await query<SearchRow>(
         `SELECT * FROM search_denial_codes($1)`,
-        [descriptionSearch]
+        [descriptionSearch],
       );
       const results = searchResult.rows;
 
@@ -1605,8 +1884,11 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
         const enriched = await Promise.all(
           results.slice(0, 10).map(async (r) => ({
             ...r,
-            appeal_strategy: r.code_type === "CARC" ? await getAppealStrategyForCARC(r.code) : null,
-          }))
+            appeal_strategy:
+              r.code_type === "CARC"
+                ? await getAppealStrategyForCARC(r.code)
+                : null,
+          })),
         );
 
         return {
@@ -1617,7 +1899,12 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
 
       return {
         success: true,
-        data: { type: "search", results: [], count: 0, message: "No matching denial codes found" },
+        data: {
+          type: "search",
+          results: [],
+          count: 0,
+          message: "No matching denial codes found",
+        },
       };
     }
 
@@ -1626,7 +1913,10 @@ const lookupDenialCodeExecutor: ToolExecutor = async (input) => {
     console.error("[Tool:lookup_denial_code] Error:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to look up denial code",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to look up denial code",
     };
   }
 };
@@ -1650,7 +1940,13 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
     }
 
     // Get denial patterns for each CPT code
-    const denialPatterns = new Map<string, { pattern: Awaited<ReturnType<typeof getDenialPatternsForCPT>>[0]; cptCodes: string[] }>();
+    const denialPatterns = new Map<
+      string,
+      {
+        pattern: Awaited<ReturnType<typeof getDenialPatternsForCPT>>[0];
+        cptCodes: string[];
+      }
+    >();
 
     for (const code of cptCodes) {
       const patterns = await getDenialPatternsForCPT(code);
@@ -1669,15 +1965,17 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
     const results = [];
 
     for (const [, { pattern }] of denialPatterns) {
-      const carcCodes = (pattern.reasonCodes || [])
-        .map((rc: string) => rc.replace(/^(CO|PR|OA)-?/i, "").trim());
+      const carcCodes = (pattern.reasonCodes || []).map((rc: string) =>
+        rc.replace(/^(CO|PR|OA)-?/i, "").trim(),
+      );
 
       // Fetch CARC descriptions
-      let carcDescriptions: { code: string; plain_english: string | null }[] = [];
+      let carcDescriptions: { code: string; plain_english: string | null }[] =
+        [];
       if (carcCodes.length > 0) {
         const carcResult = await query<CarcDescRow>(
           `SELECT code, plain_english FROM carc_codes WHERE ${latestFilter("carc_codes")} AND code = ANY($1::text[])`,
-          [carcCodes]
+          [carcCodes],
         );
         carcDescriptions = carcResult.rows;
       }
@@ -1685,7 +1983,8 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
       results.push({
         denial_reason: pattern.reason,
         carc_codes: pattern.reasonCodes || [],
-        plain_english: carcDescriptions.find((c) => c.plain_english)?.plain_english || null,
+        plain_english:
+          carcDescriptions.find((c) => c.plain_english)?.plain_english || null,
         prevention_tip: pattern.documentationChecklist.slice(0, 3).join("; "),
         appeal_success_rate: pattern.estimatedSuccessRate || "unknown",
         appeal_deadline_days: pattern.appealDeadlineDays,
@@ -1694,10 +1993,17 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
 
     // If no results from CPT matching, fetch top 3 general denial patterns from RDS
     if (results.length === 0) {
-      type PatternRow = { reason: string | null; category: string | null; reason_codes: string[] | null; documentation_checklist: string[] | null; estimated_success_rate: string | null; appeal_deadline_days: number | null };
+      type PatternRow = {
+        reason: string | null;
+        category: string | null;
+        reason_codes: string[] | null;
+        documentation_checklist: string[] | null;
+        estimated_success_rate: string | null;
+        appeal_deadline_days: number | null;
+      };
       const fallbackResult = await query<PatternRow>(
         `SELECT * FROM denial_patterns WHERE ${latestFilter("denial_patterns")} AND category = ANY($1::text[]) LIMIT 3`,
-        [["Medical Necessity", "Documentation", "Coding"]]
+        [["Medical Necessity", "Documentation", "Coding"]],
       );
       const fallbackPatterns = fallbackResult.rows;
 
@@ -1714,20 +2020,27 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
             denial_reason: p.reason,
             carc_codes: p.reason_codes || [],
             plain_english: null as string | null,
-            prevention_tip: (p.documentation_checklist || []).slice(0, 3).join("; "),
+            prevention_tip: (p.documentation_checklist || [])
+              .slice(0, 3)
+              .join("; "),
             appeal_success_rate: p.estimated_success_rate || "unknown",
             appeal_deadline_days: p.appeal_deadline_days,
           }));
 
         // Enrich with CARC plain english
         for (const denial of generalDenials) {
-          const firstCarc = (denial.carc_codes[0] || "").replace(/^(CO|PR|OA)-?/i, "").trim();
+          const firstCarc = (denial.carc_codes[0] || "")
+            .replace(/^(CO|PR|OA)-?/i, "")
+            .trim();
           if (firstCarc) {
-            const carcDataResult = await query<{ plain_english: string | null }>(
+            const carcDataResult = await query<{
+              plain_english: string | null;
+            }>(
               `SELECT plain_english FROM carc_codes WHERE ${latestFilter("carc_codes")} AND code = $1 LIMIT 1`,
-              [firstCarc]
+              [firstCarc],
             );
-            denial.plain_english = carcDataResult.rows[0]?.plain_english || null;
+            denial.plain_english =
+              carcDataResult.rows[0]?.plain_english || null;
           }
         }
 
@@ -1757,7 +2070,8 @@ const getCommonDenialsExecutor: ToolExecutor = async (input) => {
     console.error("[Tool:get_common_denials] Error:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to get common denials",
+      error:
+        error instanceof Error ? error.message : "Failed to get common denials",
     };
   }
 };

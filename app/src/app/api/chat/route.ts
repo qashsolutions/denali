@@ -15,14 +15,36 @@
 export const maxDuration = 300;
 
 /** Race a promise against a timeout. Returns fallback on timeout instead of throwing. */
-function withFallback<T>(promise: Promise<T>, timeoutMs: number, fallback: T, label: string): Promise<T> {
+function withFallback<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallback: T,
+  label: string,
+): Promise<T> {
+  const start = Date.now();
   return Promise.race([
-    promise,
+    promise.then((result) => {
+      logFallbackMetric({
+        label,
+        timeoutMs,
+        fired: false,
+        actualMs: Date.now() - start,
+      });
+      return result;
+    }),
     new Promise<T>((resolve) =>
       setTimeout(() => {
-        console.warn(`[Chat API] ${label} timed out after ${timeoutMs / 1000}s, using fallback`);
+        console.warn(
+          `[Chat API] ${label} timed out after ${timeoutMs / 1000}s, using fallback`,
+        );
+        logFallbackMetric({
+          label,
+          timeoutMs,
+          fired: true,
+          actualMs: timeoutMs,
+        });
         resolve(fallback);
-      }, timeoutMs)
+      }, timeoutMs),
     ),
   ]);
 }
@@ -35,6 +57,7 @@ import {
   extractUserInfo,
   type SessionState,
 } from "@/lib/claude";
+import { logClaudeMetric, logFallbackMetric } from "@/lib/metrics/logger";
 import {
   buildSystemPrompt,
   buildSystemPromptWithLearning,
@@ -52,6 +75,7 @@ import {
 import { saveAppeal, getUnreportedOutcome } from "@/lib/conversation-server";
 import { FEEDBACK_CONFIG, API_CONFIG, PRICING } from "@/config";
 import { getUploadLimitForPlan, formatFileSize } from "@/config/pricing";
+import { VALIDATION, RATE_LIMITS, SYSTEM } from "@/config/messages";
 import { logAudit } from "@/lib/audit";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
@@ -84,13 +108,21 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body: ChatRequestBody = await request.json();
-    console.log("[Chat API] Received request with", body.messages?.length, "messages");
+    console.log(
+      "[Chat API] Received request with",
+      body.messages?.length,
+      "messages",
+    );
 
     // Validate request
-    if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
+    if (
+      !body.messages ||
+      !Array.isArray(body.messages) ||
+      body.messages.length === 0
+    ) {
       return NextResponse.json(
-        { error: "Messages array is required and must not be empty" },
-        { status: 400 }
+        { error: VALIDATION.MESSAGES_REQUIRED },
+        { status: 400 },
       );
     }
 
@@ -100,22 +132,46 @@ export async function POST(request: NextRequest) {
     if (!authUser) {
       return NextResponse.json(
         {
-          error: "Sign up for a free trial to start chatting with Denali.",
+          error: RATE_LIMITS.TRIAL_REQUIRED,
           code: "AUTH_REQUIRED",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     let chatLimit: number = PRICING.CHAT_LIMITS.TRIAL;
     let weeklyLimit: number = PRICING.WEEKLY_LIMITS.TRIAL;
     const chatIdentifier: string = authUser.userId;
-    let userProfile: { plan: string | null; is_admin: boolean | null } | null = null;
+    let userProfile: {
+      plan: string | null;
+      is_admin: boolean | null;
+      role: string | null;
+    } | null = null;
 
-    // Fetch profile once — reused for rate limiting AND attachment validation
-    const profileResult = await query<{ plan: string | null; is_admin: boolean | null }>(
-      `SELECT plan, is_admin FROM users WHERE id = $1 LIMIT 1`,
-      [authUser.userId]
+    // Fetch profile once — reused for rate limiting, attachment validation, AND role verification
+    // Wrapped in withFallback so a transient RDS outage doesn't block chat entirely.
+    // Falls back to trial-level defaults (most restrictive) if the query fails.
+    const profileResult = await withFallback(
+      query<{
+        plan: string | null;
+        is_admin: boolean | null;
+        role: string | null;
+      }>(`SELECT plan, is_admin, role FROM users WHERE id = $1 LIMIT 1`, [
+        authUser.userId,
+      ]),
+      5000,
+      {
+        rows: [],
+        rowCount: 0,
+        command: "",
+        oid: 0,
+        fields: [],
+      } as unknown as import("pg").QueryResult<{
+        plan: string | null;
+        is_admin: boolean | null;
+        role: string | null;
+      }>,
+      "profile lookup",
     );
     userProfile = profileResult.rows[0] ?? null;
 
@@ -137,15 +193,21 @@ export async function POST(request: NextRequest) {
         // Check trial expiry
         const subResult = await query<{ trial_end: string | null }>(
           `SELECT trial_end FROM subscriptions WHERE user_id = $1 LIMIT 1`,
-          [authUser.userId]
+          [authUser.userId],
         );
-        const trialEnd = subResult.rows[0]?.trial_end ? new Date(subResult.rows[0].trial_end) : null;
+        const trialEnd = subResult.rows[0]?.trial_end
+          ? new Date(subResult.rows[0].trial_end)
+          : null;
         if (trialEnd && trialEnd > new Date()) {
           chatLimit = PRICING.CHAT_LIMITS.TRIAL;
           weeklyLimit = PRICING.WEEKLY_LIMITS.TRIAL;
         } else if (!subResult.rows[0]) {
           // No subscription row — trial POST in verify-otp must have failed. Auto-create.
-          console.warn("[Chat] No subscription row for trial user", authUser.userId, "— auto-creating trial");
+          console.warn(
+            "[Chat] No subscription row for trial user",
+            authUser.userId,
+            "— auto-creating trial",
+          );
           const now = new Date();
           const end = new Date(now);
           end.setDate(end.getDate() + PRICING.TRIAL_DURATION_DAYS);
@@ -153,7 +215,7 @@ export async function POST(request: NextRequest) {
             `INSERT INTO subscriptions (user_id, plan, status, trial_start, trial_end, trial_converted)
              VALUES ($1, 'trial', 'trialing', $2, $3, false)
              ON CONFLICT (user_id) DO NOTHING`,
-            [authUser.userId, now.toISOString(), end.toISOString()]
+            [authUser.userId, now.toISOString(), end.toISOString()],
           );
           chatLimit = PRICING.CHAT_LIMITS.TRIAL;
           weeklyLimit = PRICING.WEEKLY_LIMITS.TRIAL;
@@ -161,11 +223,11 @@ export async function POST(request: NextRequest) {
           // Trial expired — locked out
           return NextResponse.json(
             {
-              error: "Your free trial has ended. Upgrade to keep using Denali.",
+              error: RATE_LIMITS.TRIAL_EXPIRED,
               code: "TRIAL_EXPIRED",
               upsell: true,
             },
-            { status: 403 }
+            { status: 403 },
           );
         }
       } else {
@@ -176,7 +238,7 @@ export async function POST(request: NextRequest) {
             code: "TRIAL_EXPIRED",
             upsell: true,
           },
-          { status: 403 }
+          { status: 403 },
         );
       }
     }
@@ -184,20 +246,23 @@ export async function POST(request: NextRequest) {
     // --- Weekly frequency check ---
     if (weeklyLimit > 0) {
       try {
-        const weeklyResult = await query<{ allowed: boolean; days_used: number }>(
-          `SELECT * FROM check_weekly_frequency($1, $2)`,
-          [chatIdentifier, weeklyLimit]
-        );
+        const weeklyResult = await query<{
+          allowed: boolean;
+          days_used: number;
+        }>(`SELECT * FROM check_weekly_frequency($1, $2)`, [
+          chatIdentifier,
+          weeklyLimit,
+        ]);
         const weekly = weeklyResult.rows[0];
         if (weekly && !weekly.allowed) {
           return NextResponse.json(
             {
-              error: `You can chat ${weeklyLimit} day${weeklyLimit !== 1 ? "s" : ""} per week on your plan. Upgrade for more access.`,
+              error: RATE_LIMITS.WEEKLY_LIMIT(weeklyLimit),
               code: "WEEKLY_LIMIT",
               weeklyLimit,
               daysUsed: weekly.days_used,
             },
-            { status: 429 }
+            { status: 429 },
           );
         }
       } catch (weeklyError) {
@@ -210,18 +275,18 @@ export async function POST(request: NextRequest) {
       try {
         const usageResult = await query<{ allowed: boolean; count: number }>(
           `SELECT * FROM check_and_increment_chat($1, $2)`,
-          [chatIdentifier, chatLimit]
+          [chatIdentifier, chatLimit],
         );
         const usageRow = usageResult.rows[0];
         if (usageRow && !usageRow.allowed) {
-            return NextResponse.json(
+          return NextResponse.json(
             {
-              error: `You've reached your daily limit of ${chatLimit} messages. Upgrade for more access.`,
+              error: RATE_LIMITS.DAILY_LIMIT(chatLimit),
               code: "RATE_LIMITED",
               limit: chatLimit,
               count: usageRow.count,
             },
-            { status: 429 }
+            { status: 429 },
           );
         }
       } catch (usageError) {
@@ -236,16 +301,16 @@ export async function POST(request: NextRequest) {
       // Validate media type
       if (!ALLOWED_MEDIA_TYPES.includes(body.attachment.mediaType)) {
         return NextResponse.json(
-          { error: "Only PDF, PNG, and JPEG files are supported." },
-          { status: 400 }
+          { error: VALIDATION.FILE_TYPE_UNSUPPORTED },
+          { status: 400 },
         );
       }
 
       // Validate base64 data present
       if (!body.attachment.base64Data) {
         return NextResponse.json(
-          { error: "File could not be read. Please try uploading again." },
-          { status: 400 }
+          { error: VALIDATION.FILE_READ_FAILED },
+          { status: 400 },
         );
       }
 
@@ -257,8 +322,8 @@ export async function POST(request: NextRequest) {
       // uploadLimit 0 for admin = unlimited
       if (uploadLimit > 0 && body.attachment.sizeBytes > uploadLimit) {
         return NextResponse.json(
-          { error: `File exceeds your ${formatFileSize(uploadLimit)} upload limit.` },
-          { status: 413 }
+          { error: VALIDATION.FILE_TOO_LARGE(formatFileSize(uploadLimit)) },
+          { status: 413 },
         );
       }
 
@@ -271,10 +336,10 @@ export async function POST(request: NextRequest) {
     // Extract user info (name, ZIP, etc.) from messages
     sessionState = extractUserInfo(body.messages, sessionState);
     console.log("[Chat API] User info extracted:", {
-      userName: sessionState.userName,
-      userZip: sessionState.userZip,
-      providerName: sessionState.providerName,
-      duration: sessionState.duration,
+      hasName: !!sessionState.userName,
+      hasZip: !!sessionState.userZip,
+      hasProvider: !!sessionState.providerName,
+      hasDuration: !!sessionState.duration,
     });
 
     // Detect triggers based on conversation content
@@ -286,12 +351,15 @@ export async function POST(request: NextRequest) {
       try {
         const unreported = await withFallback(
           getUnreportedOutcome(body.sessionState?.email ?? null),
-          5000, null, "getUnreportedOutcome"
+          5000,
+          null,
+          "getUnreportedOutcome",
         );
         if (unreported) {
           triggers.hasUnreportedOutcome = true;
           triggers.unreportedAppealId = unreported.appealId;
-          triggers.unreportedProcedure = unreported.serviceDescription || undefined;
+          triggers.unreportedProcedure =
+            unreported.serviceDescription || undefined;
           triggers.unreportedAppealLevel = unreported.appealLevel || 1;
         }
       } catch (err) {
@@ -299,10 +367,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Role detection (from session state, set by client from user profile)
-    if (body.sessionState?.userRole === "counselor") {
+    // Role detection — verified server-side from DB, not trusted from client sessionState
+    const verifiedRole = userProfile?.role || "patient";
+    if (verifiedRole === "counselor") {
       triggers.isCounselor = true;
-    } else if (body.sessionState?.userRole === "provider") {
+    } else if (verifiedRole === "provider") {
       triggers.isProvider = true;
     }
 
@@ -317,7 +386,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Diabetes context detection (from FHIR conditions, labs, or user keywords)
-    if (sessionState.conditions?.some(c => ["type1", "type2", "pre-diabetic", "other-diabetes"].includes(c.category))) {
+    if (
+      sessionState.conditions?.some((c) =>
+        ["type1", "type2", "pre-diabetic", "other-diabetes"].includes(
+          c.category,
+        ),
+      )
+    ) {
       triggers.hasDiabetesContext = true;
     } else if (sessionState.labs && sessionState.labs.length > 0) {
       triggers.hasDiabetesContext = true;
@@ -326,22 +401,30 @@ export async function POST(request: NextRequest) {
         .filter((m) => m.role === "user")
         .map((m) => m.content.toLowerCase())
         .join(" ");
-      if (/diabetes|diabetic|a1c|hemoglobin a1c|blood sugar|glucose|insulin|pre-?diabetic|mdpp/i.test(userContent)) {
+      if (
+        /diabetes|diabetic|a1c|hemoglobin a1c|blood sugar|glucose|insulin|pre-?diabetic|mdpp/i.test(
+          userContent,
+        )
+      ) {
         triggers.hasDiabetesContext = true;
       }
     }
 
     // Obesity context detection (from FHIR conditions, medications, or user keywords)
-    if (sessionState.conditions?.some(c => c.category === "obesity")) {
+    if (sessionState.conditions?.some((c) => c.category === "obesity")) {
       triggers.hasObesityContext = true;
-    } else if (sessionState.medications?.some(m => m.isObesityMed)) {
+    } else if (sessionState.medications?.some((m) => m.isObesityMed)) {
       triggers.hasObesityContext = true;
     } else {
       const userContent = body.messages
         .filter((m) => m.role === "user")
         .map((m) => m.content.toLowerCase())
         .join(" ");
-      if (/\bobes\w*|overweight|bmi|bariatric|weight\s*(loss|management)|wegovy|ozempic.*weight|zepbound|semaglutide.*weight|tirzepatide.*weight|saxenda|contrave|qsymia|glp-?1.*weight|ibt.*obes/i.test(userContent)) {
+      if (
+        /\bobes\w*|overweight|bmi|bariatric|weight\s*(loss|management)|wegovy|ozempic.*weight|zepbound|semaglutide.*weight|tirzepatide.*weight|saxenda|contrave|qsymia|glp-?1.*weight|ibt.*obes/i.test(
+          userContent,
+        )
+      ) {
         triggers.hasObesityContext = true;
       }
     }
@@ -354,10 +437,15 @@ export async function POST(request: NextRequest) {
     const basePrompt = buildSystemPrompt(triggers, sessionState);
     const systemPrompt = await withFallback(
       buildSystemPromptWithLearning(triggers, sessionState, body.messages),
-      10_000, basePrompt, "buildSystemPromptWithLearning"
+      10_000,
+      basePrompt,
+      "buildSystemPromptWithLearning",
     );
     console.log("[Chat API] System prompt length:", systemPrompt.length);
-    console.log("[Chat API] Health context injected:", systemPrompt.includes("PATIENT CHART"));
+    console.log(
+      "[Chat API] Health context injected:",
+      systemPrompt.includes("PATIENT CHART"),
+    );
     if (triggers.hasHealthData) {
       console.log("[Chat API] Health data flags:", {
         conditions: sessionState.conditions?.length ?? 0,
@@ -371,7 +459,10 @@ export async function POST(request: NextRequest) {
     // Get tool definitions and create executor map
     const toolDefinitions = getToolDefinitions();
     const toolExecutors = createToolExecutorMap();
-    console.log("[Chat API] Available tools:", toolDefinitions.map(t => t.name));
+    console.log(
+      "[Chat API] Available tools:",
+      toolDefinitions.map((t) => t.name),
+    );
 
     // Extract entities for learning (async, non-blocking)
     const entities = extractEntitiesFromMessages(body.messages);
@@ -399,8 +490,13 @@ export async function POST(request: NextRequest) {
     const claudeMessages = attachment
       ? body.messages.map((msg, idx) =>
           idx === body.messages.length - 1 && msg.role === "user"
-            ? { ...msg, content: msg.content.replace(/\n?\n?\[Attached: .+?\]/, "").trim() }
-            : msg
+            ? {
+                ...msg,
+                content: msg.content
+                  .replace(/\n?\n?\[Attached: .+?\]/, "")
+                  .trim(),
+              }
+            : msg,
         )
       : body.messages;
     const formattedMessages = formatMessages(claudeMessages, attachment);
@@ -413,16 +509,24 @@ export async function POST(request: NextRequest) {
     const writer = writable.getWriter();
 
     const writeSSE = (event: string, data: unknown) => {
-      writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)).catch(() => {});
+      writer
+        .write(
+          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+        )
+        .catch(() => {});
     };
 
     // Start async chat processing (runs after Response is returned)
     const modelOverride = sessionState.isAppeal
       ? API_CONFIG.claude.appealModel
       : undefined;
-    console.log("[Chat API] Starting streaming response...", modelOverride ? `(appeal mode: ${modelOverride})` : "");
+    console.log(
+      "[Chat API] Starting streaming response...",
+      modelOverride ? `(appeal mode: ${modelOverride})` : "",
+    );
 
     (async () => {
+      const chatStart = Date.now();
       try {
         const result = await chat(
           {
@@ -437,11 +541,20 @@ export async function POST(request: NextRequest) {
           {
             onDelta: (text) => writeSSE("delta", { text }),
             onToolProgress: (name) => writeSSE("tool", { name }),
-          }
+          },
         );
-        console.log("[Chat API] Claude response received:");
-        console.log("[Chat API] - Tools used:", result.toolsUsed);
-        console.log("[Chat API] - Content preview:", result.content.substring(0, 200) + "...");
+        const chatDurationMs = Date.now() - chatStart;
+        logClaudeMetric({
+          model: modelOverride || API_CONFIG.claude.model,
+          iterations: result.iterations,
+          totalMs: chatDurationMs,
+          timedOut: false,
+          toolsUsed: result.toolsUsed,
+        });
+        console.log("[Chat API] Claude response received:", {
+          contentLength: result.content.length,
+          toolsUsed: result.toolsUsed,
+        });
 
         // Get or create conversation ID
         let conversationId = body.conversationId;
@@ -451,20 +564,34 @@ export async function POST(request: NextRequest) {
           isNewConversation = true;
           const firstUserMsg = body.messages.find((m) => m.role === "user");
           const title = firstUserMsg
-            ? firstUserMsg.content.slice(0, 60) + (firstUserMsg.content.length > 60 ? "..." : "")
+            ? firstUserMsg.content.slice(0, 60) +
+              (firstUserMsg.content.length > 60 ? "..." : "")
             : null;
 
           try {
             const newConvResult = await query<{ id: string }>(
               `INSERT INTO conversations (user_id, is_appeal, title, status, started_at)
                VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-              [authUser?.userId ?? null, result.sessionState.isAppeal || false, title ?? null, "active", new Date().toISOString()]
+              [
+                authUser?.userId ?? null,
+                result.sessionState.isAppeal || false,
+                title ?? null,
+                "active",
+                new Date().toISOString(),
+              ],
             );
             conversationId = newConvResult.rows[0]?.id ?? crypto.randomUUID();
-            console.log("[Chat API] Created conversation:", conversationId, authUser ? "(owned)" : "(anon)");
+            console.log(
+              "[Chat API] Created conversation:",
+              conversationId,
+              authUser ? "(owned)" : "(anon)",
+            );
           } catch (convError) {
             conversationId = crypto.randomUUID();
-            console.warn("[Chat API] Failed to create conversation in DB:", convError);
+            console.warn(
+              "[Chat API] Failed to create conversation in DB:",
+              convError,
+            );
           }
         }
 
@@ -473,42 +600,69 @@ export async function POST(request: NextRequest) {
         if (conversationId && lastUserMsg) {
           query(
             `INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3), ($1, $4, $5)`,
-            [conversationId, lastUserMsg.role, lastUserMsg.content, "assistant", result.content]
-          ).then(() => {
-            if (isNewConversation) console.log("[Chat API] Messages saved for conversation:", conversationId);
-          }).catch((msgErr: Error) => {
-            console.warn("[Chat API] Failed to save messages:", msgErr.message);
-          });
+            [
+              conversationId,
+              lastUserMsg.role,
+              lastUserMsg.content,
+              "assistant",
+              result.content,
+            ],
+          )
+            .then(() => {
+              if (isNewConversation)
+                console.log(
+                  "[Chat API] Messages saved for conversation:",
+                  conversationId,
+                );
+            })
+            .catch((msgErr: Error) => {
+              console.warn(
+                "[Chat API] Failed to save messages:",
+                msgErr.message,
+              );
+            });
 
           // Persist last suggestions so they can be restored on conversation load (fire-and-forget)
           if (result.suggestions.length > 0) {
             query(
               `UPDATE conversations SET last_suggestions = $2 WHERE id = $1`,
-              [conversationId, JSON.stringify(result.suggestions)]
+              [conversationId, JSON.stringify(result.suggestions)],
             ).catch(() => {});
           }
         }
 
         // Persist learning (non-blocking)
         if (result.toolsUsed.length > 0) {
-          persistLearning(entities, result.sessionState, result.toolsUsed).catch(
-            (err) => console.warn("Failed to persist learning:", err)
-          );
+          persistLearning(
+            entities,
+            result.sessionState,
+            result.toolsUsed,
+          ).catch((err) => console.warn("Failed to persist learning:", err));
         }
 
         // Persist appeal if generate_appeal_letter was used
         let appealId: string | undefined;
-        if (result.toolsUsed.includes("generate_appeal_letter") && conversationId) {
+        if (
+          result.toolsUsed.includes("generate_appeal_letter") &&
+          conversationId
+        ) {
           const ss = result.sessionState;
           const lcdRefs = ss.policyReferences.filter((r) => r.startsWith("L"));
-          const ncdRefs = ss.policyReferences.filter((r) => r.startsWith("NCD"));
+          const ncdRefs = ss.policyReferences.filter((r) =>
+            r.startsWith("NCD"),
+          );
           try {
             const savedAppealId = await saveAppeal(conversationId, "", {
               appealLetter: result.appealLetter || result.content,
-              denialReason: ss.denialCodes.length > 0 ? `CARC ${ss.denialCodes.join(", ")}` : undefined,
+              denialReason:
+                ss.denialCodes.length > 0
+                  ? `CARC ${ss.denialCodes.join(", ")}`
+                  : undefined,
               denialDate: ss.denialDate || undefined,
-              icd10Codes: ss.diagnosisCodes.length > 0 ? ss.diagnosisCodes : undefined,
-              cptCodes: ss.procedureCodes.length > 0 ? ss.procedureCodes : undefined,
+              icd10Codes:
+                ss.diagnosisCodes.length > 0 ? ss.diagnosisCodes : undefined,
+              cptCodes:
+                ss.procedureCodes.length > 0 ? ss.procedureCodes : undefined,
               lcdRefs: lcdRefs.length > 0 ? lcdRefs : undefined,
               ncdRefs: ncdRefs.length > 0 ? ncdRefs : undefined,
               medicareType: ss.medicareType || undefined,
@@ -542,12 +696,23 @@ export async function POST(request: NextRequest) {
           appealLetter: result.appealLetter,
         } satisfies ChatResponseBody);
 
-        console.log("[Chat API] Stream complete with", result.suggestions.length, "suggestions");
+        console.log(
+          "[Chat API] Stream complete with",
+          result.suggestions.length,
+          "suggestions",
+        );
         await writer.close();
       } catch (error) {
         console.error("[Chat API] Stream error:", error);
-        const message = error instanceof Error ? error.message : "An error occurred";
-        writeSSE("error", { error: message });
+        logClaudeMetric({
+          model: modelOverride || API_CONFIG.claude.model,
+          iterations: 0,
+          totalMs: Date.now() - chatStart,
+          timedOut:
+            error instanceof Error && error.message.includes("timed out"),
+          toolsUsed: [],
+        });
+        writeSSE("error", { error: SYSTEM.CHAT_ERROR });
         await writer.close();
       }
     })();
@@ -556,7 +721,7 @@ export async function POST(request: NextRequest) {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
         "X-Accel-Buffering": "no", // Disable nginx buffering
       },
     });
@@ -566,16 +731,13 @@ export async function POST(request: NextRequest) {
     // Pre-stream errors (validation, rate limiting) return JSON with proper status codes
     if (error instanceof Error) {
       if (error.message.includes("API key")) {
-        return NextResponse.json(
-          { error: "Something went wrong on our end. Please try again in a few minutes." },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: SYSTEM.CHAT_ERROR }, { status: 500 });
       }
     }
 
     return NextResponse.json(
-      { error: "Something went wrong. Please try again — it usually works on the second try." },
-      { status: 500 }
+      { error: SYSTEM.CHAT_ERROR_RETRY },
+      { status: 500 },
     );
   }
 }
@@ -596,7 +758,7 @@ export async function GET() {
 async function persistLearning(
   entities: ExtractedEntities,
   sessionState: SessionState,
-  toolsUsed: string[]
+  toolsUsed: string[],
 ): Promise<void> {
   const boost = FEEDBACK_CONFIG.toolSuccessBoost;
 
@@ -612,7 +774,7 @@ async function persistLearning(
           symptom.phrase,
           code,
           "", // Description will be looked up by the function
-          boost
+          boost,
         );
       }
     }
@@ -630,7 +792,7 @@ async function persistLearning(
           procedure.phrase,
           code,
           "", // Description will be looked up by the function
-          boost
+          boost,
         );
       }
     }
@@ -638,7 +800,8 @@ async function persistLearning(
 
   // If coverage was checked, record the coverage path
   if (
-    (toolsUsed.includes("search_national_coverage") || toolsUsed.includes("search_local_coverage")) &&
+    (toolsUsed.includes("search_national_coverage") ||
+      toolsUsed.includes("search_local_coverage")) &&
     sessionState.diagnosisCodes.length > 0 &&
     sessionState.procedureCodes.length > 0
   ) {
@@ -648,7 +811,7 @@ async function persistLearning(
       sessionState.procedureCodes[0],
       {}, // Policy refs would come from tool results
       "pending", // Outcome unknown until user reports
-      sessionState.coverageCriteria
+      sessionState.coverageCriteria,
     );
   }
 }

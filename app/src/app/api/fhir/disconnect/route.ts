@@ -10,21 +10,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { AUTH, SYSTEM } from "@/config/messages";
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
       );
     }
 
-    // Delete connection, cache, and diabetes data in parallel
+    // Delete connection, cache, derived reports, and diabetes data in parallel
+    // health_reports contains Claude-generated PHI summaries — must be purged on revocation
     await Promise.all([
-      query(`DELETE FROM ehr_connections WHERE user_id = $1 AND provider = 'bluebutton'`, [user.userId]),
+      query(
+        `DELETE FROM ehr_connections WHERE user_id = $1 AND provider = 'bluebutton'`,
+        [user.userId],
+      ),
       query(`DELETE FROM fhir_cache WHERE user_id = $1`, [user.userId]),
+      query(`DELETE FROM health_reports WHERE user_id = $1`, [user.userId]),
       query(`DELETE FROM diabetes_snapshots WHERE user_id = $1`, [user.userId]),
       query(`DELETE FROM diabetes_insights WHERE user_id = $1`, [user.userId]),
     ]);
@@ -33,14 +39,15 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       resourceType: "ehr_connection",
       metadata: { provider: "bluebutton" },
+      request,
     }).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[FHIR disconnect] Error:", error);
     return NextResponse.json(
-      { error: "Unable to disconnect Medicare right now. Please try again." },
-      { status: 500 }
+      { error: SYSTEM.MEDICARE_DISCONNECT_FAILED },
+      { status: 500 },
     );
   }
 }
