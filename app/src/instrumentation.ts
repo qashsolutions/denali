@@ -6,7 +6,8 @@
  */
 
 export async function register() {
-  if (typeof window === "undefined") {
+  // Only run in Node.js runtime, not Edge Runtime
+  if (process.env.NEXT_RUNTIME === "nodejs") {
     const { startAutoFlush } = await import("@/lib/metrics/cloudwatch");
     startAutoFlush();
   }
