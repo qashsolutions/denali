@@ -429,7 +429,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log("[Chat API] Detected triggers:", triggers);
+    console.log("[Chat API] Detected triggers:", {
+      hasHealthData: triggers.hasHealthData,
+      hasDiabetesContext: triggers.hasDiabetesContext,
+      hasObesityContext: triggers.hasObesityContext,
+      hasRecentDenials: triggers.hasRecentDenials,
+      hasUnreportedOutcome: triggers.hasUnreportedOutcome,
+      isCounselor: triggers.isCounselor,
+      isProvider: triggers.isProvider,
+    });
 
     // Build dynamic system prompt with learning context (async)
     // This injects learned symptom/procedure mappings and successful coverage paths
