@@ -19,7 +19,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "Who can see my data?",
-        a: "We share data only with the service providers needed to run the app: AWS (database, hosting, and AI via Bedrock), Stripe (payments), and Resend (email delivery — receives only your email address). We never share data for marketing or advertising. Each provider is contractually required to protect your data. See our Privacy Policy for details on what each provider receives and for how long.",
+        a: "We share data only with the service providers needed to run the app: AWS (database, hosting, AI via Bedrock, and email delivery via SES), and Stripe (payments). We never share data for marketing or advertising. Each provider is contractually required to protect your data. See our Privacy Policy for details on what each provider receives and for how long.",
       },
       {
         q: "What happens if there's a data breach?",
@@ -165,7 +165,7 @@ const FAQ_SECTIONS = [
 export default function FAQPage() {
   const [search, setSearch] = useState("");
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
 
   // Filter sections by search query (matches against question + answer text)
@@ -179,15 +179,13 @@ export default function FAQPage() {
         (item) =>
           item.q.toLowerCase().includes(q) ||
           item.a.toLowerCase().includes(q) ||
-          section.title.toLowerCase().includes(q)
+          section.title.toLowerCase().includes(q),
       ),
     })).filter((section) => section.items.length > 0);
   }, [search]);
 
   // Auto-expand all sections when searching
-  const visibleSections = search.trim()
-    ? filteredSections
-    : FAQ_SECTIONS;
+  const visibleSections = search.trim() ? filteredSections : FAQ_SECTIONS;
   const isSearching = search.trim().length > 0;
 
   function toggleSection(title: string) {

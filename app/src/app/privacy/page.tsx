@@ -106,7 +106,7 @@ const SECTIONS = [
     items: [
       "Stripe: Payment processing for subscriptions and per-appeal purchases. Sharing is transactional (one-time per payment event) — we never see or store your credit card number.",
       "CMS (Medicare API): We exchange data with the Medicare claims API only when you explicitly authorize the connection. Sharing is persistent while your connection is active and ceases immediately when you disconnect.",
-      "AWS (Amazon Web Services): Our database (RDS PostgreSQL), application hosting (ECS/Fargate), and AI processing (Bedrock) provider. AWS is HIPAA-eligible and our Business Associate Agreement (BAA) was executed on February 25, 2026. Your account data, conversation history, and cached health data are stored in encrypted AWS RDS databases in us-east-1. Sharing is persistent for the lifetime of your account.",
+      "AWS (Amazon Web Services): Our database (RDS PostgreSQL), application hosting (ECS/Fargate), AI processing (Bedrock), and email delivery (SES) provider. AWS is HIPAA-eligible and our Business Associate Agreement (BAA) was executed on February 25, 2026. Your account data, conversation history, and cached health data are stored in encrypted AWS RDS databases in us-east-1. Sharing is persistent for the lifetime of your account.",
       "Legal Requirements: We may disclose information if required by law, court order, or government regulation.",
       "Business Transfers: In the event of a merger, acquisition, or sale of assets, your personal information may be transferred. We will notify you via email at least 30 days before your data is transferred and becomes subject to a different privacy policy. As a holder of CMS Medicare API production credentials, we will also notify CMS at the earliest practicable time, as production credentials are issued to a specific approved application and entity and a change of ownership requires CMS re-review.",
       "Vendor Data Protection Commitments: Each third-party service provider we work with is contractually required to protect your information using safeguards appropriate to the sensitivity of the data they handle, consistent with applicable law. All providers handling protected health information are covered by Business Associate Agreements (BAAs). AWS is HIPAA-eligible and SOC 2 Type II certified (BAA executed February 25, 2026), covering database (RDS), hosting (ECS/Fargate), AI processing (Bedrock), and email delivery (SES); Stripe is PCI DSS certified for payment data.",
@@ -358,42 +358,41 @@ function SectionBlock({ section }: { section: Section }) {
 export default function PrivacyPage() {
   return (
     <>
-    <div className="max-w-3xl mx-auto px-4 py-12">
-      <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
-        Privacy Policy
-      </h1>
-      <p className="text-[var(--text-secondary)] mb-2">
-        How {BRAND.NAME} collects, uses, and protects your information.
-      </p>
-      <p className="text-xs text-[var(--text-muted)] mb-10">
-        Effective: {EFFECTIVE_DATE}
-      </p>
+      <div className="max-w-3xl mx-auto px-4 py-12">
+        <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
+          Privacy Policy
+        </h1>
+        <p className="text-[var(--text-secondary)] mb-2">
+          How {BRAND.NAME} collects, uses, and protects your information.
+        </p>
+        <p className="text-xs text-[var(--text-muted)] mb-10">
+          Effective: {EFFECTIVE_DATE}
+        </p>
 
-      {/* Table of Contents */}
-      <nav className="mb-10 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)]">
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
-          Contents
-        </h2>
-        <ol className="list-decimal list-inside space-y-1">
-          {SECTIONS.map((section) => (
-            <li key={section.id}>
-              <a
-                href={`#${section.id}`}
-                className="text-sm text-[var(--accent-primary)] hover:underline"
-              >
-                {section.title.replace(/^\d+\.\s/, "")}
-              </a>
-            </li>
-          ))}
-        </ol>
-      </nav>
+        {/* Table of Contents */}
+        <nav className="mb-10 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)]">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
+            Contents
+          </h2>
+          <ol className="list-decimal list-inside space-y-1">
+            {SECTIONS.map((section) => (
+              <li key={section.id}>
+                <a
+                  href={`#${section.id}`}
+                  className="text-sm text-[var(--accent-primary)] hover:underline"
+                >
+                  {section.title.replace(/^\d+\.\s/, "")}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
 
-      {SECTIONS.map((section) => (
-        <SectionBlock key={section.id} section={section} />
-      ))}
-
-    </div>
-    <LandingFooter />
-  </>
+        {SECTIONS.map((section) => (
+          <SectionBlock key={section.id} section={section} />
+        ))}
+      </div>
+      <LandingFooter />
+    </>
   );
 }

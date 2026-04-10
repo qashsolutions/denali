@@ -3,7 +3,7 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-23 (Legal docs: Resend→SES, Blue Button→Medicare terminology; health report data field bug fix; E2E test coverage: 212 tests across 44 files, Batch 1+2+3 complete)
+     Last updated: 2026-03-24 (Gmail plus address normalization; trial fix inline DB; 143 unit tests across 8 files; 212 E2E tests across 44 files)
      Maintainer: @cvr
 -->
 
@@ -55,18 +55,18 @@
 
 ## Quick Reference
 
-| Attribute | Value |
-|-----------|-------|
-| **Target User** | Original Medicare & Medicare Advantage patients & caregivers |
-| **NOT for** | Commercial payers, Medicaid, billers, coders |
-| **Tone** | Warm, simple, no jargon, empathetic, 8th grade reading level |
-| **Trial** | 14-day free trial, 10 msgs/day, 1 day/week, no appeals (email OTP required) |
-| **Starter** | $10/month, 20 msgs/day, 1 day/week, 1 appeal credit |
-| **Plus** | $20/month, 20 msgs/day, every day, 2 appeal credits |
-| **Unlimited** | $60/month, unlimited msgs, unlimited appeals |
-| **Tech Stack** | Next.js PWA, AWS RDS+Cognito (auth+DB), Claude via Bedrock (agentic), Stripe |
-| **AI Model** | Sonnet 4.6 (chat) / Opus 4.6 (appeals) via AWS Bedrock |
-| **Deploy** | AWS ECS/Fargate + ALB |
+| Attribute       | Value                                                                        |
+| --------------- | ---------------------------------------------------------------------------- |
+| **Target User** | Original Medicare & Medicare Advantage patients & caregivers                 |
+| **NOT for**     | Commercial payers, Medicaid, billers, coders                                 |
+| **Tone**        | Warm, simple, no jargon, empathetic, 8th grade reading level                 |
+| **Trial**       | 14-day free trial, 10 msgs/day, 1 day/week, no appeals (email OTP required)  |
+| **Starter**     | $10/month, 20 msgs/day, 1 day/week, 1 appeal credit                          |
+| **Plus**        | $20/month, 20 msgs/day, every day, 2 appeal credits                          |
+| **Unlimited**   | $60/month, unlimited msgs, unlimited appeals                                 |
+| **Tech Stack**  | Next.js PWA, AWS RDS+Cognito (auth+DB), Claude via Bedrock (agentic), Stripe |
+| **AI Model**    | Sonnet 4.6 (chat) / Opus 4.6 (appeals) via AWS Bedrock                       |
+| **Deploy**      | AWS ECS/Fargate + ALB                                                        |
 
 ---
 
@@ -86,6 +86,7 @@ These cause bugs or bad UX if violated. Read before every coding session.
 - **Auth-gated pages** (`/app/*`) MUST redirect to `/` or show sign-in prompt when user is not authenticated. No page under `/app/` should ever render meaningful content for anonymous users.
 
 **Pattern to follow:**
+
 ```tsx
 // CORRECT — real data, auth-gated
 const { user, isLoading } = useAuth();
@@ -128,15 +129,15 @@ return <Dashboard data={ctx} />; // ← shows fake data to everyone
 
 Three toggles in Settings → Privacy & Data. **All default OFF.** Enforcement is multi-layered:
 
-| Toggle | Enforcement Point | Mechanism |
-|--------|-------------------|-----------|
-| `health_data_ai` | `chat/page.tsx` → `initialSessionState` | When OFF: strips ALL health fields, sets `healthDataAvailable: false`, keeps `blueButtonConnected: true` |
-| `health_data_ai` | `useChat.ts` → before each API call | Overlays latest consent on sessionState (supports mid-session toggle changes) |
-| `health_data_ai` | `context.ts` → `buildHealthContextForPrompt()` | Gate: `consentHealthDataAi !== true` → returns null (server-side backup) |
-| `health_data_ai` | `skills-loader.ts` | When `blueButtonConnected && !healthDataAvailable`: injects prompt telling Claude to direct user to Settings toggle, NOT suggest Blue Button connection |
-| `health_data_ai` | `chat/page.tsx` UI | Grey banner: "Your Medicare data is connected but not shared with AI. Enable in Settings" |
-| `health_data_storage` | `useHealthData.ts` → `cacheSet()` | `healthDataStorageRef.current === true` gates IndexedDB writes (useRef pattern for stable useCallback) |
-| `analytics` | `conversation-service.ts` → `trackEvent()` | `analyticsConsent !== true` → early return. Passed from `useChat.ts` via `useConsent().analytics` |
+| Toggle                | Enforcement Point                              | Mechanism                                                                                                                                               |
+| --------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `health_data_ai`      | `chat/page.tsx` → `initialSessionState`        | When OFF: strips ALL health fields, sets `healthDataAvailable: false`, keeps `blueButtonConnected: true`                                                |
+| `health_data_ai`      | `useChat.ts` → before each API call            | Overlays latest consent on sessionState (supports mid-session toggle changes)                                                                           |
+| `health_data_ai`      | `context.ts` → `buildHealthContextForPrompt()` | Gate: `consentHealthDataAi !== true` → returns null (server-side backup)                                                                                |
+| `health_data_ai`      | `skills-loader.ts`                             | When `blueButtonConnected && !healthDataAvailable`: injects prompt telling Claude to direct user to Settings toggle, NOT suggest Blue Button connection |
+| `health_data_ai`      | `chat/page.tsx` UI                             | Grey banner: "Your Medicare data is connected but not shared with AI. Enable in Settings"                                                               |
+| `health_data_storage` | `useHealthData.ts` → `cacheSet()`              | `healthDataStorageRef.current === true` gates IndexedDB writes (useRef pattern for stable useCallback)                                                  |
+| `analytics`           | `conversation-service.ts` → `trackEvent()`     | `analyticsConsent !== true` → early return. Passed from `useChat.ts` via `useConsent().analytics`                                                       |
 
 **CRITICAL: Data minimization** — when `health_data_ai` is OFF, health data never leaves the client. The client strips it before sending to `/api/chat`, so server-side trigger detection (`hasHealthData`, `hasDiabetesContext`, etc.) never fires and no health skills load.
 
@@ -150,9 +151,9 @@ Three toggles in Settings → Privacy & Data. **All default OFF.** Enforcement i
   3. **No direct DB calls from client.** All data flows through API routes → Cognito + RDS.
   - **DO:** `window.addEventListener('auth-state-change', (e) => { const user = (e as CustomEvent).detail; ... })`
   - **DON'T:** Any direct DB calls from client components — always go through `/api/*` routes
-- **Timeout guards on pre-Claude async calls**: `route.ts` uses `withFallback()` for non-critical RDS queries before the Claude API call (e.g., `getUnreportedOutcome` at 5s, `buildSystemPromptWithLearning` at 10s). Falls back to defaults on timeout instead of blocking.
+- **Timeout guards on pre-Claude async calls**: `route.ts` uses `withFallback()` for RDS queries before the Claude API call: profile/plan lookup at 5s (falls back to trial-level limits), `getUnreportedOutcome` at 5s, `buildSystemPromptWithLearning` at 10s. Falls back to defaults on timeout instead of blocking.
 - **AbortController for Claude API**: `withTimeout()` in `claude.ts` uses `AbortController` to truly cancel hung requests (not just `Promise.race`). 60s per iteration for Sonnet, 120s for Opus.
-- **CRITICAL: `src/middleware.ts` refreshes Cognito tokens.** On every request, middleware calls `GET /api/auth/refresh` if `access_token` cookie is expired, then sets fresh cookies. Prevents 401s mid-session. Without it, expired access tokens cause all API routes to return 401 silently.
+- **CRITICAL: `src/middleware.ts` refreshes Cognito tokens.** On every request, middleware calls `POST /api/auth/refresh` if `access_token` cookie is expired, then sets fresh cookies. Prevents 401s mid-session. Without it, expired access tokens cause all API routes to return 401 silently. **Transient failure resilience**: refresh route returns 503 (not 401) when Cognito is unreachable, preserving cookies so the session auto-recovers. Middleware treats 503 and network errors as transient — user stays on the page instead of being redirected to landing.
 - **CRITICAL: Never call RDS from client-side code.** All data access goes through API routes. Pattern: client calls `fetch("/api/route", { credentials: "include" })` → server route calls `getAuthUser(request)` + `query()` → returns JSON. Examples: `useConversationHistory` → `/api/conversations`, `useHealthData` → `/api/fhir/data`, `useAuth` → `/api/profile`, `loadConversation()` → `/api/conversations/[id]`.
 - **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
 - **CRITICAL: SSR-safe hooks must initialize with server-matching values.** `useOnlineStatus` must use `useState(true)` — NOT `useState(typeof navigator !== "undefined" ? navigator.onLine : true)`. The latter reads `navigator.onLine` on the client during hydration, which may return `false` (flaky connection, SW cached page), causing React hydration mismatch (#418) because the server rendered `null` but the client renders a div.
@@ -164,67 +165,73 @@ Three toggles in Settings → Privacy & Data. **All default OFF.** Enforcement i
 
 Where to find specific logic in the codebase.
 
-| File | What It Does |
-|------|-------------|
-| `src/app/api/chat/route.ts` | Main chat endpoint. Orchestrates: rate limiting → extractUserInfo → detectTriggers → buildSystemPrompt → chat loop → persistLearning |
-| `src/lib/claude.ts` | Claude API client. MCP server config, Beta API call, tool-use loop, SessionState type |
-| `src/lib/tools/index.ts` | All 12 local tool definitions + executors (search_cpt, lookup_denial_code, generate_appeal_letter, etc.) |
-| `src/lib/skills-loader.ts` | Conditional prompt builder. Loads skill sections based on SkillTriggers. Also injects consent-off prompt hint when `blueButtonConnected && !healthDataAvailable` — tells Claude user IS connected but needs to enable toggle in Settings (not suggest Blue Button connection) |
-| `src/lib/session-state.ts` | SessionState type definition. Includes `consentHealthDataAi` (toggle state) and `blueButtonConnected` (Blue Button connected even when consent OFF) |
-| `src/lib/denial-patterns.ts` | Async RDS queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()` |
-| `src/lib/audit.ts` | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via `query()` (admin DB user, bypasses no RLS — RDS has none). Non-blocking fire-and-forget. Write-side dedup: `FHIR_DATA_ACCESS` skips insert if same user+action logged within 2h (`DEDUP_WINDOWS` map) |
-| `src/lib/email.ts` | AWS SES email service. `sendEmail({ to, subject, html, from? })` → `{ messageId }`. Uses `@aws-sdk/client-sesv2` with IAM auth (ECS task role in prod, local credentials in dev). Never throws — errors logged, returns null messageId |
-| `src/lib/fhir/` | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformPatient()` extracts ONLY age+gender from FHIR Patient — no name/DOB/address/Medicare ID per Privacy §2 + `transformEOB()` extracts PDE info/careTeam/POS/inpatient/diagnosis-types/NDC/network fields + `classifyDiabetesStatus()` + `DMESummary`/`WeightMeasurement` types), `eob-clinical.ts` (clinical extraction pipeline — 8 extractors including `extractDMEFromClaims()`, `extractPatientWeight()`, `detectHospiceStatus()` — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials + DME + hospice safety gate), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 11 resource types including dme, hospice_status, sync_meta), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
-| `src/lib/diabetes-insights.ts` | Claude-powered diabetes insight generation via `getClaudeClient()` (Bedrock in production). `generateDiabetesInsight(data)` calls Claude for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls |
-| `src/lib/health-report.ts` | Claude-powered health summary report generation. `generateHealthReport()` calls Sonnet 4.6 for structured JSON analysis covering 12 sections (red flags, diabetes, obesity, pre-diabetes resources, conditions, medications, DME, screenings, care team, denials, hospice). `computeReportHash()` for dedup. `HealthReport` type definition |
-| `src/components/health/ReportView.tsx` | Shared report renderer used by public `/report/[token]` page and in-app `/app/health/report`. 12 sections with severity-coded cards, pre-diabetes CDC risk test link (CMS criterion #4), hospice notice, disclaimers |
-| `src/hooks/useHealthReport.ts` | Client hook for report management. Returns `{ report, isLoading, isGenerating, shareUrl, regenerate, emailReport }`. Polls status while generating (3s interval, max 60s) |
-| `src/components/diabetes/` | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from CPT-based `ScreeningHistory[]`), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up, med refill gaps, specialty gaps, post-discharge follow-up, obesity alerts — no counseling/med refill/obesity+diabetes+no endo — with "Find a specialist" CTAs and optional `ctaLabel`), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display) |
-| `src/components/health/DiagnosisSummaryCard.tsx` | Renders "Conditions in Your Claims" list with severity color-coding. `getSeverityConfig()`: structured `DiagnosisSummary` category → `RED_KEYWORDS` (21 terms: neoplasm, cancer, stroke, heart failure, morbid obesity, severe obesity, obesity class iii, etc.) → `AMBER_KEYWORDS` (27 terms: hypertension, thyroid, anemia, COPD, etc.) → gray. `cleanDiagnosisName()` strips U+25CC combining mark artifacts from FHIR data |
-| `src/hooks/useDiabetesSnapshots.ts` | Fetches longitudinal lab data from `diabetes_snapshots`. Returns `{ snapshots, a1cHistory, isLoading }` |
-| `src/hooks/useDiabetesLog.ts` | CRUD for daily log entries via `/api/diabetes/log`. Returns `{ entries, isLoading, addEntry, deleteEntry }`. IndexedDB cache + offline queue for POST (optimistic local add) |
-| `src/hooks/useDiabetesInsights.ts` | AI insight fetch/refresh via `/api/diabetes/insights`. Returns `{ insight, isLoading, refresh }`. IndexedDB write-through + offline fallback |
-| `src/components/layout/AppHeader.tsx` | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons |
-| `src/components/layout/BottomTabs.tsx` | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings |
-| `src/components/landing/LandingFooter.tsx` | Shared footer across ALL pages (landing, blog, legal, app layout). Brand left, legal links right (FAQ, Privacy, Terms, HIPAA). HIPAA/BAA notice + disclaimer. Import directly (NOT from barrel) in `"use client"` components to avoid pulling `pg` into client bundle |
-| `src/lib/dashboard-context.ts` | Dashboard personalization data layer. Types: `DashboardContext`, `DashboardUser`, `DashboardCoverage`, `DashboardMedicare`, `DashboardDiabetes`, `DashboardObesity`, `DashboardAppeals`, `Badge`, `Nudge`. `buildDashboardContext(input)` constructs context from real hook data (useAuth + useHealthData). Helpers: `getTimeOfDay()`, `getPersonalizedGreeting()`, `buildStatusSummary()`, `selectNudge()` (priority-sorted), badge getters per card (`getCoverageBadge`, `getDashboardBadge`, `getDiabetesBadge`, `getObesityBadge`, `getAppealsBadge`). Mock factory `getMockDashboardContext()` for tests only |
-| `src/app/app/page.tsx` | Authenticated dashboard home page. **Auth-gated via middleware** (anonymous → redirect to `/`). Uses `useAuth()` + `useHealthData()` for real data via `buildDashboardContext()`. 5 UX enhancements: (1) `HeroSection` — time-aware greeting + contextual status summary + time-of-day gradient, (2) `StatusBadge` + per-card badge logic (pill-shaped, solid/outline variants), (3) `NudgeStrip` — priority-sorted contextual message with CTA + dismiss, (4) `WalkthroughBar` — 4-step guided tour (first visit only, sessionStorage flag), (5) `AnimatedFeatureCard` — staggered fade-up + hover lift + SVG ambient animations. 5 feature cards: Coverage Check (green), Medicare Dashboard (coral), Diabetes Care (blue, conditional on `hasContext`), Weight Management (amber, conditional on `obesity.classification !== "none"`), Appeals (purple) |
-| `src/app/app/chat/page.tsx` | Ask Denali chat page. **Sign-in gate**: unauthenticated users see empty state cards but ChatInput replaced with "Sign up free" prompt + button → `/app/settings`. 6 suggestion cards on empty state: Check Coverage (blue), Appeal a Denial (red), Understand My Bill (amber), Preventive Care (green), Diabetes Care (purple), Weight Management (orange). Intercepts "Upgrade plan" → opens `PaywallModal` (Starter $10 / Plus $20 / Unlimited $60 subscriptions). Intercepts "Sign up" → navigates to `/app/settings` (email OTP flow). **Consent-gated health data bridge**: when `consent.health_data_ai` is OFF, `initialSessionState` returns minimal state (`healthDataAvailable: false`, `blueButtonConnected: true`, no health fields). Grey consent banner shown when Blue Button connected but AI toggle OFF, with link to Settings. MFA gate for authenticated non-admin users. Payment toast on `?payment=success` |
-| `src/lib/cms.ts` | CMS content queries via `query()`: `getBlogPosts(category?)`, `getBlogPost(slug)`, `getBlogSlugs()`, `getUserTopics(userId)`, `getPersonalizedBlogPosts(topics?)`, `getDefaultBlogPosts()` (weekly-rotating: 1 post per topic via ISO week number), `getLandingPageData()`, `getSiteSettings()`, `getPricingPlans()`, `getTestimonials()`. All have try/catch with empty defaults for build-time resilience |
-| `src/app/blog/page.tsx` | Blog listing page. SSR with `revalidate = 3600`. Three display modes: (1) `?category=` or `?view=all` → all posts with category tabs, (2) signed-in user with topic prefs → personalized grouped view, (3) default (anonymous/no prefs) → 3 weekly-rotating posts (one per topic) with "Browse all" link. Reads JWT from cookie (lightweight decode, no full auth). Falls back gracefully on any error |
-| `src/app/blog/[slug]/page.tsx` | Individual blog post page. Dynamic route, ISR. Uses `getBlogPost(slug)` + `BlogArticle`. `generateStaticParams()` via `getBlogSlugs()` |
-| `src/components/blog/` | Blog UI: `BlogCard` (card in grid), `BlogGrid` (3 modes: `groupedContent` → personalized topic sections with "Based on your interests" badge; `showBrowseAll` → curated "This Week's Picks" with "Browse all articles" link; default → category filter tabs + full grid), `BlogArticle` (full post layout) |
-| `src/hooks/useTopicPreferences.ts` | Content topic preferences (client). Returns `{ topics, isLoading, updateTopics, toggleTopic }`. Max 2 topics. Optimistic update + revert-on-failure (same pattern as `useConsent`) |
-| `src/app/api/preferences/topics/route.ts` | GET/PUT user topic preferences. Validates max 2, allowlist check. Audit-logged. Auth required |
-| `scripts/migrate-blog.js` | Blog migration script (runs inside ECS container via S3 relay). ALTER TABLE + seed 10 posts. Idempotent via ON CONFLICT (slug) DO NOTHING |
-| `scripts/migrate-blog-topics.js` | Topic preferences migration: creates `user_topic_preferences` table, tags existing 10 posts with `medicare-general`, seeds 6 new posts (3 diabetes, 3 obesity). Idempotent |
-| `src/hooks/useAuth.ts` | Auth state: email OTP via `/api/auth/send-otp`+`verify-otp`, TOTP MFA via `/api/auth/mfa/*` (UI disabled, code preserved), AAL tracking, ID.me verification status (`isIdmeVerified`) + verified name (`firstName`) + gender, plan/role/trial/admin detection, credit-based appeal access gating (`appealCredits`), auto-trial on signup. Dispatches `auth-state-change` custom event. Profile from `/api/profile`. |
-| `src/hooks/useConsent.ts` | Consent preferences: fetches/updates `consent_preferences` table. Default all OFF. Three enforcement points: `health_data_ai` → chat/page.tsx strips health data from sessionState + context.ts blocks prompt injection; `health_data_storage` → useHealthData.ts gates IndexedDB caching; `analytics` → conversation-service.ts gates trackEvent calls |
-| `src/hooks/useHealthData.ts` | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations. IndexedDB write-through + offline fallback |
-| `src/config/api.ts` | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path), ID.me OIDC config (baseUrl, clientId, clientSecret, scope, callbackPath) |
-| `src/config/pricing.ts` | 4-tier pricing: `TRIAL_APPEAL_CREDITS: 0`, daily chat limits (`TRIAL: 10`, `STARTER: 20`, `PLUS: 20`, `UNLIMITED: 0`), weekly limits (`TRIAL: 1`, `STARTER: 1`, `PLUS: 0`, `UNLIMITED: 0`), Stripe price IDs for 3 subscriptions (`STARTER/PLUS/UNLIMITED`). Sign-in required for all chat (no anonymous access) |
-| `src/lib/stripe-fulfillment.ts` | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade + credit add), `handleSubscriptionEvent()` (lifecycle + monthly credit reset). Uses admin client |
-| `src/components/payment/PaywallModal.tsx` | Paywall UI: 3-plan selector (Starter/Plus/Unlimited), Stripe subscription checkout. CSS variables for theme. No dev bypass |
-| `src/components/appeal/AppealGate.tsx` | Appeal access orchestration: email OTP → access check → PaywallModal pipeline (TOTP modals disabled 2026-03-10, code preserved) |
-| `src/middleware.ts` | Cognito JWT middleware + auth redirects. (0) API routes (`/api/*`) get early `NextResponse.next()` — no session enforcement or silent refresh (prevents recursive fetch + mid-request cookie clearing). (1) 7-day session lifetime enforcement via `session_issued_at` cookie. (2) Silent token refresh when `access_token` expired but `refresh_token` exists. (3) Signed-in users on `/` → redirect to `/app`. (4) Anonymous users on `/app` → redirect to `/`. Auth detection: checks `access_token` cookie existence. |
-| `src/lib/offline-cache.ts` | IndexedDB wrapper via `idb`. 6 stores (conversations, health-data, diabetes-log, diabetes-insights, profile, offline-queue). Exports `cacheSet()`, `cacheGet()`, `cacheGetIfFresh()`, `queueOfflineRequest()`, `getOfflineQueue()`, `removeFromQueue()`. TTL constants: profile=4h, everything else=24h |
-| `src/lib/offline-sync.ts` | Client-side offline queue processor. `processQueue()` replays failed POSTs, removes on success, drops after 3 retries. `getQueueCount()` for pending item count |
-| `src/hooks/useOnlineStatus.ts` | SSR-safe hook: always inits `true` (matches SSR), syncs `navigator.onLine` in `useEffect`. Returns `{ isOnline, wasOffline }` |
-| `src/components/ui/OfflineBanner.tsx` | Fixed amber-accent banner below AppHeader when offline. Auto-dismisses on reconnect |
-| `src/hooks/useIdleTimeout.ts` | HIPAA inactivity timeout. Tracks mouse/key/touch/scroll (1s throttle), warns at 27 min, signs out at 30 min. Auth-gated (no-op for anon). Returns `{ showWarning, secondsRemaining, staySignedIn, isAuthenticated }` |
-| `src/components/ui/InactivityWarning.tsx` | Fixed amber-accent banner with countdown + "Stay signed in" button. Same positioning as OfflineBanner. Rendered in root `layout.tsx` |
-| `src/hooks/useConversationHistory.ts` | Chat sidebar history. Fetches from `/api/conversations` (cookie-authenticated). Listens to `auth-state-change` custom event for re-fetch on sign-in/out. Groups conversations by date. IndexedDB write-through + offline fallback |
-| `src/lib/conversation-service.ts` | Client-side conversation functions using `fetch()`: `loadConversation()`, `loadAppealsForConversation()`, `claimConversation()`, `submitMessageFeedback()`, `trackEvent()`. No direct DB access. |
-| `src/lib/conversation-server.ts` | Server-side conversation functions using `query()`: `saveAppeal()` (insert + credit decrement + outcome schedule), `getUnreportedOutcome()`. Import only from API routes. |
-| `src/components/layout/Sidebar.tsx` | Chat sidebar: new chat button, conversation history grouped by date with timestamps. Groups are collapsible — Today/Yesterday/Past Week expand by default; Past Month/Older collapse by default. Click group header to toggle; chevron rotates to show state; count badge visible when collapsed. Refreshes on both new conversation creation AND new chat click (via `useRef` tracking previous conversationId). No sign-in prompt — anon users see "No conversations yet" |
-| `src/types/database.ts` | TypeScript types for RDS schema (used for type safety on table rows). |
+| File                                             | What It Does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/api/chat/route.ts`                      | Main chat endpoint. Orchestrates: rate limiting → extractUserInfo → detectTriggers → buildSystemPrompt → chat loop → persistLearning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `src/lib/claude.ts`                              | Claude API client. MCP server config, Beta API call, tool-use loop, SessionState type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `src/lib/tools/index.ts`                         | All 12 local tool definitions + executors (search_cpt, lookup_denial_code, generate_appeal_letter, etc.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `src/lib/skills-loader.ts`                       | Conditional prompt builder. Loads skill sections based on SkillTriggers. Also injects consent-off prompt hint when `blueButtonConnected && !healthDataAvailable` — tells Claude user IS connected but needs to enable toggle in Settings (not suggest Blue Button connection)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `src/lib/session-state.ts`                       | SessionState type definition. Includes `consentHealthDataAi` (toggle state) and `blueButtonConnected` (Blue Button connected even when consent OFF)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `src/lib/denial-patterns.ts`                     | Async RDS queries for denial patterns and appeal levels. `getAppealStrategyForCARC()`, `getDenialPatternsForCPT()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `src/lib/audit.ts`                               | Audit logging utility. `logAudit(action, options)` writes to `audit_logs` via `query()` (admin DB user, bypasses no RLS — RDS has none). Non-blocking fire-and-forget. Write-side dedup: `FHIR_DATA_ACCESS` skips insert if same user+action logged within 2h (`DEDUP_WINDOWS` map)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `src/lib/email.ts`                               | AWS SES email service. `sendEmail({ to, subject, html, from? })` → `{ messageId }`. Uses `@aws-sdk/client-sesv2` with IAM auth (ECS task role in prod, local credentials in dev). Never throws — errors logged, returns null messageId                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `src/lib/fhir/`                                  | Blue Button 2.0 FHIR library: `crypto.ts` (AES-256-GCM encryption), `tokens.ts` (refresh), `client.ts` (FHIR API), `transforms.ts` (FHIR→UI types + `transformPatient()` extracts ONLY age+gender from FHIR Patient — no name/DOB/address/Medicare ID per Privacy §2 + `transformEOB()` extracts PDE info/careTeam/POS/inpatient/diagnosis-types/NDC/network fields + `classifyDiabetesStatus()` + `DMESummary`/`WeightMeasurement` types), `eob-clinical.ts` (clinical extraction pipeline — 8 extractors including `extractDMEFromClaims()`, `extractPatientWeight()`, `detectHospiceStatus()` — see EOB Extraction Pipeline below), `context.ts` (AI prompt injection: coverage + labs + conditions + medications + screenings + providers + hospitalizations + classification + lab trends + denials + DME + hospice safety gate), `sync.ts` (cache sync: Patient + Coverage + EOB → extract all clinical data → cache 11 resource types including dme, hospice_status, sync_meta), `snapshots.ts` (append diabetes labs to `diabetes_snapshots` for longitudinal tracking) |
+| `src/lib/diabetes-insights.ts`                   | Claude-powered diabetes insight generation via `getClaudeClient()` (Bedrock in production). `generateDiabetesInsight(data)` calls Claude for structured analysis, `computeDataHash()` for change detection to avoid redundant API calls                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/lib/health-report.ts`                       | Claude-powered health summary report generation. `generateHealthReport()` calls Sonnet 4.6 for structured JSON analysis covering 12 sections (red flags, diabetes, obesity, pre-diabetes resources, conditions, medications, DME, screenings, care team, denials, hospice). `computeReportHash()` for dedup. `HealthReport` type definition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `src/components/health/ReportView.tsx`           | Shared report renderer used by public `/report/[token]` page and in-app `/app/health/report`. 12 sections with severity-coded cards, pre-diabetes CDC risk test link (CMS criterion #4), hospice notice, disclaimers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `src/hooks/useHealthReport.ts`                   | Client hook for report management. Returns `{ report, isLoading, isGenerating, shareUrl, regenerate, emailReport }`. Polls status while generating (3s interval, max 60s)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `src/components/diabetes/`                       | Diabetes dashboard components: `A1CTrendChart` (SVG sparkline + list toggle), `ScreeningReminders` (due date alerts from CPT-based `ScreeningHistory[]`), `RiskAlerts` (proactive alerts: high A1C, missing meds, trending up, med refill gaps, specialty gaps, post-discharge follow-up, obesity alerts — no counseling/med refill/obesity+diabetes+no endo — with "Find a specialist" CTAs and optional `ctaLabel`), `QuickLog` (4-tab daily entry form: glucose/activity/meal/note), `InsightsCard` (Claude-generated analysis display)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `src/components/health/DiagnosisSummaryCard.tsx` | Renders "Conditions in Your Claims" list with severity color-coding. `getSeverityConfig()`: structured `DiagnosisSummary` category → `RED_KEYWORDS` (21 terms: neoplasm, cancer, stroke, heart failure, morbid obesity, severe obesity, obesity class iii, etc.) → `AMBER_KEYWORDS` (27 terms: hypertension, thyroid, anemia, COPD, etc.) → gray. `cleanDiagnosisName()` strips U+25CC combining mark artifacts from FHIR data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `src/hooks/useDiabetesSnapshots.ts`              | Fetches longitudinal lab data from `diabetes_snapshots`. Returns `{ snapshots, a1cHistory, isLoading }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/hooks/useDiabetesLog.ts`                    | CRUD for daily log entries via `/api/diabetes/log`. Returns `{ entries, isLoading, addEntry, deleteEntry }`. IndexedDB cache + offline queue for POST (optimistic local add)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `src/hooks/useDiabetesInsights.ts`               | AI insight fetch/refresh via `/api/diabetes/insights`. Returns `{ insight, isLoading, refresh }`. IndexedDB write-through + offline fallback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `src/components/layout/AppHeader.tsx`            | Universal header (root layout). Auth-aware Sign In / Settings gear. Desktop nav + mobile hamburger. Colored icons                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `src/components/layout/BottomTabs.tsx`           | Mobile bottom nav for `/app/*` pages: Home, Health, Ask Denali, Settings                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `src/components/landing/LandingFooter.tsx`       | Shared footer across ALL pages (landing, blog, legal, app layout). Brand left, legal links right (FAQ, Privacy, Terms, HIPAA). HIPAA/BAA notice + disclaimer. Import directly (NOT from barrel) in `"use client"` components to avoid pulling `pg` into client bundle                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `src/lib/dashboard-context.ts`                   | Dashboard personalization data layer. Types: `DashboardContext`, `DashboardUser`, `DashboardCoverage`, `DashboardMedicare`, `DashboardDiabetes`, `DashboardObesity`, `DashboardAppeals`, `Badge`, `Nudge`. `buildDashboardContext(input)` constructs context from real hook data (useAuth + useHealthData). Helpers: `getTimeOfDay()`, `getPersonalizedGreeting()`, `buildStatusSummary()`, `selectNudge()` (priority-sorted), badge getters per card (`getCoverageBadge`, `getDashboardBadge`, `getDiabetesBadge`, `getObesityBadge`, `getAppealsBadge`). Mock factory `getMockDashboardContext()` for tests only                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `src/app/app/page.tsx`                           | Authenticated dashboard home page. **Auth-gated via middleware** (anonymous → redirect to `/`). Uses `useAuth()` + `useHealthData()` for real data via `buildDashboardContext()`. 5 UX enhancements: (1) `HeroSection` — time-aware greeting + contextual status summary + time-of-day gradient, (2) `StatusBadge` + per-card badge logic (pill-shaped, solid/outline variants), (3) `NudgeStrip` — priority-sorted contextual message with CTA + dismiss, (4) `WalkthroughBar` — 4-step guided tour (first visit only, sessionStorage flag), (5) `AnimatedFeatureCard` — staggered fade-up + hover lift + SVG ambient animations. 5 feature cards: Coverage Check (green), Medicare Dashboard (coral), Diabetes Care (blue, conditional on `hasContext`), Weight Management (amber, conditional on `obesity.classification !== "none"`), Appeals (purple)                                                                                                                                                                                                                      |
+| `src/app/app/chat/page.tsx`                      | Ask Denali chat page. **Sign-in gate**: unauthenticated users see empty state cards but ChatInput replaced with "Sign up free" prompt + button → `/app/settings`. 6 suggestion cards on empty state: Check Coverage (blue), Appeal a Denial (red), Understand My Bill (amber), Preventive Care (green), Diabetes Care (purple), Weight Management (orange). Intercepts "Upgrade plan" → opens `PaywallModal` (Starter $10 / Plus $20 / Unlimited $60 subscriptions). Intercepts "Sign up" → navigates to `/app/settings` (email OTP flow). **Consent-gated health data bridge**: when `consent.health_data_ai` is OFF, `initialSessionState` returns minimal state (`healthDataAvailable: false`, `blueButtonConnected: true`, no health fields). Grey consent banner shown when Blue Button connected but AI toggle OFF, with link to Settings. MFA gate for authenticated non-admin users. Payment toast on `?payment=success`                                                                                                                                                |
+| `src/lib/cms.ts`                                 | CMS content queries via `query()`: `getBlogPosts(category?)`, `getBlogPost(slug)`, `getBlogSlugs()`, `getUserTopics(userId)`, `getPersonalizedBlogPosts(topics?)`, `getDefaultBlogPosts()` (weekly-rotating: 1 post per topic via ISO week number), `getLandingPageData()`, `getSiteSettings()`, `getPricingPlans()`, `getTestimonials()`. All have try/catch with empty defaults for build-time resilience                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `src/app/blog/page.tsx`                          | Blog listing page. SSR with `revalidate = 3600`. Three display modes: (1) `?category=` or `?view=all` → all posts with category tabs, (2) signed-in user with topic prefs → personalized grouped view, (3) default (anonymous/no prefs) → 3 weekly-rotating posts (one per topic) with "Browse all" link. Reads JWT from cookie (lightweight decode, no full auth). Falls back gracefully on any error                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `src/app/blog/[slug]/page.tsx`                   | Individual blog post page. Dynamic route, ISR. Uses `getBlogPost(slug)` + `BlogArticle`. `generateStaticParams()` via `getBlogSlugs()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `src/components/blog/`                           | Blog UI: `BlogCard` (card in grid), `BlogGrid` (3 modes: `groupedContent` → personalized topic sections with "Based on your interests" badge; `showBrowseAll` → curated "This Week's Picks" with "Browse all articles" link; default → category filter tabs + full grid), `BlogArticle` (full post layout)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `src/hooks/useTopicPreferences.ts`               | Content topic preferences (client). Returns `{ topics, isLoading, updateTopics, toggleTopic }`. Max 2 topics. Optimistic update + revert-on-failure (same pattern as `useConsent`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `src/app/api/preferences/topics/route.ts`        | GET/PUT user topic preferences. Validates max 2, allowlist check. Audit-logged. Auth required                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `scripts/migrate-blog.js`                        | Blog migration script (runs inside ECS container via S3 relay). ALTER TABLE + seed 10 posts. Idempotent via ON CONFLICT (slug) DO NOTHING                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `scripts/migrate-blog-topics.js`                 | Topic preferences migration: creates `user_topic_preferences` table, tags existing 10 posts with `medicare-general`, seeds 6 new posts (3 diabetes, 3 obesity). Idempotent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `src/lib/normalize-email.ts`                     | Gmail plus address normalization. `normalizeEmail(email)` strips `+tag` from `@gmail.com`/`@googlemail.com`. Non-Gmail addresses pass through unchanged. Used by `send-otp` and `verify-otp` to prevent duplicate accounts via plus addressing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `src/hooks/useAuth.ts`                           | Auth state: email OTP via `/api/auth/send-otp`+`verify-otp`, TOTP MFA via `/api/auth/mfa/*` (UI disabled, code preserved), AAL tracking, ID.me verification status (`isIdmeVerified`) + verified name (`firstName`) + gender, plan/role/trial/admin detection, credit-based appeal access gating (`appealCredits`), auto-trial on signup. Dispatches `auth-state-change` custom event. Profile from `/api/profile`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `src/hooks/useConsent.ts`                        | Consent preferences: fetches/updates `consent_preferences` table. Default all OFF. Three enforcement points: `health_data_ai` → chat/page.tsx strips health data from sessionState + context.ts blocks prompt injection; `health_data_storage` → useHealthData.ts gates IndexedDB caching; `analytics` → conversation-service.ts gates trackEvent calls                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/hooks/useHealthData.ts`                     | Blue Button FHIR data: connect/disconnect/refresh, fetches from `/api/fhir/data`. Returns patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations. IndexedDB write-through + offline fallback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/config/api.ts`                              | API endpoints, Claude model config, Blue Button OAuth config (scopes, callback path), ID.me OIDC config (baseUrl, clientId, clientSecret, scope, callbackPath)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `src/config/pricing.ts`                          | 4-tier pricing: `TRIAL_APPEAL_CREDITS: 0`, daily chat limits (`TRIAL: 10`, `STARTER: 20`, `PLUS: 20`, `UNLIMITED: 0`), weekly limits (`TRIAL: 1`, `STARTER: 1`, `PLUS: 0`, `UNLIMITED: 0`), Stripe price IDs for 3 subscriptions (`STARTER/PLUS/UNLIMITED`). Sign-in required for all chat (no anonymous access)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `src/lib/stripe-fulfillment.ts`                  | Stripe payment fulfillment: `fulfillCheckoutSession()` (checkout → plan upgrade + credit add), `handleSubscriptionEvent()` (lifecycle + monthly credit reset). Uses admin client                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `src/components/payment/PaywallModal.tsx`        | Paywall UI: 3-plan selector (Starter/Plus/Unlimited), Stripe subscription checkout. CSS variables for theme. No dev bypass                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `src/lib/appeal-pdf.ts`                          | Appeal letter PDF generation via jsPDF 4.2.1. `buildPDF()` renders text-only (no `addJS`/`addImage`/AcroForm/FreeText). `extractLetterContent()`, `getCleanLetter()` (markdown stripping), `calculateDeadlineInfo()`. Returns `jsPDF` doc for `save()`/`output("blob")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/components/appeal/AppealGate.tsx`           | Appeal access orchestration: email OTP → access check → PaywallModal pipeline (TOTP modals disabled 2026-03-10, code preserved)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `src/lib/metrics/logger.ts`                      | Structured metric log emitters for CloudWatch Logs Insights. `logRequestMetric({route, method, status, durationMs})`, `logClaudeMetric({model, iterations, totalMs, timedOut, toolsUsed})`, `logFallbackMetric({label, timeoutMs, fired, actualMs})`. JSON with `_m` discriminator. Pure, sync, never throws                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `src/lib/metrics/cloudwatch.ts`                  | CloudWatch PutMetricData buffer. Namespace `Denali/App`. `recordMetric(datum)` buffers, `flush()` sends, `startAutoFlush()` at boot (60s interval). No-op in non-production. SIGTERM flushes before shutdown                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `src/lib/metrics/index.ts`                       | Barrel + `withMetrics(handler, route)` HOF. Wraps route handlers with request timing → `logRequestMetric` + `recordMetric(RequestLatency)` + `recordMetric(ErrorCount)` on 5xx                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `src/instrumentation.ts`                         | Next.js server boot hook. Calls `startAutoFlush()` for CloudWatch metrics timer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `src/middleware.ts`                              | Cognito JWT middleware + auth redirects. (0) API routes (`/api/*`) get early `NextResponse.next()` — no session enforcement or silent refresh (prevents recursive fetch + mid-request cookie clearing). (1) 7-day session lifetime enforcement via `session_issued_at` cookie. (2) Silent token refresh when `access_token` expired but `refresh_token` exists. (3) Signed-in users on `/` → redirect to `/app`. (4) Anonymous users on `/app` → redirect to `/`. Auth detection: checks `access_token` cookie existence.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `src/lib/offline-cache.ts`                       | IndexedDB wrapper via `idb`. 6 stores (conversations, health-data, diabetes-log, diabetes-insights, profile, offline-queue). Exports `cacheSet()`, `cacheGet()`, `cacheGetIfFresh()`, `queueOfflineRequest()`, `getOfflineQueue()`, `removeFromQueue()`. TTL constants: profile=4h, everything else=24h                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/lib/offline-sync.ts`                        | Client-side offline queue processor. `processQueue()` replays failed POSTs, removes on success, drops after 3 retries. `getQueueCount()` for pending item count                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `src/hooks/useOnlineStatus.ts`                   | SSR-safe hook: always inits `true` (matches SSR), syncs `navigator.onLine` in `useEffect`. Returns `{ isOnline, wasOffline }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `src/components/ui/OfflineBanner.tsx`            | Fixed amber-accent banner below AppHeader when offline. Auto-dismisses on reconnect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `src/hooks/useIdleTimeout.ts`                    | HIPAA inactivity timeout. Tracks mouse/key/touch/scroll (1s throttle), warns at 27 min, signs out at 30 min. Auth-gated (no-op for anon). Returns `{ showWarning, secondsRemaining, staySignedIn, isAuthenticated }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `src/components/ui/InactivityWarning.tsx`        | Fixed amber-accent banner with countdown + "Stay signed in" button. Same positioning as OfflineBanner. Rendered in root `layout.tsx`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `src/hooks/useConversationHistory.ts`            | Chat sidebar history. Fetches from `/api/conversations` (cookie-authenticated). Listens to `auth-state-change` custom event for re-fetch on sign-in/out. Groups conversations by date. IndexedDB write-through + offline fallback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `src/lib/conversation-service.ts`                | Client-side conversation functions using `fetch()`: `loadConversation()`, `loadAppealsForConversation()`, `claimConversation()`, `submitMessageFeedback()`, `trackEvent()`. No direct DB access.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `src/lib/conversation-server.ts`                 | Server-side conversation functions using `query()`: `saveAppeal()` (insert + credit decrement + outcome schedule), `getUnreportedOutcome()`. Import only from API routes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `src/components/layout/Sidebar.tsx`              | Chat sidebar: new chat button, conversation history grouped by date with timestamps. Groups are collapsible — Today/Yesterday/Past Week expand by default; Past Month/Older collapse by default. Click group header to toggle; chevron rotates to show state; count badge visible when collapsed. Refreshes on both new conversation creation AND new chat click (via `useRef` tracking previous conversationId). No sign-in prompt — anon users see "No conversations yet"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `src/types/database.ts`                          | TypeScript types for RDS schema (used for type safety on table rows).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 ### API Routes
 
 ```
 src/app/api/
-  auth/send-otp/route.ts      # Email OTP initiation (Cognito AdminCreateUser + AWS SES). OTP shown in subject line for notification banner visibility
-  auth/verify-otp/route.ts    # OTP verification → sets httpOnly access_token + refresh_token cookies. Body: `{email, otp}` (field is `otp`, NOT `code`)
+  auth/send-otp/route.ts      # Email OTP initiation (Cognito AdminCreateUser + AWS SES). Gmail plus address normalization via normalizeEmail(). OTP shown in subject line for notification banner visibility
+  auth/verify-otp/route.ts    # OTP verification → sets httpOnly access_token + refresh_token cookies. Gmail plus normalization. Inline trial creation (no self-referencing HTTP fetch). Body: `{email, otp}` (field is `otp`, NOT `code`)
   auth/signout/route.ts       # Global sign out + clear cookies
   auth/refresh/route.ts       # Refresh access_token from refresh_token cookie
   auth/mfa/enroll|confirm|challenge|unenroll|status  # TOTP MFA (RFC 6238 via lib/totp.ts)
@@ -246,7 +253,7 @@ src/app/api/
   preferences/topics/route.ts # GET/PUT user topic preferences (max 2: diabetes, obesity)
   trial/route.ts              # GET/POST 14-day trial
   cms-metadata/route.ts       # GET public CMS app directory metadata
-  health/route.ts             # GET health check (ALB target, returns 200)
+  health/route.ts             # GET health check (ALB target, pings RDS — returns 200 or 503 if DB unreachable)
   fhir/authorize/route.ts     # Blue Button OAuth initiation (PKCE + state). GATED on ID.me verification (admin bypass)
   fhir/callback/route.ts      # Blue Button OAuth callback (token exchange + inline Cognito token refresh if access_token expired during OAuth redirect)
   fhir/data/route.ts          # GET FHIR data (from fhir_cache RDS table)
@@ -302,16 +309,16 @@ User-facing (plain English):        Internal (codes, never shown):
 
 **Population sources** — how fields get populated during the chat loop:
 
-| Field | Populated By | Mechanism |
-|-------|-------------|-----------|
-| `diagnosisCodes` | MCP `search_icd10` / Local `generate_appeal_letter` | Regex from Claude text / `updateSessionFromToolResults()` |
-| `procedureCodes` | Local `search_cpt` / `generate_appeal_letter` | `updateSessionFromToolResults()` |
-| `denialCodes` | Local `lookup_denial_code` / User message | `updateSessionFromToolResults()` + `extractUserInfo()` regex (CO-50, PR-1, CARC 167, RARC N56 patterns — gated on appeal context to avoid false positives) |
-| `policyReferences` | MCP `search_local_coverage` / `search_national_coverage` | Regex from Claude text (LCD L\d{5}, NCD patterns) |
-| `priorAuthRequired` | Local `check_prior_auth` | `updateSessionFromToolResults()` |
-| `denialDate` | User message | `extractUserInfo()` regex |
-| `isAppeal` | User message | `extractUserInfo()` keyword detection |
-| `maPlanName` | Blue Button coverage / User message | Auto-detected from Part C coverage in `chat/page.tsx` / `extractUserInfo()` |
+| Field               | Populated By                                             | Mechanism                                                                                                                                                  |
+| ------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `diagnosisCodes`    | MCP `search_icd10` / Local `generate_appeal_letter`      | Regex from Claude text / `updateSessionFromToolResults()`                                                                                                  |
+| `procedureCodes`    | Local `search_cpt` / `generate_appeal_letter`            | `updateSessionFromToolResults()`                                                                                                                           |
+| `denialCodes`       | Local `lookup_denial_code` / User message                | `updateSessionFromToolResults()` + `extractUserInfo()` regex (CO-50, PR-1, CARC 167, RARC N56 patterns — gated on appeal context to avoid false positives) |
+| `policyReferences`  | MCP `search_local_coverage` / `search_national_coverage` | Regex from Claude text (LCD L\d{5}, NCD patterns)                                                                                                          |
+| `priorAuthRequired` | Local `check_prior_auth`                                 | `updateSessionFromToolResults()`                                                                                                                           |
+| `denialDate`        | User message                                             | `extractUserInfo()` regex                                                                                                                                  |
+| `isAppeal`          | User message                                             | `extractUserInfo()` keyword detection                                                                                                                      |
+| `maPlanName`        | Blue Button coverage / User message                      | Auto-detected from Part C coverage in `chat/page.tsx` / `extractUserInfo()`                                                                                |
 
 ---
 
@@ -321,39 +328,39 @@ User-facing (plain English):        Internal (codes, never shown):
 
 These tools are local executors in `tools/index.ts` that call free public government APIs directly. No patient data is sent — only generic search terms. Previously used MCP servers at `mcp.deepsense.ai` (removed 2026-03-04).
 
-| Tool | API Endpoint | Data |
-|------|-------------|------|
-| `search_icd10` | `clinicaltables.nlm.nih.gov/api/icd10cm/v3/search` (NLM, public) | ICD-10 diagnosis codes |
-| `search_local_coverage`, `search_national_coverage`, `get_coverage_document` | `api.coverage-finder.medicare.gov/api/v1` (CMS, public) | LCD/NCD coverage policies |
-| `npi_search`, `npi_lookup` | `npiregistry.cms.hhs.gov/api` (NPPES, public) | Provider NPI, specialty, Medicare status |
+| Tool                                                                         | API Endpoint                                                     | Data                                     |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------- |
+| `search_icd10`                                                               | `clinicaltables.nlm.nih.gov/api/icd10cm/v3/search` (NLM, public) | ICD-10 diagnosis codes                   |
+| `search_local_coverage`, `search_national_coverage`, `get_coverage_document` | `api.coverage-finder.medicare.gov/api/v1` (CMS, public)          | LCD/NCD coverage policies                |
+| `npi_search`, `npi_lookup`                                                   | `npiregistry.cms.hhs.gov/api` (NPPES, public)                    | Provider NPI, specialty, Medicare status |
 
 ### Other Local Tools (defined in `src/lib/tools/index.ts`)
 
-| Tool | Purpose | Data Source |
-|------|---------|-------------|
-| `search_cpt` | Map procedure descriptions to CPT codes | AMA API (dev only) |
-| `get_related_diagnoses` | CPT -> related ICD-10 codes | Local mappings |
-| `get_related_procedures` | ICD-10 -> related CPT codes | Local mappings |
-| `check_prior_auth` | Check if CPT requires prior auth (CMS PA Model + expanded list) | Local rules + CMS PA Model categories |
-| `check_preventive` | Check if service is preventive (no cost-sharing) | Local rules |
-| `search_pubmed` | Clinical evidence search (rate-limited) | NCBI E-utilities |
-| `generate_appeal_letter` | Build appeal letter (Level 1 Redetermination for Original Medicare, Organization Determination Appeal for MA) with inline codes + policy refs + PubMed citations. Accepts `medicare_type` and `plan_name` params for MA branching | Combines multiple sources + policy_references + pubmed_citations inputs |
-| `check_sad_list` | Part B (physician) vs Part D (self-administered) drug routing | CMS SAD list |
-| `lookup_denial_code` | CARC/RARC code lookup + appeal strategy | RDS `carc_codes`, `rarc_codes`, `eob_denial_mappings` |
-| `get_common_denials` | Top denial reasons for a procedure + prevention tips | RDS (`denial_patterns` + `carc_codes`) |
+| Tool                     | Purpose                                                                                                                                                                                                                     | Data Source                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `search_cpt`             | Map procedure descriptions to CPT codes                                                                                                                                                                                     | AMA API (dev only)                                                      |
+| `get_related_diagnoses`  | CPT -> related ICD-10 codes                                                                                                                                                                                                 | Local mappings                                                          |
+| `get_related_procedures` | ICD-10 -> related CPT codes                                                                                                                                                                                                 | Local mappings                                                          |
+| `check_prior_auth`       | Check if CPT requires prior auth (CMS PA Model + expanded list)                                                                                                                                                             | Local rules + CMS PA Model categories                                   |
+| `check_preventive`       | Check if service is preventive (no cost-sharing)                                                                                                                                                                            | Local rules                                                             |
+| `search_pubmed`          | Clinical evidence search (rate-limited)                                                                                                                                                                                     | NCBI E-utilities                                                        |
+| `generate_appeal_letter` | Build appeal letter (Level 1 Redetermination for Original Medicare, Request for Reconsideration for MA) with inline codes + policy refs + PubMed citations. Accepts `medicare_type` and `plan_name` params for MA branching | Combines multiple sources + policy_references + pubmed_citations inputs |
+| `check_sad_list`         | Part B (physician) vs Part D (self-administered) drug routing                                                                                                                                                               | CMS SAD list                                                            |
+| `lookup_denial_code`     | CARC/RARC code lookup + appeal strategy                                                                                                                                                                                     | RDS `carc_codes`, `rarc_codes`, `eob_denial_mappings`                   |
+| `get_common_denials`     | Top denial reasons for a procedure + prevention tips                                                                                                                                                                        | RDS (`denial_patterns` + `carc_codes`)                                  |
 
 ### Data Inventory
 
-| Dataset | Status | Source |
-|---------|--------|--------|
-| ICD-10 | Full | MCP server |
-| CPT | Dev only (AMA license required for prod) | Local AMA API |
-| NPI | Full | MCP server |
-| NCD/LCD | Full | MCP server |
-| PubMed | Full | NCBI API |
-| CARC codes | 90 codes | RDS (from CMS, effective 2025-12-10) |
-| RARC codes | 195 codes | RDS (from CMS, effective 2025-12-10) |
-| EOB-to-CARC/RARC mappings | 1,873 mappings | RDS (from CMS, effective 2025-12-10) |
+| Dataset                   | Status                                   | Source                               |
+| ------------------------- | ---------------------------------------- | ------------------------------------ |
+| ICD-10                    | Full                                     | MCP server                           |
+| CPT                       | Dev only (AMA license required for prod) | Local AMA API                        |
+| NPI                       | Full                                     | MCP server                           |
+| NCD/LCD                   | Full                                     | MCP server                           |
+| PubMed                    | Full                                     | NCBI API                             |
+| CARC codes                | 90 codes                                 | RDS (from CMS, effective 2025-12-10) |
+| RARC codes                | 195 codes                                | RDS (from CMS, effective 2025-12-10) |
+| EOB-to-CARC/RARC mappings | 1,873 mappings                           | RDS (from CMS, effective 2025-12-10) |
 
 ---
 
@@ -361,75 +368,75 @@ These tools are local executors in `tools/index.ts` that call free public govern
 
 ### Core Tables
 
-| Table | Purpose |
-|-------|---------|
-| `users` | Auth, phone (primary), email, plan (`trial`/`starter`/`plus`/`unlimited` — CHECK constraint), `is_admin` (bypass all limits), theme, accessibility settings |
-| `user_verification` | Email + mobile OTP status + ID.me verification (`idme_verified`, `idme_verified_at`, `idme_uuid`, `idme_ial_level`, `idme_first_name`, `idme_gender`). Unique index on `idme_uuid`. Migrations: `scripts/migrate-idme.sql` + `scripts/migrate-idme-name.sql` |
-| `subscriptions` | Plan type (`trial`/`starter`/`plus`/`unlimited` — CHECK constraint), Stripe customer ID, billing status, `trial_start`/`trial_end`/`trial_converted`. RLS: users SELECT/INSERT/UPDATE own rows |
-| `usage` | Appeal count (lifetime) + appeal credits (available) per email. Credits decremented on appeal save, added by Stripe fulfillment |
-| `conversations` | Chat history per user |
-| `messages` | Individual messages (role: user/assistant) |
-| `appeals` | Generated appeal letters with codes, policy refs, `carc_codes TEXT[]`, `rarc_codes TEXT[]` |
-| `user_feedback` | Thumbs up/down + corrections |
-| `audit_logs` | CMS compliance audit trail — who, what, when, why (IP, user agent). RLS: users read own logs, service role writes. High-frequency actions (FHIR_DATA_ACCESS) deduped on write (2h window). API groups by action+day with count for Settings display |
-| `consent_preferences` | Per-user consent toggles: `health_data_ai`, `health_data_storage`, `analytics`. Versioned, audit-logged on change |
-| `ehr_connections` | Blue Button OAuth tokens (AES-256-GCM encrypted), FHIR patient ID, connection status |
-| `fhir_cache` | Transformed FHIR data (patient, coverage, eob, conditions, medications, screenings, providers, hospitalizations), 24h TTL. RLS-protected reads |
-| `diabetes_snapshots` | Append-only longitudinal lab history. Unique on `(user_id, loinc_code, observed_date)`. RLS: users read own, service_role inserts. Auto-populated on FHIR sync |
-| `diabetes_log` | User-entered daily entries (glucose/activity/meal/note). Any signed-in user. CHECK constraint on entry_type. RLS: users CRUD own |
-| `diabetes_insights` | Claude-generated diabetes analysis (summary, recommendations, risk_alerts, screening_reminders). Unique on user_id. Hash-based dedup avoids redundant Claude calls. RLS: users read own, service_role manages |
-| `chat_daily_usage` | Daily chat message rate limiting. Columns: `identifier` (user_id or IP), `usage_date`, `message_count`. Unique on `(identifier, usage_date)`. Managed by `check_and_increment_chat` RPC |
-| `health_reports` | Claude-generated health summary reports. Columns: id (UUID PK), user_id (FK→users CASCADE), share_token (UUID UNIQUE), status (pending/generating/ready/failed), report_data (JSONB — `HealthReport` type), source_hash (dedup), expires_at (30-day default), created_at, updated_at. Public share via `/report/[token]` (no auth). Auto-generated after Blue Button connect. Cascade deleted on account deletion |
-| `blog_posts` | Public blog content. Columns: slug (UNIQUE), title, kicker, key_message, body, category, cta_text, cta_url, sources (TEXT[]), tags (TEXT[]), meta_title, meta_description, published (bool), published_at. 16 posts across 4 categories: denial-codes (3), coverage (3+6 topic posts), appeals (2), prior-auth (2). Tags: `medicare-general` (all 10 originals), `diabetes` (3), `obesity` (3), some dual-tagged (e.g., GLP-1 article). Seeded via `scripts/migrate-blog.js` + `scripts/migrate-blog-topics.js`. ON CONFLICT (slug) DO NOTHING for idempotency |
-| `user_topic_preferences` | User content topic selections (max 2). Columns: id (UUID PK), user_id (FK→users, CASCADE), topic (TEXT, CHECK IN diabetes/obesity/medicare-general), created_at. Unique index on `(user_id, topic)`. Used by blog page SSR for personalized content grouping |
+| Table                    | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `users`                  | Auth, phone (primary), email, plan (`trial`/`starter`/`plus`/`unlimited` — CHECK constraint), `is_admin` (bypass all limits), theme, accessibility settings                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `user_verification`      | Email + mobile OTP status + ID.me verification (`idme_verified`, `idme_verified_at`, `idme_uuid`, `idme_ial_level`, `idme_first_name`, `idme_gender`). Unique index on `idme_uuid`. Migrations: `scripts/migrate-idme.sql` + `scripts/migrate-idme-name.sql`                                                                                                                                                                                                                                                                                                   |
+| `subscriptions`          | Plan type (`trial`/`starter`/`plus`/`unlimited` — CHECK constraint), Stripe customer ID, billing status, `trial_start`/`trial_end`/`trial_converted`. RLS: users SELECT/INSERT/UPDATE own rows                                                                                                                                                                                                                                                                                                                                                                 |
+| `usage`                  | Appeal count (lifetime) + appeal credits (available) per email. Credits decremented on appeal save, added by Stripe fulfillment                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `conversations`          | Chat history per user                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `messages`               | Individual messages (role: user/assistant)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `appeals`                | Generated appeal letters with codes, policy refs, `carc_codes TEXT[]`, `rarc_codes TEXT[]`                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `user_feedback`          | Thumbs up/down + corrections                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `audit_logs`             | CMS compliance audit trail — who, what, when, why (IP, user agent). RLS: users read own logs, service role writes. High-frequency actions (FHIR_DATA_ACCESS) deduped on write (2h window). API groups by action+day with count for Settings display                                                                                                                                                                                                                                                                                                            |
+| `consent_preferences`    | Per-user consent toggles: `health_data_ai`, `health_data_storage`, `analytics`. Versioned, audit-logged on change                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `ehr_connections`        | Blue Button OAuth tokens (AES-256-GCM encrypted), FHIR patient ID, connection status                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `fhir_cache`             | Transformed FHIR data (patient, coverage, eob, conditions, medications, screenings, providers, hospitalizations), 24h TTL. RLS-protected reads                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `diabetes_snapshots`     | Append-only longitudinal lab history. Unique on `(user_id, loinc_code, observed_date)`. RLS: users read own, service_role inserts. Auto-populated on FHIR sync                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `diabetes_log`           | User-entered daily entries (glucose/activity/meal/note). Any signed-in user. CHECK constraint on entry_type. RLS: users CRUD own                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `diabetes_insights`      | Claude-generated diabetes analysis (summary, recommendations, risk_alerts, screening_reminders). Unique on user_id. Hash-based dedup avoids redundant Claude calls. RLS: users read own, service_role manages                                                                                                                                                                                                                                                                                                                                                  |
+| `chat_daily_usage`       | Daily chat message rate limiting. Columns: `identifier` (user_id or IP), `usage_date`, `message_count`. Unique on `(identifier, usage_date)`. Managed by `check_and_increment_chat` RPC                                                                                                                                                                                                                                                                                                                                                                        |
+| `health_reports`         | Claude-generated health summary reports. Columns: id (UUID PK), user_id (FK→users CASCADE), share_token (UUID UNIQUE), status (pending/generating/ready/failed), report_data (JSONB — `HealthReport` type), source_hash (dedup), expires_at (30-day default), created_at, updated_at. Public share via `/report/[token]` (no auth). Auto-generated after Blue Button connect. Cascade deleted on account deletion                                                                                                                                              |
+| `blog_posts`             | Public blog content. Columns: slug (UNIQUE), title, kicker, key_message, body, category, cta_text, cta_url, sources (TEXT[]), tags (TEXT[]), meta_title, meta_description, published (bool), published_at. 16 posts across 4 categories: denial-codes (3), coverage (3+6 topic posts), appeals (2), prior-auth (2). Tags: `medicare-general` (all 10 originals), `diabetes` (3), `obesity` (3), some dual-tagged (e.g., GLP-1 article). Seeded via `scripts/migrate-blog.js` + `scripts/migrate-blog-topics.js`. ON CONFLICT (slug) DO NOTHING for idempotency |
+| `user_topic_preferences` | User content topic selections (max 2). Columns: id (UUID PK), user_id (FK→users, CASCADE), topic (TEXT, CHECK IN diabetes/obesity/medicare-general), created_at. Unique index on `(user_id, topic)`. Used by blog page SSR for personalized content grouping                                                                                                                                                                                                                                                                                                   |
 
 ### Denial Code Tables
 
-| Table | Purpose | Row Count |
-|-------|---------|-----------|
-| `carc_codes` | Claim Adjustment Reason Codes (the "why" of a denial) | 90 |
-| `rarc_codes` | Remittance Advice Remark Codes (additional detail) | 195 |
-| `eob_denial_mappings` | Maps payer EOB codes to standard CARC/RARC | 1,873 |
-| `denial_patterns` | Common denial reasons with appeal strategies, CPT lists, checklists, success rates | 12 |
-| `appeal_levels` | Medicare's 5 appeal levels with timeframes and success rates | 5 |
+| Table                 | Purpose                                                                            | Row Count |
+| --------------------- | ---------------------------------------------------------------------------------- | --------- |
+| `carc_codes`          | Claim Adjustment Reason Codes (the "why" of a denial)                              | 90        |
+| `rarc_codes`          | Remittance Advice Remark Codes (additional detail)                                 | 195       |
+| `eob_denial_mappings` | Maps payer EOB codes to standard CARC/RARC                                         | 1,873     |
+| `denial_patterns`     | Common denial reasons with appeal strategies, CPT lists, checklists, success rates | 12        |
+| `appeal_levels`       | Medicare's 5 appeal levels with timeframes and success rates                       | 5         |
 
 **Versioning**: All five tables use `effective_date` column. Views `carc_codes_latest`, `rarc_codes_latest`, `eob_denial_mappings_latest`, `denial_patterns_latest`, `appeal_levels_latest` always return `WHERE effective_date = MAX(effective_date)`. When CMS publishes updates, insert new rows with a newer `effective_date`; old rows stay for history.
 
 ### Learning Tables (No User Link)
 
-| Table | Purpose |
-|-------|---------|
-| `symptom_mappings` | "dizzy spells" -> R42 (confidence-based) |
-| `procedure_mappings` | "back scan" -> 72148 (confidence-based) |
-| `coverage_paths` | Successful dx + px + policy combinations |
-| `conversation_patterns` | Successful question sequences by intent |
-| `appeal_outcomes` | Real-world appeal results (user-reported) |
-| `policy_cache` | Medicare policy tracking and change detection |
-| `user_events` | User behavior tracking for UX optimization |
-| `learning_queue` | Async job queue for background learning |
+| Table                   | Purpose                                       |
+| ----------------------- | --------------------------------------------- |
+| `symptom_mappings`      | "dizzy spells" -> R42 (confidence-based)      |
+| `procedure_mappings`    | "back scan" -> 72148 (confidence-based)       |
+| `coverage_paths`        | Successful dx + px + policy combinations      |
+| `conversation_patterns` | Successful question sequences by intent       |
+| `appeal_outcomes`       | Real-world appeal results (user-reported)     |
+| `policy_cache`          | Medicare policy tracking and change detection |
+| `user_events`           | User behavior tracking for UX optimization    |
+| `learning_queue`        | Async job queue for background learning       |
 
 ### Key Functions
 
-| Function | Purpose |
-|----------|---------|
-| `check_appeal_access(email)` | Returns 'free', 'paywall', or 'allowed' (legacy — client now checks `appeal_credits` directly) |
-| `increment_appeal_count(email)` | Increments lifetime appeal counter |
-| `decrement_appeal_credit(p_email)` | Decrements available credit, returns remaining (-1 if none). SECURITY DEFINER |
-| `add_appeal_credits(p_email, p_credits)` | Adds credits (used by Stripe single-payment fulfillment). SECURITY DEFINER |
-| `reset_monthly_appeal_credits(p_email, p_credits)` | Resets credits to N (used by Stripe monthly renewal). SECURITY DEFINER |
-| `process_feedback(message_id, rating, correction)` | Handle thumbs up/down, update mappings |
-| `update_symptom_mapping(phrase, code, boost)` | Upsert symptom -> ICD-10 |
-| `update_procedure_mapping(phrase, code, boost)` | Upsert procedure -> CPT |
-| `record_appeal_outcome(appeal_id, outcome, ...)` | Store user-reported result |
-| `get_learning_context(symptoms, procedures)` | Get learned data for prompts |
-| `search_denial_codes(search_text)` | Full-text search across CARC/RARC/EOB tables |
-| `get_denial_pattern_for_carc(carc_code)` | Match CARC code to denial pattern with appeal strategy |
-| `get_denial_patterns_for_cpt(cpt_code)` | Get denial patterns commonly associated with a CPT code |
-| `check_and_increment_chat(p_identifier, p_daily_limit)` | Atomic rate limit check: returns `{allowed, count}`. SECURITY DEFINER — upserts `chat_daily_usage` and increments count if under limit |
-| `check_weekly_frequency(p_identifier, p_max_days)` | Weekly frequency check: returns `{allowed, days_used}`. Counts distinct days chatted in current week. 0 = unlimited. SECURITY DEFINER |
-| `check_rolling_chat_limit(p_identifier, p_max, p_window_days)` | Rolling cap check (anonymous): returns `{allowed, total, is_last}`. Sums messages in window. `is_last` = true on final allowed message. SECURITY DEFINER |
-| `get_grouped_audit_logs(p_user_id, p_limit, p_offset)` | Returns audit logs grouped by `action + resource_type + DATE(created_at)` with `entry_count`. SECURITY DEFINER. Used by `/api/audit-log` for daily grouping with count badges |
-| `delete_user_cascade(user_id)` | GDPR/CCPA compliant deletion |
+| Function                                                       | Purpose                                                                                                                                                                       |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check_appeal_access(email)`                                   | Returns 'free', 'paywall', or 'allowed' (legacy — client now checks `appeal_credits` directly)                                                                                |
+| `increment_appeal_count(email)`                                | Increments lifetime appeal counter                                                                                                                                            |
+| `decrement_appeal_credit(p_email)`                             | Decrements available credit, returns remaining (-1 if none). SECURITY DEFINER                                                                                                 |
+| `add_appeal_credits(p_email, p_credits)`                       | Adds credits (used by Stripe single-payment fulfillment). SECURITY DEFINER                                                                                                    |
+| `reset_monthly_appeal_credits(p_email, p_credits)`             | Resets credits to N (used by Stripe monthly renewal). SECURITY DEFINER                                                                                                        |
+| `process_feedback(message_id, rating, correction)`             | Handle thumbs up/down, update mappings                                                                                                                                        |
+| `update_symptom_mapping(phrase, code, boost)`                  | Upsert symptom -> ICD-10                                                                                                                                                      |
+| `update_procedure_mapping(phrase, code, boost)`                | Upsert procedure -> CPT                                                                                                                                                       |
+| `record_appeal_outcome(appeal_id, outcome, ...)`               | Store user-reported result                                                                                                                                                    |
+| `get_learning_context(symptoms, procedures)`                   | Get learned data for prompts                                                                                                                                                  |
+| `search_denial_codes(search_text)`                             | Full-text search across CARC/RARC/EOB tables                                                                                                                                  |
+| `get_denial_pattern_for_carc(carc_code)`                       | Match CARC code to denial pattern with appeal strategy                                                                                                                        |
+| `get_denial_patterns_for_cpt(cpt_code)`                        | Get denial patterns commonly associated with a CPT code                                                                                                                       |
+| `check_and_increment_chat(p_identifier, p_daily_limit)`        | Atomic rate limit check: returns `{allowed, count}`. SECURITY DEFINER — upserts `chat_daily_usage` and increments count if under limit                                        |
+| `check_weekly_frequency(p_identifier, p_max_days)`             | Weekly frequency check: returns `{allowed, days_used}`. Counts distinct days chatted in current week. 0 = unlimited. SECURITY DEFINER                                         |
+| `check_rolling_chat_limit(p_identifier, p_max, p_window_days)` | Rolling cap check (anonymous): returns `{allowed, total, is_last}`. Sums messages in window. `is_last` = true on final allowed message. SECURITY DEFINER                      |
+| `get_grouped_audit_logs(p_user_id, p_limit, p_offset)`         | Returns audit logs grouped by `action + resource_type + DATE(created_at)` with `entry_count`. SECURITY DEFINER. Used by `/api/audit-log` for daily grouping with count badges |
+| `delete_user_cascade(user_id)`                                 | GDPR/CCPA compliant deletion                                                                                                                                                  |
 
 ---
 
@@ -441,19 +448,19 @@ Skills are conditional prompt sections loaded by `skills-loader.ts` based on `Sk
 
 The system uses gates that return early and prevent later skills from loading prematurely:
 
-| Priority | Trigger | Skill Loaded | Gate Behavior |
-|----------|---------|-------------|---------------|
-| 1 | Emergency symptoms detected | RED_FLAG_SKILL | Highest priority, overrides all. Regex covers: chest pain+SOB, sudden headache/numbness, DKA (fruity breath+thirst, extreme thirst+urination), severe hypoglycemia (shaking+sweating+sugar, seizure+sugar, passed out+sugar) |
-| 2 | Missing name OR ZIP | ONBOARDING | + TOOL_RESTRAINT (no tools allowed) |
-| 3 | Has procedure but missing symptoms/duration | SYMPTOM_GATHERING | + TOOL_RESTRAINT (+ PROCEDURE_SKILL for clarification) |
-| 4 | Has symptom info but no provider confirmed | PROVIDER_VERIFICATION | NPI tools only |
-| 5 | Has procedure or needs clarification | PROCEDURE_SKILL | Disambiguate procedure type/region |
-| 6 | Has procedure or coverage or appeal | CODE_VALIDATION | ICD-10 <-> CPT mapping + prior auth check + preventive check + SAD list |
-| 7 | Has coverage but not all requirements verified | REQUIREMENT_VERIFICATION | Ask 1 requirement at a time |
-| 8 | Provider confirmed + specialty mismatch | SPECIALTY_VALIDATION | Warn about ordering specialty risk |
-| 9 | Has coverage and `verificationComplete === true` | GUIDANCE_DELIVERY | Proactive checklist + denial warnings + prior auth status. **NOTE**: Guidance no longer loads when requirements are simply empty (vacuous truth fix) — Claude must emit `[REQUIREMENTS]` block and user must verify or skip |
-| 10 | Appeal detected | APPEAL_SKILL | Denial code lookup + strategy + PubMed evidence + letter generation (MA-aware: Organization Determination Appeal for Advantage plans) |
-| 11 | User asks about bills/claims + has health data | EOB_EXPLAINER_SKILL | Explains claims, charges, Medicare payment rules, denial reasons in plain English |
+| Priority | Trigger                                          | Skill Loaded             | Gate Behavior                                                                                                                                                                                                                |
+| -------- | ------------------------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1        | Emergency symptoms detected                      | RED_FLAG_SKILL           | Highest priority, overrides all. Regex covers: chest pain+SOB, sudden headache/numbness, DKA (fruity breath+thirst, extreme thirst+urination), severe hypoglycemia (shaking+sweating+sugar, seizure+sugar, passed out+sugar) |
+| 2        | Missing name OR ZIP                              | ONBOARDING               | + TOOL_RESTRAINT (no tools allowed)                                                                                                                                                                                          |
+| 3        | Has procedure but missing symptoms/duration      | SYMPTOM_GATHERING        | + TOOL_RESTRAINT (+ PROCEDURE_SKILL for clarification)                                                                                                                                                                       |
+| 4        | Has symptom info but no provider confirmed       | PROVIDER_VERIFICATION    | NPI tools only                                                                                                                                                                                                               |
+| 5        | Has procedure or needs clarification             | PROCEDURE_SKILL          | Disambiguate procedure type/region                                                                                                                                                                                           |
+| 6        | Has procedure or coverage or appeal              | CODE_VALIDATION          | ICD-10 <-> CPT mapping + prior auth check + preventive check + SAD list                                                                                                                                                      |
+| 7        | Has coverage but not all requirements verified   | REQUIREMENT_VERIFICATION | Ask 1 requirement at a time                                                                                                                                                                                                  |
+| 8        | Provider confirmed + specialty mismatch          | SPECIALTY_VALIDATION     | Warn about ordering specialty risk                                                                                                                                                                                           |
+| 9        | Has coverage and `verificationComplete === true` | GUIDANCE_DELIVERY        | Proactive checklist + denial warnings + prior auth status. **NOTE**: Guidance no longer loads when requirements are simply empty (vacuous truth fix) — Claude must emit `[REQUIREMENTS]` block and user must verify or skip  |
+| 10       | Appeal detected                                  | APPEAL_SKILL             | Denial code lookup + strategy + PubMed evidence + letter generation (MA-aware: Request for Reconsideration for Advantage plans)                                                                                              |
+| 11       | User asks about bills/claims + has health data   | EOB_EXPLAINER_SKILL      | Explains claims, charges, Medicare payment rules, denial reasons in plain English                                                                                                                                            |
 
 **TOOL_RESTRAINT**: During onboarding and symptom gathering, the prompt explicitly forbids all tool calls. This prevents Claude from jumping ahead to code lookups before gathering enough context.
 
@@ -467,16 +474,16 @@ The system uses gates that return early and prevent later skills from loading pr
 
 ### Additional Skills (Loaded Contextually)
 
-| Skill | File | Trigger |
-|-------|------|---------|
-| `HEALTH_RECORDS_SKILL` | `src/lib/skills/health-records.ts` | `hasHealthData` or `hasRecentDenials` |
-| `MEDICARE_NOTIFICATIONS_SKILL` | `src/lib/skills/medicare-notifications.ts` | `hasHealthData && hasRecentChanges` |
-| `DIABETES_PREVENTION_SKILL` | `src/lib/skills/diabetes-prevention.ts` | `hasDiabetesContext` — includes provider search (NPI) for endocrinologists/dietitians/MDPP, urgent A1C values (≥12% contact doctor, ≥14% DKA warning) |
-| `OBESITY_PREVENTION_SKILL` | `src/lib/skills/obesity-prevention.ts` | `hasObesityContext` — obesity diagnosis (E66), obesity medications, or user keywords (weight loss, bariatric, BMI, Wegovy, etc.). Includes severity awareness (morbid/severe → bariatric/specialist referral), provider search for bariatric surgeons/counselors |
-| `EOB_EXPLAINER_SKILL` | `src/skills/domain/eob-explainer.ts` | `hasEOBQuestion && hasHealthData` — user asks about bills/claims with Blue Button connected |
-| `OUTCOME_PROMPTING_SKILL` | `src/skills/domain/outcome-prompting.ts` | Returning user with pending appeal (`hasUnreportedOutcome`). Outcome reported via `/api/appeal-outcome` → `recordAppealOutcome()` + `applyOutcomeIncentive()` (free appeal credit) |
-| `COUNSELOR_SKILL` | `src/skills/channel/counselor.ts` | `role === "counselor"` |
-| `PROVIDER_PILOT_SKILL` | `src/skills/channel/provider.ts` | `role === "provider"` |
+| Skill                          | File                                       | Trigger                                                                                                                                                                                                                                                          |
+| ------------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HEALTH_RECORDS_SKILL`         | `src/lib/skills/health-records.ts`         | `hasHealthData` or `hasRecentDenials`                                                                                                                                                                                                                            |
+| `MEDICARE_NOTIFICATIONS_SKILL` | `src/lib/skills/medicare-notifications.ts` | `hasHealthData && hasRecentChanges`                                                                                                                                                                                                                              |
+| `DIABETES_PREVENTION_SKILL`    | `src/lib/skills/diabetes-prevention.ts`    | `hasDiabetesContext` — includes provider search (NPI) for endocrinologists/dietitians/MDPP, urgent A1C values (≥12% contact doctor, ≥14% DKA warning)                                                                                                            |
+| `OBESITY_PREVENTION_SKILL`     | `src/lib/skills/obesity-prevention.ts`     | `hasObesityContext` — obesity diagnosis (E66), obesity medications, or user keywords (weight loss, bariatric, BMI, Wegovy, etc.). Includes severity awareness (morbid/severe → bariatric/specialist referral), provider search for bariatric surgeons/counselors |
+| `EOB_EXPLAINER_SKILL`          | `src/skills/domain/eob-explainer.ts`       | `hasEOBQuestion && hasHealthData` — user asks about bills/claims with Blue Button connected                                                                                                                                                                      |
+| `OUTCOME_PROMPTING_SKILL`      | `src/skills/domain/outcome-prompting.ts`   | Returning user with pending appeal (`hasUnreportedOutcome`). Outcome reported via `/api/appeal-outcome` → `recordAppealOutcome()` + `applyOutcomeIncentive()` (free appeal credit)                                                                               |
+| `COUNSELOR_SKILL`              | `src/skills/channel/counselor.ts`          | `role === "counselor"`                                                                                                                                                                                                                                           |
+| `PROVIDER_PILOT_SKILL`         | `src/skills/channel/provider.ts`           | `role === "provider"`                                                                                                                                                                                                                                            |
 
 ### Implementation
 
@@ -513,7 +520,7 @@ How ICD-10, CMS coverage, CARC/RARC, and NPI data come together in end-to-end to
 
 **Key rule**: `lookup_denial_code` is the FIRST tool called. It immediately gives Claude enough context to explain the denial before gathering additional details for the letter.
 
-**MA branching**: When `sessionState.medicareType === "advantage"`, `generate_appeal_letter` is called with `medicare_type: "advantage"` and `plan_name` from `sessionState.maPlanName`. The letter uses "Organization Determination Appeal" (not "Level 1 Redetermination"), addresses the plan (not MAC), and cites 42 CFR §422.101. Appeal levels differ for MA: Level 1 → plan, Level 2 → IRE (not QIC), Levels 3-5 same as Original Medicare.
+**MA branching**: When `sessionState.medicareType === "advantage"`, `generate_appeal_letter` is called with `medicare_type: "advantage"` and `plan_name` from `sessionState.maPlanName`. The letter uses "Request for Reconsideration" (not "Level 1 Redetermination"), addresses the plan (not MAC), and cites 42 CFR §422.101. Appeal levels differ for MA: Level 1 → plan, Level 2 → IRE (not QIC), Levels 3-5 same as Original Medicare. For MA Level 2, the plan auto-forwards to the IRE per 42 CFR §422.590; the generated letter serves as supplementary evidence.
 
 ### Flow 3: Quick Denial Code Lookup
 
@@ -539,33 +546,34 @@ Reuses existing `sessionState` (ICD-10, CPT, policy refs from earlier coverage f
 
 ### Pricing
 
-| Plan | Price | Appeals/30d | Chat Messages/Day | Weekly Frequency | Auth Required |
-|------|-------|-------------|-------------------|-----------------|---------------|
-| Trial (14 days) | $0 | 0 | 10 | 1 day/week | Email OTP |
-| Expired (post-trial) | — | — | 0 (locked) | — | Email OTP |
-| Starter | $10/month | 1 credit | 20 | 1 day/week | Email OTP |
-| Plus | $20/month | 2 credits | 20 | Every day | Email OTP |
-| Unlimited | $60/month | Unlimited | Unlimited | Unlimited | Email OTP |
-| **Admin** | — | Unlimited | Unlimited | Unlimited | `is_admin = TRUE` on `users` row |
+| Plan                 | Price     | Appeals/30d | Chat Messages/Day | Weekly Frequency | Auth Required                    |
+| -------------------- | --------- | ----------- | ----------------- | ---------------- | -------------------------------- |
+| Trial (14 days)      | $0        | 0           | 10                | 1 day/week       | Email OTP                        |
+| Expired (post-trial) | —         | —           | 0 (locked)        | —                | Email OTP                        |
+| Starter              | $10/month | 1 credit    | 20                | 1 day/week       | Email OTP                        |
+| Plus                 | $20/month | 2 credits   | 20                | Every day        | Email OTP                        |
+| Unlimited            | $60/month | Unlimited   | Unlimited         | Unlimited        | Email OTP                        |
+| **Admin**            | —         | Unlimited   | Unlimited         | Unlimited        | `is_admin = TRUE` on `users` row |
 
-**Sign-in required for all chat.** No anonymous access — users must sign up (email OTP) before chatting. Every signup = automatic 14-day trial. After trial expires → locked (0 chats, must pay). Plan values are `trial`, `starter`, `plus`, `unlimited` only. All paid plans are monthly subscriptions (no one-time payments). Appeal access is credit-based via `usage.appeal_credits` column; `unlimited` plan bypasses credit checks entirely. `AppealAccessStatus` returns `"available"` (has credits), `"paywall"` (no credits), or `"allowed"` (admin/counselor/unlimited). Chat rate limiting enforced via two layers: (1) `check_weekly_frequency` for weekly day limits, (2) `check_and_increment_chat` for daily limits. Returns 429 `WEEKLY_LIMIT` / `RATE_LIMITED`; returns 401 `AUTH_REQUIRED` for unauthenticated users; returns 403 `TRIAL_EXPIRED` when expired trial users try to chat. **Admin users** (`users.is_admin`) bypass all rate limits and appeal paywalls.
+**Sign-in required for all chat.** No anonymous access — users must sign up (email OTP) before chatting. **Gmail plus address normalization**: `user+tag@gmail.com` → `user@gmail.com` at sign-in via `normalizeEmail()` in `src/lib/normalize-email.ts` — prevents duplicate accounts. OTP email sent to original address (Gmail delivers it). Every signup = automatic 14-day trial (inline DB insert in `verify-otp`, not self-referencing HTTP fetch). After trial expires → locked (0 chats, must pay). Plan values are `trial`, `starter`, `plus`, `unlimited` only. All paid plans are monthly subscriptions (no one-time payments). Appeal access is credit-based via `usage.appeal_credits` column; `unlimited` plan bypasses credit checks entirely. `AppealAccessStatus` returns `"available"` (has credits), `"paywall"` (no credits), or `"allowed"` (admin/counselor/unlimited). Chat rate limiting enforced via two layers: (1) `check_weekly_frequency` for weekly day limits, (2) `check_and_increment_chat` for daily limits. Returns 429 `WEEKLY_LIMIT` / `RATE_LIMITED`; returns 401 `AUTH_REQUIRED` for unauthenticated users; returns 403 `TRIAL_EXPIRED` when expired trial users try to chat. **Admin users** (`users.is_admin`) bypass all rate limits and appeal paywalls.
 
 **AI Model**: Sonnet 4.6 for all chat messages (cost-efficient). Opus 4.6 for appeal letter generation only (higher quality for formal letters).
 
 ### Auth Gating
 
-| Feature | Auth Required |
-|---------|---------------|
-| 14-day trial (10 msgs/day, 1 day/week) | Email OTP |
-| Post-trial (locked) | Email OTP + Subscription to continue |
-| Starter (2 msgs/day, 1 day/week, 1 appeal) | Email OTP + $10/month |
-| Plus (5 msgs/day, 5 days/week, 2 appeals) | Email OTP + $20/month |
-| Unlimited (everything unlimited) | Email OTP + $60/month |
-| Medicare health data | Email OTP + Blue Button OAuth. **ID.me verification** only when `REQUIRE_IDENTITY_VERIFICATION=true` (Medicare App Library mode) |
+| Feature                                     | Auth Required                                                                                                                    |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 14-day trial (10 msgs/day, 1 day/week)      | Email OTP                                                                                                                        |
+| Post-trial (locked)                         | Email OTP + Subscription to continue                                                                                             |
+| Starter (20 msgs/day, 1 day/week, 1 appeal) | Email OTP + $10/month                                                                                                            |
+| Plus (20 msgs/day, every day, 2 appeals)    | Email OTP + $20/month                                                                                                            |
+| Unlimited (everything unlimited)            | Email OTP + $60/month                                                                                                            |
+| Medicare health data                        | Email OTP + Blue Button OAuth. **ID.me verification** only when `REQUIRE_IDENTITY_VERIFICATION=true` (Medicare App Library mode) |
 
 ### AAL2 Compliance Strategy (CMS A1 / NIST 800-63B)
 
 **ID.me provides IAL2/AAL2 identity verification.** Controlled by `REQUIRE_IDENTITY_VERIFICATION` env var:
+
 - `false` (default) = **Connected Apps Directory** mode — Blue Button works without ID.me. ID.me card hidden in Settings unless already verified.
 - `true` = **Medicare App Library** mode — users must verify identity via ID.me before connecting Blue Button. ID.me card shown as required.
 
@@ -656,7 +664,7 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
 NEXT_PUBLIC_APP_URL=https://denali.health  # or https://staging.denali.health
 ```
 
-> **Note**: `RESEND_API_KEY` and `RESEND_FROM_EMAIL` may still exist in `denali/prod/app` Secrets Manager but are **not used by any code** (replaced by AWS SES with IAM auth, 2026-03-19). Safe to remove from secrets when convenient.
+> **Note**: `RESEND_API_KEY` and `RESEND_FROM_EMAIL` were removed from `denali/prod/app` Secrets Manager on 2026-04-09. No Resend references remain in AWS. Email is exclusively via AWS SES (IAM auth).
 
 ### ECS Deployment Gotchas
 
@@ -676,13 +684,13 @@ Pre-launch cost optimization: ECS+RDS can be shut down outside working hours to 
 
 **Automated scheduler** (`infra/cfn-scheduler.json`): CloudFormation stack `denali-scheduler` with 3 Lambda functions + 5 EventBridge rules. **Status: DEPLOYED** (2026-02-27). Deploy/update via `infra/deploy-scheduler.sh`.
 
-| Component | Schedule (CT) | UTC Cron |
-|-----------|---------------|----------|
-| Startup | Daily 7:45am | `cron(45 13 * * ? *)` |
-| Shutdown Mon-Thu | 11:30pm | `cron(30 5 ? * TUE-FRI *)` |
-| Shutdown Fri-Sat | 2:00am | `cron(0 8 ? * SAT-SUN *)` |
-| Shutdown Sun | 11:00pm | `cron(0 5 ? * MON *)` |
-| Safety re-stop | Every 6 days | `rate(6 days)` |
+| Component        | Schedule (CT) | UTC Cron                   |
+| ---------------- | ------------- | -------------------------- |
+| Startup          | Daily 7:45am  | `cron(45 13 * * ? *)`      |
+| Shutdown Mon-Thu | 11:30pm       | `cron(30 5 ? * TUE-FRI *)` |
+| Shutdown Fri-Sat | 2:00am        | `cron(0 8 ? * SAT-SUN *)`  |
+| Shutdown Sun     | 11:00pm       | `cron(0 5 ? * MON *)`      |
+| Safety re-stop   | Every 6 days  | `rate(6 days)`             |
 
 **IAM role**: `denali-scheduler-lambda-role` with minimal permissions (RDS start/stop/describe on `denali-prod`, ECS update/describe on `denali-web`, CloudWatch Logs).
 
@@ -697,6 +705,23 @@ Pre-launch cost optimization: ECS+RDS can be shut down outside working hours to 
 - **SNS topic** `denali-monitor-alerts`: Email to `ramanac@gmail.com` + `admin@denali.health`. SMS not available (account in SMS sandbox — needs toll-free origination number to enable).
 - **IAM role**: `denali-monitor-lambda-role` with ECS/RDS describe, ELB target health, Cost Explorer, SNS publish, CloudWatch.
 
+### App-Level Error Alerting (2026-04-08)
+
+CloudWatch Logs metric filters on `/ecs/denali` log group → custom metrics → alarms → SNS alerts.
+
+| Filter         | Pattern                                                                            | Metric             | Alarm Threshold |
+| -------------- | ---------------------------------------------------------------------------------- | ------------------ | --------------- |
+| `AppErrors`    | `console.error`, `[ERROR]`, `Error:`, `FATAL`                                      | `AppErrorCount`    | >20 / 5min      |
+| `ClaudeErrors` | `[CLAUDE API]`, `timed out`, `Stream error`, `Bedrock`, `ThrottlingException`      | `ClaudeErrorCount` | >5 / 5min       |
+| `DBErrors`     | `connection refused`, `ETIMEDOUT`, `ECONNREFUSED`, `[DB]`, `connection terminated` | `DBErrorCount`     | >3 / 5min       |
+
+Plus the custom metrics alarms from `withMetrics` wrapper:
+
+- `Denali-ErrorRate`: HTTP 5xx ErrorCount Sum >10 / 5min
+- `Denali-P95Latency`: RequestLatency p95 >5000ms / 5min
+
+All 5 alarms → `denali-monitor-alerts` SNS topic. Logs Insights queries in `infra/cloudwatch-queries.md`.
+
 ### Lifecycle Policies
 
 - **ECR**: Keep last 3 images, auto-expire older (set 2026-02-27)
@@ -704,25 +729,26 @@ Pre-launch cost optimization: ECS+RDS can be shut down outside working hours to 
 
 ### AWS Resource Inventory (2026-02-28)
 
-| Service | Resource | Spec | Est. Monthly Cost |
-|---------|----------|------|-------------------|
-| RDS | denali-prod | db.t4g.micro, PostgreSQL 16.9, 20GB gp3, private | ~$12.10 |
-| ECS Fargate | denali-web | 0.5 vCPU, 1GB RAM, task def :30 | ~$18.40 |
-| ALB | denali-alb | Application, internet-facing | ~$16.20 |
-| EIP | 3× (ALB-attached) | All associated, no idle charge | $0 |
-| Secrets Manager | 3 secrets | denali/prod/db, denali/prod/app, rds!db-... | ~$1.20 |
-| CloudWatch Logs | /ecs/denali | 3-day retention, ~8KB stored | ~$0 |
-| S3 | denali-cloudtrail-logs | CloudTrail storage, 30-day lifecycle | ~$0.05 |
-| CloudTrail | denali-audit-trail | Multi-region, management events | $0 (free tier) |
-| ECR | denali | Docker images, keep-last-3 lifecycle | $0 (free tier) |
-| Cognito | denali-users | User pool (us-east-1_bA3bcPcy2) | $0 (free tier) |
-| SNS | denali-monitor-alerts | 2 email subscriptions | $0 (free tier) |
-| IAM | 5 denali roles | ecs-execution, ecs-task, github-actions, scheduler-lambda, monitor-lambda | $0 |
-| Lambda | 4 functions | shutdown, startup, safety-stop, monitor | $0 (free tier) |
-| EventBridge | 7 rules | 5 scheduler + 2 monitor | $0 |
-| CloudFormation | 2 stacks | denali-scheduler, denali-monitor | $0 |
-| **TOTAL** | | **24/7 runtime** | **~$48/mo** |
-| **With scheduler** | | **~16hr/day weekdays** | **~$30-35/mo** |
+| Service            | Resource                            | Spec                                                                      | Est. Monthly Cost |
+| ------------------ | ----------------------------------- | ------------------------------------------------------------------------- | ----------------- |
+| RDS                | denali-prod                         | db.t4g.micro, PostgreSQL 16.9, 20GB gp3, private                          | ~$12.10           |
+| ECS Fargate        | denali-web                          | 0.5 vCPU, 1GB RAM, task def :30                                           | ~$18.40           |
+| ALB                | denali-alb                          | Application, internet-facing                                              | ~$16.20           |
+| EIP                | 3× (ALB-attached)                   | All associated, no idle charge                                            | $0                |
+| Secrets Manager    | 3 secrets                           | denali/prod/db, denali/prod/app, rds!db-...                               | ~$1.20            |
+| CloudWatch Logs    | /ecs/denali                         | 3-day retention, ~8KB stored                                              | ~$0               |
+| S3                 | denali-cloudtrail-logs              | CloudTrail storage, 30-day lifecycle                                      | ~$0.05            |
+| CloudTrail         | denali-audit-trail                  | Multi-region, management events                                           | $0 (free tier)    |
+| ECR                | denali                              | Docker images, keep-last-3 lifecycle                                      | $0 (free tier)    |
+| Cognito            | denali-users                        | User pool (us-east-1_bA3bcPcy2)                                           | $0 (free tier)    |
+| SNS                | denali-monitor-alerts               | 2 email subscriptions                                                     | $0 (free tier)    |
+| IAM                | 5 denali roles                      | ecs-execution, ecs-task, github-actions, scheduler-lambda, monitor-lambda | $0                |
+| Lambda             | 4 functions                         | shutdown, startup, safety-stop, monitor                                   | $0 (free tier)    |
+| EventBridge        | 7 rules                             | 5 scheduler + 2 monitor                                                   | $0                |
+| CloudWatch Alarms  | Denali-ErrorRate, Denali-P95Latency | `Denali/App` namespace, SNS alerts on error rate >10/5min or P95 >5s      | $0.20             |
+| CloudFormation     | 2 stacks                            | denali-scheduler, denali-monitor                                          | $0                |
+| **TOTAL**          |                                     | **24/7 runtime**                                                          | **~$48/mo**       |
+| **With scheduler** |                                     | **~16hr/day weekdays**                                                    | **~$30-35/mo**    |
 
 ---
 
@@ -734,16 +760,16 @@ Blue Button connects patients to their Medicare claims data via FHIR APIs. It is
 
 What Blue Button provides and what it does not:
 
-| Data | Available |
-|------|-----------|
-| Medicare claims, denials, what was billed/paid | ✅ |
-| Actual lab values (A1C, glucose, reference ranges) | ❌ — only that the lab was performed (CPT code), not the value |
-| Vitals (BP, weight, BMI) | ❌ |
-| Conditions | ⚠️ Inferred from EOB ICD-10 codes, not a formal diagnosis list |
-| Medications | ⚠️ Part D claims only — no dosing, prescriber, or full medication record |
-| Immunizations | ❌ |
-| Clinical notes | ❌ |
-| Visit history | ⚠️ Claims-derived (service dates + CPT codes), no chief complaint |
+| Data                                               | Available                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------ |
+| Medicare claims, denials, what was billed/paid     | ✅                                                                       |
+| Actual lab values (A1C, glucose, reference ranges) | ❌ — only that the lab was performed (CPT code), not the value           |
+| Vitals (BP, weight, BMI)                           | ❌                                                                       |
+| Conditions                                         | ⚠️ Inferred from EOB ICD-10 codes, not a formal diagnosis list           |
+| Medications                                        | ⚠️ Part D claims only — no dosing, prescriber, or full medication record |
+| Immunizations                                      | ❌                                                                       |
+| Clinical notes                                     | ❌                                                                       |
+| Visit history                                      | ⚠️ Claims-derived (service dates + CPT codes), no chief complaint        |
 
 Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab values are not available from Blue Button — only the dates labs were performed.
 
@@ -797,20 +823,21 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 
 `eob-clinical.ts` mines clinical intelligence from EOB claims data (since Blue Button doesn't provide Observation/Condition/MedicationRequest resources directly). Four extraction layers:
 
-| Function | Input | Output | Key Logic |
-|----------|-------|--------|-----------|
-| `extractConditionsFromClaims()` | All claims | `DiagnosisSummary[]` | Scans `diagnosisCodes[]` for diabetes ICD-10 prefixes (E10, E11, E13, R73, E66). Dedupes by code, keeps most recent date |
-| `extractMedicationsFromClaims()` | Part D claims | `MedicationSummary[]` | Filters PDE claims, matches drug name patterns (DIABETES_DRUG_PATTERNS + OBESITY_DRUG_PATTERNS). Dual-flagging: `isDiabetesMed` + `isObesityMed` (GLP-1s like semaglutide can be both). Enriched with PDE data: daysSupply, refillNumber, brand/generic, estimatedRunOutDate, gapDays (positive = overdue) |
-| `extractScreeningsFromClaims()` | Carrier/Outpatient claims | `ScreeningHistory[]` | Matches `procedureCodes[]` against `SCREENING_CPT_MAP` (20 CPT codes → 9 screening types: A1C, eye-exam, kidney, ECG, office-visit, nutrition, DSMT, metabolic-panel, obesity-counseling). Dedupes by type, computes monthsSinceLast + isOverdue |
-| `extractProvidersFromClaims()` | All claims with careTeam | `ProviderDetail[]` | Aggregates by NPI, tracks specialty, visit count, claim types. From `careTeam[]` extracted in `transformEOB()` |
-| `extractHospitalizationsFromClaims()` | Inpatient/SNF claims | `HospitalizationSummary[]` | Filters inpatient claims, computes LOS, daysSinceDischarge, needsFollowUp (< 30 days). Admission type + discharge status from `supportingInfo[]` |
-| `extractDMEFromClaims()` | DME claims | `DMESummary[]` | Maps HCPCS codes (E0607, E2100, A4253, E0601, E0784, etc.) to categories (glucose-monitor, cpap, insulin-pump, test-strips, etc.) with diabetes/obesity relevance flags |
-| `extractPatientWeight()` | Professional/Carrier claims | `WeightMeasurement[]` | Scans `supportingInfo` for `patientweight` category. Returns empty if BB doesn't populate (placeholder) |
-| `detectHospiceStatus()` | All claims | `boolean` | Returns true if ANY hospice claim exists. **SAFETY**: triggers hospice gate in AI prompt + suppresses risk alerts |
+| Function                              | Input                       | Output                     | Key Logic                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------- | --------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extractConditionsFromClaims()`       | All claims                  | `DiagnosisSummary[]`       | Scans `diagnosisCodes[]` for diabetes ICD-10 prefixes (E10, E11, E13, R73, E66). Dedupes by code, keeps most recent date                                                                                                                                                                                   |
+| `extractMedicationsFromClaims()`      | Part D claims               | `MedicationSummary[]`      | Filters PDE claims, matches drug name patterns (DIABETES_DRUG_PATTERNS + OBESITY_DRUG_PATTERNS). Dual-flagging: `isDiabetesMed` + `isObesityMed` (GLP-1s like semaglutide can be both). Enriched with PDE data: daysSupply, refillNumber, brand/generic, estimatedRunOutDate, gapDays (positive = overdue) |
+| `extractScreeningsFromClaims()`       | Carrier/Outpatient claims   | `ScreeningHistory[]`       | Matches `procedureCodes[]` against `SCREENING_CPT_MAP` (20 CPT codes → 9 screening types: A1C, eye-exam, kidney, ECG, office-visit, nutrition, DSMT, metabolic-panel, obesity-counseling). Dedupes by type, computes monthsSinceLast + isOverdue                                                           |
+| `extractProvidersFromClaims()`        | All claims with careTeam    | `ProviderDetail[]`         | Aggregates by NPI, tracks specialty, visit count, claim types. From `careTeam[]` extracted in `transformEOB()`                                                                                                                                                                                             |
+| `extractHospitalizationsFromClaims()` | Inpatient/SNF claims        | `HospitalizationSummary[]` | Filters inpatient claims, computes LOS, daysSinceDischarge, needsFollowUp (< 30 days). Admission type + discharge status from `supportingInfo[]`                                                                                                                                                           |
+| `extractDMEFromClaims()`              | DME claims                  | `DMESummary[]`             | Maps HCPCS codes (E0607, E2100, A4253, E0601, E0784, etc.) to categories (glucose-monitor, cpap, insulin-pump, test-strips, etc.) with diabetes/obesity relevance flags                                                                                                                                    |
+| `extractPatientWeight()`              | Professional/Carrier claims | `WeightMeasurement[]`      | Scans `supportingInfo` for `patientweight` category. Returns empty if BB doesn't populate (placeholder)                                                                                                                                                                                                    |
+| `detectHospiceStatus()`               | All claims                  | `boolean`                  | Returns true if ANY hospice claim exists. **SAFETY**: triggers hospice gate in AI prompt + suppresses risk alerts                                                                                                                                                                                          |
 
 **Data flow**: Blue Button FHIR → `transformEOB()` (extracts PDE/careTeam/POS/inpatient/diagnosis-types/NDC/network fields onto `ClaimSummary`) → `eob-clinical.ts` extractors (8 functions) → `sync.ts` caches 11 resource types (patient, coverage, eob, conditions, medications, screenings, providers, hospitalizations, dme, hospice_status, sync_meta) → `useHealthData` hook → `context.ts` prompt injection + `chat/page.tsx` SessionState bridge
 
 **`transformEOB()` enrichments** (in `transforms.ts`):
+
 - `extractPDEInfo()`: Reads `supportingInfo[]` for dayssupply, refillnum, brandgenericindicator → `ClaimSummary.pdeInfo`
 - `extractCareTeam()`: Maps `careTeam[]` to NPI + name + role + specialty → `ClaimSummary.careTeam`
 - `extractPlaceOfService()`: Maps `item[].locationCodeableConcept` via `POS_CODE_MAP` → `ClaimSummary.placeOfService`
@@ -844,10 +871,10 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 
 **AppHeader** (`src/components/layout/AppHeader.tsx`) — universal, rendered in root layout (`src/app/layout.tsx`):
 
-| Viewport | Left | Center | Right |
-|----------|------|--------|-------|
+| Viewport    | Left       | Center                                               | Right                                        |
+| ----------- | ---------- | ---------------------------------------------------- | -------------------------------------------- |
 | **Desktop** | Logo → `/` | Nav: Health (rose), Ask Denali (blue), Blog (violet) | Sign In button (not auth) / Gear icon (auth) |
-| **Mobile** | Logo → `/` | — | Sign In / Gear + Hamburger menu |
+| **Mobile**  | Logo → `/` | —                                                    | Sign In / Gear + Hamburger menu              |
 
 - Auth-aware via `createClient().auth.getSession()` + `onAuthStateChange`
 - Nav icons have per-item Tailwind colors (e.g. `text-rose-500`); active state uses `--accent-primary`
@@ -855,15 +882,18 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 - Hamburger dropdown shows nav items on mobile
 
 **Shared Footer** (`src/components/landing/LandingFooter.tsx`) — used across ALL pages:
+
 - Used by: landing page, blog, legal pages (faq/terms/privacy/hipaa), app layout (desktop only via `hidden md:block`)
 - Top row: Logo + "Qash Solutions Inc © 2026" (left), FAQ · Privacy · Terms · HIPAA links (right)
 - Bottom row: HIPAA/BAA notice (`text-base font-medium`) + disclaimer (`text-xs`), separated by `border-t`
 - **CRITICAL**: In `"use client"` components (like `app/layout.tsx`), import directly from `"@/components/landing/LandingFooter"` — NOT from barrel `"@/components/landing"`. Barrel import pulls `pg` into client bundle via transitive server deps
 
 **BottomTabs** (`src/components/layout/BottomTabs.tsx`) — mobile only, `/app/*` pages:
+
 - Tabs: Home, Health, Ask Denali, Settings (4 tabs, fixed bottom)
 
 **Landing Page** (`src/components/landing/`) — premium warm medical reference design:
+
 - **Hero** (`LandingHero.tsx`): Typographic hero with subtle mountain silhouette SVG (two path layers at opacity 0.08/0.12). Serif heading, decorative accent line, refined pill CTAs, uppercase trust line. Tagline: diabetes + obesity + coverage + denials + appeals. Primary CTA defaults to `/app/chat` (not `/app`) so users land on chat directly (sign-in required to send messages).
 - **Features** (`LandingFeatures.tsx`): 3 health-first cards prioritizing CMS diabetes/obesity categories: (1) Pre-Diabetes & Diabetes Care — A1C screenings, meds, coverage; (2) Obesity Care — GLP-1s, bariatric, counseling, coverage; (3) Claims & Appeals — Medicare data + appeal letters. Section header: "Tailored guidance from your Medicare data" + "Pre-diabetes, Diabetes and Obesity" (accent color). Cards: `rounded-xl`, monospace step labels (`01`/`02`/`03`), monochromatic tags, subtle border hover.
 - **Conditions** (`LandingConditions.tsx`): 2-column × 3-row alternating image/text section. Header: "Analysis grounded in your **Medicare** data". Three rows: Pre-Diabetes (image left), Diabetes (image right), Obesity (image left). ~30-word descriptions grounded in actual Blue Button data capabilities (R73 codes, Part D meds, DME, screening CPTs, GLP-1 tracking, obesity counseling). Images: `PreDiabetes.png`, `Diabetes.png`, `Obesity.png` in `public/`. Next.js `Image` with `fill` + `object-cover`, intersection observer fade-in.
@@ -874,6 +904,7 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 - Section bg alternation: Hero `bg-primary`, Features `bg-secondary`, Conditions `bg-primary`, HowItWorks `bg-secondary`, Pricing default, Testimonials `bg-secondary`, Footer `bg-secondary`.
 
 **Health Hub** (`src/app/app/health/page.tsx`) — 7 collapsible accordion cards replacing 11-section scroll:
+
 - Each card: `HealthHubCard` — status dot (red/amber/green) + title + one-line summary + chevron toggle
 - Cards: Needs Attention (auto-expanded, conditional), Coverage Status, Diabetes Care (conditional), Weight Management (conditional, obesity), Health Conditions (conditional), Claims & Providers, Medicare Account
 - Status dots computed via `computeCardStatuses()` (useMemo) — checks denied claims, overdue screenings, med refill gaps (diabetes + obesity), severity classification, sync age, obesity screenings/meds
@@ -883,6 +914,7 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 - Existing child components (`CoverageCards`, `ClaimsTimeline`, `DiagnosisSummaryCard`, etc.) reused as-is inside card bodies
 
 **Icons** (`src/components/icons/index.tsx`):
+
 - `DiabetesIcon`: chart/monitoring icon (trend line + dot) — NOT blood drop
 - `WeightScaleIcon`: weight scale with circular gauge, needle, tick marks, handle — used by Weight Management card
 - `HeartPulseIcon`, `ChatBubbleIcon`, `DocumentTextIcon`, `GearIcon`, `HomeIcon`, `MountainIcon`
@@ -925,14 +957,14 @@ Designed for rural Medicare patients on spotty connections. Caches API responses
 
 `public/sw.js` — plain JS, no build step. Routes requests by URL pattern:
 
-| URL Pattern | Strategy | Cache Name |
-|-------------|----------|------------|
-| `/_next/static/`, `/icon-*`, `/favicon*`, `/logo*` | Cache-first | `denali-static-v2` |
-| `/api/chat` | Network-only | — |
-| `/api/fhir/authorize`, `/api/fhir/callback`, `/api/checkout`, `/api/webhooks/*` | Network-only | — |
-| `/api/conversations`, `/api/fhir/data`, `/api/profile`, `/api/diabetes/log` (GET), `/api/diabetes/insights` (GET) | Network-first, cache fallback | `denali-api-v2` |
-| Navigation (`mode=navigate`) | Network-first → cached page → `/offline` | `denali-static-v2` |
-| Everything else | Stale-while-revalidate | `denali-static-v2` |
+| URL Pattern                                                                                                       | Strategy                                 | Cache Name         |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------ |
+| `/_next/static/`, `/icon-*`, `/favicon*`, `/logo*`                                                                | Cache-first                              | `denali-static-v2` |
+| `/api/chat`                                                                                                       | Network-only                             | —                  |
+| `/api/fhir/authorize`, `/api/fhir/callback`, `/api/checkout`, `/api/webhooks/*`                                   | Network-only                             | —                  |
+| `/api/conversations`, `/api/fhir/data`, `/api/profile`, `/api/diabetes/log` (GET), `/api/diabetes/insights` (GET) | Network-first, cache fallback            | `denali-api-v2`    |
+| Navigation (`mode=navigate`)                                                                                      | Network-first → cached page → `/offline` | `denali-static-v2` |
+| Everything else                                                                                                   | Stale-while-revalidate                   | `denali-static-v2` |
 
 **Precached**: `/offline`, `/manifest.json`, `/icon-192.png`, `/icon-512.png`. **Cache versioning**: `CACHE_VERSION = "v3"` — bump on deploy. Old caches deleted on activate. **Update detection**: SW registration checks for updates every 60 min; auto-activates waiting worker.
 
@@ -944,14 +976,14 @@ Designed for rural Medicare patients on spotty connections. Caches API responses
 
 `src/lib/offline-cache.ts` — database `denali-offline-cache` v1 with 6 object stores:
 
-| Store | Key | TTL | What's Cached |
-|-------|-----|-----|---------------|
-| `conversations` | `"list"` | 24h | `ConversationHistoryItem[]` |
-| `health-data` | `"snapshot"` | 24h | Full health snapshot (patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations) |
-| `diabetes-log` | `"entries"` | 24h | `LogEntry[]` |
-| `diabetes-insights` | `"current"` | 24h | `StoredInsight` |
-| `profile` | `"profile"` | 4h | Non-sensitive profile data (plan, role, appealCount, appealCredits, isAdmin, trialStatus) |
-| `offline-queue` | Auto-generated ID | — | Failed POST requests awaiting replay |
+| Store               | Key               | TTL | What's Cached                                                                                                            |
+| ------------------- | ----------------- | --- | ------------------------------------------------------------------------------------------------------------------------ |
+| `conversations`     | `"list"`          | 24h | `ConversationHistoryItem[]`                                                                                              |
+| `health-data`       | `"snapshot"`      | 24h | Full health snapshot (patient, coverage, claims, labs, conditions, medications, screenings, providers, hospitalizations) |
+| `diabetes-log`      | `"entries"`       | 24h | `LogEntry[]`                                                                                                             |
+| `diabetes-insights` | `"current"`       | 24h | `StoredInsight`                                                                                                          |
+| `profile`           | `"profile"`       | 4h  | Non-sensitive profile data (plan, role, appealCount, appealCredits, isAdmin, trialStatus)                                |
+| `offline-queue`     | Auto-generated ID | —   | Failed POST requests awaiting replay                                                                                     |
 
 All operations are try/catch guarded — gracefully degrades if IndexedDB is unavailable (private browsing, Safari restrictions).
 
@@ -974,13 +1006,13 @@ fetch failure → cacheGetIfFresh() → setState() from cache (if within TTL)
 
 **CRITICAL: Never `await` IndexedDB writes before `setState()`.** Fire-and-forget pattern — blocking on cache writes causes UI hangs.
 
-| Hook | Store | TTL | Offline Behavior |
-|------|-------|-----|------------------|
-| `useConversationHistory` | `conversations` | 24h | Shows cached conversation list |
-| `useHealthData` | `health-data` | 24h | Shows cached health snapshot |
-| `useDiabetesLog` | `diabetes-log` | 24h | Shows cached entries + optimistic adds queued |
-| `useDiabetesInsights` | `diabetes-insights` | 24h | Shows cached insight |
-| `useAuth` (`loadProfileData`) | `profile` | 4h | Restores plan/role/admin from cache |
+| Hook                          | Store               | TTL | Offline Behavior                              |
+| ----------------------------- | ------------------- | --- | --------------------------------------------- |
+| `useConversationHistory`      | `conversations`     | 24h | Shows cached conversation list                |
+| `useHealthData`               | `health-data`       | 24h | Shows cached health snapshot                  |
+| `useDiabetesLog`              | `diabetes-log`      | 24h | Shows cached entries + optimistic adds queued |
+| `useDiabetesInsights`         | `diabetes-insights` | 24h | Shows cached insight                          |
+| `useAuth` (`loadProfileData`) | `profile`           | 4h  | Restores plan/role/admin from cache           |
 
 ### Network-Aware UI
 
@@ -1054,20 +1086,56 @@ Domain skills are implemented via Claude tool calling in `/api/chat`, NOT separa
 
 ```bash
 cd app
-npx vitest run          # 91 unit tests
+npx vitest run          # 575 unit tests
+npm run test:coverage   # Unit tests + coverage thresholds
 npx playwright test     # 212 E2E tests (requires dev server or auto-starts)
 npx tsc --noEmit        # Type check
 ```
 
 ### Unit Tests (Vitest)
 
+**Coverage**: `@vitest/coverage-v8` with per-file thresholds on critical files. Global floor: 33% stmts / 32% branch / 33% lines / 29% functions (ratchet up as tests are added). Run `npm run test:coverage` to enforce.
+
+| File                      | Stmts | Branch | Lines | Why                                    |
+| ------------------------- | ----- | ------ | ----- | -------------------------------------- |
+| `claude.ts`               | 65%   | 50%    | 65%   | Extraction pipeline, tool loop         |
+| `middleware.ts`           | 100%  | 90%    | 100%  | Guards every request                   |
+| `auth/refresh/route.ts`   | 100%  | 100%   | 100%  | Session resilience                     |
+| `chat/route.ts`           | 85%   | 75%    | 85%   | Core endpoint, orchestrates everything |
+| `health/route.ts`         | 100%  | 100%   | 100%  | ALB health check                       |
+| `auth-server.ts`          | 95%   | 95%    | 100%  | JWT + all Cognito functions            |
+| `stripe-fulfillment.ts`   | 95%   | 90%    | 95%   | Financial risk                         |
+| `eob-clinical.ts`         | 60%   | 50%    | 70%   | Patient safety                         |
+| `fhir/crypto.ts`          | 100%  | 100%   | 100%  | Token encryption at rest               |
+| `learning.ts`             | 95%   | 80%    | 95%   | Entity extraction, mapping upserts     |
+| `rate-limiter.ts`         | 80%   | 60%    | 80%   | Token bucket, circuit breaker, retry   |
+| `fhir/context.ts`         | 80%   | 60%    | 80%   | Consent gate — health data → AI        |
+| `fhir/transforms.ts`      | 45%   | 40%    | 50%   | PII boundary — age+gender only         |
+| `account/delete/route.ts` | 100%  | 70%    | 100%  | GDPR/CCPA cascade                      |
+
 **Config**: `app/vitest.config.ts` — `@/` alias, includes `src/**/*.test.ts`, excludes `e2e/**`.
 
-| Test File | Tests | What It Covers |
-|-----------|-------|----------------|
-| `src/lib/fhir/__tests__/eob-clinical.test.ts` | 35 | All 5 EOB extraction functions: conditions, medications (PDE enrichment), screenings (CPT mapping), providers (careTeam aggregation), hospitalizations (LOS, follow-up) |
-| `src/config/__tests__/pricing.test.ts` | 12 | `getUploadLimitForPlan` (6 plan types), `formatPrice` (2), `formatFileSize` (4) |
-| `src/app/api/consent/__tests__/route.test.ts` | 9 | Consent route handler: auth checks (GET/PUT 401), type validation (400), boolean validation (400), upsert with correct `granted_at`/`revoked_at` timestamps, 500 on DB error |
+| Test File                                             | Tests | What It Covers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/fhir/__tests__/eob-clinical.test.ts`         | 35    | All 5 EOB extraction functions: conditions, medications (PDE enrichment), screenings (CPT mapping), providers (careTeam aggregation), hospitalizations (LOS, follow-up)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `src/config/__tests__/pricing.test.ts`                | 12    | `getUploadLimitForPlan` (6 plan types), `formatPrice` (2), `formatFileSize` (4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/app/api/consent/__tests__/route.test.ts`         | 13    | Consent route handler: auth checks (GET/PUT 401), type validation (400), boolean validation (400), upsert with correct `granted_at`/`revoked_at` timestamps, 500 on DB error                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `src/app/api/webhooks/stripe/__tests__/route.test.ts` | 17    | Stripe webhook: signature verification, checkout.session.completed dispatch, subscription.updated/deleted, invoice.payment_failed (subscription retrieval), unhandled events, error resilience                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `src/lib/__tests__/stripe-fulfillment.test.ts`        | 28    | fulfillCheckoutSession (plan mapping, credit reset, idempotency), handleSubscriptionEvent (status sync, credit reset, cancellation), period date extraction                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `src/lib/__tests__/normalize-email.test.ts`           | 7     | Gmail/Googlemail plus stripping, domain case normalization, non-Gmail passthrough, edge cases                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `src/lib/__tests__/auth-server.test.ts`               | 16    | `getAuthUser` JWT extraction: Bearer header, cookie fallback, header priority, email/username claims, DB fallback for UUID usernames, DB failure graceful degradation, expired token handling. Negative: malformed Bearer headers (lowercase, no-space, empty, whitespace). `getAuthUserOptional` null-on-error                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/lib/__tests__/auth-server-cognito.test.ts`       | 25    | All 7 Cognito admin functions via mocked SDK `send()`: deleteCognitoUser (command params, error propagation), getCognitoUsernameByEmail (success, UserNotFound, other error), createOrGetCognitoUser (existing user, create on not-found, non-UserNotFound error, missing sub), setCognitoPassword (Permanent=true, error), initiateCognitoAuth (tokens, defaults, missing tokens, auth flow params), cognitoGlobalSignOut (command, error swallowed), refreshCognitoTokens (success, defaults, missing token, null result, flow params, error propagation)                                                                                                                                                                                                                                             |
+| `src/app/api/auth/refresh/__tests__/route.test.ts`    | 13    | Token refresh: missing cookie 401, success 200 + cookie set, invalid token 401 + cookie clear (NotAuthorizedException/invalid_grant/Invalid Refresh Token), transient failure 503 + cookies preserved (ETIMEDOUT/DNS/ServiceUnavailable/non-Error). Negative: ambiguous error classification (client config NotAuthorizedException, case mismatch, JSON-wrapped errors)                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `src/__tests__/middleware.test.ts`                    | 23    | API route passthrough, 7-day session lifetime (expired redirect, valid passthrough, session-expired no-loop), silent refresh (success + cookie forwarding, skip when both/neither tokens present), transient resilience (503 → next, network error → next, 401 → anonymous redirect), auth redirects (/ ↔ /app). Negative: malformed session_issued_at (NaN/0/negative), session boundary + refresh interaction, refresh 200 with missing Set-Cookie                                                                                                                                                                                                                                                                                                                                                    |
+| `src/app/api/chat/__tests__/route.test.ts`            | 37    | Pre-stream: validation, auth 401, plan detection (5 plans + admin), rate limiting (weekly/daily 429 + graceful degradation), profile fallback, attachment validation (3 cases), SSE stream success/error, auto-create trial. Post-stream: role detection (counselor/provider), trigger detection (diabetes from conditions/keywords, obesity from conditions/meds/keywords, health data + denials), conversation persistence (create/reuse/fallback UUID), appeal persistence (save + failure resilience), suggestions persistence, unreported outcome check, GET health endpoint                                                                                                                                                                                                                       |
+| `src/app/api/health/__tests__/route.test.ts`          | 4     | Health check: 200 when RDS reachable, 503 on timeout/connection refused/auth failure                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `src/lib/fhir/__tests__/crypto.test.ts`               | 18    | AES-256-GCM: round-trip (plain, JSON, empty, long, unicode), IV uniqueness (same plaintext → different ciphertext), output format (valid base64, IV+ciphertext+tag sizing), tamper detection (flipped ciphertext/tag/IV, truncated, garbage), wrong key rejection, key validation (missing, short, long, empty)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/lib/fhir/__tests__/context.test.ts`              | 28    | Consent gate (null on false/null/undefined consentHealthDataAi, context only on `true`), hospice safety gate, all data injection sections (coverage, MA plan, conditions, meds with refill gaps, obesity meds, overdue screenings, diabetes/obesity classification, denied claims, EOB claims, hospitalizations, care team, DME, A1C trends), 4KB truncation                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `src/lib/fhir/__tests__/transforms.test.ts`           | 13    | PII boundary: transformPatient extracts ONLY age+gender (10 tests proving name/DOB/Medicare ID/address are never in output). transformCoverage (3 tests). transformEOB basics (3 tests)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `src/app/api/account/delete/__tests__/route.test.ts`  | 11    | Auth 401, admin block 403, 11-step cascade deletion (FK order verified), Cognito cleanup last, Stripe cancellation + failure resilience, delete_user_cascade RPC fallback, DB failure 500, POST alias                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `src/lib/__tests__/rate-limiter.test.ts`              | 29    | Token bucket (acquire/exhaust/refill/cap/per-API config), getTimeUntilNextToken, circuit breaker state machine (closed→open→half-open→closed, re-open on half-open failure, success decrements failures, reset), error types (RetryableError/NonRetryableError/CircuitOpenError/RateLimitError), withRetry (success/retry+recover/NonRetryable immediate/circuit blocks/onRetry callback/records success+failure), getAllStats, resetAll                                                                                                                                                                                                                                                                                                                                                                |
+| `src/lib/__tests__/learning.test.ts`                  | 70    | Entity extraction: symptoms (8 patterns + dedup + severity + duration), procedures (imaging/surgery/therapy + bodyPart), medications, providers, timeframes, edge cases. Prompt injection: buildLearningPromptInjection (empty/caps/NCD-LCD fallback), buildFlywheelPromptInjection (empty/format/null avg_days/cap 20). DB: updateSymptomMapping (RPC + fallback + confidence clamp at 1.0), updateProcedureMapping, recordCoveragePath (upsert + docs + error), processFeedback (positive/negative/correction), getSymptomMappings/getProcedureMappings (row mapping + error), getSuccessfulCoveragePaths, getLearningContext (orchestration + denials), queueLearningJob, pruneLowConfidenceMappings, getFlywheelContext, checkOutcomeIncentive/applyOutcomeIncentive, recordAppealOutcome (5 paths) |
+| `src/lib/__tests__/claude.test.ts`                    | 40    | extractUserInfo (name/ZIP/duration/provider/Medicare type/appeal detection/denial codes/date/requirement skip), formatMessages (text + PDF + image multimodal), extraction pipeline via mock API (MEDICARE_TYPE/REQUIREMENTS/VERIFIED/PRIOR_AUTH_LCD/SUGGESTIONS/policy refs), tool calling loop (execute+unknown+error), max iterations graceful fallback (partial content + absolute fallback)                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 **Fixtures**: `src/lib/fhir/__tests__/fixtures/synthetic-claims.ts` — 7 synthetic `ClaimSummary` objects exercising all extractors (carrier, outpatient, Part D with PDE, inpatient).
 
@@ -1079,75 +1147,76 @@ npx tsc --noEmit        # Type check
 
 #### Foundation Tests (pre-existing — 19 files, 147 tests)
 
-| Test File | Tests | What It Covers |
-|-----------|-------|----------------|
-| `e2e/chat-flow.spec.ts` | 20 | Chat SSE flow, suggestions, empty state cards, greeting, consent banner, ?message= auto-send, ?topic= routing, PaywallModal via "upgrade", XSS in SSE, error states (429/500) |
-| `e2e/health-hub.spec.ts` | 11 | Health page connected (accordion cards, coverage, diabetes, conditions, claims, expansion, attribution, needs-attention) + disconnected + unauth |
-| `e2e/dashboard.spec.ts` | 8 | Feature cards (Coverage/Medicare/Appeals/Diabetes), greeting with name, walkthrough bar, nudge strip |
-| `e2e/diabetes.spec.ts` | 10 | Coverage table 6 items, quick actions, A1C guide, connected states (with/without diabetes), QuickLog visibility, PreDiabetes Risk Card, CMS pledge |
-| `e2e/settings.spec.ts` | 14 | Account email/plan/trial, appearance/accessibility sections, 3 consent toggles + default OFF, topic preferences, audit log, danger zone 2-step delete, unauth sign-in option |
-| `e2e/sidebar.spec.ts` | 3 | New Chat button, conversation history grouped by date (Today/Yesterday), empty state |
-| `e2e/navigation.spec.ts` | 6 | Desktop nav links, Health nav click, gear icon, landing/blog/FAQ public access |
-| `e2e/health-report.spec.ts` | 5 | Report API auth (401s), share token 404, PDF invalid-id error |
-| `e2e/offline-pwa.spec.ts` | 3 | Chat input disabled offline, offline banner, SW registration |
-| `e2e/inactivity.spec.ts` | 2 | No warning for active auth user, no warning for anon |
-| `e2e/auth-api.spec.ts` | 15 | 401 guards on 12 protected routes, profile/conversations data leakage checks |
-| `e2e/api-validation.spec.ts` | 20 | Input validation across consent, checkout, diabetes log, events, feedback, appeal-outcome, topics, health-report email, admin CMS (403) |
-| `e2e/consent-toggles.spec.ts` | 8 | Consent API 401, toggle rendering, initial state, PUT payloads, optimistic revert, toggle OFF |
-| `e2e/payment-trial.spec.ts` | 11 | Trial/checkout/webhook auth guards, invalid plan, Stripe signature |
-| `e2e/xss-security.spec.ts` | 1 | XSS in URL param |
-| `e2e/spoofing-security.spec.ts` | 7 | API access control on 5 routes |
-| `e2e/rate-limiting.spec.ts` | 2 | Unauth sign-up prompt, checkout 503 error |
-| `e2e/coverage-check.spec.ts` | 1 | Full chat flow: send → stream → render → suggestions |
-| `e2e/pages.spec.ts` | 7 | Landing hero/pricing, FAQ, Terms, Privacy |
-| `e2e/utility-api.spec.ts` | 3 | Health check 200, CMS metadata shape + public access |
+| Test File                       | Tests | What It Covers                                                                                                                                                                |
+| ------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/chat-flow.spec.ts`         | 20    | Chat SSE flow, suggestions, empty state cards, greeting, consent banner, ?message= auto-send, ?topic= routing, PaywallModal via "upgrade", XSS in SSE, error states (429/500) |
+| `e2e/health-hub.spec.ts`        | 11    | Health page connected (accordion cards, coverage, diabetes, conditions, claims, expansion, attribution, needs-attention) + disconnected + unauth                              |
+| `e2e/dashboard.spec.ts`         | 8     | Feature cards (Coverage/Medicare/Appeals/Diabetes), greeting with name, walkthrough bar, nudge strip                                                                          |
+| `e2e/diabetes.spec.ts`          | 10    | Coverage table 6 items, quick actions, A1C guide, connected states (with/without diabetes), QuickLog visibility, PreDiabetes Risk Card, CMS pledge                            |
+| `e2e/settings.spec.ts`          | 14    | Account email/plan/trial, appearance/accessibility sections, 3 consent toggles + default OFF, topic preferences, audit log, danger zone 2-step delete, unauth sign-in option  |
+| `e2e/sidebar.spec.ts`           | 3     | New Chat button, conversation history grouped by date (Today/Yesterday), empty state                                                                                          |
+| `e2e/navigation.spec.ts`        | 6     | Desktop nav links, Health nav click, gear icon, landing/blog/FAQ public access                                                                                                |
+| `e2e/health-report.spec.ts`     | 5     | Report API auth (401s), share token 404, PDF invalid-id error                                                                                                                 |
+| `e2e/offline-pwa.spec.ts`       | 3     | Chat input disabled offline, offline banner, SW registration                                                                                                                  |
+| `e2e/inactivity.spec.ts`        | 2     | No warning for active auth user, no warning for anon                                                                                                                          |
+| `e2e/auth-api.spec.ts`          | 15    | 401 guards on 12 protected routes, profile/conversations data leakage checks                                                                                                  |
+| `e2e/api-validation.spec.ts`    | 20    | Input validation across consent, checkout, diabetes log, events, feedback, appeal-outcome, topics, health-report email, admin CMS (403)                                       |
+| `e2e/consent-toggles.spec.ts`   | 8     | Consent API 401, toggle rendering, initial state, PUT payloads, optimistic revert, toggle OFF                                                                                 |
+| `e2e/payment-trial.spec.ts`     | 11    | Trial/checkout/webhook auth guards, invalid plan, Stripe signature                                                                                                            |
+| `e2e/xss-security.spec.ts`      | 1     | XSS in URL param                                                                                                                                                              |
+| `e2e/spoofing-security.spec.ts` | 7     | API access control on 5 routes                                                                                                                                                |
+| `e2e/rate-limiting.spec.ts`     | 2     | Unauth sign-up prompt, checkout 503 error                                                                                                                                     |
+| `e2e/coverage-check.spec.ts`    | 1     | Full chat flow: send → stream → render → suggestions                                                                                                                          |
+| `e2e/pages.spec.ts`             | 7     | Landing hero/pricing, FAQ, Terms, Privacy                                                                                                                                     |
+| `e2e/utility-api.spec.ts`       | 3     | Health check 200, CMS metadata shape + public access                                                                                                                          |
 
 #### Batch 1 — User Interaction Tests (pendingtests.md #1–#20 — 9 files, 25 tests)
 
-| Test File | Tests | What It Covers |
-|-----------|-------|----------------|
-| `e2e/auth-flows.spec.ts` | 5 | #1 Email OTP sign-in flow, #2 Sign-out clears auth state, #3 Account delete fires DELETE + signs out |
-| `e2e/payment-flows.spec.ts` | 5 | #4 PaywallModal plan selection → POST body, #16 Processing loading state, #17 Settings upgrade opens PaywallModal |
-| `e2e/appeal-gate.spec.ts` | 2 | #5 AppealGate unauth → sign-up overlay, #6 AppealGate no credits → unlock overlay |
-| `e2e/chat-interactions.spec.ts` | 4 | #7 "Sign up free" → /app/settings, #8 "Upgrade plan" → paywall, #18 ?payment=cancelled toast, #20 Consent banner "Enable in Settings" |
-| `e2e/quicklog.spec.ts` | 4 | #9 Glucose form submission POST, #10 Activity/Meal/Note tab forms |
-| `e2e/sidebar-interactions.spec.ts` | 2 | #11 Click → navigate to ?id=, #12 Group collapse/expand |
-| `e2e/health-interactions.spec.ts` | 4 | #13 Disconnect calls POST, #14 Report "ready" banner + View link, #15 Unauth redirect, #19 OAuth error banner |
+| Test File                          | Tests | What It Covers                                                                                                                        |
+| ---------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/auth-flows.spec.ts`           | 5     | #1 Email OTP sign-in flow, #2 Sign-out clears auth state, #3 Account delete fires DELETE + signs out                                  |
+| `e2e/payment-flows.spec.ts`        | 5     | #4 PaywallModal plan selection → POST body, #16 Processing loading state, #17 Settings upgrade opens PaywallModal                     |
+| `e2e/appeal-gate.spec.ts`          | 2     | #5 AppealGate unauth → sign-up overlay, #6 AppealGate no credits → unlock overlay                                                     |
+| `e2e/chat-interactions.spec.ts`    | 4     | #7 "Sign up free" → /app/settings, #8 "Upgrade plan" → paywall, #18 ?payment=cancelled toast, #20 Consent banner "Enable in Settings" |
+| `e2e/quicklog.spec.ts`             | 4     | #9 Glucose form submission POST, #10 Activity/Meal/Note tab forms                                                                     |
+| `e2e/sidebar-interactions.spec.ts` | 2     | #11 Click → navigate to ?id=, #12 Group collapse/expand                                                                               |
+| `e2e/health-interactions.spec.ts`  | 4     | #13 Disconnect calls POST, #14 Report "ready" banner + View link, #15 Unauth redirect, #19 OAuth error banner                         |
 
 #### Batch 2 — Data-Driven Tests (pendingtests.md #21–#40 — 10 files, 24 tests)
 
-| Test File | Tests | What It Covers |
-|-----------|-------|----------------|
-| `e2e/health-hub-interactions.spec.ts` | 5 | #21 Accordion expand shows content, #22 "Needs Attention" conditional card, #23 Diabetes card conditional, #24 Obesity card conditional |
-| `e2e/health-report-interactions.spec.ts` | 1 | #25 "Generating" spinner banner |
-| `e2e/appeal-letter.spec.ts` | 1 | #26 Appeal card renders from SSE appealLetter |
-| `e2e/trial-enforcement.spec.ts` | 2 | #27 Trial expired → 403 lock message, #28 Weekly rate limit → 429 message |
-| `e2e/chat-edge-cases.spec.ts` | 3 | #29 ?id= loads existing conversation, #30 New Chat resets state, #31 URL syncs ?id= on new conversation |
-| `e2e/settings-interactions.spec.ts` | 6 | #32 Theme toggle (dark mode), #33 Text size selector, #34 Plan display for 4 tiers (serviceWorkers: "block") |
-| `e2e/landing.spec.ts` | 2 | #35 Hero CTA → /app/chat, #36 Pricing 4 tiers with prices |
-| `e2e/blog.spec.ts` | 2 | #37 Blog listing renders posts, #38 Blog post renders article |
-| `e2e/mobile-nav.spec.ts` | 1 | #39 BottomTabs 4 tabs + navigation |
-| `e2e/dashboard.spec.ts` | 1 | #40 Dashboard renders feature cards for auth user (shared with foundation) |
+| Test File                                | Tests | What It Covers                                                                                                                          |
+| ---------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/health-hub-interactions.spec.ts`    | 5     | #21 Accordion expand shows content, #22 "Needs Attention" conditional card, #23 Diabetes card conditional, #24 Obesity card conditional |
+| `e2e/health-report-interactions.spec.ts` | 1     | #25 "Generating" spinner banner                                                                                                         |
+| `e2e/appeal-letter.spec.ts`              | 1     | #26 Appeal card renders from SSE appealLetter                                                                                           |
+| `e2e/trial-enforcement.spec.ts`          | 2     | #27 Trial expired → 403 lock message, #28 Weekly rate limit → 429 message                                                               |
+| `e2e/chat-edge-cases.spec.ts`            | 3     | #29 ?id= loads existing conversation, #30 New Chat resets state, #31 URL syncs ?id= on new conversation                                 |
+| `e2e/settings-interactions.spec.ts`      | 6     | #32 Theme toggle (dark mode), #33 Text size selector, #34 Plan display for 4 tiers (serviceWorkers: "block")                            |
+| `e2e/landing.spec.ts`                    | 2     | #35 Hero CTA → /app/chat, #36 Pricing 4 tiers with prices                                                                               |
+| `e2e/blog.spec.ts`                       | 2     | #37 Blog listing renders posts, #38 Blog post renders article                                                                           |
+| `e2e/mobile-nav.spec.ts`                 | 1     | #39 BottomTabs 4 tabs + navigation                                                                                                      |
+| `e2e/dashboard.spec.ts`                  | 1     | #40 Dashboard renders feature cards for auth user (shared with foundation)                                                              |
 
 #### Batch 3 — Integration Tests (pendingtests.md #41–#60 — 9 files, 20 tests)
 
-| Test File | Tests | What It Covers |
-|-----------|-------|----------------|
-| `e2e/health-report-view.spec.ts` | 3 | #41 Report view renders sections, #42 Share link controls visible, #43 Email sends via POST |
-| `e2e/consent-enforcement.spec.ts` | 2 | #44 health_data_ai OFF strips health from sessionState, #45 Grey banner visible |
-| `e2e/appeal-outcome.spec.ts` | 2 | #46 Appeal card renders + outcome form, #47 Credit incentive on approved |
-| `e2e/chat-feedback.spec.ts` | 2 | #48 Thumbs up/down sends POST, #49 Thumbs down shows confirmation |
-| `e2e/diabetes-interactions.spec.ts` | 5 | #50 RiskAlerts + CTA, #51 A1C chart toggle, #52 ScreeningReminders overdue, #53 InsightsCard + refresh, #54 Log delete |
-| `e2e/blog-interactions.spec.ts` | 2 | #55 Category tab filtering, #56 Personalized grouping |
-| `e2e/settings-topic-prefs.spec.ts` | 1 | #57 Topic preferences max 2 + PUT on selection |
-| `e2e/dashboard-interactions.spec.ts` | 1 | #58 Time-aware greeting + nudge strip CTA |
-| `e2e/offline-interactions.spec.ts` | 2 | #59 Offline banner shows/hides, #60 Chat input disabled offline |
+| Test File                            | Tests | What It Covers                                                                                                         |
+| ------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------- |
+| `e2e/health-report-view.spec.ts`     | 3     | #41 Report view renders sections, #42 Share link controls visible, #43 Email sends via POST                            |
+| `e2e/consent-enforcement.spec.ts`    | 2     | #44 health_data_ai OFF strips health from sessionState, #45 Grey banner visible                                        |
+| `e2e/appeal-outcome.spec.ts`         | 2     | #46 Appeal card renders + outcome form, #47 Credit incentive on approved                                               |
+| `e2e/chat-feedback.spec.ts`          | 2     | #48 Thumbs up/down sends POST, #49 Thumbs down shows confirmation                                                      |
+| `e2e/diabetes-interactions.spec.ts`  | 5     | #50 RiskAlerts + CTA, #51 A1C chart toggle, #52 ScreeningReminders overdue, #53 InsightsCard + refresh, #54 Log delete |
+| `e2e/blog-interactions.spec.ts`      | 2     | #55 Category tab filtering, #56 Personalized grouping                                                                  |
+| `e2e/settings-topic-prefs.spec.ts`   | 1     | #57 Topic preferences max 2 + PUT on selection                                                                         |
+| `e2e/dashboard-interactions.spec.ts` | 1     | #58 Time-aware greeting + nudge strip CTA                                                                              |
+| `e2e/offline-interactions.spec.ts`   | 2     | #59 Offline banner shows/hides, #60 Chat input disabled offline                                                        |
 
 **Shared Test Infrastructure** (`e2e/helpers.ts`): `mockAuthenticatedUser` (profile+conversations+trial+mfa, supports `authOverrides` for plan/credits), `mockUnauthenticatedUser`, `mockAdminUser`, `buildSSEResponse` (correct `event: delta\ndata: {text}` + `event: done\ndata: {content,suggestions}` format with optional `conversationId`/`appealLetter`), `mockChatSSE`, `mockChatError`, `mockFHIRData` (connected/disconnected with `MOCK_FHIR_CONNECTED`/`MOCK_FHIR_DISCONNECTED`), `mockConsent`, `mockConversationHistory` (unroutes previous handler, returns `{authenticated, conversations}` shape), `mockHealthReport`, `mockDiabetesSnapshots`, `mockDiabetesLog`, `mockDiabetesInsights`, `mockAuditLog`, `mockTopicPreferences`.
 
 **SSE Mock Pattern**: Chat E2E tests mock `/api/chat` via `page.route()` returning `text/event-stream`. Format: `event: delta\ndata: {"text":"..."}\n\n` + `event: done\ndata: {"content":"...","suggestions":[],...}\n\n`. Trailing `\n\n` required to flush last SSE event from browser parser.
 
 **Key E2E Testing Lessons** (2026-03-23):
+
 - `page.context().addCookies([{name:"access_token",value:"fake",domain:"localhost",path:"/"}])` required before navigating to `/app` (middleware redirect)
 - Profile mock MUST include `userId` field — dashboard page returns null without it
 - Mock `/api/auth/mfa/status` — `loadProfileData()` calls it and hangs otherwise
@@ -1177,24 +1246,28 @@ npx tsc --noEmit        # Type check
 ### Security Tests
 
 **XSS Prevention** (`xss-security.spec.ts`):
+
 - Detection: Sets `window.xssTriggered = false` before test, asserts still `false` after render
 - Paragraph tests: `<script>`, `<img onerror>`, `<div onmouseover>`, `javascript:` URI — all escaped by `parseMarkdown()` (lines 51-54)
 - Table tests: `<script>` in cell, `<img onerror>` in header — escaped by `parseTable()` HTML entity escaping
 - URL param: `?message=<script>...` rendered as plain text in user bubble (React text nodes)
 
 **Spoofing Prevention** (`spoofing-security.spec.ts`):
+
 - `/api/conversations` without auth → `{ authenticated: false, conversations: [] }`
 - `/api/profile` without auth → `{ authenticated: false }`, no plan/role/admin/credits leaked
 - `/api/consent` without auth → 401
 - `/api/diabetes/log` without auth → 401
 
 **Payment & Trial Access Control** (`payment-trial.spec.ts`):
+
 - `/api/trial` GET/POST without auth → 401
 - `/api/checkout` POST without auth or Stripe key → 400/401/503
 - `/api/checkout` POST with invalid plan → 400 `"Invalid plan type"`
 - `/api/webhooks/stripe` POST without secret → 500; without signature → 400
 
 **Consent Toggle Behavior** (`consent-toggles.spec.ts`):
+
 - PUT `/api/consent` without auth → 401
 - All 3 toggles render as `role="switch"` with correct `aria-checked` from GET response
 - Clicking toggle sends PUT with correct `{ consentType, granted }` payload
@@ -1236,29 +1309,30 @@ Server-side logs (ECS CloudWatch):
 
 ### Layers
 
-| Layer | Goal | Storage |
-|-------|------|---------|
-| Language | Understand user phrases | `symptom_mappings`, `procedure_mappings` |
-| Clinical | Know what gets approved | `coverage_paths`, `appeal_outcomes` |
-| Conversation | Optimal question flow | `conversation_patterns` |
-| Policy | Track Medicare changes | `policy_cache` |
-| User Behavior | Optimize UX | `user_events` |
+| Layer         | Goal                    | Storage                                  |
+| ------------- | ----------------------- | ---------------------------------------- |
+| Language      | Understand user phrases | `symptom_mappings`, `procedure_mappings` |
+| Clinical      | Know what gets approved | `coverage_paths`, `appeal_outcomes`      |
+| Conversation  | Optimal question flow   | `conversation_patterns`                  |
+| Policy        | Track Medicare changes  | `policy_cache`                           |
+| User Behavior | Optimize UX             | `user_events`                            |
 
 ### Triggers
 
-| Trigger | What Happens |
-|---------|--------------|
-| Every message | Extract entities, queue mapping updates |
-| Thumbs up | Reinforce all mappings in conversation (+0.1) |
-| Thumbs down | Penalize mappings (-0.15), learn from correction |
-| Appeal generated | Store coverage path as pending |
-| Outcome reported | Update coverage path success/failure |
-| Print/copy/download | Track user event |
-| Nightly batch | Process queue, prune weak mappings, check policy updates |
+| Trigger             | What Happens                                             |
+| ------------------- | -------------------------------------------------------- |
+| Every message       | Extract entities, queue mapping updates                  |
+| Thumbs up           | Reinforce all mappings in conversation (+0.1)            |
+| Thumbs down         | Penalize mappings (-0.15), learn from correction         |
+| Appeal generated    | Store coverage path as pending                           |
+| Outcome reported    | Update coverage path success/failure                     |
+| Print/copy/download | Track user event                                         |
+| Nightly batch       | Process queue, prune weak mappings, check policy updates |
 
 ### Persistence
 
 After every chat response, `persistLearning()` runs non-blocking:
+
 - If ICD-10 search used + symptoms extracted -> `updateSymptomMapping(phrase, code, +0.1)`
 - If CPT search used + procedures extracted -> `updateProcedureMapping(phrase, code, +0.1)`
 - If coverage checked + codes found -> `recordCoveragePath(icd10, cpt, policy, "pending")`
@@ -1314,6 +1388,7 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 Verified answers to CMS early adopter questionnaire, backed by code and AWS infrastructure audit.
 
 **App description (for CMS directory):**
+
 > DenaliHealth connects to Medicare claims data through Blue Button 2.0 and uses Claude (Anthropic) on AWS Bedrock to deliver personalized coverage guidance for beneficiaries with diabetes and obesity. The app extracts conditions, medications, screenings, and denial history from a patient's own claims, then provides tailored support — offering direct assistance when appropriate and directing patients to care from a health professional when needed.
 
 **Q: If data is shared with third parties, how will you obtain informed consent?**
@@ -1330,6 +1405,7 @@ Terms §12 and Privacy §5 both require: (1) users notified via email at least 3
 
 **Q: How do you store/retain health information consistent with PHI protection best practices?**
 Verified via AWS CLI audit (2026-03-04):
+
 - **Encryption at rest**: RDS AES-256 via KMS (`a44e46d3-84bc-4f3e-87ff-50cc848843b8`), deletion protection ON. Blue Button tokens: app-layer AES-256-GCM. Secrets Manager: KMS encryption.
 - **Encryption in transit**: ALB TLS 1.3/1.2 (`ELBSecurityPolicy-TLS13-1-2-2021-06`), HTTP→HTTPS redirect. RDS TLS via `rds-ca-rsa2048-g1` CA cert.
 - **Network isolation**: RDS `PubliclyAccessible: false`, ECS→RDS via VPC security group (port 5432 restricted). Fargate serverless (no SSH).
@@ -1344,36 +1420,36 @@ Verified via AWS CLI audit (2026-03-04):
 
 **Third-party data flow summary (verified 2026-03-04):**
 
-| Service | Data Sent | Health Data? |
-|---------|-----------|-------------|
-| AWS Bedrock (Claude) | Conversation + health context (consent-gated) | Yes — within AWS/BAA |
-| NLM Clinical Tables | Generic ICD-10 search terms | No |
-| CMS Coverage DB | Generic procedure keywords | No |
-| NPPES NPI Registry | Provider names/locations | No |
-| PubMed/NCBI | Clinical search terms | No |
-| CMS Blue Button | OAuth tokens (reads FROM CMS) | No — inbound only |
-| ID.me | OIDC auth code (identity verification) | No — UUID only, no PII stored |
-| Cognito | Email address | No |
-| Stripe | Email, internal user ID | No |
-| AWS SES | Email address (within AWS/BAA) | No |
+| Service              | Data Sent                                     | Health Data?                  |
+| -------------------- | --------------------------------------------- | ----------------------------- |
+| AWS Bedrock (Claude) | Conversation + health context (consent-gated) | Yes — within AWS/BAA          |
+| NLM Clinical Tables  | Generic ICD-10 search terms                   | No                            |
+| CMS Coverage DB      | Generic procedure keywords                    | No                            |
+| NPPES NPI Registry   | Provider names/locations                      | No                            |
+| PubMed/NCBI          | Clinical search terms                         | No                            |
+| CMS Blue Button      | OAuth tokens (reads FROM CMS)                 | No — inbound only             |
+| ID.me                | OIDC auth code (identity verification)        | No — UUID only, no PII stored |
+| Cognito              | Email address                                 | No                            |
+| Stripe               | Email, internal user ID                       | No                            |
+| AWS SES              | Email address (within AWS/BAA)                | No                            |
 
 ### Remaining Gaps
 
-| Gap | CMS Ref | Priority | Type |
-|-----|---------|----------|------|
-| **HIPAA compliance** | A6 | **P0** | **AWS migration COMPLETE + BAA executed** — All code phases done. ECS task def :30 deployed. AWS BAA executed Feb 25, 2026 (covers RDS, ECS/Fargate, Bedrock, Cognito). RDS storage encrypted (KMS). Legal pages updated to reflect AWS-only architecture (no Supabase/Vercel references). See `memory/aws-migration.md`. |
-| **HITRUST certification** | Criterion 26 | **P0** | Process — org-level security certification |
-| **CMS security self-assessment** | A3 | **P0** | Docs — data source inventory + security checklist required for CMS review participation. In-app `/terms` (15 sections) and `/privacy` (16 sections) audited against CMS Blue Button ToS + production access checklist on 2026-03-03 — all 13 privacy policy checklist items pass, ToS consistent with Privacy, active opt-in, seven framework principles covered. PDFs generated for CMS submission (`DenaliHealth-Terms-of-Service.pdf`, `DenaliHealth-Privacy-Policy.pdf`). Implementation verification checklist: `terms_privacy.md`. Remaining: submit formal security self-assessment document to CMS. |
-| **Medicare.gov notification bridge** | A2 | **P1** | Code + API — direct Medicare.gov communication integration |
-| **CMS credential service integration** | A1 | **DONE** | **ID.me OIDC integrated (2026-03-10)** — IAL2/AAL2 identity verification via ID.me sandbox. Feature-flagged: `REQUIRE_IDENTITY_VERIFICATION=true` enables gate on Blue Button. CMS confirmed (2026-03-13) NOT required for Connected Apps Directory, only for Medicare App Library. Extracts UUID + first name + gender. Login.gov being evaluated as free alternative to ID.me for production. |
-| **CMS review submission** | A3 | **P1** | Docs — submit data source inventory + security self-assessment to CMS |
-| **CMS app directory submission** | A5 | **P1** | Docs — screenshots, descriptions for Medicare.gov listing |
-| **AAL2 app auth** | A1, Criteria 3, 23 | **DONE** | **ID.me provides IAL2/AAL2** (2026-03-10). Email+password + TOTP remains available as additional layer. |
-| **FHIR USCDI v3 compliance** | Criterion 13 | **P2** | Code — verify Blue Button maps to USCDI v3 by July 2026 |
+| Gap                                    | CMS Ref            | Priority | Type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------------- | ------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **HIPAA compliance**                   | A6                 | **P0**   | **AWS migration COMPLETE + BAA executed** — All code phases done. ECS task def :30 deployed. AWS BAA executed Feb 25, 2026 (covers RDS, ECS/Fargate, Bedrock, Cognito). RDS storage encrypted (KMS). Legal pages updated to reflect AWS-only architecture (no Supabase/Vercel references). See `memory/aws-migration.md`.                                                                                                                                                                                                                                                                                   |
+| **HITRUST certification**              | Criterion 26       | **P0**   | Process — org-level security certification                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **CMS security self-assessment**       | A3                 | **P0**   | Docs — data source inventory + security checklist required for CMS review participation. In-app `/terms` (15 sections) and `/privacy` (16 sections) audited against CMS Blue Button ToS + production access checklist on 2026-03-03 — all 13 privacy policy checklist items pass, ToS consistent with Privacy, active opt-in, seven framework principles covered. PDFs generated for CMS submission (`DenaliHealth-Terms-of-Service.pdf`, `DenaliHealth-Privacy-Policy.pdf`). Implementation verification checklist: `terms_privacy.md`. Remaining: submit formal security self-assessment document to CMS. |
+| **Medicare.gov notification bridge**   | A2                 | **P1**   | Code + API — direct Medicare.gov communication integration                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **CMS credential service integration** | A1                 | **DONE** | **ID.me OIDC integrated (2026-03-10)** — IAL2/AAL2 identity verification via ID.me sandbox. Feature-flagged: `REQUIRE_IDENTITY_VERIFICATION=true` enables gate on Blue Button. CMS confirmed (2026-03-13) NOT required for Connected Apps Directory, only for Medicare App Library. Extracts UUID + first name + gender. Login.gov being evaluated as free alternative to ID.me for production.                                                                                                                                                                                                             |
+| **CMS review submission**              | A3                 | **P1**   | Docs — submit data source inventory + security self-assessment to CMS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **CMS app directory submission**       | A5                 | **P1**   | Docs — screenshots, descriptions for Medicare.gov listing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **AAL2 app auth**                      | A1, Criteria 3, 23 | **DONE** | **ID.me provides IAL2/AAL2** (2026-03-10). Email+password + TOTP remains available as additional layer.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **FHIR USCDI v3 compliance**           | Criterion 13       | **P2**   | Code — verify Blue Button maps to USCDI v3 by July 2026                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ### Key Dates
 
-| Date | Milestone |
-|------|-----------|
-| **Q1 2026** | CMS early adopter showcase target |
+| Date             | Milestone                         |
+| ---------------- | --------------------------------- |
+| **Q1 2026**      | CMS early adopter showcase target |
 | **July 4, 2026** | FHIR API mandate (Criteria 13–16) |

@@ -1,4 +1,7 @@
 #!/usr/bin/env npx tsx
+// Last reality-sync: 2026-04-09 (pricing tiers + Resend → SES)
+// When pricing tiers, vendors, or product features change, the checks
+// here MUST be updated in the same PR.
 /**
  * Legal Document Consistency Checker
  *
@@ -56,21 +59,36 @@ const checks: Check[] = [
     name: "60-day breach notification window in FAQ, Privacy, HIPAA",
     run: () => {
       const missing = allHave(["faq", "privacy", "hipaa"], "60 days");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
   {
     name: "500+ breach notifies FTC in FAQ, Privacy, HIPAA",
     run: () => {
       const missing = allHave(["faq", "privacy", "hipaa"], "FTC");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
   {
     name: "500+ breach notifies HHS in FAQ, Privacy, HIPAA",
     run: () => {
       const missing = allHave(["faq", "privacy", "hipaa"], "HHS");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
 
@@ -79,7 +97,12 @@ const checks: Check[] = [
     name: "6-year audit log retention in FAQ, Privacy, HIPAA",
     run: () => {
       const missing = allHave(["faq", "privacy", "hipaa"], /6.year/i);
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
   {
@@ -87,9 +110,14 @@ const checks: Check[] = [
     run: () => {
       // Each doc must mention both audit logs AND 6-year retention (case-insensitive)
       const missing = (["faq", "privacy", "hipaa"] as DocKey[]).filter(
-        (d) => !has(d, /audit log/i) || !has(d, /6.year/i)
+        (d) => !has(d, /audit log/i) || !has(d, /6.year/i),
       );
-      return { pass: missing.length === 0, detail: missing.length ? `Carve-out missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Carve-out missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
   {
@@ -109,7 +137,9 @@ const checks: Check[] = [
   {
     name: "Terms §13 Medicare data deletion includes audit log exception",
     run: () => {
-      const hasMedicareDeleted = docs.terms.includes("all Medicare data is permanently deleted");
+      const hasMedicareDeleted = docs.terms.includes(
+        "all Medicare data is permanently deleted",
+      );
       const hasCarveout = has("terms", /audit log/i);
       const fail = hasMedicareDeleted && !hasCarveout;
       return {
@@ -126,7 +156,12 @@ const checks: Check[] = [
     name: "24-hour health data cache TTL in FAQ, Privacy, HIPAA",
     run: () => {
       const missing = allHave(["faq", "privacy", "hipaa"], /24.hour/i);
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
 
@@ -135,14 +170,24 @@ const checks: Check[] = [
     name: "AES-256-GCM at-rest encryption in FAQ, Privacy, HIPAA",
     run: () => {
       const missing = allHave(["faq", "privacy", "hipaa"], "AES-256-GCM");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
   {
     name: "TLS 1.2+ in-transit encryption in FAQ, Privacy, HIPAA",
     run: () => {
       const missing = allHave(["faq", "privacy", "hipaa"], "TLS 1.2");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
 
@@ -151,28 +196,48 @@ const checks: Check[] = [
     name: "$10 per-appeal price in FAQ and Terms",
     run: () => {
       const missing = allHave(["faq", "terms"], "$10");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
   {
     name: "$20/month price in FAQ and Terms",
     run: () => {
       const missing = allHave(["faq", "terms"], "$20");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
   {
-    name: "5 messages/day with per-appeal plan in FAQ and Terms",
+    name: "20 messages/day Starter plan in FAQ and Terms",
     run: () => {
-      const missing = allHave(["faq", "terms"], "5 messages");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      const missing = allHave(["faq", "terms"], /20 (?:msgs|messages)\/day/i);
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
   {
-    name: "3 appeal credits/month for Monthly plan in FAQ and Terms",
+    name: "2 appeal credits for Plus plan in FAQ and Terms",
     run: () => {
-      const missing = allHave(["faq", "terms"], "3 appeal");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      const missing = allHave(["faq", "terms"], "2 appeal credits");
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
 
@@ -181,28 +246,48 @@ const checks: Check[] = [
     name: "14-day free trial in FAQ and Terms",
     run: () => {
       const missing = allHave(["faq", "terms"], "14-day");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
   {
-    name: "3 messages/day trial limit in FAQ and Terms",
+    name: "10 messages/day trial limit in FAQ and Terms",
     run: () => {
-      const missing = allHave(["faq", "terms"], "3 messages");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      const missing = allHave(["faq", "terms"], /10 (?:msgs|messages)/i);
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
   {
     name: "Trial gives '1 appeal credit' (not 'letter') in FAQ and Terms",
     run: () => {
       const missing = allHave(["faq", "terms"], "1 appeal credit");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
   {
     name: "Post-trial chat lock stated in FAQ and Terms",
     run: () => {
       const missing = allHave(["faq", "terms"], "chat access is locked");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
 
@@ -214,9 +299,13 @@ const checks: Check[] = [
       const issues: string[] = [];
       for (const p of processors) {
         const missing = allHave(["faq", "privacy"], p);
-        if (missing.length) issues.push(`${p} missing in: ${missing.join(", ")}`);
+        if (missing.length)
+          issues.push(`${p} missing in: ${missing.join(", ")}`);
       }
-      return { pass: issues.length === 0, detail: issues.join("; ") || undefined };
+      return {
+        pass: issues.length === 0,
+        detail: issues.join("; ") || undefined,
+      };
     },
   },
 
@@ -226,7 +315,11 @@ const checks: Check[] = [
     run: () => {
       // BAA with AWS was executed February 25, 2026 — must be stated in both docs
       const missing = (["privacy", "hipaa"] as DocKey[]).filter(
-        (d) => !has(d, /executed.{0,40}February 25, 2026|February 25, 2026.{0,40}executed/i)
+        (d) =>
+          !has(
+            d,
+            /executed.{0,40}February 25, 2026|February 25, 2026.{0,40}executed/i,
+          ),
       );
       return {
         pass: missing.length === 0,
@@ -241,8 +334,16 @@ const checks: Check[] = [
   {
     name: "No AI model training on user data stated in Privacy and HIPAA",
     run: () => {
-      const missing = allHave(["privacy", "hipaa"], /not train|do not train|does not train/i);
-      return { pass: missing.length === 0, detail: missing.length ? `No-training statement missing in: ${missing.join(", ")}` : undefined };
+      const missing = allHave(
+        ["privacy", "hipaa"],
+        /not train|do not train|does not train/i,
+      );
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `No-training statement missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
 
@@ -251,7 +352,12 @@ const checks: Check[] = [
     name: "30-day policy change notification in Terms, Privacy, HIPAA",
     run: () => {
       const missing = allHave(["terms", "privacy", "hipaa"], "30 days");
-      return { pass: missing.length === 0, detail: missing.length ? `Missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
 
@@ -260,19 +366,37 @@ const checks: Check[] = [
     name: "CMS non-endorsement disclaimer in Terms",
     run: () => {
       const has = docs.terms.includes("not endorsed or certified by");
-      return { pass: has, detail: has ? undefined : "CMS non-endorsement disclaimer missing from Terms" };
+      return {
+        pass: has,
+        detail: has
+          ? undefined
+          : "CMS non-endorsement disclaimer missing from Terms",
+      };
     },
   },
 
-  // ── Resend mentioned in all vendor lists ────────────────────────────────
+  // ── Resend removed, AWS SES is active email vendor ─────────────────────
   {
-    name: "Resend named as service provider in FAQ, Privacy, HIPAA",
+    name: "Resend NOT named in FAQ, Privacy, HIPAA (replaced by AWS SES)",
     run: () => {
-      const faq = /resend/i.test(docs.faq);
-      const privacy = /resend/i.test(docs.privacy);
-      const hipaa = /resend/i.test(docs.hipaa);
-      const pass = faq && privacy && hipaa;
-      return { pass, detail: pass ? undefined : `Resend missing from: ${[!faq && "FAQ", !privacy && "Privacy", !hipaa && "HIPAA"].filter(Boolean).join(", ")}` };
+      const found = noneHave(["faq", "privacy", "hipaa"], /resend/i);
+      const sesMissing = allHave(["privacy"], /SES/i);
+      const pass = found.length === 0 && sesMissing.length === 0;
+      return {
+        pass,
+        detail: pass
+          ? undefined
+          : [
+              found.length
+                ? `Stale Resend reference in: ${found.join(", ")}`
+                : "",
+              sesMissing.length
+                ? `AWS SES missing from: ${sesMissing.join(", ")}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join("; "),
+      };
     },
   },
 
@@ -286,14 +410,24 @@ const checks: Check[] = [
       const privBad = pattern.test(docs.privacy);
       const hipaaBad = pattern.test(docs.hipaa);
       const bad = faqBad || privBad || hipaaBad;
-      return { pass: !bad, detail: bad ? `False PII claim in: ${[faqBad && "FAQ", privBad && "Privacy", hipaaBad && "HIPAA"].filter(Boolean).join(", ")}` : undefined };
+      return {
+        pass: !bad,
+        detail: bad
+          ? `False PII claim in: ${[faqBad && "FAQ", privBad && "Privacy", hipaaBad && "HIPAA"].filter(Boolean).join(", ")}`
+          : undefined,
+      };
     },
   },
   {
     name: "HIPAA does not claim 'active session' for cache TTL",
     run: () => {
       const bad = docs.hipaa.includes("active session");
-      return { pass: !bad, detail: bad ? "Inaccurate 'active session' TTL wording still in HIPAA" : undefined };
+      return {
+        pass: !bad,
+        detail: bad
+          ? "Inaccurate 'active session' TTL wording still in HIPAA"
+          : undefined,
+      };
     },
   },
 
@@ -303,9 +437,18 @@ const checks: Check[] = [
     run: () => {
       // AWS Bedrock does not retain prompts by default — must be stated in both docs
       const missing = (["privacy", "hipaa"] as DocKey[]).filter(
-        (d) => !has(d, /Bedrock[\s\S]{0,100}not (store|log|retain)|not (store|log|retain)[\s\S]{0,100}Bedrock/i)
+        (d) =>
+          !has(
+            d,
+            /Bedrock[\s\S]{0,100}not (store|log|retain)|not (store|log|retain)[\s\S]{0,100}Bedrock/i,
+          ),
       );
-      return { pass: missing.length === 0, detail: missing.length ? `AWS Bedrock no-retention statement missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `AWS Bedrock no-retention statement missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
 
@@ -317,9 +460,14 @@ const checks: Check[] = [
         (d) =>
           !has(d, "Patient") ||
           !has(d, "Coverage") ||
-          !has(d, /Explanation of Benefit|EOB/i)
+          !has(d, /Explanation of Benefit|EOB/i),
       );
-      return { pass: missing.length === 0, detail: missing.length ? `Scope statement incomplete in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Scope statement incomplete in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
 
@@ -328,9 +476,14 @@ const checks: Check[] = [
     name: "Disconnecting Medicare deletes cached health data in Privacy and HIPAA",
     run: () => {
       const missing = (["privacy", "hipaa"] as DocKey[]).filter(
-        (d) => !has(d, /disconnect|revok/i) || !has(d, /delet|remov/i)
+        (d) => !has(d, /disconnect|revok/i) || !has(d, /delet|remov/i),
       );
-      return { pass: missing.length === 0, detail: missing.length ? `Revocation-deletion link missing in: ${missing.join(", ")}` : undefined };
+      return {
+        pass: missing.length === 0,
+        detail: missing.length
+          ? `Revocation-deletion link missing in: ${missing.join(", ")}`
+          : undefined,
+      };
     },
   },
 ];
