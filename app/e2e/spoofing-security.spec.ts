@@ -5,6 +5,7 @@ import { test, expect } from "@playwright/test";
  *
  * Verifies that API routes properly reject unauthenticated requests
  * and don't leak sensitive data to unauthenticated callers.
+ * Error messages must match src/config/messages.ts (AUTH.SIGN_IN_REQUIRED).
  */
 
 test.describe("API access control without authentication", () => {
@@ -41,7 +42,7 @@ test.describe("API access control without authentication", () => {
     expect(response.status()).toBe(401);
 
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("GET /api/diabetes/log returns 401 without auth", async ({
@@ -51,7 +52,7 @@ test.describe("API access control without authentication", () => {
     expect(response.status()).toBe(401);
 
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("POST /api/diabetes/log returns 401 without auth", async ({
@@ -62,7 +63,7 @@ test.describe("API access control without authentication", () => {
     });
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("DELETE /api/diabetes/log returns 401 without auth", async ({
@@ -71,13 +72,13 @@ test.describe("API access control without authentication", () => {
     const response = await request.delete("/api/diabetes/log?id=some-id");
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("GET /api/trial returns 401 without auth", async ({ request }) => {
     const response = await request.get("/api/trial");
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 });

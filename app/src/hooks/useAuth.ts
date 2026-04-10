@@ -1,13 +1,20 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { cacheSet, cacheGetIfFresh, STORES, TTL } from "@/lib/offline-cache";
+import {
+  cacheSet,
+  cacheGetIfFresh,
+  clearAllCaches,
+  STORES,
+  TTL,
+} from "@/lib/offline-cache";
+import { AUTH } from "@/config/messages";
 
 export interface AuthState {
   userId: string | null;
   email: string | null;
-  firstName: string | null;    // From ID.me identity verification (personalizes AI chat)
-  gender: string | null;       // From ID.me identity verification (clinical context)
+  firstName: string | null; // From ID.me identity verification (personalizes AI chat)
+  gender: string | null; // From ID.me identity verification (clinical context)
   isEmailVerified: boolean;
   isIdmeVerified: boolean;
   isMfaEnrolled: boolean;
@@ -30,7 +37,10 @@ export type AppealAccessStatus = "available" | "paywall" | "allowed";
 interface UseAuthReturn {
   authState: AuthState;
   sendEmailOTP: (email: string) => Promise<boolean>;
-  verifyEmailOTP: (email: string, code: string) => Promise<{ success: boolean; mfaRequired?: boolean }>;
+  verifyEmailOTP: (
+    email: string,
+    code: string,
+  ) => Promise<{ success: boolean; mfaRequired?: boolean }>;
   enrollTOTP: () => Promise<{ qrCode: string; secret: string } | null>;
   unenrollTOTP: () => Promise<boolean>;
   challengeAndVerifyTOTP: (code: string) => Promise<boolean>;
@@ -68,13 +78,15 @@ let _cachedAuthState: AuthState | null = null;
 // Dispatch auth state change to other hooks (AppHeader, useConversationHistory, etc.)
 function dispatchAuthChange(user: { email: string; userId: string } | null) {
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("auth-state-change", { detail: user }));
+    window.dispatchEvent(
+      new CustomEvent("auth-state-change", { detail: user }),
+    );
   }
 }
 
 export function useAuth(): UseAuthReturn {
   const [authState, setAuthState] = useState<AuthState>(
-    _cachedAuthState ?? DEFAULT_AUTH_STATE
+    _cachedAuthState ?? DEFAULT_AUTH_STATE,
   );
 
   // Sync module-level cache when auth state settles
@@ -85,122 +97,129 @@ export function useAuth(): UseAuthReturn {
   }, [authState]);
 
   // Load profile data from /api/profile (non-blocking, enhances basic auth state)
-  const loadProfileData = useCallback(
-    async (userId: string, email: string) => {
-      try {
-        // Profile + appeal data
-        const res = await fetch("/api/profile");
-        const profileData = res.ok ? await res.json() : null;
+  const loadProfileData = useCallback(async (userId: string, email: string) => {
+    try {
+      // Profile + appeal data
+      const res = await fetch("/api/profile");
+      const profileData = res.ok ? await res.json() : null;
 
-        // Trial status
-        const trialRes = await fetch("/api/trial");
-        const trialData = trialRes.ok ? await trialRes.json() : null;
+      // Trial status
+      const trialRes = await fetch("/api/trial");
+      const trialData = trialRes.ok ? await trialRes.json() : null;
 
-        // MFA status
-        const mfaRes = await fetch("/api/auth/mfa/status");
-        const mfaData = mfaRes.ok ? await mfaRes.json() : null;
+      // MFA status
+      const mfaRes = await fetch("/api/auth/mfa/status");
+      const mfaData = mfaRes.ok ? await mfaRes.json() : null;
 
-        const isMfaEnrolled = mfaData?.enrolled ?? false;
-        // mfa_verified cookie presence = AAL2 (checked server-side; client infers from response)
-        const isMfaVerified = false; // Will be updated after TOTP challenge
+      const isMfaEnrolled = mfaData?.enrolled ?? false;
+      // mfa_verified cookie presence = AAL2 (checked server-side; client infers from response)
+      const isMfaVerified = false; // Will be updated after TOTP challenge
 
-        const validPlans = ["trial", "starter", "plus", "unlimited"] as const;
-        const rawPlan = profileData?.plan || "trial";
-        // Backward-compat: map legacy plan names
-        const normalized = rawPlan === "per_appeal" ? "starter" : rawPlan === "monthly" ? "plus" : rawPlan;
-        const userPlan = validPlans.includes(normalized as (typeof validPlans)[number])
-          ? (normalized as "trial" | "starter" | "plus" | "unlimited")
-          : "trial";
+      const validPlans = ["trial", "starter", "plus", "unlimited"] as const;
+      const rawPlan = profileData?.plan || "trial";
+      // Backward-compat: map legacy plan names
+      const normalized =
+        rawPlan === "per_appeal"
+          ? "starter"
+          : rawPlan === "monthly"
+            ? "plus"
+            : rawPlan;
+      const userPlan = validPlans.includes(
+        normalized as (typeof validPlans)[number],
+      )
+        ? (normalized as "trial" | "starter" | "plus" | "unlimited")
+        : "trial";
 
-        const validRoles = ["patient", "counselor", "provider"] as const;
-        const rawRole = profileData?.role || "patient";
-        const userRole = validRoles.includes(rawRole as (typeof validRoles)[number])
-          ? (rawRole as "patient" | "counselor" | "provider")
-          : "patient";
+      const validRoles = ["patient", "counselor", "provider"] as const;
+      const rawRole = profileData?.role || "patient";
+      const userRole = validRoles.includes(
+        rawRole as (typeof validRoles)[number],
+      )
+        ? (rawRole as "patient" | "counselor" | "provider")
+        : "patient";
 
-        const appealCount = profileData?.appealCount || 0;
-        const appealCredits = profileData?.appealCredits || 0;
-        const isAdmin = profileData?.isAdmin || false;
-        const isIdmeVerified = profileData?.idmeVerified || false;
-        const firstName = profileData?.firstName || null;
-        const gender = profileData?.gender || null;
-        const requireIdentityVerification = profileData?.requireIdentityVerification || false;
+      const appealCount = profileData?.appealCount || 0;
+      const appealCredits = profileData?.appealCredits || 0;
+      const isAdmin = profileData?.isAdmin || false;
+      const isIdmeVerified = profileData?.idmeVerified || false;
+      const firstName = profileData?.firstName || null;
+      const gender = profileData?.gender || null;
+      const requireIdentityVerification =
+        profileData?.requireIdentityVerification || false;
 
-        let trialStatus: AuthState["trialStatus"] = "none";
-        let trialDaysRemaining = 0;
-        if (trialData?.status) {
-          trialStatus = trialData.status as AuthState["trialStatus"];
-          trialDaysRemaining = trialData.daysRemaining || 0;
-        }
+      let trialStatus: AuthState["trialStatus"] = "none";
+      let trialDaysRemaining = 0;
+      if (trialData?.status) {
+        trialStatus = trialData.status as AuthState["trialStatus"];
+        trialDaysRemaining = trialData.daysRemaining || 0;
+      }
 
+      setAuthState((prev) => ({
+        ...prev,
+        isIdmeVerified,
+        firstName,
+        gender,
+        isMfaEnrolled,
+        isMfaVerified,
+        currentAAL: isMfaVerified ? "aal2" : "aal1",
+        plan: userPlan,
+        role: userRole,
+        appealCount,
+        appealCredits,
+        trialStatus,
+        trialDaysRemaining,
+        isAdmin,
+        requireIdentityVerification,
+      }));
+
+      cacheSet(STORES.PROFILE, "profile", {
+        plan: userPlan,
+        role: userRole,
+        appealCount,
+        appealCredits,
+        isAdmin,
+        isIdmeVerified,
+        firstName,
+        gender,
+        trialStatus,
+        trialDaysRemaining,
+        requireIdentityVerification,
+      });
+    } catch (error) {
+      console.error("Error loading profile data:", error);
+      // Fallback to offline cache
+      const cached = await cacheGetIfFresh<{
+        plan: string;
+        role: string;
+        appealCount: number;
+        appealCredits: number;
+        isAdmin: boolean;
+        isIdmeVerified: boolean;
+        firstName?: string | null;
+        gender?: string | null;
+        trialStatus: string;
+        trialDaysRemaining: number;
+        requireIdentityVerification?: boolean;
+      }>(STORES.PROFILE, "profile", TTL.PROFILE);
+      if (cached) {
+        const d = cached.data;
         setAuthState((prev) => ({
           ...prev,
-          isIdmeVerified,
-          firstName,
-          gender,
-          isMfaEnrolled,
-          isMfaVerified,
-          currentAAL: isMfaVerified ? "aal2" : "aal1",
-          plan: userPlan,
-          role: userRole,
-          appealCount,
-          appealCredits,
-          trialStatus,
-          trialDaysRemaining,
-          isAdmin,
-          requireIdentityVerification,
+          plan: d.plan as AuthState["plan"],
+          role: d.role as AuthState["role"],
+          appealCount: d.appealCount,
+          appealCredits: d.appealCredits || 0,
+          isAdmin: d.isAdmin,
+          isIdmeVerified: d.isIdmeVerified || false,
+          firstName: d.firstName || null,
+          gender: d.gender || null,
+          trialStatus: d.trialStatus as AuthState["trialStatus"],
+          trialDaysRemaining: d.trialDaysRemaining,
+          requireIdentityVerification: d.requireIdentityVerification || false,
         }));
-
-        cacheSet(STORES.PROFILE, "profile", {
-          plan: userPlan,
-          role: userRole,
-          appealCount,
-          appealCredits,
-          isAdmin,
-          isIdmeVerified,
-          firstName,
-          gender,
-          trialStatus,
-          trialDaysRemaining,
-          requireIdentityVerification,
-        });
-      } catch (error) {
-        console.error("Error loading profile data:", error);
-        // Fallback to offline cache
-        const cached = await cacheGetIfFresh<{
-          plan: string;
-          role: string;
-          appealCount: number;
-          appealCredits: number;
-          isAdmin: boolean;
-          isIdmeVerified: boolean;
-          firstName?: string | null;
-          gender?: string | null;
-          trialStatus: string;
-          trialDaysRemaining: number;
-          requireIdentityVerification?: boolean;
-        }>(STORES.PROFILE, "profile", TTL.PROFILE);
-        if (cached) {
-          const d = cached.data;
-          setAuthState((prev) => ({
-            ...prev,
-            plan: d.plan as AuthState["plan"],
-            role: d.role as AuthState["role"],
-            appealCount: d.appealCount,
-            appealCredits: d.appealCredits || 0,
-            isAdmin: d.isAdmin,
-            isIdmeVerified: d.isIdmeVerified || false,
-            firstName: d.firstName || null,
-            gender: d.gender || null,
-            trialStatus: d.trialStatus as AuthState["trialStatus"],
-            trialDaysRemaining: d.trialDaysRemaining,
-            requireIdentityVerification: d.requireIdentityVerification || false,
-          }));
-        }
       }
-    },
-    []
-  );
+    }
+  }, []);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -238,7 +257,8 @@ export function useAuth(): UseAuthReturn {
 
     // Listen for auth state changes dispatched by other hooks / signout
     function handleAuthChange(e: Event) {
-      const user = (e as CustomEvent<{ email: string; userId: string } | null>).detail;
+      const user = (e as CustomEvent<{ email: string; userId: string } | null>)
+        .detail;
       if (user) {
         setAuthState((prev) => ({
           ...prev,
@@ -256,7 +276,8 @@ export function useAuth(): UseAuthReturn {
     }
 
     window.addEventListener("auth-state-change", handleAuthChange);
-    return () => window.removeEventListener("auth-state-change", handleAuthChange);
+    return () =>
+      window.removeEventListener("auth-state-change", handleAuthChange);
   }, [loadProfileData]);
 
   // Send OTP to email
@@ -275,7 +296,7 @@ export function useAuth(): UseAuthReturn {
         setAuthState((prev) => ({
           ...prev,
           isLoading: false,
-          error: data.error || "Failed to send verification code",
+          error: data.error || AUTH.OTP_SEND_FAILED,
         }));
         return false;
       }
@@ -286,7 +307,7 @@ export function useAuth(): UseAuthReturn {
       setAuthState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to send verification code",
+        error: error instanceof Error ? error.message : AUTH.OTP_SEND_FAILED,
       }));
       return false;
     }
@@ -294,7 +315,10 @@ export function useAuth(): UseAuthReturn {
 
   // Verify email OTP — returns { success, mfaRequired }
   const verifyEmailOTP = useCallback(
-    async (email: string, code: string): Promise<{ success: boolean; mfaRequired?: boolean }> => {
+    async (
+      email: string,
+      code: string,
+    ): Promise<{ success: boolean; mfaRequired?: boolean }> => {
       setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       try {
@@ -309,7 +333,7 @@ export function useAuth(): UseAuthReturn {
           setAuthState((prev) => ({
             ...prev,
             isLoading: false,
-            error: data.error || "Failed to verify code",
+            error: data.error || AUTH.SIGN_IN_ERROR,
           }));
           return { success: false };
         }
@@ -339,16 +363,19 @@ export function useAuth(): UseAuthReturn {
         setAuthState((prev) => ({
           ...prev,
           isLoading: false,
-          error: error instanceof Error ? error.message : "Failed to verify code",
+          error: error instanceof Error ? error.message : AUTH.SIGN_IN_ERROR,
         }));
         return { success: false };
       }
     },
-    [loadProfileData]
+    [loadProfileData],
   );
 
   // Enroll TOTP — returns secret + QR code URI
-  const enrollTOTP = useCallback(async (): Promise<{ qrCode: string; secret: string } | null> => {
+  const enrollTOTP = useCallback(async (): Promise<{
+    qrCode: string;
+    secret: string;
+  } | null> => {
     setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
@@ -370,7 +397,10 @@ export function useAuth(): UseAuthReturn {
       setAuthState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to set up authenticator",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to set up authenticator",
       }));
       return null;
     }
@@ -404,114 +434,134 @@ export function useAuth(): UseAuthReturn {
       setAuthState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to remove authenticator",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to remove authenticator",
       }));
       return false;
     }
   }, []);
 
   // Verify TOTP code (challenge during sign-in or enrollment confirm)
-  const challengeAndVerifyTOTP = useCallback(async (code: string): Promise<boolean> => {
-    setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
+  const challengeAndVerifyTOTP = useCallback(
+    async (code: string): Promise<boolean> => {
+      setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-    try {
-      const res = await fetch("/api/auth/mfa/challenge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-      const data = await res.json();
+      try {
+        const res = await fetch("/api/auth/mfa/challenge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        const data = await res.json();
 
-      if (!res.ok) {
+        if (!res.ok) {
+          setAuthState((prev) => ({
+            ...prev,
+            isLoading: false,
+            error: data.error || "Failed to verify authenticator code",
+          }));
+          return false;
+        }
+
+        setAuthState((prev) => ({
+          ...prev,
+          isMfaVerified: true,
+          currentAAL: "aal2",
+          isLoading: false,
+        }));
+        return true;
+      } catch (error) {
         setAuthState((prev) => ({
           ...prev,
           isLoading: false,
-          error: data.error || "Failed to verify authenticator code",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to verify authenticator code",
         }));
         return false;
       }
-
-      setAuthState((prev) => ({
-        ...prev,
-        isMfaVerified: true,
-        currentAAL: "aal2",
-        isLoading: false,
-      }));
-      return true;
-    } catch (error) {
-      setAuthState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to verify authenticator code",
-      }));
-      return false;
-    }
-  }, []);
+    },
+    [],
+  );
 
   // Confirm TOTP enrollment (first code after scanning QR)
-  const confirmTOTPEnrollment = useCallback(async (code: string): Promise<boolean> => {
-    setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
+  const confirmTOTPEnrollment = useCallback(
+    async (code: string): Promise<boolean> => {
+      setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-    try {
-      const res = await fetch("/api/auth/mfa/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-      const data = await res.json();
+      try {
+        const res = await fetch("/api/auth/mfa/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        const data = await res.json();
 
-      if (!res.ok) {
+        if (!res.ok) {
+          setAuthState((prev) => ({
+            ...prev,
+            isLoading: false,
+            error: data.error || "Failed to confirm authenticator setup",
+          }));
+          return false;
+        }
+
+        setAuthState((prev) => ({
+          ...prev,
+          isMfaVerified: true,
+          isMfaEnrolled: true,
+          currentAAL: "aal2",
+          isLoading: false,
+        }));
+        return true;
+      } catch (error) {
         setAuthState((prev) => ({
           ...prev,
           isLoading: false,
-          error: data.error || "Failed to confirm authenticator setup",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to confirm authenticator setup",
         }));
         return false;
       }
+    },
+    [],
+  );
 
-      setAuthState((prev) => ({
-        ...prev,
-        isMfaVerified: true,
-        isMfaEnrolled: true,
-        currentAAL: "aal2",
-        isLoading: false,
-      }));
-      return true;
-    } catch (error) {
-      setAuthState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to confirm authenticator setup",
-      }));
-      return false;
-    }
-  }, []);
+  // Check appeal access — uses fresh profile data to avoid stale closure race
+  const checkAppealAccess =
+    useCallback(async (): Promise<AppealAccessStatus> => {
+      if (authState.isAdmin) return "allowed";
+      if (authState.role === "counselor" || authState.role === "provider")
+        return "allowed";
+      if (!authState.isEmailVerified || !authState.email) return "paywall";
 
-  // Check appeal access
-  const checkAppealAccess = useCallback(async (): Promise<AppealAccessStatus> => {
-    if (authState.isAdmin) return "allowed";
-    if (authState.role === "counselor" || authState.role === "provider") return "allowed";
-    if (!authState.isEmailVerified || !authState.email) return "paywall";
+      try {
+        const res = await fetch("/api/profile");
+        const data = res.ok ? await res.json() : null;
+        const credits = data?.appealCredits ?? authState.appealCredits;
+        const plan = data?.plan ?? authState.plan;
+        const isAdmin = data?.isAdmin ?? authState.isAdmin;
 
-    try {
-      const res = await fetch("/api/profile");
-      const data = res.ok ? await res.json() : null;
-      const credits = data?.appealCredits ?? authState.appealCredits;
-
-      // Unlimited plan bypasses credit checks
-      if (authState.plan === "unlimited") return "allowed";
-      // Trial has no appeal credits
-      if (authState.plan === "trial") return "paywall";
-      // Starter/Plus — credit-based
-      if (authState.plan === "starter" || authState.plan === "plus") {
-        return credits > 0 ? "available" : "paywall";
+        if (isAdmin) return "allowed";
+        // Unlimited plan bypasses credit checks
+        if (plan === "unlimited") return "allowed";
+        // Trial has no appeal credits
+        if (plan === "trial") return "paywall";
+        // Starter/Plus — credit-based
+        if (plan === "starter" || plan === "plus") {
+          return credits > 0 ? "available" : "paywall";
+        }
+        return "paywall";
+      } catch {
+        if (authState.plan === "unlimited") return "allowed";
+        return authState.appealCredits > 0 ? "available" : "paywall";
       }
-      return "paywall";
-    } catch {
-      if (authState.plan === "unlimited") return "allowed";
-      return authState.appealCredits > 0 ? "available" : "paywall";
-    }
-  }, [authState]);
+    }, [authState]);
 
   // Sign out
   const signOut = useCallback(async () => {
@@ -519,6 +569,21 @@ export function useAuth(): UseAuthReturn {
     _cachedAuthState = null;
     setAuthState({ ...DEFAULT_AUTH_STATE, isLoading: false });
     dispatchAuthChange(null);
+    // Clear all client-side caches (HIPAA: prevent next user from seeing health data)
+    clearAllCaches().catch(() => {});
+    // Clear ALL SW caches (HIPAA: prevent next user from seeing health data on shared devices)
+    if ("caches" in window) {
+      caches
+        .keys()
+        .then((keys) =>
+          Promise.all(
+            keys
+              .filter((k) => k.startsWith("denali-"))
+              .map((k) => caches.delete(k)),
+          ),
+        )
+        .catch(() => {});
+    }
   }, []);
 
   const clearError = useCallback(() => {

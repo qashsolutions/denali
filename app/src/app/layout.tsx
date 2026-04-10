@@ -4,6 +4,7 @@ import { BRAND } from "@/config";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
+import { OfflineSyncFailedBanner } from "@/components/ui/OfflineSyncFailedBanner";
 import { InactivityWarning } from "@/components/ui/InactivityWarning";
 import "./globals.css";
 
@@ -79,6 +80,12 @@ const swScript = `
         navigator.serviceWorker.controller.postMessage({ type: 'SYNC_QUEUE' });
       }
     });
+    // Listen for permanently failed queue items from SW
+    navigator.serviceWorker.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'QUEUE_ITEM_FAILED') {
+        window.dispatchEvent(new CustomEvent('offline-sync-failed'));
+      }
+    });
   }
 `;
 
@@ -113,20 +120,35 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${instrumentSerif.variable} ${dmSans.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${instrumentSerif.variable} ${dmSans.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <script dangerouslySetInnerHTML={{ __html: swScript }} />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="icon" href="/favicon.ico" sizes="32x32" />
-        <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
-        <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+        <link
+          rel="icon"
+          href="/favicon-16.png"
+          sizes="16x16"
+          type="image/png"
+        />
+        <link
+          rel="icon"
+          href="/favicon-32.png"
+          sizes="32x32"
+          type="image/png"
+        />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body className="antialiased">
         <ThemeProvider>
           <AppHeader />
           <OfflineBanner />
+          <OfflineSyncFailedBanner />
           <InactivityWarning />
           {children}
         </ThemeProvider>

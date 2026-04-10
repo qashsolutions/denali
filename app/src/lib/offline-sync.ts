@@ -28,6 +28,9 @@ export async function processQueue(): Promise<number> {
   for (const item of items) {
     if (item.retries >= MAX_RETRIES) {
       await removeFromQueue(item.id);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("offline-sync-failed"));
+      }
       continue;
     }
 
@@ -36,11 +39,15 @@ export async function processQueue(): Promise<number> {
         method: item.method,
         headers: { "Content-Type": "application/json" },
         body: item.body,
+        credentials: "include",
       });
 
       if (response.ok) {
         await removeFromQueue(item.id);
         synced++;
+      } else if (response.status === 401) {
+        // Auth expired — keep item, stop processing until re-auth
+        break;
       } else {
         await updateQueueRetries(item.id, item.retries + 1);
       }

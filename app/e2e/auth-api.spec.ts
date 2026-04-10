@@ -5,6 +5,7 @@ import { test, expect } from "@playwright/test";
  *
  * Verifies every auth-required API route properly rejects unauthenticated requests.
  * All tests use the `request` fixture (no browser needed).
+ * Error messages must match src/config/messages.ts (AUTH.SIGN_IN_REQUIRED, SYSTEM.SESSION_INVALID).
  */
 
 test.describe("Auth-required routes return 401 without auth", () => {
@@ -31,7 +32,7 @@ test.describe("Auth-required routes return 401 without auth", () => {
     const response = await request.get("/api/fhir/data");
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("§2.2.10 POST /api/fhir/disconnect returns 401 without auth", async ({
@@ -40,7 +41,7 @@ test.describe("Auth-required routes return 401 without auth", () => {
     const response = await request.post("/api/fhir/disconnect");
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("§2.2.11 GET /api/health-report returns 401 without auth", async ({
@@ -49,7 +50,7 @@ test.describe("Auth-required routes return 401 without auth", () => {
     const response = await request.get("/api/health-report");
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("§2.2.12 POST /api/health-report/generate returns 401 without auth", async ({
@@ -58,7 +59,7 @@ test.describe("Auth-required routes return 401 without auth", () => {
     const response = await request.post("/api/health-report/generate");
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("§2.2.13 POST /api/health-report/email returns 401 without auth", async ({
@@ -69,7 +70,7 @@ test.describe("Auth-required routes return 401 without auth", () => {
     });
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("§2.2.14 GET /api/diabetes/snapshots returns 401 without auth", async ({
@@ -78,7 +79,7 @@ test.describe("Auth-required routes return 401 without auth", () => {
     const response = await request.get("/api/diabetes/snapshots");
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("§2.2.15 GET /api/diabetes/insights returns 401 without auth", async ({
@@ -87,7 +88,7 @@ test.describe("Auth-required routes return 401 without auth", () => {
     const response = await request.get("/api/diabetes/insights");
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("§2.2.16 POST /api/appeal-outcome returns 401 without auth", async ({
@@ -98,7 +99,7 @@ test.describe("Auth-required routes return 401 without auth", () => {
     });
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Authentication required");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("§2.2.17 DELETE /api/account/delete returns 401 without auth", async ({
@@ -107,7 +108,7 @@ test.describe("Auth-required routes return 401 without auth", () => {
     const response = await request.delete("/api/account/delete");
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Invalid or expired session");
+    expect(body.error).toBe("Your sign-in has expired. Please sign in again.");
   });
 
   test("§2.2.18 GET /api/preferences/topics returns 401 without auth", async ({
@@ -116,7 +117,7 @@ test.describe("Auth-required routes return 401 without auth", () => {
     const response = await request.get("/api/preferences/topics");
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 
   test("§2.2.19 PUT /api/preferences/topics returns 401 without auth", async ({
@@ -127,7 +128,7 @@ test.describe("Auth-required routes return 401 without auth", () => {
     });
     expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe("Please sign in to continue.");
   });
 });
 

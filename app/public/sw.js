@@ -15,7 +15,7 @@ const PRECACHE_URLS = [
 // ── Install: precache critical assets ──
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE_URLS))
+    caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE_URLS)),
   );
   self.skipWaiting();
 });
@@ -23,15 +23,17 @@ self.addEventListener("install", (event) => {
 // ── Activate: delete old versioned caches ──
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== STATIC_CACHE && key !== API_CACHE)
-          .map((key) => caches.delete(key))
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== STATIC_CACHE && key !== API_CACHE)
+            .map((key) => caches.delete(key)),
+        ),
       )
-    )
+      .then(() => self.clients.claim()),
   );
-  self.clients.claim();
 });
 
 // ── Fetch: route-based caching strategies ──
@@ -53,13 +55,13 @@ self.addEventListener("fetch", (event) => {
 
   // 3. Network-first with cache fallback: cacheable API routes (GET only)
   if (isCacheableAPI(url, request)) {
-    event.respondWith(networkFirstAPI(request));
+    event.respondWith(networkFirstAPI(request, event));
     return;
   }
 
   // 4. Navigation: network-first → cached shell → /offline
   if (request.mode === "navigate") {
-    event.respondWith(navigationHandler(request));
+    event.respondWith(navigationHandler(request, event));
     return;
   }
 
@@ -67,10 +69,13 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
 });
 
-// ── Message handler: sync offline queue ──
+// ── Message handler: sync offline queue + skip waiting ──
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SYNC_QUEUE") {
     event.waitUntil(processOfflineQueue());
+  }
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
   }
 });
 
@@ -127,12 +132,17 @@ async function cacheFirst(request, cacheName) {
   }
 }
 
-async function networkFirstAPI(request) {
+async function networkFirstAPI(request, event) {
   try {
-    const response = await fetch(request);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(request, { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (response.ok) {
-      const cache = await caches.open(API_CACHE);
-      cache.put(request, response.clone());
+      const writePromise = caches
+        .open(API_CACHE)
+        .then((cache) => cache.put(request, response.clone()));
+      event.waitUntil(writePromise);
     }
     return response;
   } catch {
@@ -154,12 +164,14 @@ async function networkFirstAPI(request) {
   }
 }
 
-async function navigationHandler(request) {
+async function navigationHandler(request, event) {
   try {
     const response = await fetch(request);
     if (response.ok) {
-      const cache = await caches.open(STATIC_CACHE);
-      cache.put(request, response.clone());
+      const writePromise = caches
+        .open(STATIC_CACHE)
+        .then((cache) => cache.put(request, response.clone()));
+      event.waitUntil(writePromise);
     }
     return response;
   } catch {
@@ -186,7 +198,9 @@ async function staleWhileRevalidate(request, cacheName) {
     })
     .catch(() => null);
 
-  return cached || (await fetchPromise) || new Response("Offline", { status: 503 });
+  return (
+    cached || (await fetchPromise) || new Response("Offline", { status: 503 })
+  );
 }
 
 // ── Offline queue processing ──
@@ -216,8 +230,16 @@ async function processOfflineQueue() {
     for (const entry of entries) {
       const item = entry.data;
       if (!item || item.retries >= 3) {
-        // Drop after 3 retries
+        // Drop after 3 retries — notify client so user knows data was lost
         await deleteQueueItem(db, entry.key);
+        self.clients.matchAll().then((clients) => {
+          clients.forEach((client) =>
+            client.postMessage({
+              type: "QUEUE_ITEM_FAILED",
+              url: item ? item.url : null,
+            }),
+          );
+        });
         continue;
       }
 
@@ -226,15 +248,21 @@ async function processOfflineQueue() {
           method: item.method,
           headers: { "Content-Type": "application/json" },
           body: item.body,
+          credentials: "include",
         });
 
         if (response.ok) {
           await deleteQueueItem(db, entry.key);
+        } else if (response.status === 401) {
+          // Auth expired — keep item in queue, stop processing
+          // User must re-authenticate before queue can drain
+          console.warn("[SW] Queue replay got 401 — waiting for re-auth");
+          break;
         } else {
-          await incrementRetry(db, entry);
+          await incrementRetry(db, entry.key);
         }
       } catch {
-        await incrementRetry(db, entry);
+        await incrementRetry(db, entry.key);
       }
     }
   } catch {
@@ -254,13 +282,19 @@ function deleteQueueItem(db, key) {
   });
 }
 
-function incrementRetry(db, entry) {
+function incrementRetry(db, key) {
   return new Promise((resolve, reject) => {
-    entry.data.retries = (entry.data.retries || 0) + 1;
     const tx = db.transaction("offline-queue", "readwrite");
     const store = tx.objectStore("offline-queue");
-    const req = store.put(entry);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
+    const getReq = store.get(key);
+    getReq.onsuccess = () => {
+      const fresh = getReq.result;
+      if (!fresh) return resolve();
+      fresh.data.retries = (fresh.data.retries || 0) + 1;
+      const putReq = store.put(fresh);
+      putReq.onsuccess = () => resolve();
+      putReq.onerror = () => reject(putReq.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
   });
 }
