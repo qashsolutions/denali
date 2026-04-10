@@ -168,3 +168,17 @@ export async function updateQueueRetries(
     // Silent degrade
   }
 }
+
+/** Clear all cached data (sign-out, HIPAA inactivity timeout). Preserves DB structure. */
+export async function clearAllCaches(): Promise<void> {
+  try {
+    const db = await getDB();
+    const tx = db.transaction(Object.values(STORES), "readwrite");
+    await Promise.all([
+      ...Object.values(STORES).map((store) => tx.objectStore(store).clear()),
+      tx.done,
+    ]);
+  } catch {
+    // Silent degrade — IndexedDB may be unavailable
+  }
+}
