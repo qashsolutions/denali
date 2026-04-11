@@ -37,7 +37,7 @@ GRANT INSERT, SELECT ON audit_logs TO denali_admin;
 
 This restricts the application database user (`denali_admin`) to INSERT and SELECT only. Only a DBA with superuser privileges can modify audit rows.
 
-**Status:** Documented and version-controlled. Pending application during next scheduled maintenance window.
+**Status:** Applied to production on 2026-04-10. Verified via `information_schema.role_table_grants` — UPDATE, DELETE, TRUNCATE confirmed revoked for `denali_admin`.
 
 ## Foreign Key Behavior
 

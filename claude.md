@@ -672,7 +672,8 @@ NEXT_PUBLIC_APP_URL=https://denali.health  # or https://staging.denali.health
 - **RDS managed secret (`rds!db-...`) only has `username` + `password`** — no `host`/`dbname`/`port`. Use `denali/prod/db` (self-managed) for all DB connection fields.
 - **Audit task def secrets before every manual deployment**: `aws ecs describe-task-definition --task-definition denali:N --query "taskDefinition.containerDefinitions[0].secrets[*].valueFrom" --region us-east-1 --output json | sort -u`
 - **DB credentials**: DB_USER/DB_PASSWORD reference `rds!db-...:username::` / `rds!db-...:password::` (auto-rotates every 7 days). DB_HOST/DB_NAME/DB_PORT are plain env vars.
-- **Current task def**: denali:101+, deployed 2026-03-11 (ID.me name/gender extraction + TOTP UI disabled). See `memory/aws-ecs.md` and `memory/aws-infra.md` for full details.
+- **Current task def**: denali:124, deployed 2026-04-10. Revision 124: removed RESEND_API_KEY and RESEND_FROM_EMAIL secret references after SES migration completion. See `memory/aws-ecs.md` and `memory/aws-infra.md` for full details.
+- **audit_logs REVOKE** (2026-04-10): `denali_admin` can only INSERT and SELECT on `audit_logs`. UPDATE, DELETE, TRUNCATE revoked. Rollback: `GRANT UPDATE, DELETE, TRUNCATE ON audit_logs TO denali_admin;`
 - **RDS is private-only** (2026-02-27): `PubliclyAccessible: false`. ECS→RDS connectivity via security group `sg-018b0bc1ca0f1db14` allowing port 5432 from ECS SG `sg-0c234bbde5efb2d53`. No public endpoint, no EIP on RDS.
 - **CloudWatch log retention**: `/ecs/denali` set to 3 days (was 90). Sufficient for pre-launch debugging. Increase post-launch if needed.
 
