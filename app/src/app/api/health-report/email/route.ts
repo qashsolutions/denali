@@ -9,13 +9,26 @@ import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
+import { AUTH, VALIDATION, SYSTEM } from "@/config/messages";
 import type { HealthReport } from "@/lib/health-report";
+
+/** Escape HTML entities to prevent XSS in email content */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
+      );
     }
 
     const body = await request.json();
@@ -26,31 +39,44 @@ export async function POST(request: NextRequest) {
     };
 
     if (!reportId || !recipientEmail) {
-      return NextResponse.json({ error: "Missing reportId or recipientEmail" }, { status: 400 });
+      return NextResponse.json(
+        { error: VALIDATION.REPORT_EMAIL_REQUIRED },
+        { status: 400 },
+      );
     }
 
     // Validate email format
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
-      return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
+      return NextResponse.json(
+        { error: VALIDATION.EMAIL_INVALID },
+        { status: 400 },
+      );
     }
 
     // Get report
     const result = await query<{ report_data: unknown }>(
       `SELECT report_data FROM health_reports
        WHERE id = $1 AND user_id = $2 AND status = 'ready'`,
-      [reportId, user.userId]
+      [reportId, user.userId],
     );
 
     if (result.rows.length === 0) {
-      return NextResponse.json({ error: "Report not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: SYSTEM.REPORT_NOT_FOUND },
+        { status: 404 },
+      );
     }
 
-    const reportData = (typeof result.rows[0].report_data === "string"
-      ? JSON.parse(result.rows[0].report_data)
-      : result.rows[0].report_data) as HealthReport;
+    const reportData = (
+      typeof result.rows[0].report_data === "string"
+        ? JSON.parse(result.rows[0].report_data)
+        : result.rows[0].report_data
+    ) as HealthReport;
 
     // Send via AWS SES
-    const greeting = recipientName ? `Dear ${recipientName},` : "Hello,";
+    const greeting = recipientName
+      ? `Dear ${escapeHtml(recipientName)},`
+      : "Hello,";
     const htmlBody = buildEmailHtml(reportData, greeting);
 
     const emailResult = await sendEmail({
@@ -61,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     if (!emailResult.messageId) {
       console.error("[HealthReport] SES email send failed");
-      return NextResponse.json({ error: "Failed to send email" }, { status: 502 });
+      return NextResponse.json({ error: SYSTEM.EMAIL_FAILED }, { status: 502 });
     }
 
     logAudit("REPORT_EMAILED", {
@@ -75,7 +101,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ sent: true });
   } catch (error) {
     console.error("[HealthReport] Email error:", error);
-    return NextResponse.json({ error: "Unable to send the email. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.EMAIL_FAILED }, { status: 500 });
   }
 }
 
@@ -85,33 +111,53 @@ function buildEmailHtml(report: HealthReport, greeting: string): string {
   // Red flags
   if (report.redFlags.length > 0) {
     const flags = report.redFlags
-      .map((f) => `<li><strong>${f.title}</strong>: ${f.detail}<br/><em>${f.recommendation}</em></li>`)
+      .map(
+        (f) =>
+          `<li><strong>${escapeHtml(f.title)}</strong>: ${escapeHtml(f.detail)}<br/><em>${escapeHtml(f.recommendation)}</em></li>`,
+      )
       .join("");
-    sections.push(`<h3 style="color:#B3695A">Items Needing Attention</h3><ul>${flags}</ul>`);
+    sections.push(
+      `<h3 style="color:#B3695A">Items Needing Attention</h3><ul>${flags}</ul>`,
+    );
   }
 
   // Diabetes
   if (report.diabetesSection.classification !== "none") {
-    const items = report.diabetesSection.actionItems.map((a) => `<li>${a}</li>`).join("");
-    sections.push(`<h3>Diabetes Assessment: ${report.diabetesSection.classification}</h3>${items ? `<ul>${items}</ul>` : ""}`);
+    const items = report.diabetesSection.actionItems
+      .map((a) => `<li>${escapeHtml(a)}</li>`)
+      .join("");
+    sections.push(
+      `<h3>Diabetes Assessment: ${escapeHtml(report.diabetesSection.classification)}</h3>${items ? `<ul>${items}</ul>` : ""}`,
+    );
   }
 
   // Obesity
   if (report.obesitySection.classification !== "none") {
-    const items = report.obesitySection.actionItems.map((a) => `<li>${a}</li>`).join("");
-    sections.push(`<h3>Weight Management: ${report.obesitySection.classification}</h3>${items ? `<ul>${items}</ul>` : ""}`);
+    const oItems = report.obesitySection.actionItems
+      .map((a) => `<li>${escapeHtml(a)}</li>`)
+      .join("");
+    sections.push(
+      `<h3>Weight Management: ${escapeHtml(report.obesitySection.classification)}</h3>${oItems ? `<ul>${oItems}</ul>` : ""}`,
+    );
   }
 
   // Pre-diabetes
   if (report.preDiabetesResources?.eligible) {
-    sections.push(`<h3>Pre-Diabetes Resources</h3><p>${report.preDiabetesResources.mdppInfo}</p><p><a href="${report.preDiabetesResources.cdcRiskTestLink}">Take the CDC Diabetes Risk Test</a></p>`);
+    sections.push(
+      `<h3>Pre-Diabetes Resources</h3><p>${escapeHtml(report.preDiabetesResources.mdppInfo)}</p><p><a href="${escapeHtml(report.preDiabetesResources.cdcRiskTestLink)}">Take the CDC Diabetes Risk Test</a></p>`,
+    );
   }
 
   // Screenings
   const overdueScreenings = report.screeningStatus.filter((s) => s.isOverdue);
   if (overdueScreenings.length > 0) {
-    const items = overdueScreenings.map((s) => `<li>${s.type} — ${s.medicareCoverage}</li>`).join("");
-    sections.push(`<h3>Overdue Screenings</h3><ul>${items}</ul>`);
+    const sItems = overdueScreenings
+      .map(
+        (s) =>
+          `<li>${escapeHtml(s.type)} — ${escapeHtml(s.medicareCoverage)}</li>`,
+      )
+      .join("");
+    sections.push(`<h3>Overdue Screenings</h3><ul>${sItems}</ul>`);
   }
 
   return `
@@ -130,7 +176,7 @@ function buildEmailHtml(report: HealthReport, greeting: string): string {
   ${sections.join("")}
 
   <div style="margin-top:32px;padding-top:16px;border-top:1px solid #E8DFD3;font-size:12px;color:#666;">
-    <p>Generated from Medicare claims data via Blue Button 2.0. Not endorsed or certified by CMS or HHS.</p>
+    <p>Generated from Medicare claims data via the Medicare claims API. Not endorsed or certified by CMS or HHS.</p>
     <p>This is coverage guidance, not medical advice. Always consult with your healthcare provider.</p>
     <p>&copy; ${new Date().getFullYear()} Qash Solutions Inc — <a href="https://denali.health">denali.health</a></p>
   </div>

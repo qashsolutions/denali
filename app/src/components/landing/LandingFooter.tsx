@@ -61,12 +61,15 @@ export function LandingFooter({ settings = {} }: LandingFooterProps) {
         {/* HIPAA/BAA notice + Disclaimer */}
         <div className="pt-4 border-t border-[var(--border)] space-y-2">
           <p className="text-base font-medium text-[var(--text-primary)]">
-            denali.health is built on HIPAA-ready infrastructure, under a Business Associate Agreement with Amazon AWS.
+            denali.health is built on HIPAA-ready infrastructure, under a
+            Business Associate Agreement with Amazon AWS.
           </p>
           <p className="text-xs text-[var(--text-muted)]">
             Coverage guidance only, not medical advice. Always consult with
-            healthcare providers for medical decisions.
-            This product is not endorsed or certified by CMS or HHS.
+            healthcare providers for medical decisions. This product uses the
+            Blue Button APIs but is not endorsed or certified by the Centers for
+            Medicare & Medicaid Services or the U.S. Department of Health and
+            Human Services.
           </p>
         </div>
       </div>

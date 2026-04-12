@@ -136,45 +136,65 @@ export interface SkillTriggers {
 }
 
 // Emergency symptom patterns
-const EMERGENCY_PATTERNS = /chest pain.*(breath|short)|sudden.*(headache|numb|weak)|can't (move|feel)|worst headache|one side.*(numb|weak)|fruity breath.*(thirst|naus)|extreme thirst.*(urinat|naus|vomit)|shaking.*(sweat|confus).*(sugar|diabet|eat)|seizure.*(sugar|diabet|insulin)|passed out.*(sugar|insulin|diabet)/i;
+const EMERGENCY_PATTERNS =
+  /chest pain.*(breath|short)|sudden.*(headache|numb|weak)|can't (move|feel)|worst headache|one side.*(numb|weak)|fruity breath.*(thirst|naus)|extreme thirst.*(urinat|naus|vomit)|shaking.*(sweat|confus).*(sugar|diabet|eat)|seizure.*(sugar|diabet|insulin)|passed out.*(sugar|insulin|diabet)/i;
 
 export function detectTriggers(
   messages: Array<{ role: string; content: string }>,
-  sessionState?: SessionState
+  sessionState?: SessionState,
 ): SkillTriggers {
   // IMPORTANT: Only look at USER messages for content-based triggers
   // Otherwise Claude's questions ("Have you tried any treatments?") trigger false positives
   const userMessages = messages.filter((m) => m.role === "user");
-  const userContent = userMessages.map((m) => m.content.toLowerCase()).join(" ");
-  const lastUserMessage = userMessages.length > 0 ? userMessages[userMessages.length - 1].content.toLowerCase() : "";
+  const userContent = userMessages
+    .map((m) => m.content.toLowerCase())
+    .join(" ");
+  const lastUserMessage =
+    userMessages.length > 0
+      ? userMessages[userMessages.length - 1].content.toLowerCase()
+      : "";
 
   return {
     // Onboarding
-    hasUserName: sessionState?.userName != null && sessionState.userName.length > 0,
-    hasUserZip: sessionState?.userZip != null && sessionState.userZip.length > 0,
-    hasProblem: userMessages.length > 1 || /mri|ct|scan|surgery|pain|hurt|denied|appeal|approval/.test(userContent),
+    hasUserName:
+      sessionState?.userName != null && sessionState.userName.length > 0,
+    hasUserZip:
+      sessionState?.userZip != null && sessionState.userZip.length > 0,
+    hasProblem:
+      userMessages.length > 1 ||
+      /mri|ct|scan|surgery|pain|hurt|denied|appeal|approval/.test(userContent),
 
     // Symptoms - ONLY from sessionState or user's actual statements
     hasSymptoms:
       (sessionState?.symptoms?.length ?? 0) > 0 ||
-      /my.*(pain|hurt|ache|numb)|pain in|hurts when|been having|suffering from/.test(userContent),
+      /my.*(pain|hurt|ache|numb)|pain in|hurts when|been having|suffering from/.test(
+        userContent,
+      ),
     hasDuration:
       sessionState?.duration != null ||
-      /\d+\s*(week|month|year|day)s?|few (weeks|months)|long time|a while|since/.test(userContent),
+      /\d+\s*(week|month|year|day)s?|few (weeks|months)|long time|a while|since/.test(
+        userContent,
+      ),
     hasPriorTreatments:
       (sessionState?.priorTreatments?.length ?? 0) > 0 ||
-      /i('ve| have) tried|been doing|taking|did pt|physical therapy|on medication/.test(userContent),
+      /i('ve| have) tried|been doing|taking|did pt|physical therapy|on medication/.test(
+        userContent,
+      ),
 
     // Procedure
     hasProcedure:
       sessionState?.procedureNeeded != null ||
-      /mri|ct scan|surgery|replacement|x-ray|ultrasound|need.*(scan|test)/.test(userContent),
+      /mri|ct scan|surgery|replacement|x-ray|ultrasound|need.*(scan|test)/.test(
+        userContent,
+      ),
     needsClarification: /which|what kind|what type/.test(lastUserMessage),
 
     // Rush mode - user asked about coverage 2+ times without answering questions
     isRushMode: (() => {
-      const coverageRequests = userMessages.filter(m =>
-        /check.*coverage|ask.*coverage|coverage.*check|just.*coverage|want.*coverage/i.test(m.content)
+      const coverageRequests = userMessages.filter((m) =>
+        /check.*coverage|ask.*coverage|coverage.*check|just.*coverage|want.*coverage/i.test(
+          m.content,
+        ),
       );
       return coverageRequests.length >= 2;
     })(),
@@ -186,7 +206,9 @@ export function detectTriggers(
     hasProviderConfirmed:
       sessionState?.provider != null && sessionState.provider.npi != null,
     providerSkipped:
-      /don't have a doctor|no doctor yet|not yet|show coverage first|find.*specialist|skip/i.test(lastUserMessage),
+      /don't have a doctor|no doctor yet|not yet|show coverage first|find.*specialist|skip/i.test(
+        lastUserMessage,
+      ),
 
     // Coverage
     hasCoverage: (sessionState?.coverageCriteria?.length ?? 0) > 0,
@@ -198,7 +220,8 @@ export function detectTriggers(
       /denied|denial|appeal|rejected|refused/.test(userContent),
 
     // Verification
-    hasRequirementsToVerify: (sessionState?.requirementsToVerify?.length ?? 0) > 0,
+    hasRequirementsToVerify:
+      (sessionState?.requirementsToVerify?.length ?? 0) > 0,
     verificationComplete: sessionState?.verificationComplete || false,
     meetsAllRequirements: sessionState?.meetsAllRequirements === true,
 
@@ -216,7 +239,10 @@ export function detectTriggers(
     isMedicareAdvantage: sessionState?.medicareType === "advantage",
 
     // Prior auth query
-    isPriorAuthQuery: /prior auth|pre-?approv|pre-?authoriz|need approval first/i.test(userContent),
+    isPriorAuthQuery:
+      /prior auth|pre-?approv|pre-?authoriz|need approval first/i.test(
+        userContent,
+      ),
 
     // Outcome capture (set externally by route.ts before calling buildSystemPrompt)
     hasUnreportedOutcome: false,
@@ -235,7 +261,10 @@ export function detectTriggers(
     hasObesityContext: false,
 
     // EOB explainer
-    hasEOBQuestion: /explain.*(bill|charge|eob|claim)|understand.*(bill|charge|eob|claim)|my (eob|bill)|what do i owe|why.*(charged|owe)|show.*(claim|bill)|breakdown.*(bill|charge)|recent.*(claim|bill)/i.test(userContent),
+    hasEOBQuestion:
+      /explain.*(bill|charge|eob|claim)|understand.*(bill|charge|eob|claim)|my (eob|bill)|what do i owe|why.*(charged|owe)|show.*(claim|bill)|breakdown.*(bill|charge)|recent.*(claim|bill)/i.test(
+        userContent,
+      ),
   };
 }
 
@@ -244,14 +273,14 @@ export function detectTriggers(
 // =============================================================================
 
 export function checkProviderSpecialtyMatch(
-  sessionState?: SessionState
+  sessionState?: SessionState,
 ): SpecialtyMatchResult | null {
   if (!sessionState?.provider?.specialty || !sessionState?.procedureNeeded) {
     return null;
   }
   return validateSpecialtyMatch(
     sessionState.procedureNeeded,
-    sessionState.provider.specialty
+    sessionState.provider.specialty,
   );
 }
 
@@ -261,7 +290,7 @@ export function checkProviderSpecialtyMatch(
 
 export function buildSystemPrompt(
   triggers: SkillTriggers,
-  sessionState?: SessionState
+  sessionState?: SessionState,
 ): string {
   // BASE_PROMPT is ALWAYS loaded (conversation style, error handling, etc.)
   const sections: string[] = [BASE_PROMPT];
@@ -281,7 +310,9 @@ export function buildSystemPrompt(
   // ─────────────────────────────────────────────────────────────────────────
   if (triggers.hasHealthData) {
     sections.push(HEALTH_RECORDS_SKILL);
-    const healthContext = buildHealthContextForPrompt(sessionState ?? ({} as SessionState));
+    const healthContext = buildHealthContextForPrompt(
+      sessionState ?? ({} as SessionState),
+    );
     if (healthContext) {
       sections.push(healthContext);
     }
@@ -291,15 +322,15 @@ export function buildSystemPrompt(
   if (sessionState?.blueButtonConnected && !sessionState?.healthDataAvailable) {
     sections.push(
       `## Important: Medicare Data Access\n` +
-      `This user has connected their Medicare account via Blue Button, but has NOT enabled ` +
-      `"Use health data in AI conversations" in their Privacy & Data settings. ` +
-      `You do NOT have access to their health records, claims, conditions, or medications.\n\n` +
-      `When the user asks about their personal health data, conditions, claims, or medications:\n` +
-      `- Let them know their Medicare account IS connected\n` +
-      `- Tell them they can enable personalized health insights by going to **Settings → Privacy & Data** ` +
-      `and turning on "Use health data in AI conversations"\n` +
-      `- Offer to help with general Medicare questions in the meantime\n` +
-      `- Do NOT suggest connecting via Blue Button — they are already connected`
+        `This user has connected their Medicare account, but has NOT enabled ` +
+        `"Use health data in AI conversations" in their Privacy & Data settings. ` +
+        `You do NOT have access to their health records, claims, conditions, or medications.\n\n` +
+        `When the user asks about their personal health data, conditions, claims, or medications:\n` +
+        `- Let them know their Medicare account IS connected\n` +
+        `- Tell them they can enable personalized health insights by going to **Settings → Privacy & Data** ` +
+        `and turning on "Use health data in AI conversations"\n` +
+        `- Offer to help with general Medicare questions in the meantime\n` +
+        `- Do NOT suggest connecting Medicare — they are already connected`,
     );
   }
 
@@ -332,10 +363,9 @@ export function buildSystemPrompt(
     const level = triggers.unreportedAppealLevel || 1;
     const nextLevel = Math.min(level + 1, 5);
     sections.push(
-      OUTCOME_PROMPTING_SKILL
-        .replace(/{procedure}/g, procedure)
+      OUTCOME_PROMPTING_SKILL.replace(/{procedure}/g, procedure)
         .replace(/{appealLevel}/g, String(level))
-        .replace(/{nextLevel}/g, String(nextLevel))
+        .replace(/{nextLevel}/g, String(nextLevel)),
     );
   }
 
@@ -354,7 +384,8 @@ export function buildSystemPrompt(
   // Coverage and appeal flows need name+ZIP; informational queries don't.
   // ─────────────────────────────────────────────────────────────────────────
   const needsOnboarding = !triggers.hasUserName || !triggers.hasUserZip;
-  const isOnboardingRequired = triggers.hasProcedure || triggers.isAppeal || triggers.hasCoverage;
+  const isOnboardingRequired =
+    triggers.hasProcedure || triggers.isAppeal || triggers.hasCoverage;
 
   if (needsOnboarding && isOnboardingRequired) {
     sections.push(TOOL_RESTRAINT);
@@ -374,7 +405,12 @@ export function buildSystemPrompt(
   // After onboarding, ask if they have Original Medicare or Advantage.
   // Appeals skip this gate (appeal process is similar for both).
   // Informational queries (no procedure/coverage) skip this gate too.
-  if (!triggers.hasMedicareType && triggers.hasProblem && !triggers.isAppeal && isOnboardingRequired) {
+  if (
+    !triggers.hasMedicareType &&
+    triggers.hasProblem &&
+    !triggers.isAppeal &&
+    isOnboardingRequired
+  ) {
     sections.push(TOOL_RESTRAINT);
     sections.push(MEDICARE_TYPE_SKILL);
     sections.push(PROMPTING_SKILL);
@@ -402,8 +438,11 @@ export function buildSystemPrompt(
   // If we have a procedure but haven't gathered symptoms/duration/treatments,
   // try to gather them first. BUT if user is in rush mode (asked 2+ times),
   // provide basic coverage while offering to personalize.
-  const needsSymptomGathering = triggers.hasProcedure &&
-    (!triggers.hasSymptoms || !triggers.hasDuration || !triggers.hasPriorTreatments);
+  const needsSymptomGathering =
+    triggers.hasProcedure &&
+    (!triggers.hasSymptoms ||
+      !triggers.hasDuration ||
+      !triggers.hasPriorTreatments);
 
   if (needsSymptomGathering && !triggers.isAppeal) {
     // Rush mode: User asked for coverage 2+ times - give basic info but offer better
@@ -441,10 +480,15 @@ export function buildSystemPrompt(
   // Only then can we provide coverage guidance
   // (Unless user explicitly skips - "show coverage first" / "not yet")
 
-  const hasAllSymptomInfo = triggers.hasProcedure && triggers.hasSymptoms &&
-    triggers.hasDuration && triggers.hasPriorTreatments;
-  const providerResolved = triggers.hasProviderConfirmed || triggers.providerSkipped;
-  const needsProviderInfo = hasAllSymptomInfo && !providerResolved && !triggers.isAppeal;
+  const hasAllSymptomInfo =
+    triggers.hasProcedure &&
+    triggers.hasSymptoms &&
+    triggers.hasDuration &&
+    triggers.hasPriorTreatments;
+  const providerResolved =
+    triggers.hasProviderConfirmed || triggers.providerSkipped;
+  const needsProviderInfo =
+    hasAllSymptomInfo && !providerResolved && !triggers.isAppeal;
 
   if (needsProviderInfo) {
     // Provider gate: allow NPI lookup only, no coverage/ICD tools yet
@@ -502,7 +546,11 @@ Coverage tools come AFTER the provider is confirmed.
   }
 
   // Coverage lookup - only after symptoms gathered
-  if (triggers.hasProcedure && triggers.hasDuration && triggers.hasPriorTreatments) {
+  if (
+    triggers.hasProcedure &&
+    triggers.hasDuration &&
+    triggers.hasPriorTreatments
+  ) {
     sections.push(COVERAGE_SKILL);
   }
 
@@ -547,19 +595,26 @@ Coverage tools come AFTER the provider is confirmed.
 // =============================================================================
 
 function buildSessionContext(state: SessionState): string {
-  const context: string[] = ["## Current Session State (USE THIS DATA — NO PLACEHOLDERS)"];
+  const context: string[] = [
+    "## Current Session State (USE THIS DATA — NO PLACEHOLDERS)",
+  ];
 
   // Onboarding
   if (state.userName) {
     context.push(`**User's name:** ${state.userName} ← Address them by name!`);
   }
   if (state.userZip) {
-    context.push(`**User's ZIP:** ${state.userZip} ← Use for NPI search & regional LCD`);
+    context.push(
+      `**User's ZIP:** ${state.userZip} ← Use for NPI search & regional LCD`,
+    );
   }
   if (state.medicareType) {
-    const typeLabel = state.medicareType === "original" ? "Original Medicare (Parts A & B)"
-      : state.medicareType === "advantage" ? "Medicare Advantage (Part C)"
-      : "Original Medicare with Supplement";
+    const typeLabel =
+      state.medicareType === "original"
+        ? "Original Medicare (Parts A & B)"
+        : state.medicareType === "advantage"
+          ? "Medicare Advantage (Part C)"
+          : "Original Medicare with Supplement";
     context.push(`**Medicare type:** ${typeLabel}`);
     if (state.maPlanName) {
       context.push(`**MA Plan Name:** ${state.maPlanName}`);
@@ -568,13 +623,19 @@ function buildSessionContext(state: SessionState): string {
 
   // Symptoms — MUST use in checklist
   if (state.symptoms?.length > 0) {
-    context.push(`**Symptoms:** ${state.symptoms.join(", ")} ← Include in checklist as "✓ Symptoms: ${state.symptoms.join(", ")}"`);
+    context.push(
+      `**Symptoms:** ${state.symptoms.join(", ")} ← Include in checklist as "✓ Symptoms: ${state.symptoms.join(", ")}"`,
+    );
   }
   if (state.duration) {
-    context.push(`**Duration:** ${state.duration} ← Include in checklist as "✓ Duration: ${state.duration}"`);
+    context.push(
+      `**Duration:** ${state.duration} ← Include in checklist as "✓ Duration: ${state.duration}"`,
+    );
   }
   if (state.priorTreatments?.length > 0) {
-    context.push(`**Prior treatments:** ${state.priorTreatments.join(", ")} ← Include in checklist as "✓ Treatments tried: ${state.priorTreatments.join(", ")}"`);
+    context.push(
+      `**Prior treatments:** ${state.priorTreatments.join(", ")} ← Include in checklist as "✓ Treatments tried: ${state.priorTreatments.join(", ")}"`,
+    );
   }
 
   // Procedure
@@ -590,7 +651,9 @@ function buildSessionContext(state: SessionState): string {
     context.push(`**Search attempts:** ${state.providerSearchAttempts}/3`);
   }
   if (state.provider?.npi) {
-    context.push(`**Provider confirmed:** ${state.provider.name} (NPI: ${state.provider.npi})`);
+    context.push(
+      `**Provider confirmed:** ${state.provider.name} (NPI: ${state.provider.npi})`,
+    );
     context.push(`  Specialty: ${state.provider.specialty || "Unknown"}`);
   }
 
@@ -604,12 +667,16 @@ function buildSessionContext(state: SessionState): string {
 
   // Red flags
   if (state.redFlagsPresent?.length > 0) {
-    context.push(`**⚠️ Red flags (expedites approval):** ${state.redFlagsPresent.join(", ")}`);
+    context.push(
+      `**⚠️ Red flags (expedites approval):** ${state.redFlagsPresent.join(", ")}`,
+    );
   }
 
   // Prior imaging
   if (state.priorImagingDone !== null) {
-    context.push(`**Prior imaging:** ${state.priorImagingDone ? `Yes (${state.priorImagingType})` : "Not yet"}`);
+    context.push(
+      `**Prior imaging:** ${state.priorImagingDone ? `Yes (${state.priorImagingType})` : "Not yet"}`,
+    );
   }
 
   // Verification
@@ -617,14 +684,19 @@ function buildSessionContext(state: SessionState): string {
     context.push("**Requirements to verify:**");
     for (const req of state.requirementsToVerify) {
       const answer = state.requirementAnswers[req];
-      const status = answer === undefined ? "? Unverified" : answer ? "✓ Met" : "✗ Not met";
+      const status =
+        answer === undefined ? "? Unverified" : answer ? "✓ Met" : "✗ Not met";
       context.push(`  ${status}: ${req}`);
     }
     if (state.verificationComplete) {
-      context.push(`**Verification:** Complete — ${state.meetsAllRequirements === true ? "All met" : state.meetsAllRequirements === false ? "Some missing" : "Skipped by user"}`);
+      context.push(
+        `**Verification:** Complete — ${state.meetsAllRequirements === true ? "All met" : state.meetsAllRequirements === false ? "Some missing" : "Skipped by user"}`,
+      );
     }
   } else if (state.verificationComplete) {
-    context.push(`**Requirements verified:** ${state.meetsAllRequirements ? "All met ✓" : "Some missing"}`);
+    context.push(
+      `**Requirements verified:** ${state.meetsAllRequirements ? "All met ✓" : "Some missing"}`,
+    );
   }
 
   // Specialty mismatch
@@ -635,23 +707,33 @@ function buildSessionContext(state: SessionState): string {
 
   // Policy references
   if (state.policyReferences?.length > 0) {
-    context.push(`**Policy references:** ${state.policyReferences.join(", ")} ← Include these in guidance!`);
+    context.push(
+      `**Policy references:** ${state.policyReferences.join(", ")} ← Include these in guidance!`,
+    );
   }
 
   // Prior authorization
   if (state.priorAuthRequired === true) {
-    const sourceLabel = state.priorAuthSource === "lcd" ? " (from LCD policy)"
-      : state.priorAuthSource === "cms_model" ? " (CMS PA Model)"
-      : state.priorAuthSource === "hardcoded_list" ? " (common list)"
-      : "";
-    context.push(`**⚠️ Prior authorization:** REQUIRED${sourceLabel} — Include this in checklist!`);
+    const sourceLabel =
+      state.priorAuthSource === "lcd"
+        ? " (from LCD policy)"
+        : state.priorAuthSource === "cms_model"
+          ? " (CMS PA Model)"
+          : state.priorAuthSource === "hardcoded_list"
+            ? " (common list)"
+            : "";
+    context.push(
+      `**⚠️ Prior authorization:** REQUIRED${sourceLabel} — Include this in checklist!`,
+    );
   } else if (state.priorAuthRequired === false) {
     context.push(`**Prior authorization:** Not required`);
   }
 
   // Coverage
   if (state.coverageCriteria?.length > 0) {
-    context.push(`**Coverage checked:** Yes ← Include LCD/NCD number in guidance!`);
+    context.push(
+      `**Coverage checked:** Yes ← Include LCD/NCD number in guidance!`,
+    );
   }
 
   // Mode
@@ -659,9 +741,13 @@ function buildSessionContext(state: SessionState): string {
     const levelLabel = state.appealLevel ? ` (Level ${state.appealLevel})` : "";
     context.push(`**Mode:** Appeal assistance${levelLabel}`);
     if (state.appealLevel && state.appealLevel > 1) {
-      context.push(`**Appeal Level:** ${state.appealLevel} — escalation from prior denied appeal`);
+      context.push(
+        `**Appeal Level:** ${state.appealLevel} — escalation from prior denied appeal`,
+      );
       if (state.previousAppealOutcome) {
-        context.push(`**Prior appeal outcome:** ${state.previousAppealOutcome}`);
+        context.push(
+          `**Prior appeal outcome:** ${state.previousAppealOutcome}`,
+        );
       }
       if (state.priorAppealId) {
         context.push(`**Prior appeal ID:** ${state.priorAppealId}`);
@@ -671,7 +757,9 @@ function buildSessionContext(state: SessionState): string {
 
   // Denial info
   if (state.denialCodes?.length > 0) {
-    context.push(`**[Internal] Denial codes (CARC):** ${state.denialCodes.join(", ")}`);
+    context.push(
+      `**[Internal] Denial codes (CARC):** ${state.denialCodes.join(", ")}`,
+    );
   }
   if (state.denialDate) {
     context.push(`**Denial date:** ${state.denialDate}`);
@@ -681,7 +769,9 @@ function buildSessionContext(state: SessionState): string {
   }
 
   context.push("");
-  context.push("**REMINDER:** Use ALL the above data in your response. NO generic placeholders like [X weeks] — use their actual values!");
+  context.push(
+    "**REMINDER:** Use ALL the above data in your response. NO generic placeholders like [X weeks] — use their actual values!",
+  );
 
   return context.join("\n");
 }
@@ -690,7 +780,10 @@ function buildSessionContext(state: SessionState): string {
 // RUSH MODE REMINDER
 // =============================================================================
 
-function buildRushModeReminder(triggers: SkillTriggers, sessionState?: SessionState): string {
+function buildRushModeReminder(
+  triggers: SkillTriggers,
+  sessionState?: SessionState,
+): string {
   const userName = sessionState?.userName || "there";
   const procedure = sessionState?.procedureNeeded || "this procedure";
 
@@ -733,7 +826,10 @@ Basic info is fine
 // FLOW STATE REMINDER
 // =============================================================================
 
-function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionState): string {
+function buildFlowStateReminder(
+  triggers: SkillTriggers,
+  sessionState?: SessionState,
+): string {
   const reminder: string[] = ["## YOUR NEXT ACTION"];
   const userName = sessionState?.userName;
   const userZip = sessionState?.userZip;
@@ -741,26 +837,39 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
   // Emergency takes priority
   if (triggers.hasEmergencySymptoms) {
     reminder.push("**⚠️ EMERGENCY SYMPTOMS DETECTED**");
-    reminder.push("**SAY:** 'If this is happening RIGHT NOW, please call 911. Once safe, I can help with coverage.'");
+    reminder.push(
+      "**SAY:** 'If this is happening RIGHT NOW, please call 911. Once safe, I can help with coverage.'",
+    );
     return reminder.join("\n");
   }
 
   // Informational queries — respond helpfully without gating on name/ZIP
-  const isInformationalQuery = !triggers.hasProcedure && !triggers.isAppeal && !triggers.hasCoverage;
+  const isInformationalQuery =
+    !triggers.hasProcedure && !triggers.isAppeal && !triggers.hasCoverage;
   if (isInformationalQuery && (!triggers.hasUserName || !triggers.hasUserZip)) {
     if (triggers.hasDiabetesContext || triggers.hasObesityContext) {
-      const topic = triggers.hasDiabetesContext && triggers.hasObesityContext
-        ? "diabetes/obesity" : triggers.hasDiabetesContext ? "diabetes" : "obesity";
+      const topic =
+        triggers.hasDiabetesContext && triggers.hasObesityContext
+          ? "diabetes/obesity"
+          : triggers.hasDiabetesContext
+            ? "diabetes"
+            : "obesity";
       reminder.push(`**RESPOND:** Answer their ${topic} question directly`);
       reminder.push("**DO NOT** ask for name or ZIP — answer first");
-      reminder.push("**OFFER** to check specific coverage if they want (that will need ZIP)");
+      reminder.push(
+        "**OFFER** to check specific coverage if they want (that will need ZIP)",
+      );
     } else if (triggers.hasProblem) {
       reminder.push("**RESPOND:** Address what they described");
-      reminder.push("**DO NOT** ask for name or ZIP — understand their situation first");
+      reminder.push(
+        "**DO NOT** ask for name or ZIP — understand their situation first",
+      );
       reminder.push("**GUIDE** toward next step via suggestions");
     } else {
       reminder.push("**RESPOND:** Welcome and ask what they need help with");
-      reminder.push("**DO NOT** ask for name first — understand their need first");
+      reminder.push(
+        "**DO NOT** ask for name first — understand their need first",
+      );
     }
     return reminder.join("\n");
   }
@@ -774,7 +883,9 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
 
   // Step 2: Get ZIP
   if (!triggers.hasUserZip) {
-    reminder.push(`**ASK:** 'Great, ${userName}! What's your ZIP?\\n*Coverage rules vary by region.*'`);
+    reminder.push(
+      `**ASK:** 'Great, ${userName}! What's your ZIP?\\n*Coverage rules vary by region.*'`,
+    );
     return reminder.join("\n");
   }
 
@@ -786,7 +897,9 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
 
   // Step 3a: Medicare type
   if (!triggers.hasMedicareType && !triggers.isAppeal) {
-    reminder.push("**ASK:** 'Do you have Original Medicare or a Medicare Advantage plan?'");
+    reminder.push(
+      "**ASK:** 'Do you have Original Medicare or a Medicare Advantage plan?'",
+    );
     reminder.push("*Our guidance is built for Original Medicare.*");
     return reminder.join("\n");
   }
@@ -794,35 +907,49 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
   // Step 3b: Medicare Advantage deflection
   if (triggers.isMedicareAdvantage && !triggers.isAppeal) {
     reminder.push("**DEFLECT:** Explain we focus on Original Medicare");
-    reminder.push("**OFFER:** Help with appeals, or 'check anyway' to proceed with caveats");
+    reminder.push(
+      "**OFFER:** Help with appeals, or 'check anyway' to proceed with caveats",
+    );
     return reminder.join("\n");
   }
 
   // Step 4: Get symptoms
   if (triggers.hasProcedure && !triggers.hasSymptoms) {
-    reminder.push("**ASK:** 'What's going on — pain, numbness, something else?\\n*Helps match you to the right coverage policy.*'");
+    reminder.push(
+      "**ASK:** 'What's going on — pain, numbness, something else?\\n*Helps match you to the right coverage policy.*'",
+    );
     return reminder.join("\n");
   }
 
   // Step 5: Get duration
   if (triggers.hasProcedure && !triggers.hasDuration) {
-    reminder.push("**ASK:** 'How long has this been going on?\\n*Medicare needs a minimum duration for most approvals.*'");
+    reminder.push(
+      "**ASK:** 'How long has this been going on?\\n*Medicare needs a minimum duration for most approvals.*'",
+    );
     return reminder.join("\n");
   }
 
   // Step 6: Get prior treatments
   if (triggers.hasDuration && !triggers.hasPriorTreatments) {
-    reminder.push("**ASK:** 'Tried any treatments — PT, meds?\\n*Medicare usually requires this before approving imaging.*'");
+    reminder.push(
+      "**ASK:** 'Tried any treatments — PT, meds?\\n*Medicare usually requires this before approving imaging.*'",
+    );
     return reminder.join("\n");
   }
 
   // Step 7: Get doctor
-  const hasAllSymptomInfo = triggers.hasProcedure && triggers.hasSymptoms &&
-    triggers.hasDuration && triggers.hasPriorTreatments;
-  const providerResolved = triggers.hasProviderConfirmed || triggers.providerSkipped;
+  const hasAllSymptomInfo =
+    triggers.hasProcedure &&
+    triggers.hasSymptoms &&
+    triggers.hasDuration &&
+    triggers.hasPriorTreatments;
+  const providerResolved =
+    triggers.hasProviderConfirmed || triggers.providerSkipped;
 
   if (hasAllSymptomInfo && !providerResolved && !triggers.isAppeal) {
-    reminder.push("**ASK:** 'Have a doctor for this? (I can check if they take Medicare.)'");
+    reminder.push(
+      "**ASK:** 'Have a doctor for this? (I can check if they take Medicare.)'",
+    );
     reminder.push("**ONE LINE ONLY**");
     return reminder.join("\n");
   }
@@ -836,13 +963,30 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
   }
 
   // Step 9: Check coverage (NOW we have enough info - provider resolved)
-  const providerResolvedForCoverage = triggers.hasProviderConfirmed || triggers.providerSkipped;
-  if (!triggers.hasCoverage && triggers.hasProcedure && triggers.hasDuration && triggers.hasPriorTreatments && providerResolvedForCoverage) {
-    reminder.push("**STEP:** Check Medicare coverage (provider step complete ✓)");
-    reminder.push("**ACTION:** Look up NCD/LCD for procedure + diagnosis (use ZIP for regional LCD)");
-    reminder.push("**ALSO:** Check if prior authorization is required for this procedure");
-    reminder.push("**SAVE:** The LCD/NCD policy number (e.g., L35936) — REQUIRED for guidance");
-    reminder.push("**THEN:** IMMEDIATELY provide PERSONALIZED checklist using THEIR data:");
+  const providerResolvedForCoverage =
+    triggers.hasProviderConfirmed || triggers.providerSkipped;
+  if (
+    !triggers.hasCoverage &&
+    triggers.hasProcedure &&
+    triggers.hasDuration &&
+    triggers.hasPriorTreatments &&
+    providerResolvedForCoverage
+  ) {
+    reminder.push(
+      "**STEP:** Check Medicare coverage (provider step complete ✓)",
+    );
+    reminder.push(
+      "**ACTION:** Look up NCD/LCD for procedure + diagnosis (use ZIP for regional LCD)",
+    );
+    reminder.push(
+      "**ALSO:** Check if prior authorization is required for this procedure",
+    );
+    reminder.push(
+      "**SAVE:** The LCD/NCD policy number (e.g., L35936) — REQUIRED for guidance",
+    );
+    reminder.push(
+      "**THEN:** IMMEDIATELY provide PERSONALIZED checklist using THEIR data:",
+    );
     reminder.push(`  - Name: ${userName}`);
     if (sessionState?.symptoms?.length) {
       reminder.push(`  - Symptoms: ${sessionState.symptoms.join(", ")}`);
@@ -851,26 +995,46 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
       reminder.push(`  - Duration: ${sessionState.duration}`);
     }
     if (sessionState?.priorTreatments?.length) {
-      reminder.push(`  - Treatments: ${sessionState.priorTreatments.join(", ")}`);
+      reminder.push(
+        `  - Treatments: ${sessionState.priorTreatments.join(", ")}`,
+      );
     }
-    reminder.push("**POLICY:** Pass through LCD/NCD requirements AS-IS (we're not the doctor)");
+    reminder.push(
+      "**POLICY:** Pass through LCD/NCD requirements AS-IS (we're not the doctor)",
+    );
     return reminder.join("\n");
   }
 
   // Step 9a: Prior auth warning (if check_prior_auth was used and PA is required)
   if (sessionState?.priorAuthRequired === true && triggers.hasCoverage) {
-    const sourceLabel = sessionState.priorAuthSource === "lcd" ? "from LCD policy"
-      : sessionState.priorAuthSource === "cms_model" ? "CMS PA Model"
-      : "common list";
-    reminder.push(`**⚠️ PRIOR AUTH REQUIRED (${sourceLabel})** — Include this prominently in guidance!`);
-    reminder.push("**TELL USER:** 'Your doctor needs to get pre-approval before scheduling this procedure.'");
+    const sourceLabel =
+      sessionState.priorAuthSource === "lcd"
+        ? "from LCD policy"
+        : sessionState.priorAuthSource === "cms_model"
+          ? "CMS PA Model"
+          : "common list";
+    reminder.push(
+      `**⚠️ PRIOR AUTH REQUIRED (${sourceLabel})** — Include this prominently in guidance!`,
+    );
+    reminder.push(
+      "**TELL USER:** 'Your doctor needs to get pre-approval before scheduling this procedure.'",
+    );
   }
 
   // Step 9b: Extract requirements from coverage results
   // Coverage was checked but no requirements extracted yet — Claude needs to emit [REQUIREMENTS] block
-  if (triggers.hasCoverage && !triggers.hasRequirementsToVerify && !triggers.verificationComplete && !triggers.hasGuidance) {
-    reminder.push("**STEP:** Extract requirements from the LCD/NCD policy you just looked up");
-    reminder.push("**ACTION:** Re-read the policy text and emit a [REQUIREMENTS] block listing specific, checkable requirements");
+  if (
+    triggers.hasCoverage &&
+    !triggers.hasRequirementsToVerify &&
+    !triggers.verificationComplete &&
+    !triggers.hasGuidance
+  ) {
+    reminder.push(
+      "**STEP:** Extract requirements from the LCD/NCD policy you just looked up",
+    );
+    reminder.push(
+      "**ACTION:** Re-read the policy text and emit a [REQUIREMENTS] block listing specific, checkable requirements",
+    );
     reminder.push("**FORMAT:**");
     reminder.push("```");
     reminder.push("[REQUIREMENTS]");
@@ -879,23 +1043,31 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
     reminder.push("Prior imaging completed");
     reminder.push("[/REQUIREMENTS]");
     reminder.push("```");
-    reminder.push("**THEN:** Ask the user about each requirement one at a time");
+    reminder.push(
+      "**THEN:** Ask the user about each requirement one at a time",
+    );
     return reminder.join("\n");
   }
 
   // Step 10: Verify requirements
-  if (triggers.hasCoverage && !triggers.verificationComplete && triggers.hasRequirementsToVerify) {
+  if (
+    triggers.hasCoverage &&
+    !triggers.verificationComplete &&
+    triggers.hasRequirementsToVerify
+  ) {
     const total = sessionState?.requirementsToVerify?.length ?? 0;
     const answered = Object.keys(sessionState?.requirementAnswers ?? {}).length;
     const nextUnverified = sessionState?.requirementsToVerify?.find(
-      (r) => (sessionState?.requirementAnswers ?? {})[r] === undefined
+      (r) => (sessionState?.requirementAnswers ?? {})[r] === undefined,
     );
     reminder.push(`**STEP:** Verify requirements (${answered}/${total} done)`);
     if (nextUnverified) {
       reminder.push(`**ASK NEXT:** "${nextUnverified}"`);
     }
     reminder.push("**ASK:** One verification question at a time");
-    reminder.push("**EMIT:** [VERIFIED]requirement text|true/false[/VERIFIED] after each answer");
+    reminder.push(
+      "**EMIT:** [VERIFIED]requirement text|true/false[/VERIFIED] after each answer",
+    );
     return reminder.join("\n");
   }
 
@@ -908,16 +1080,30 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
   }
 
   // Step 12: Generate guidance (BE PROACTIVE)
-  if (triggers.hasCoverage && triggers.verificationComplete && !triggers.hasGuidance) {
-    reminder.push("**STEP:** Deliver guidance (PROACTIVELY — don't ask if they want it)");
-    reminder.push("**FIRST:** High-level answer (covered? yes/no) personalized to their situation");
-    reminder.push("**THEN:** IMMEDIATELY show the full checklist (don't offer, just provide it)");
+  if (
+    triggers.hasCoverage &&
+    triggers.verificationComplete &&
+    !triggers.hasGuidance
+  ) {
+    reminder.push(
+      "**STEP:** Deliver guidance (PROACTIVELY — don't ask if they want it)",
+    );
+    reminder.push(
+      "**FIRST:** High-level answer (covered? yes/no) personalized to their situation",
+    );
+    reminder.push(
+      "**THEN:** IMMEDIATELY show the full checklist (don't offer, just provide it)",
+    );
     reminder.push("**INCLUDE:**");
     reminder.push("  - LCD/NCD policy number (e.g., L35936)");
-    reminder.push("  - Policy requirements AS-IS (pass through, don't interpret)");
+    reminder.push(
+      "  - Policy requirements AS-IS (pass through, don't interpret)",
+    );
     reminder.push(`  - ${userName}'s specific data with ✓/☐ checkmarks`);
     if (sessionState?.provider?.name) {
-      reminder.push(`  - Provider: ${sessionState.provider.name} (${sessionState.provider.specialty})`);
+      reminder.push(
+        `  - Provider: ${sessionState.provider.name} (${sessionState.provider.specialty})`,
+      );
     }
     reminder.push("**NO PLACEHOLDERS:** Replace [brackets] with actual data");
     return reminder.join("\n");
@@ -950,7 +1136,7 @@ function buildFlowStateReminder(triggers: SkillTriggers, sessionState?: SessionS
 // =============================================================================
 
 export function extractEntitiesFromMessages(
-  messages: Array<{ role: string; content: string }>
+  messages: Array<{ role: string; content: string }>,
 ): ExtractedEntities {
   const allContent = messages.map((m) => m.content).join(" ");
   return extractEntities(allContent);
@@ -959,7 +1145,7 @@ export function extractEntitiesFromMessages(
 export async function buildSystemPromptWithLearning(
   triggers: SkillTriggers,
   sessionState?: SessionState,
-  messages?: Array<{ role: string; content: string }>
+  messages?: Array<{ role: string; content: string }>,
 ): Promise<string> {
   let systemPrompt = buildSystemPrompt(triggers, sessionState);
 
@@ -983,11 +1169,14 @@ export async function buildSystemPromptWithLearning(
   }
 
   // Inject flywheel data if we have procedure and denial codes
-  if (sessionState?.procedureCodes?.length && sessionState?.denialCodes?.length) {
+  if (
+    sessionState?.procedureCodes?.length &&
+    sessionState?.denialCodes?.length
+  ) {
     try {
       const flywheelContext = await getFlywheelContext(
         sessionState.procedureCodes,
-        sessionState.denialCodes
+        sessionState.denialCodes,
       );
       const flywheelInjection = buildFlywheelPromptInjection(flywheelContext);
       if (flywheelInjection) {

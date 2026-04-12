@@ -7,16 +7,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { AUTH, SYSTEM } from "@/config/messages";
 import type { HealthReport } from "@/lib/health-report";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
+      );
     }
 
     const { id } = await params;
@@ -24,16 +28,21 @@ export async function GET(
     const result = await query<{ report_data: unknown }>(
       `SELECT report_data FROM health_reports
        WHERE id = $1 AND user_id = $2 AND status = 'ready'`,
-      [id, user.userId]
+      [id, user.userId],
     );
 
     if (result.rows.length === 0) {
-      return NextResponse.json({ error: "Report not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: SYSTEM.REPORT_NOT_FOUND },
+        { status: 404 },
+      );
     }
 
-    const reportData = (typeof result.rows[0].report_data === "string"
-      ? JSON.parse(result.rows[0].report_data)
-      : result.rows[0].report_data) as HealthReport;
+    const reportData = (
+      typeof result.rows[0].report_data === "string"
+        ? JSON.parse(result.rows[0].report_data)
+        : result.rows[0].report_data
+    ) as HealthReport;
 
     // Build a simple text-based PDF content
     // Server-side jsPDF is heavyweight — use plain text format instead
@@ -48,7 +57,7 @@ export async function GET(
     });
   } catch (error) {
     console.error("[HealthReport] PDF error:", error);
-    return NextResponse.json({ error: "Unable to generate the PDF. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.PDF_FAILED }, { status: 500 });
   }
 }
 
@@ -59,13 +68,17 @@ function buildReportText(report: HealthReport): string {
   lines.push("        DENALI HEALTH — MEDICARE HEALTH SUMMARY");
   lines.push("═══════════════════════════════════════════════════");
   lines.push("");
-  lines.push(`Generated: ${new Date(report.generatedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`);
+  lines.push(
+    `Generated: ${new Date(report.generatedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`,
+  );
   lines.push("");
 
   // Patient Summary
   lines.push("── PATIENT SUMMARY ──");
-  if (report.patientSummary.age) lines.push(`Age: ${report.patientSummary.age}`);
-  if (report.patientSummary.gender) lines.push(`Gender: ${report.patientSummary.gender}`);
+  if (report.patientSummary.age)
+    lines.push(`Age: ${report.patientSummary.age}`);
+  if (report.patientSummary.gender)
+    lines.push(`Gender: ${report.patientSummary.gender}`);
   lines.push(`Coverage: ${report.patientSummary.coverageType}`);
   if (report.patientSummary.coverageParts.length > 0) {
     lines.push(`Parts: ${report.patientSummary.coverageParts.join(", ")}`);
@@ -74,7 +87,9 @@ function buildReportText(report: HealthReport): string {
 
   // Hospice
   if (report.hospiceStatus) {
-    lines.push("⚠️  HOSPICE STATUS — This report focuses on comfort care and hospice benefit coverage.");
+    lines.push(
+      "⚠️  HOSPICE STATUS — This report focuses on comfort care and hospice benefit coverage.",
+    );
     lines.push("");
   }
 
@@ -96,11 +111,13 @@ function buildReportText(report: HealthReport): string {
     for (const f of report.diabetesSection.findings) lines.push(`• ${f}`);
     if (report.diabetesSection.medicareBenefits.length > 0) {
       lines.push("Medicare Benefits Available:");
-      for (const b of report.diabetesSection.medicareBenefits) lines.push(`  ✓ ${b}`);
+      for (const b of report.diabetesSection.medicareBenefits)
+        lines.push(`  ✓ ${b}`);
     }
     if (report.diabetesSection.actionItems.length > 0) {
       lines.push("Action Items:");
-      for (const a of report.diabetesSection.actionItems) lines.push(`  → ${a}`);
+      for (const a of report.diabetesSection.actionItems)
+        lines.push(`  → ${a}`);
     }
     lines.push("");
   }
@@ -112,7 +129,8 @@ function buildReportText(report: HealthReport): string {
     for (const f of report.obesitySection.findings) lines.push(`• ${f}`);
     if (report.obesitySection.medicareBenefits.length > 0) {
       lines.push("Medicare Benefits Available:");
-      for (const b of report.obesitySection.medicareBenefits) lines.push(`  ✓ ${b}`);
+      for (const b of report.obesitySection.medicareBenefits)
+        lines.push(`  ✓ ${b}`);
     }
     lines.push("");
   }
@@ -122,7 +140,8 @@ function buildReportText(report: HealthReport): string {
     lines.push("── PRE-DIABETES RESOURCES ──");
     lines.push(report.preDiabetesResources.mdppInfo);
     lines.push(`CDC Risk Test: ${report.preDiabetesResources.cdcRiskTestLink}`);
-    for (const g of report.preDiabetesResources.lifestyleGuidance) lines.push(`  → ${g}`);
+    for (const g of report.preDiabetesResources.lifestyleGuidance)
+      lines.push(`  → ${g}`);
     lines.push("");
   }
 
@@ -130,7 +149,8 @@ function buildReportText(report: HealthReport): string {
   if (report.conditionsSummary.length > 0) {
     lines.push("── CONDITIONS ──");
     for (const c of report.conditionsSummary) {
-      const marker = c.severity === "red" ? "🔴" : c.severity === "amber" ? "🟡" : "🟢";
+      const marker =
+        c.severity === "red" ? "🔴" : c.severity === "amber" ? "🟡" : "🟢";
       const primary = c.isPrimary ? " [Primary]" : "";
       lines.push(`${marker} ${c.name}${primary} — ${c.note}`);
     }
@@ -172,7 +192,9 @@ function buildReportText(report: HealthReport): string {
     lines.push("── CARE TEAM ──");
     for (const ct of report.careTeam) {
       const rec = ct.recommendation ? ` → ${ct.recommendation}` : "";
-      lines.push(`• ${ct.specialty}: ${ct.hasVisited ? "Active" : "Not seen"}${rec}`);
+      lines.push(
+        `• ${ct.specialty}: ${ct.hasVisited ? "Active" : "Not seen"}${rec}`,
+      );
     }
     lines.push("");
   }
@@ -188,7 +210,9 @@ function buildReportText(report: HealthReport): string {
   }
 
   lines.push("═══════════════════════════════════════════════════");
-  lines.push("This report was generated from Medicare claims data via Blue Button 2.0.");
+  lines.push(
+    "This report was generated from Medicare claims data via the Medicare claims API.",
+  );
   lines.push("Not endorsed or certified by CMS or HHS.");
   lines.push("This is coverage guidance, not medical advice.");
   lines.push("Always consult with your healthcare provider.");

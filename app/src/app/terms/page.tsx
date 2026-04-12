@@ -175,15 +175,13 @@ const SECTIONS = [
     id: "cms-disclaimer",
     title: "14. CMS Non-Endorsement Disclaimer",
     paragraphs: [
-      `This product is not endorsed or certified by the Centers for Medicare & Medicaid Services (CMS) or the U.S. Department of Health and Human Services (HHS). ${BRAND.NAME} is an independent application that accesses Medicare data through publicly available APIs. References to Medicare, CMS, or government programs do not imply any official affiliation, endorsement, or certification.`,
+      `This product uses the Blue Button APIs but is not endorsed or certified by the Centers for Medicare & Medicaid Services or the U.S. Department of Health and Human Services. ${BRAND.NAME} is an independent application that accesses Medicare data through publicly available APIs. References to Medicare, CMS, or government programs do not imply any official affiliation, endorsement, or certification.`,
     ],
   },
   {
     id: "contact",
     title: "15. Contact Information",
-    paragraphs: [
-      "If you have questions about these Terms of Service:",
-    ],
+    paragraphs: ["If you have questions about these Terms of Service:"],
     items: [
       "Email: admin@denali.health",
       `Organization: ${BRAND.COMPANY_NAME}`,
@@ -279,42 +277,41 @@ function SectionBlock({ section }: { section: Section }) {
 export default function TermsPage() {
   return (
     <>
-    <div className="max-w-3xl mx-auto px-4 py-12">
-      <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
-        Terms of Service
-      </h1>
-      <p className="text-[var(--text-secondary)] mb-2">
-        The rules and conditions for using {BRAND.NAME}.
-      </p>
-      <p className="text-xs text-[var(--text-muted)] mb-10">
-        Effective: {EFFECTIVE_DATE}
-      </p>
+      <div className="max-w-3xl mx-auto px-4 py-12">
+        <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
+          Terms of Service
+        </h1>
+        <p className="text-[var(--text-secondary)] mb-2">
+          The rules and conditions for using {BRAND.NAME}.
+        </p>
+        <p className="text-xs text-[var(--text-muted)] mb-10">
+          Effective: {EFFECTIVE_DATE}
+        </p>
 
-      {/* Table of Contents */}
-      <nav className="mb-10 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)]">
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
-          Contents
-        </h2>
-        <ol className="list-decimal list-inside space-y-1">
-          {SECTIONS.map((section) => (
-            <li key={section.id}>
-              <a
-                href={`#${section.id}`}
-                className="text-sm text-[var(--accent-primary)] hover:underline"
-              >
-                {section.title.replace(/^\d+\.\s/, "")}
-              </a>
-            </li>
-          ))}
-        </ol>
-      </nav>
+        {/* Table of Contents */}
+        <nav className="mb-10 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)]">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
+            Contents
+          </h2>
+          <ol className="list-decimal list-inside space-y-1">
+            {SECTIONS.map((section) => (
+              <li key={section.id}>
+                <a
+                  href={`#${section.id}`}
+                  className="text-sm text-[var(--accent-primary)] hover:underline"
+                >
+                  {section.title.replace(/^\d+\.\s/, "")}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
 
-      {SECTIONS.map((section) => (
-        <SectionBlock key={section.id} section={section} />
-      ))}
-
-    </div>
-    <LandingFooter />
-  </>
+        {SECTIONS.map((section) => (
+          <SectionBlock key={section.id} section={section} />
+        ))}
+      </div>
+      <LandingFooter />
+    </>
   );
 }
