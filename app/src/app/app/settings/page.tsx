@@ -349,7 +349,7 @@ function AppSettingsPageInner() {
                         setAuthLoading(false);
                         if (ok) {
                           setOtpSent(true);
-                          setAuthMessage("Check your email for a verification code.");
+                          setAuthMessage("Check your email for a verification code. If you don\u0027t see it, check your spam or junk folder — the email comes from no-reply@denali.health.");
                           setAuthMessageType("success");
                         } else {
                           setAuthMessage("Failed to send code. Try again.");
