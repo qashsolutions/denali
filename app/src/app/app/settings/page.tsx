@@ -810,7 +810,6 @@ function AppSettingsPageInner() {
                       try {
                         const res = await fetch("/api/account/delete", {
                           method: "DELETE",
-                          headers: { Authorization: "Bearer session" },
                         });
                         if (res.ok) {
                           await signOut();
