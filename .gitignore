@@ -3,7 +3,9 @@
 
 # Claude Code
 .claude.json
-.claude/
+.claude/settings.local.json
+.claude/logs/
+.claude/agent-memory/
 
 # MCP (Model Context Protocol)
 .mcp.json
