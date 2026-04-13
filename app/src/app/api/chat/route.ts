@@ -689,7 +689,7 @@ export async function POST(request: NextRequest) {
               }).catch(() => {});
             }
           } catch (err) {
-            console.warn("Failed to save appeal:", err);
+            console.warn("Failed to save appeal:", err instanceof Error ? err.message : "unknown error");
           }
         }
 

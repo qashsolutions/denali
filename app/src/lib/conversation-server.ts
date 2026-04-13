@@ -40,15 +40,20 @@ export async function saveAppeal(
   const level = appealData.appealLevel || 1;
 
   // Calculate appeal deadline based on level
-  // Level 1: denial_date + 120/60 days; Level 2: 180 days; Level 3+: 60 days
+  // Level 1: denial_date + 120/60 days; Level 2 FFS: 180 days; Level 2 MA: null (auto-forward); Level 3+: 60 days
   let deadline: string | null = null;
   if (appealData.denialDate) {
-    const deadlineDays = level === 1
+    const deadlineDays: number | null = level === 1
       ? MEDICARE_CONSTANTS.getAppealDeadlineDays(appealData.medicareType)
-      : level === 2 ? 180 : 60;
-    const deadlineDate = new Date(appealData.denialDate);
-    deadlineDate.setDate(deadlineDate.getDate() + deadlineDays);
-    deadline = deadlineDate.toISOString();
+      : level === 2
+        ? (appealData.medicareType === "advantage" ? null : 180)
+        : 60;
+    if (deadlineDays !== null) {
+      const deadlineDate = new Date(appealData.denialDate);
+      deadlineDate.setDate(deadlineDate.getDate() + deadlineDays);
+      deadline = deadlineDate.toISOString();
+    }
+    // MA Level 2: deadline stays null — plan auto-forwards to IRE (42 CFR §422.590)
   }
 
   // Atomic: INSERT appeal + decrement credit in a single transaction.
@@ -96,7 +101,7 @@ export async function saveAppeal(
       return id;
     });
   } catch (err) {
-    console.error("[saveAppeal] Transaction failed (insert + credit decrement):", err);
+    console.error("[saveAppeal] Transaction failed (insert + credit decrement):", err instanceof Error ? err.message : "unknown error");
     return null;
   }
 

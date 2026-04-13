@@ -161,6 +161,11 @@ export function buildPDF(
     "  - Keep a copy of everything you send",
     "  - Ask your doctor's office for a letter of medical necessity",
     "  - Include records showing failed conservative treatments",
+    "",
+    "",
+    "This product uses the Blue Button APIs but is not endorsed or certified",
+    "by the Centers for Medicare & Medicaid Services or the U.S. Department",
+    "of Health and Human Services.",
   ];
 
   for (const line of instructions) {

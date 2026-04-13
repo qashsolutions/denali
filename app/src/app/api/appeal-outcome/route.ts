@@ -11,6 +11,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { recordAppealOutcome, applyOutcomeIncentive } from "@/lib/learning";
 import { getAuthUser } from "@/lib/auth-server";
 import { logAudit } from "@/lib/audit";
+import { withMetrics } from "@/lib/metrics";
+import { AUTH, VALIDATION, SYSTEM } from "@/config/messages";
 
 interface AppealOutcomeRequest {
   appealId: string;
@@ -20,14 +22,14 @@ interface AppealOutcomeRequest {
   daysToDecision?: number;
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     // Verify authentication
     const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
       );
     }
 
@@ -36,15 +38,18 @@ export async function POST(request: NextRequest) {
     // Validate request
     if (!body.appealId) {
       return NextResponse.json(
-        { error: "Appeal ID is required" },
-        { status: 400 }
+        { error: VALIDATION.APPEAL_ID_REQUIRED },
+        { status: 400 },
       );
     }
 
-    if (!body.outcome || !["approved", "denied", "partial"].includes(body.outcome)) {
+    if (
+      !body.outcome ||
+      !["approved", "denied", "partial"].includes(body.outcome)
+    ) {
       return NextResponse.json(
-        { error: "Valid outcome is required (approved, denied, or partial)" },
-        { status: 400 }
+        { error: VALIDATION.OUTCOME_REQUIRED },
+        { status: 400 },
       );
     }
 
@@ -56,10 +61,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!success) {
-      return NextResponse.json(
-        { error: "Unable to save your appeal outcome. Please try again." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: SYSTEM.SAVE_OUTCOME }, { status: 500 });
     }
 
     logAudit("APPEAL_OUTCOME", {
@@ -75,7 +77,7 @@ export async function POST(request: NextRequest) {
     if (user.email) {
       incentiveApplied = await applyOutcomeIncentive(user.email);
       if (incentiveApplied) {
-        console.log(`[Appeal Outcome] Incentive applied for ${user.email}`);
+        console.log("[Appeal Outcome] Incentive applied for user:", user.userId);
       }
     }
 
@@ -88,9 +90,8 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Appeal outcome error:", error);
-    return NextResponse.json(
-      { error: "Something went wrong saving your outcome. Please try again." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: SYSTEM.GENERIC_ERROR }, { status: 500 });
   }
 }
+
+export const POST = withMetrics(_POST, "/api/appeal-outcome");
