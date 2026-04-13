@@ -41,6 +41,7 @@ function AppSettingsPageInner() {
   const [otpInput, setOtpInput] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [gmailTruncated, setGmailTruncated] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [authMessageType, setAuthMessageType] = useState<"success" | "error" | "">("");
@@ -308,9 +309,7 @@ function AppSettingsPageInner() {
                 Sign in with email
               </label>
               <p className="text-xs text-[var(--text-muted)] mb-3">
-                Sign in to save conversations, generate appeal letters, and connect Medicare. By signing in, you agree to our{" "}
-                <a href="/terms" className="text-[var(--accent-primary)] hover:underline">Terms of Service</a> and{" "}
-                <a href="/privacy" className="text-[var(--accent-primary)] hover:underline">Privacy Policy</a>.
+                Sign in to save conversations, generate appeal letters, and connect Medicare.
               </p>
               {!otpSent ? (
                 <>
@@ -329,6 +328,7 @@ function AppSettingsPageInner() {
                           if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
                             setEmailInput(`${local.substring(0, local.indexOf("+"))}@${domain}`);
                             setGmailTruncated(true);
+                            setAgreedToTerms(false);
                             return;
                           }
                         }
@@ -341,7 +341,7 @@ function AppSettingsPageInner() {
                     />
                     <button
                       onClick={async () => {
-                        if (!emailInput) return;
+                        if (!emailInput || !agreedToTerms) return;
                         setAuthLoading(true);
                         setAuthMessage("");
                         setAuthMessageType("");
@@ -356,7 +356,7 @@ function AppSettingsPageInner() {
                           setAuthMessageType("error");
                         }
                       }}
-                      disabled={authLoading || !emailInput}
+                      disabled={authLoading || !emailInput || !agreedToTerms}
                       className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors disabled:opacity-50"
                     >
                       {authLoading ? "Sending..." : "Send Code"}
@@ -367,6 +367,19 @@ function AppSettingsPageInner() {
                       We&apos;ll sign you in as <span className="font-semibold">{emailInput}</span>. Only one account is allowed per email.
                     </p>
                   )}
+                  <label className="flex items-start gap-2 mt-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={agreedToTerms}
+                      onChange={(e) => setAgreedToTerms(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded border-[var(--border)] accent-[var(--accent-primary)]"
+                    />
+                    <span className="text-xs text-[var(--text-secondary)]">
+                      I have read and agree to the{" "}
+                      <a href="/terms" target="_blank" className="text-[var(--accent-primary)] hover:underline">Terms of Service</a> and{" "}
+                      <a href="/privacy" target="_blank" className="text-[var(--accent-primary)] hover:underline">Privacy Policy</a>
+                    </span>
+                  </label>
                 </>
               ) : (
                 <>
