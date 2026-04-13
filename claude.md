@@ -31,6 +31,32 @@
 
 > Medicare claims intelligence PWA. Claude is the brain — driving conversations, calling tools, synthesizing coverage guidance, and learning from interactions. Focus: **proactive denial prevention** through plain English.
 
+## Session Summary — 2026-04-12
+
+CMS Blue Button production access demo prep. All findings from prior hardening sessions verified. Additional compliance fixes:
+
+- Privacy policy readability improved: prose sections grade 9-13 (from grade 13-18). Aggregate 15.4 due to bullet-list tool inflation.
+- CMS attribution notice: exact verbatim text now in 6 locations (Terms §14, site footer, ConnectMedicare, CmsPledge, ReportView, health page)
+- "Blue Button" removed from all user-facing strings (email footer, PDF footer, AI system prompt). Only remains in CMS-mandated attribution text and code comments.
+- Disconnect confirmation dialog added (matches account deletion pattern)
+- REVOKE UPDATE/DELETE/TRUNCATE on audit_logs applied to production (2026-04-10). All 3 append-only layers live.
+
+Current status:
+
+- Legal cross-audit: 29/29
+- Unit tests: 575/575
+- CloudWatch errors: 0/5min
+- ECS: denali:124 running
+- CMS evidence PDFs: 7 files in docs/cms-demo-evidence/
+
+Commits this session: `a81cd0c` (readability), `2b7826a` (CMS compliance fixes)
+
+Open items:
+
+- UI-2 (signup checkbox): deferred — OTP is affirmative action, defensible per Terms §2. Add checkbox post-demo if CMS requests.
+- Privacy policy aggregate readability score (15.4): inflated by bullet-list sections. Prose sections are grade 9-13. Prepared answer for CMS if asked.
+- REVOKE/GRANT migration not yet run via migration script — applied manually on 2026-04-10, migration file committed for future environments.
+
 ## Table of Contents
 
 - [Quick Reference](#quick-reference)

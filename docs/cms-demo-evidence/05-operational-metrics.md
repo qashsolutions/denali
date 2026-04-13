@@ -39,3 +39,5 @@ Post-hardening session metrics confirming system health.
 | `6e93917` | Strip PHI from skill trigger logs                                           |
 | `3307903` | audit_logs append-only hardening (baseline DDL, REVOKE, Update type)        |
 | `abb3482` | FHIR audit log semantics: success vs failure, 5-min dedup                   |
+| `2b7826a` | CMS compliance: Blue Button labeling, attribution, disconnect confirmation  |
+| `a81cd0c` | Privacy policy readability improvements                                     |

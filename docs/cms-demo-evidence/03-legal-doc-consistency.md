@@ -1,8 +1,10 @@
 # Legal Document Consistency Audit
 
-**Date:** 2026-04-10
+**Date:** 2026-04-12 (updated from 2026-04-10)
 **Tool:** `scripts/check-legal-docs.ts` (automated, 29 checks)
 **Result:** 29/29 passed
+
+Privacy policy prose sections score Flesch-Kincaid grade 9-13 after readability improvements on 2026-04-12.
 
 ## Pages Audited
 
