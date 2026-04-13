@@ -17,6 +17,7 @@ export function AccountSection({
   onDisconnect,
 }: AccountSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const timeAgo = lastSynced ? formatTimeAgo(lastSynced) : null;
 
   return (
@@ -73,21 +74,50 @@ export function AccountSection({
             </div>
           )}
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onRefresh}
-              className="text-xs font-medium text-[var(--accent-primary)] hover:underline px-2 py-1"
-            >
-              Refresh Data
-            </button>
-            <span className="text-[var(--text-muted)]">&middot;</span>
-            <button
-              onClick={onDisconnect}
-              className="text-xs font-medium text-[var(--text-muted)] hover:text-red-500 px-2 py-1"
-            >
-              Disconnect Medicare
-            </button>
-          </div>
+          {confirming ? (
+            <div className="bg-[var(--bg-secondary)] rounded-xl border border-red-500/20 px-4 py-3">
+              <p className="text-sm font-medium text-red-600 mb-2">
+                Are you sure you want to disconnect your Medicare account?
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mb-3">
+                This will permanently delete all cached health data, health reports,
+                and diabetes insights. This action cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirming(false)}
+                  className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] bg-[var(--bg-tertiary)] hover:bg-[var(--bg-tertiary)]/80 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setConfirming(false);
+                    onDisconnect();
+                  }}
+                  className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-red-600 hover:bg-red-700 transition-colors"
+                >
+                  Yes, Disconnect
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onRefresh}
+                className="text-xs font-medium text-[var(--accent-primary)] hover:underline px-2 py-1"
+              >
+                Refresh Data
+              </button>
+              <span className="text-[var(--text-muted)]">&middot;</span>
+              <button
+                onClick={() => setConfirming(true)}
+                className="text-xs font-medium text-[var(--text-muted)] hover:text-red-500 px-2 py-1"
+              >
+                Disconnect Medicare
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
