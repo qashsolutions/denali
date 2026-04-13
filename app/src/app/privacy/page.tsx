@@ -8,7 +8,7 @@ const SECTIONS = [
   {
     id: "overview",
     title: "1. Overview",
-    content: `${BRAND.NAME} ("we," "us," or "our") is a Medicare claims intelligence application operated by ${BRAND.COMPANY_NAME}. This Privacy Policy explains how we collect, use, disclose, and protect your personal information when you use our website at ${BRAND.DOMAIN} and related services (collectively, the "Service"). By creating an account, you actively acknowledge and accept the practices described in this policy. You may review this policy before signing up, and you may delete your account at any time if you no longer agree.`,
+    content: `${BRAND.NAME} ("we," "us," or "our") is a Medicare coverage guidance app run by ${BRAND.COMPANY_NAME}. This Privacy Policy explains how we collect, use, and protect your information when you use ${BRAND.DOMAIN} (the "Service"). By creating an account, you agree to this policy. You can review it before signing up. You can delete your account at any time if you no longer agree.`,
   },
   {
     id: "information-we-collect",
@@ -73,7 +73,7 @@ const SECTIONS = [
     paragraphs: [
       "We access your Medicare data through the official Medicare claims API. This connection uses OAuth 2.0 with PKCE (Proof Key for Code Exchange) for security — we never see or store your Medicare password.",
       "When you connect your Medicare account, you authorize CMS to share specific data with us. You can revoke this connection at any time in Settings.",
-      "When you disconnect your Medicare connection, all cached health data is immediately and permanently deleted from our servers. Previously collected health data is not retained, shared, or used after you revoke access. Your right to revoke access does not affect any data already anonymized for service improvement (see Section 7).",
+      "When you disconnect Medicare, we immediately and permanently delete all your cached health data. We do not keep, share, or use it after you disconnect. Data that was already anonymized for service improvement is not affected (see Section 7).",
     ],
     subsections: [
       {
@@ -108,8 +108,8 @@ const SECTIONS = [
       "CMS (Medicare API): We exchange data with the Medicare claims API only when you explicitly authorize the connection. Sharing is persistent while your connection is active and ceases immediately when you disconnect.",
       "AWS (Amazon Web Services): Our database (RDS PostgreSQL), application hosting (ECS/Fargate), AI processing (Bedrock), and email delivery (SES) provider. AWS is HIPAA-eligible and our Business Associate Agreement (BAA) was executed on February 25, 2026. Your account data, conversation history, and cached health data are stored in encrypted AWS RDS databases in us-east-1. Sharing is persistent for the lifetime of your account.",
       "Legal Requirements: We may disclose information if required by law, court order, or government regulation.",
-      "Business Transfers: In the event of a merger, acquisition, or sale of assets, your personal information may be transferred. We will notify you via email at least 30 days before your data is transferred and becomes subject to a different privacy policy. As a holder of CMS Medicare API production credentials, we will also notify CMS at the earliest practicable time, as production credentials are issued to a specific approved application and entity and a change of ownership requires CMS re-review.",
-      "Vendor Data Protection Commitments: Each third-party service provider we work with is contractually required to protect your information using safeguards appropriate to the sensitivity of the data they handle, consistent with applicable law. All providers handling protected health information are covered by Business Associate Agreements (BAAs). AWS is HIPAA-eligible and SOC 2 Type II certified (BAA executed February 25, 2026), covering database (RDS), hosting (ECS/Fargate), AI processing (Bedrock), and email delivery (SES); Stripe is PCI DSS certified for payment data.",
+      "Business Transfers: If our company is sold or merges with another, your data may be transferred. We will email you at least 30 days before the transfer happens. We will also notify CMS as soon as possible. Our access to Medicare data is tied to our specific company — if ownership changes, CMS must review and re-approve the new owner.",
+      "Vendor Data Protection: Every company we work with must protect your data. They are required by contract to use safeguards that match the sensitivity of the data they handle. All providers handling health data are covered by Business Associate Agreements (BAAs). AWS is HIPAA-eligible and SOC 2 Type II certified. Our BAA with AWS (signed February 25, 2026) covers database (RDS), hosting (ECS/Fargate), AI processing (Bedrock), and email delivery (SES). Stripe is PCI DSS certified for payments.",
     ],
     subsections: [
       {
@@ -153,7 +153,7 @@ const SECTIONS = [
       "Your Stripe subscription (if active)",
     ],
     afterItems:
-      "The only data retained after deletion is anonymized, de-identified learning data (e.g., 'symptom phrase X maps to diagnosis code Y with Z% confidence'). This data contains no names, contact details, Medicare beneficiary IDs, or account identifiers. While we believe this data cannot be traced back to any individual, we acknowledge that in rare cases, highly specific patterns in medical data could theoretically contribute to re-identification of individuals with uncommon conditions. We deliberately minimize and aggregate this data to reduce that risk. Medicare claims data may also contain information relevant to family members — for example, diagnosis codes for hereditary conditions. We do not share your personal health data with any other individuals, including relatives, without your explicit consent. We handle all such data with this sensitivity in mind. Note: audit logs are subject to a minimum 6-year HIPAA retention requirement that applies even after account deletion. All other data listed above is permanently and irreversibly deleted.",
+      "After deletion, we keep only two things. First: anonymized learning data (for example, 'symptom X maps to code Y'). This data has no names, contact info, or Medicare IDs. We believe it cannot identify you. However, in rare cases, very specific medical patterns could theoretically help identify someone with an uncommon condition. We minimize this risk by aggregating the data. Second: audit logs are kept for at least 6 years as required by HIPAA. This applies even after you delete your account. Everything else listed above is permanently deleted. Note: Medicare claims may include information about family members, such as codes for hereditary conditions. We never share your health data with anyone — including relatives — without your permission.",
   },
   {
     id: "security",
@@ -173,13 +173,13 @@ const SECTIONS = [
     id: "hipaa",
     title: "9. HIPAA Compliance and Privacy Act",
     paragraphs: [
-      "Medicare data obtained through the Medicare APIs is subject to the Privacy Act of 1974, the Health Insurance Portability and Accountability Act (HIPAA), and other applicable federal and state laws requiring special safeguarding. We comply with all applicable federal and state laws regarding the protection and disclosure of information obtained through the Medicare APIs. Our compliance measures include:",
+      "Your Medicare data is protected by federal law, including HIPAA and the Privacy Act of 1974. We follow all applicable federal and state laws for safeguarding this data. Our compliance measures include:",
     ],
     items: [
       "Technical safeguards: encryption, access controls, audit logging",
       "Administrative safeguards: workforce training, security policies, incident response procedures",
       "Physical safeguards: secure hosting through AWS (RDS, ECS/Fargate, Cognito) with SOC 2 and HIPAA-eligible services",
-      "Business Associate Agreements (BAAs) are required from all service providers who access, process, or store protected health information on our behalf. Our BAA with AWS (covering database, hosting, and AI services via Amazon RDS, ECS/Fargate, and Bedrock) was executed on February 25, 2026.",
+      "Every vendor that handles your health data must sign a Business Associate Agreement (BAA) with us. Our BAA with AWS (covering database, hosting, and AI services via Amazon RDS, ECS/Fargate, and Bedrock) was executed on February 25, 2026.",
     ],
     afterItems:
       "For detailed information about our HIPAA practices, see our HIPAA Compliance page.",
@@ -189,20 +189,21 @@ const SECTIONS = [
     id: "breach-notification",
     title: "10. Breach Notification",
     paragraphs: [
-      "As a personal health record vendor, we comply with the FTC Health Breach Notification Rule (16 CFR Part 318) and the HITECH Act breach notification requirements. In the event of a breach of unsecured health data:",
+      "We follow federal breach notification rules, including the FTC Health Breach Notification Rule (16 CFR Part 318) and the HITECH Act. If your health data is exposed in a breach:",
     ],
     items: [
-      "We will notify affected individuals within 60 days of discovery via email, explaining what happened, what data was involved, and what steps to take",
-      "Notification will include: a description of the breach, the types of data involved, steps we have taken to investigate and mitigate, and specific steps you can take to protect yourself — such as monitoring your Medicare Summary Notices and Explanation of Benefits for unfamiliar claims, contacting 1-800-MEDICARE (1-800-633-4227) if you suspect misuse of your Medicare number, and reviewing your credit report if personal identifiers were involved",
+      "We will email you within 60 days. The notice will explain what happened, what data was involved, and what you can do",
+      "The notice will describe the breach, the data involved, and the steps we took to fix it",
+      "Steps you can take to protect yourself: check your Medicare Summary Notices for unfamiliar claims, call 1-800-MEDICARE (1-800-633-4227) if you suspect misuse, and review your credit report if personal info was involved",
       "For breaches affecting 500 or more individuals, we will also notify the FTC and HHS as required by law",
-      "We maintain incident response procedures to detect, investigate, and contain potential breaches promptly (see our HIPAA Compliance page for the full Incident Response Plan)",
+      "We have procedures in place to detect, investigate, and stop breaches quickly. See our HIPAA Compliance page for the full plan",
     ],
   },
   {
     id: "cms-framework",
     title: "11. CMS Interoperability Framework",
     paragraphs: [
-      "We participate in the CMS Health Technology Ecosystem as a Patient-Facing App under two categories: Conversational AI Assistants and Diabetes & Obesity Prevention. As part of this framework, we commit to:",
+      "We are part of the CMS Health Technology Ecosystem. Our app is listed under two categories: Conversational AI and Diabetes & Obesity Prevention. As part of this framework, we commit to:",
     ],
     items: [
       "Supporting patient identity verification through CMS-approved services (Medicare OAuth with IAL2/AAL2)",
@@ -253,8 +254,8 @@ const SECTIONS = [
     title: "15. Changes to This Policy",
     paragraphs: [
       "We may update this Privacy Policy from time to time. For material changes, we will notify registered users via email at least 30 days before the new policy takes effect, with a summary of what changed.",
-      "If changes are driven by CMS regulatory updates or modifications to the CMS Interoperability Framework, we will specifically identify those changes and explain how they affect your Medicare data handling.",
-      "If you disagree with the changes, you may delete your account and all associated data before the effective date (Settings > Danger Zone). Continued use of the Service after the effective date constitutes acceptance of the updated policy.",
+      "If changes are due to new CMS rules, we will tell you what changed and how it affects your Medicare data.",
+      "If you disagree with the changes, you may delete your account and all associated data before the effective date (Settings > Danger Zone). If you keep using the app after the new policy starts, you are agreeing to it.",
     ],
   },
   {
