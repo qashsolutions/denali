@@ -813,7 +813,7 @@ function AppSettingsPageInner() {
                         });
                         if (res.ok) {
                           await signOut();
-                          router.push("/");
+                          window.location.href = "/";
                         } else {
                           const data = await res.json();
                           alert(data.error || "Failed to delete account");
