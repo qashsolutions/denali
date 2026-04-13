@@ -57,6 +57,57 @@ Open items:
 - Privacy policy aggregate readability score (15.4): inflated by bullet-list sections. Prose sections are grade 9-13. Prepared answer for CMS if asked.
 - REVOKE/GRANT migration not yet run via migration script — applied manually on 2026-04-10, migration file committed for future environments.
 
+## Session Summary — 2026-04-13
+
+CMS Blue Button production demo rehearsal + P0 bug fixes.
+
+### P0 Bugs Found & Fixed
+
+1. **Chat rate limiter blocking all non-admin users** (commit `077f1e8` + SQL)
+   - Root cause: `check_and_increment_chat` SQL returned jsonb, TypeScript read flat row. `row.allowed` was always `undefined` → every non-admin rate-limited on every message.
+   - Fix: SQL `RETURNS jsonb` → `RETURNS TABLE (allowed boolean, count integer)`. Applied to production RDS. Error messages now distinguish weekly day limit from daily message limit.
+
+2. **Account deletion "Invalid or expired session"** (commit `4f2b7bf`)
+   - Root cause: `settings/page.tsx` sent `Authorization: "Bearer session"` (hardcoded literal) instead of using httpOnly cookie.
+   - Fix: Removed fake header. Cookie sent automatically.
+
+3. **Account deletion cascade failure + data corruption** (commit `1085008`)
+   - Root cause: `DELETE FROM user_events WHERE user_id` — but `user_events` has no `user_id` column. Cascade was NOT transactional — partial deletion committed (conversations, messages, subscriptions deleted but user record survived).
+   - Fix: Transaction wrapper using existing `transaction()` helper. `user_events` delete changed to `conversation_id` subquery. Stripe cancel moved outside transaction.
+   - Orphan user (`ceeveear@yahoo.com`) cleaned up manually.
+
+4. **Disconnect confirmation on wrong component** (commit `e661b79`)
+   - Root cause: `ConnectionStatus.tsx` had the dialog but wasn't used on `/app/health`. `AccountSection.tsx` was the actual component.
+   - Fix: Added confirmation dialog to `AccountSection.tsx`.
+
+### CMS Compliance Fixes
+- Appeal letter: CMS attribution added to `AppealLetterModal` (2 locations) and appeal PDF page 2 (commit `eb4f5f6`)
+- Appeal outcome: email → userId in CloudWatch log
+- Error log sanitization: `route.ts:692` and `conversation-server.ts:104` log `err.message` only
+
+### Demo Walkthrough Results (all verified in production browser)
+- Landing page, signup, Terms/Privacy links
+- Connect Medicare (sandbox), consent screen
+- Health data display, consent toggles (3, all OFF default)
+- AI chat with Medicare data (personalized diabetes response)
+- Appeal letter generation (paywall working, tool chain verified)
+- Disconnect confirmation dialog + clean post-disconnect state
+- Account deletion confirmation + redirect + data verification
+
+### Current Status
+- Legal cross-audit: 29/29
+- Unit tests: 575/575
+- CloudWatch errors: 0/5min
+- CMS attribution: 9 locations with verbatim text
+- Account deletion: transactional, verified zero rows post-deletion
+- Audit logs: survive deletion with `user_id = NULL` (HIPAA 6yr)
+
+### Open Items
+- Full appeal letter + PDF download: test with admin account before demo
+- Post-demo: hashed email approach for preventing trial abuse
+- Cognito orphan cleanup for deleted test users
+- UI-2 (signup checkbox): deferred
+
 ## Table of Contents
 
 - [Quick Reference](#quick-reference)
