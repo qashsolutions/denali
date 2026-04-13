@@ -118,9 +118,9 @@ export const RATE_LIMITS = {
   TRIAL_REQUIRED: "Sign up for a free trial to start chatting with Denali.",
   TRIAL_EXPIRED: "Your free trial has ended. Upgrade to keep using Denali.",
   WEEKLY_LIMIT: (days: number) =>
-    `You can chat ${days} day${days !== 1 ? "s" : ""} per week on your plan. Upgrade for more access.`,
+    `You've used your chat day${days !== 1 ? "s" : ""} for this week. You can chat again next week, or upgrade for more access.`,
   DAILY_LIMIT: (limit: number) =>
-    `You've reached your daily limit of ${limit} messages. Upgrade for more access.`,
+    `You've reached your daily limit of ${limit} messages. You can continue tomorrow, or upgrade for more access.`,
 } as const;
 
 // =============================================================================

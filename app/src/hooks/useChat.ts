@@ -14,6 +14,7 @@ import {
   trackEvent,
 } from "@/lib/conversation-service";
 import { useConsent } from "@/hooks/useConsent";
+import { RATE_LIMITS, SYSTEM } from "@/config/messages";
 
 export interface AppealLetterData {
   letterContent: string;
@@ -368,7 +369,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           const authMsg: Message = {
             id: generateId(),
             role: "assistant",
-            content: errorData.error || "Sign up for a free trial to start chatting with Denali.",
+            content: errorData.error || RATE_LIMITS.TRIAL_REQUIRED,
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, authMsg]);
@@ -398,7 +399,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           const weeklyMsg: Message = {
             id: generateId(),
             role: "assistant",
-            content: `You can chat ${errorData.weeklyLimit} day${errorData.weeklyLimit !== 1 ? "s" : ""} per week on your plan. **Upgrade** for more access.`,
+            content: `You've used your chat day${errorData.weeklyLimit !== 1 ? "s" : ""} for this week. You can chat again next week, or **upgrade** for more access.`,
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, weeklyMsg]);
@@ -423,7 +424,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           return;
         }
 
-        throw new Error(errorData.error || `API error: ${response.status}`);
+        throw new Error(errorData.error || SYSTEM.GENERIC_ERROR);
       }
 
       // Check if response is SSE stream or JSON
@@ -629,7 +630,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         const errorMessage: Message = {
           id: generateId(),
           role: "assistant",
-          content: "This is taking longer than usual. Please try again — it usually works on the second try.",
+          content: SYSTEM.CHAT_TIMEOUT,
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, errorMessage]);
@@ -645,7 +646,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       const errorMessage: Message = {
         id: generateId(),
         role: "assistant",
-        content: "I'm having trouble connecting right now. Please try again in a moment.",
+        content: SYSTEM.CHAT_OFFLINE,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -767,7 +768,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       const errorMessage: Message = {
         id: generateId(),
         role: "assistant",
-        content: `Sorry, I couldn't send the email. Please try again or use the print option instead.`,
+        content: SYSTEM.EMAIL_FAILED,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -827,7 +828,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       const errorMessage: Message = {
         id: generateId(),
         role: "assistant",
-        content: "Sorry, I couldn't save your outcome. Please try again.",
+        content: SYSTEM.SAVE_OUTCOME,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
