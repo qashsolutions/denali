@@ -103,10 +103,40 @@ CMS Blue Button production demo rehearsal + P0 bug fixes.
 - Audit logs: survive deletion with `user_id = NULL` (HIPAA 6yr)
 
 ### Open Items
-- Full appeal letter + PDF download: test with admin account before demo
 - Post-demo: hashed email approach for preventing trial abuse
 - Cognito orphan cleanup for deleted test users
-- UI-2 (signup checkbox): deferred
+
+### Evening Session — Appeal Letter + Final Fixes
+
+- Full appeal letter verified with admin account (ramanac@gmail.com): Opus 4.6 tool chain (denial lookup → ICD-10 → CPT → PubMed → NPI → coverage policy → letter generation) working end-to-end
+- Provider NPI verification: Dr. Daniel Christopher Allison, MD, Orthopaedic Surgery, 444 S San Vicente Blvd, Los Angeles — confirmed via NPI Registry, "Accepts Medicare" badge in chat
+- Appeal letter modal: Copy, Download PDF, Print, Close all functional
+- Letter includes: Medical Necessity section, 3 PubMed citations, Medicare Coverage Criteria, blank lines for MBI/claim/DOS, AI disclaimer
+- Letter correctly pulled Blue Button data: "Patient has Type 2 diabetes mellitus without complications (existing condition per Medicare records)"
+- Modal CSS fix: sticky header so buttons always visible (commits `38ea83e`, `4f93175`, `5dc69ef`)
+- Active opt-in checkbox added to signup flow: unchecked by default, Send Code disabled until checked, linked Terms + Privacy Policy (commit `e8134dc` — UI-2 closed)
+
+### Final Demo-Ready Status
+
+All 12 demo segments verified in production browser:
+1. Landing page
+2. Signup with opt-in checkbox
+3. Connect Medicare + consent screen
+4. Health data display
+5. Consent toggles (3, all OFF default)
+6. AI chat with Medicare data
+7. Appeal letter + modal + PDF
+8. Disconnect with confirmation
+9. Account deletion with confirmation
+10. CMS attribution (9 locations)
+11. Privacy policy readability (prose grade 9-13)
+12. Active opt-in checkbox
+
+CMS Production Access Checklist: 100% — all requirements MET, zero deferrals.
+
+Commits today: `077f1e8`, `4f2b7bf`, `1085008`, `e661b79`, `eb4f5f6`, `2b7826a`, `a81cd0c`, `8556cac`, `e8134dc`, `38ea83e`, `4f93175`, `5dc69ef`, `762d77a`
+
+Demo materials: `docs/cms-demo-evidence/08-cms-demo-qa.pdf` (22 Q&As)
 
 ## Table of Contents
 
