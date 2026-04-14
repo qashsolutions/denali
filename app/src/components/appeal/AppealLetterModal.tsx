@@ -83,9 +83,9 @@ export function AppealLetterModal({
   if (data.isInformational) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="bg-white text-black max-w-2xl w-full max-h-[90vh] overflow-auto rounded-lg shadow-2xl">
+        <div className="bg-white text-black max-w-2xl w-full max-h-[90vh] rounded-lg shadow-2xl flex flex-col">
           {/* Header */}
-          <div className="sticky top-0 bg-white border-b p-4 flex items-center justify-between">
+          <div className="sticky top-0 z-10 bg-white rounded-t-lg flex-shrink-0 border-b p-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">
               Level {data.appealLevel} — {data.levelName || (data.appealLevel === 4 ? "Medicare Appeals Council" : "Federal District Court")}
             </h2>
@@ -94,7 +94,7 @@ export function AppealLetterModal({
             </Button>
           </div>
 
-          {/* Guidance content */}
+          {/* Guidance content — scrollable */}
           <div className="p-6 space-y-4">
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
               <p className="text-sm font-medium text-amber-900 mb-1">Guidance Only</p>
@@ -148,83 +148,85 @@ export function AppealLetterModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white text-black max-w-2xl w-full max-h-[90vh] overflow-auto rounded-lg shadow-2xl">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b p-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{levelLabel}</h2>
-          <div className="flex gap-2">
-            {accessGranted && (
-              <>
-                <Button variant="secondary" size="sm" onClick={handleCopy}>
-                  {copied ? "Copied!" : "Copy"}
-                </Button>
-                <Button variant="secondary" size="sm" onClick={handleDownload}>
-                  Download PDF
-                </Button>
-                <Button variant="primary" size="sm" onClick={handlePrint}>
-                  Print
-                </Button>
-              </>
-            )}
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              Close
-            </Button>
+      <div className="bg-white text-black max-w-2xl w-full max-h-[90vh] rounded-lg shadow-2xl flex flex-col">
+        {/* Sticky header — buttons + banners always visible */}
+        <div className="sticky top-0 z-10 bg-white rounded-t-lg flex-shrink-0">
+          <div className="border-b p-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">{levelLabel}</h2>
+            <div className="flex gap-2">
+              {accessGranted && (
+                <>
+                  <Button variant="secondary" size="sm" onClick={handleCopy}>
+                    {copied ? "Copied!" : "Copy"}
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={handleDownload}>
+                    Download PDF
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={handlePrint}>
+                    Print
+                  </Button>
+                </>
+              )}
+              <Button variant="ghost" size="sm" onClick={onClose}>
+                Close
+              </Button>
+            </div>
           </div>
+
+          {/* Deadline banner with days remaining */}
+          {deadlineInfo && (
+            <div
+              className={`border-b px-4 py-3 text-sm font-medium ${
+                deadlineInfo.expired
+                  ? "bg-gray-100 border-gray-300 text-gray-700"
+                  : deadlineInfo.daysRemaining <= 14
+                    ? "bg-red-100 border-red-300 text-red-900"
+                    : "bg-amber-50 border-amber-200 text-amber-900"
+              }`}
+            >
+              {deadlineInfo.expired ? (
+                <>
+                  Deadline passed {Math.abs(deadlineInfo.daysRemaining)} days ago
+                  ({deadlineInfo.display}). Late filing may still be possible
+                  with good cause.
+                </>
+              ) : (
+                <>
+                  {deadlineInfo.daysRemaining} days left to file — deadline{" "}
+                  {deadlineInfo.display}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Free escalation banner for Level 2+ */}
+          {data.appealLevel >= 2 && accessGranted && (
+            <div className="border-b px-4 py-2 bg-green-50 border-green-200">
+              <p className="text-xs font-medium text-green-800">
+                Level {data.appealLevel} escalation — no additional credit used
+              </p>
+            </div>
+          )}
+
+          {/* Review checklist banner */}
+          {accessGranted && (
+            <div className="border-b px-4 py-3 bg-blue-50 border-blue-200">
+              <p className="text-sm font-medium text-blue-900">Before submitting:</p>
+              <ul className="text-xs text-blue-800 mt-1 space-y-0.5 list-disc list-inside">
+                <li>Fill in your Medicare number, claim number, and date of service</li>
+                <li>Sign and date the letter</li>
+                <li>Attach your denial notice and medical records</li>
+                {data.appealLevel >= 2 && (
+                  <li>Include copies of all prior appeal denial letters</li>
+                )}
+                <li>Review all details with your healthcare provider</li>
+              </ul>
+            </div>
+          )}
         </div>
 
-        {/* Deadline banner with days remaining */}
-        {deadlineInfo && (
-          <div
-            className={`border-b px-4 py-3 text-sm font-medium ${
-              deadlineInfo.expired
-                ? "bg-gray-100 border-gray-300 text-gray-700"
-                : deadlineInfo.daysRemaining <= 14
-                  ? "bg-red-100 border-red-300 text-red-900"
-                  : "bg-amber-50 border-amber-200 text-amber-900"
-            }`}
-          >
-            {deadlineInfo.expired ? (
-              <>
-                Deadline passed {Math.abs(deadlineInfo.daysRemaining)} days ago
-                ({deadlineInfo.display}). Late filing may still be possible
-                with good cause.
-              </>
-            ) : (
-              <>
-                {deadlineInfo.daysRemaining} days left to file — deadline{" "}
-                {deadlineInfo.display}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Free escalation banner for Level 2+ */}
-        {data.appealLevel >= 2 && accessGranted && (
-          <div className="border-b px-4 py-2 bg-green-50 border-green-200">
-            <p className="text-xs font-medium text-green-800">
-              Level {data.appealLevel} escalation — no additional credit used
-            </p>
-          </div>
-        )}
-
-        {/* Review checklist banner */}
-        {accessGranted && (
-          <div className="border-b px-4 py-3 bg-blue-50 border-blue-200">
-            <p className="text-sm font-medium text-blue-900">Before submitting:</p>
-            <ul className="text-xs text-blue-800 mt-1 space-y-0.5 list-disc list-inside">
-              <li>Fill in your Medicare number, claim number, and date of service</li>
-              <li>Sign and date the letter</li>
-              <li>Attach your denial notice and medical records</li>
-              {data.appealLevel >= 2 && (
-                <li>Include copies of all prior appeal denial letters</li>
-              )}
-              <li>Review all details with your healthcare provider</li>
-            </ul>
-          </div>
-        )}
-
-        {/* Letter content only (no Claude commentary) */}
-        <div className="p-8">
+        {/* Letter content — scrollable independently */}
+        <div className="p-8 overflow-y-auto">
           <AppealGate onAccessGranted={handleAccessGranted}>
             <MarkdownContent content={letterMarkdown} />
           </AppealGate>
