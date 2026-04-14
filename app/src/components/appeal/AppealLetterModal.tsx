@@ -151,7 +151,7 @@ export function AppealLetterModal({
       <div className="bg-white text-black max-w-2xl w-full max-h-[90vh] rounded-lg shadow-2xl flex flex-col">
         {/* Sticky header — buttons + banners always visible */}
         <div className="sticky top-0 z-10 bg-white rounded-t-lg flex-shrink-0">
-          <div className="border-b p-4 flex items-center justify-between">
+          <div className="border-b px-4 py-5 flex items-center justify-between">
             <h2 className="text-lg font-semibold">{levelLabel}</h2>
             <div className="flex gap-2">
               {accessGranted && (
