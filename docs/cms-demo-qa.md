@@ -18,7 +18,7 @@ OTP-based email authentication via AWS Cognito + AWS SES. The user enters their 
 
 **2. How a user would authorize access to their Medicare data via Medicare.gov**
 
-MyHealth → "Connect Your Medicare" with a 3-step explainer: "Sign in with your Medicare account," "Approve read-only access to your data," "See your claims and coverage here." Pre-authorization messaging includes "Your data stays private and encrypted" and "We only read your data — we never modify it." The CMS attribution notice is visible on this page. OAuth 2.0 PKCE flow redirects to Medicare.gov for identity verification and consent.
+MyHealth > "Connect Your Medicare" with a 3-step explainer: "Sign in with your Medicare account," "Approve read-only access to your data," "See your claims and coverage here." Pre-authorization messaging includes "Your data stays private and encrypted" and "We only read your data — we never modify it." The CMS attribution notice is visible on this page. OAuth 2.0 PKCE flow redirects to Medicare.gov for identity verification and consent.
 
 **3. How the enrollee's Medicare data is used within the application**
 
@@ -26,11 +26,11 @@ Three uses, all consent-gated. (a) The Health hub displays conditions, coverage,
 
 **4. How a user can terminate their application profile / account**
 
-Settings → Danger Zone → Delete Account. A confirmation dialog lists what will be deleted (conversations, appeals, Medicare data, subscriptions). A transaction-wrapped cascade deletes all user data across 18 tables. Audit logs survive with user_id set to NULL (HIPAA 6-year retention). The Cognito identity is deleted as the final step. The user is redirected to the landing page.
+Settings > Danger Zone > Delete Account. A confirmation dialog lists what will be deleted (conversations, appeals, Medicare data, subscriptions). A transaction-wrapped cascade deletes all user data across 18 tables. Audit logs survive with user_id set to NULL (HIPAA 6-year retention). The Cognito identity is deleted as the final step. The user is redirected to the landing page.
 
 **5. How a user can delete their Medicare data from the application**
 
-MyHealth → "Disconnect Medicare" opens a confirmation dialog: "Are you sure? This will permanently delete all cached health data, health reports, and diabetes insights. This action cannot be undone." The dialog has Cancel and "Yes, Disconnect" buttons. All fhir_cache, health_reports, ehr_connections, and diabetes data rows are deleted immediately.
+MyHealth > "Disconnect Medicare" opens a confirmation dialog: "Are you sure? This will permanently delete all cached health data, health reports, and diabetes insights. This action cannot be undone." The dialog has Cancel and "Yes, Disconnect" buttons. All fhir_cache, health_reports, ehr_connections, and diabetes data rows are deleted immediately.
 
 **6. Where a user can find your privacy policy and terms of service**
 
@@ -42,7 +42,7 @@ The signup page shows an unchecked checkbox: "I have read and agree to the Terms
 
 **8. If your application sends automated communications, show how a user can opt out**
 
-Settings → Email Alerts lists 4 alert types — appeal deadline reminders, medication refill gaps, new claim denials, Medicare data refresh — each with an independent toggle, ALL OFF by default. Users must explicitly opt in. The only non-optional emails are the OTP sign-in code (transactional, required for authentication) and regulatory policy-change notices (required by Terms §12 / Privacy §15).
+Settings > Email Alerts lists 4 alert types — appeal deadline reminders, medication refill gaps, new claim denials, Medicare data refresh — each with an independent toggle, ALL OFF by default. Users must explicitly opt in. The only non-optional emails are the OTP sign-in code (transactional, required for authentication) and regulatory policy-change notices (required by Terms §12 / Privacy §15).
 
 ---
 
@@ -80,7 +80,7 @@ OAuth tokens are stored in the ehr_connections table with app-layer AES-256-GCM 
 
 **8. The lifecycle of claims data as it moves through your application**
 
-Raw FHIR bundles are fetched from the Blue Button API → processed in memory by 8 extractors (conditions, medications, screenings, coverage, providers, hospitalizations, DME, hospice) → raw bundles discarded, never stored → transformed summaries cached in PostgreSQL (RDS AES-256) → cache refreshes every 24 hours → data deleted on disconnect or account deletion. When the AI consent toggle is ON, transformed summaries are sent to Claude via AWS Bedrock — conditions, medications (detailed for diabetes/obesity, count-only for others), coverage, and recent claims.
+Raw FHIR bundles are fetched from the Blue Button API, processed in memory by 8 extractors (conditions, medications, screenings, coverage, providers, hospitalizations, DME, hospice), and discarded. Raw bundles are never stored. Transformed summaries are cached in PostgreSQL (RDS AES-256). The cache refreshes every 24 hours. Data is deleted on disconnect or account deletion. When the AI consent toggle is ON, the transformed summaries are sent to Claude via AWS Bedrock — conditions, medications (detailed for diabetes/obesity, count-only for others), coverage, and recent claims.
 
 ---
 
