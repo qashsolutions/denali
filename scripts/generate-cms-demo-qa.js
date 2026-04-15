@@ -181,6 +181,31 @@ const SECTIONS = [
         a:
           "We ran Flesch-Kincaid analysis using textstat. Prose sections score grade 9-13 after our simplification pass. The aggregate score is higher (15.4) because bullet-list formatting inflates the tool's calculation. The actual prose content is accessible to a Medicare audience.",
       },
+      {
+        q: 'Q: Do you use "Blue Button" in any user-facing text?',
+        a:
+          'Only in the CMS-mandated attribution notice. All other references use "Medicare" - "Connect Medicare," "Medicare data," "Medicare account." We removed "Blue Button" from email footers, PDF footers, and AI system prompts during our compliance audit.',
+      },
+      {
+        q: "Q: What happens if your company is sold?",
+        a:
+          "Privacy Policy §5 requires us to notify CMS as soon as possible. Our access to Medicare data is tied to our specific company - if ownership changes, CMS must review and re-approve the new owner. Users are notified of any ownership change that could affect their data.",
+      },
+      {
+        q: "Q: How do you handle a data breach?",
+        a:
+          "We follow the FTC Health Breach Notification Rule (16 CFR Part 318) and the HITECH Act. Affected users are notified within 60 days via email explaining what happened, what data was involved, and steps they can take - including checking Medicare Summary Notices for unfamiliar claims, calling 1-800-MEDICARE if they suspect misuse, and reviewing their credit report. CMS is notified at the earliest practicable time.",
+      },
+      {
+        q: "Q: What BAAs do you have and with whom?",
+        a:
+          "AWS BAA signed February 25, 2026, covering RDS (database), ECS/Fargate (hosting), Bedrock (AI processing), and SES (email). Stripe is PCI DSS certified for payment processing. No other vendors handle Medicare data.",
+      },
+      {
+        q: "Q: What data does the AI actually see?",
+        a:
+          "When the health data consent toggle is ON, Claude receives: patient age and gender, active coverage types, recent claims (top 5 with procedure/diagnosis codes and amounts), diabetes and obesity diagnoses with ICD-10 codes, diabetes and obesity medications with details, a count-only summary of other medications (no names), screening dates and overdue flags, and provider specialties. It never sees names, DOB, addresses, MBI, or raw FHIR bundles.",
+      },
     ],
   },
 ];

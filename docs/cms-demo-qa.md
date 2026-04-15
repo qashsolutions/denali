@@ -129,3 +129,23 @@ Stripe is integrated in test mode — the full subscription flow works (plan sel
 **Q: What is the readability level of your privacy policy?**
 
 We ran Flesch-Kincaid analysis using textstat. Prose sections score grade 9-13 after our simplification pass. The aggregate score is higher (15.4) because bullet-list formatting inflates the tool's calculation. The actual prose content is accessible to a Medicare audience.
+
+**Q: Do you use "Blue Button" in any user-facing text?**
+
+Only in the CMS-mandated attribution notice. All other references use "Medicare" - "Connect Medicare," "Medicare data," "Medicare account." We removed "Blue Button" from email footers, PDF footers, and AI system prompts during our compliance audit.
+
+**Q: What happens if your company is sold?**
+
+Privacy Policy §5 requires us to notify CMS as soon as possible. Our access to Medicare data is tied to our specific company - if ownership changes, CMS must review and re-approve the new owner. Users are notified of any ownership change that could affect their data.
+
+**Q: How do you handle a data breach?**
+
+We follow the FTC Health Breach Notification Rule (16 CFR Part 318) and the HITECH Act. Affected users are notified within 60 days via email explaining what happened, what data was involved, and steps they can take - including checking Medicare Summary Notices for unfamiliar claims, calling 1-800-MEDICARE if they suspect misuse, and reviewing their credit report. CMS is notified at the earliest practicable time.
+
+**Q: What BAAs do you have and with whom?**
+
+AWS BAA signed February 25, 2026, covering RDS (database), ECS/Fargate (hosting), Bedrock (AI processing), and SES (email). Stripe is PCI DSS certified for payment processing. No other vendors handle Medicare data.
+
+**Q: What data does the AI actually see?**
+
+When the health data consent toggle is ON, Claude receives: patient age and gender, active coverage types, recent claims (top 5 with procedure/diagnosis codes and amounts), diabetes and obesity diagnoses with ICD-10 codes, diabetes and obesity medications with details, a count-only summary of other medications (no names), screening dates and overdue flags, and provider specialties. It never sees names, DOB, addresses, MBI, or raw FHIR bundles.
