@@ -2,7 +2,7 @@
  * Alert Preferences API
  *
  * GET  /api/alerts/preferences — return user's alert preferences + plan eligibility
- * PUT  /api/alerts/preferences — update alert preference (opt-out toggle)
+ * PUT  /api/alerts/preferences — update alert preference (opt-in toggle)
  *
  * Auth via Cognito JWT. Follows consent/route.ts pattern.
  */
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const isAdmin = userResult.rows[0]?.is_admin ?? false;
     const eligible = getEligibleAlertTypes(plan, isAdmin);
 
-    // Get stored preferences (missing = enabled by default)
+    // Get stored preferences (missing = disabled — opt-in required per CMS)
     const prefs = await query<{ alert_type: string; enabled: boolean }>(
       `SELECT alert_type, enabled FROM alert_preferences WHERE user_id = $1`,
       [user.userId]
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     const eligibility: Record<string, boolean> = {};
 
     for (const type of ALERT_TYPES) {
-      preferences[type] = prefMap.get(type) ?? true; // default enabled
+      preferences[type] = prefMap.get(type) ?? false; // default disabled (opt-in)
       eligibility[type] = eligible.includes(type);
     }
 

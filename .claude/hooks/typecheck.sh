@@ -56,8 +56,15 @@ if ! command -v npx >/dev/null 2>&1; then
   exit 0
 fi
 
-# Run typecheck with a timeout (don't hang Claude forever)
-TSC_OUTPUT=$(timeout 60 npx --no-install tsc --noEmit 2>&1)
+# Run typecheck with a timeout (don't hang Claude forever).
+# macOS doesn't ship `timeout` by default — fall back to running without it.
+if command -v timeout >/dev/null 2>&1; then
+  TSC_OUTPUT=$(timeout 60 npx --no-install tsc --noEmit --pretty false 2>&1)
+elif command -v gtimeout >/dev/null 2>&1; then
+  TSC_OUTPUT=$(gtimeout 60 npx --no-install tsc --noEmit --pretty false 2>&1)
+else
+  TSC_OUTPUT=$(npx --no-install tsc --noEmit --pretty false 2>&1)
+fi
 TSC_EXIT=$?
 
 # timeout returned 124 = exceeded time limit; let it pass silently

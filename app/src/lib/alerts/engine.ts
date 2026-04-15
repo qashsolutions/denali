@@ -59,12 +59,13 @@ export async function processAlerts(dryRun: boolean = false): Promise<ProcessRes
       const eligible = getEligibleAlertTypes(user.plan, user.is_admin);
       if (eligible.length === 0 && !user.is_admin) continue;
 
-      // Get user's alert preferences (missing row = enabled)
+      // Get user's alert preferences (missing row = disabled — opt-in required per CMS)
       const prefs = await query<{ alert_type: string; enabled: boolean }>(
         `SELECT alert_type, enabled FROM alert_preferences WHERE user_id = $1`,
         [user.id]
       );
       const prefMap = new Map(prefs.rows.map((p) => [p.alert_type, p.enabled]));
+      const hasAnyAlertEnabled = Array.from(prefMap.values()).some((v) => v === true);
 
       // Check today's send count for safety cap
       const todayCount = await query<{ count: string }>(
@@ -78,16 +79,20 @@ export async function processAlerts(dryRun: boolean = false): Promise<ProcessRes
       const candidates: AlertCandidate[] = [];
 
       for (const alertType of eligible) {
-        // Skip if user opted out
-        if (prefMap.get(alertType) === false) continue;
+        // Skip unless user has explicitly opted in (missing row = disabled per CMS)
+        if (prefMap.get(alertType) !== true) continue;
 
         const typeCandidates = await checkAlertCondition(user.id, alertType);
         candidates.push(...typeCandidates);
       }
 
-      // Also check outcome followups (not plan-gated)
-      const followupCandidates = await checkOutcomeFollowups(user.id, user.email);
-      candidates.push(...followupCandidates);
+      // Outcome followups are not plan-gated, but still require at least one
+      // alert type opted in — a user who has disabled all email alerts should
+      // not receive followup prompts either.
+      if (hasAnyAlertEnabled) {
+        const followupCandidates = await checkOutcomeFollowups(user.id, user.email);
+        candidates.push(...followupCandidates);
+      }
 
       // Dedup against alert_log and enforce daily cap
       for (const candidate of candidates) {

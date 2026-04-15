@@ -8,10 +8,10 @@ type AlertPreferences = Record<AlertType, boolean>;
 type AlertEligibility = Record<AlertType, boolean>;
 
 const DEFAULT_PREFS: AlertPreferences = {
-  appeal_deadline: true,
-  med_refill: true,
-  new_denial: true,
-  data_refresh: true,
+  appeal_deadline: false,
+  med_refill: false,
+  new_denial: false,
+  data_refresh: false,
 };
 
 const DEFAULT_ELIGIBILITY: AlertEligibility = {
