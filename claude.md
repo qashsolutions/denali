@@ -182,18 +182,18 @@ Commits this session: `1e33970` (alert opt-in), `c3d0b26` (Q&A restructure), `d3
 
 ## Quick Reference
 
-| Attribute       | Value                                                                        |
-| --------------- | ---------------------------------------------------------------------------- |
-| **Target User** | Original Medicare & Medicare Advantage patients & caregivers                 |
-| **NOT for**     | Commercial payers, Medicaid, billers, coders                                 |
-| **Tone**        | Warm, simple, no jargon, empathetic, 8th grade reading level                 |
-| **Trial**       | 14-day free trial, 10 msgs/day, 1 day/week, no appeals (email OTP required)  |
-| **Starter**     | $10/month, 20 msgs/day, 1 day/week, 1 appeal credit                          |
-| **Plus**        | $20/month, 20 msgs/day, every day, 2 appeal credits                          |
-| **Unlimited**   | $60/month, unlimited msgs, unlimited appeals                                 |
-| **Tech Stack**  | Next.js PWA, AWS RDS+Cognito (auth+DB), Claude via Bedrock (agentic), Stripe |
-| **AI Model**    | Sonnet 4.6 (chat) / Opus 4.6 (appeals) via AWS Bedrock                       |
-| **Deploy**      | AWS ECS/Fargate + ALB                                                        |
+* Target User: Medicare patients & caregivers
+* Focus: Pre-diabetes, Diabetes & Obesity coverage guidance
+* Backend: Next.js 16, React 19, TypeScript strict, AWS ECS Fargate
+* Database: PostgreSQL 16.9 on RDS (AES-256 encryption)
+* AI: Claude Sonnet 4.6 (chat) + Opus 4.6 (appeals) via AWS Bedrock
+* Auth: AWS Cognito + SES (OTP, HttpOnly cookies, 30-min HIPAA timeout)
+* Payments: Stripe (test mode until CMS production approval)
+* Email: AWS SES (BAA signed Feb 25, 2026)
+* Data Sources: Blue Button 2.0 API (FHIR R4), ICD-10, CPT, NPI Registry, NCD/LCD, SAD list, PubMed
+* Payer: Original Medicare (Medicare Advantage support in appeal letters)
+* Infrastructure: AWS VPC, ECS Fargate, RDS, Secrets Manager, CloudWatch, EventBridge
+* CMS Status: Production access demo scheduled, 20/20 checklist items verified
 
 ---
 
