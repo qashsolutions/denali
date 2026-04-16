@@ -70,7 +70,7 @@ const SECTIONS = [
         q:
           "8. If your application sends automated communications, show how a user can opt out",
         a:
-          "Settings > Email Alerts lists 4 alert types — appeal deadline reminders, medication refill gaps, new claim denials, Medicare data refresh — each with an independent toggle, ALL OFF by default. Users must explicitly opt in. The only non-optional emails are the OTP sign-in code (transactional, required for authentication) and regulatory policy-change notices (required by Terms §12 / Privacy §15).",
+          "Settings > Email Alerts lists 4 alert types: appeal deadline reminders, medication refill gaps, new claim denials, and Medicare data refresh. Toggles render based on the user's subscription tier. Plus-tier users see interactive toggles for 2 alerts (appeal deadline reminders and new claim denials). Unlimited-tier users see toggles for all 4. Alerts not included in the user's current tier display a tier badge instead of a toggle. Every toggle is OFF by default - users must explicitly opt in. The only non-optional emails are the OTP sign-in code (transactional, required for authentication) and regulatory policy-change notices (required by Terms §12 / Privacy §15).",
       },
     ],
   },
@@ -205,6 +205,11 @@ const SECTIONS = [
         q: "Q: What data does the AI actually see?",
         a:
           "When the health data consent toggle is ON, Claude receives: patient age and gender, active coverage types, recent claims (top 5 with procedure/diagnosis codes and amounts), diabetes and obesity diagnoses with ICD-10 codes, diabetes and obesity medications with details, a count-only summary of other medications (no names), screening dates and overdue flags, and provider specialties. It never sees names, DOB, addresses, MBI, or raw FHIR bundles.",
+      },
+      {
+        q: "Q: How do you demonstrate the opt-out mechanism during the demo?",
+        a:
+          "We demonstrate with a Plus-tier or Unlimited-tier account so the toggle switches render. Each toggle reads the user's alert_preferences row from the database before every email send. If the toggle is OFF - or the row does not exist, since we default to OFF per our opt-in policy - the alert engine skips that user for that alert type and no email is sent.",
       },
     ],
   },

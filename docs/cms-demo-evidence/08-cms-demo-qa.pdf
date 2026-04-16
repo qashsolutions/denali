@@ -305,7 +305,7 @@ endobj
 endobj
 6 0 obj
 <<
-/Length 5290
+/Length 5653
 >>
 stream
 0.6 w
@@ -350,242 +350,256 @@ BT
 11.5 TL
 0 g
 64. 657. Td
-(Settings > Email Alerts lists 4 alert types — appeal deadline reminders, medication refill gaps, new claim) Tj
+(Settings > Email Alerts lists 4 alert types: appeal deadline reminders, medication refill gaps, new claim denials,) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
 64. 644. Td
-(denials, Medicare data refresh — each with an independent toggle, ALL OFF by default. Users must explicitly) Tj
+(and Medicare data refresh. Toggles render based on the user's subscription tier. Plus-tier users see interactive) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
 64. 631. Td
-(opt in. The only non-optional emails are the OTP sign-in code \(transactional, required for authentication\) and) Tj
+(toggles for 2 alerts \(appeal deadline reminders and new claim denials\). Unlimited-tier users see toggles for all 4.) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
 64. 618. Td
-(regulatory policy-change notices \(required by Terms §12 / Privacy §15\).) Tj
+(Alerts not included in the user's current tier display a tier badge instead of a toggle. Every toggle is OFF by) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+64. 605. Td
+(default - users must explicitly opt in. The only non-optional emails are the OTP sign-in code \(transactional,) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+64. 592. Td
+(required for authentication\) and regulatory policy-change notices \(required by Terms §12 / Privacy §15\).) Tj
 ET
 0.78 G
 0.4 w
-54. 591. m
-558. 591. l
+54. 565. m
+558. 565. l
 S
 BT
 /F2 13 Tf
 14.9499999999999993 TL
 0 g
-54. 577. Td
+54. 551. Td
 (Section 2 — Be Prepared to Discuss) Tj
 ET
 BT
 /F3 9.5 Tf
 10.9249999999999989 TL
 0 g
-54. 558. Td
+54. 532. Td
 (The eight topics CMS said they would ask us to explain verbally during the demo.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 536. Td
+54. 510. Td
 (1. Does your application require the enrollee's demographic data? If so, why?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 520. Td
+64. 494. Td
 (We extract only age and gender from the Patient resource — for clinical context such as age-appropriate) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 507. Td
+64. 481. Td
 (screening recommendations and gender-specific coverage rules. We never store names, dates of birth,) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 494. Td
+64. 468. Td
 (addresses, or Medicare Beneficiary IDs. If the enrollee unchecks "Personal Information" on the Medicare.gov) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 481. Td
+64. 455. Td
 (consent screen, the app still functions fully.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 458. Td
+54. 432. Td
 (2. How your application keeps Medicare data secure at rest and in transit) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 442. Td
+64. 416. Td
 (In transit: TLS 1.2+ for all connections. At rest: RDS AES-256 encryption via an AWS KMS key. OAuth tokens) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 429. Td
+64. 403. Td
 (have additional app-layer AES-256-GCM encryption. The database is private within the VPC with no public) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 416. Td
+64. 390. Td
 (endpoint. There is a 30-minute HIPAA session timeout with on-screen warning. Cookies are HttpOnly, Secure,) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 403. Td
+64. 377. Td
 (and SameSite.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 380. Td
+54. 354. Td
 (3. Whether your application uses FHIR STU3 or R4) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 364. Td
+64. 338. Td
 (R4. We use the CARIN Blue Button Implementation Guide based on FHIR R4, which is what the Blue Button 2.0) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 351. Td
+64. 325. Td
 (API provides.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 328. Td
+54. 302. Td
 (4. If using STU3, migration plan to R4?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 312. Td
+64. 286. Td
 (N/A — we built on R4 from the start.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 289. Td
+54. 263. Td
 (5. Technology stack and why you chose it) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 273. Td
+64. 247. Td
 (Next.js 16 with React 19 and TypeScript strict mode on AWS ECS Fargate. PostgreSQL 16.9 on RDS. Claude) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 260. Td
+64. 234. Td
 (AI via AWS Bedrock \(Sonnet 4.6 for chat, Opus 4.6 for appeals\). AWS SES for email. Stripe for payments \(test) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 247. Td
+64. 221. Td
 (mode until CMS approval\). We chose AWS for HIPAA eligibility and BAA coverage across all services —) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 234. Td
+64. 208. Td
 (database, hosting, AI, and email are all under one BAA signed February 25, 2026.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 211. Td
+54. 185. Td
 (6. How your application will secure the BB2.0 production credentials) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 195. Td
+64. 169. Td
 (AWS Secrets Manager, encrypted at rest, accessed only by the ECS task role via IAM policy. Credentials never) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 182. Td
+64. 156. Td
 (appear in source code, environment files, or logs. We have a secrets-scanner hook in our CI that blocks) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 169. Td
+64. 143. Td
 (commits containing 13 credential patterns \(AWS keys, Stripe keys, API tokens, private keys, JWTs\).) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 146. Td
+54. 120. Td
 (7. How your application will store and secure the enrollee's authorization token) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 130. Td
+64. 104. Td
 (OAuth tokens are stored in the ehr_connections table with app-layer AES-256-GCM encryption on top of RDS) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 117. Td
+64. 91. Td
 (encryption. Tokens are scoped per-user and deleted on disconnect or account deletion. The encryption key is) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 104. Td
+64. 78. Td
 (stored in AWS Secrets Manager. Tokens are never logged.) Tj
 ET
 BT
@@ -921,7 +935,7 @@ endobj
 endobj
 10 0 obj
 <<
-/Length 4276
+/Length 4939
 >>
 stream
 0.4 w
@@ -1150,10 +1164,45 @@ BT
 64. 244. Td
 (FHIR bundles.) Tj
 ET
+BT
+/F2 10.5 Tf
+12.0749999999999993 TL
+0 g
+54. 221. Td
+(Q: How do you demonstrate the opt-out mechanism during the demo?) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+64. 205. Td
+(We demonstrate with a Plus-tier or Unlimited-tier account so the toggle switches render. Each toggle reads the) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+64. 192. Td
+(user's alert_preferences row from the database before every email send. If the toggle is OFF - or the row does) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+64. 179. Td
+(not exist, since we default to OFF per our opt-in policy - the alert engine skips that user for that alert type and no) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+64. 166. Td
+(email is sent.) Tj
+ET
 0.78 G
 0.4 w
-54. 217. m
-558. 217. l
+54. 139. m
+558. 139. l
 S
 BT
 /F1 8 Tf
@@ -1334,7 +1383,7 @@ endobj
 25 0 obj
 <<
 /Producer (jsPDF 4.2.1)
-/CreationDate (D:20260415151616-05'00')
+/CreationDate (D:20260416095903-05'00')
 >>
 endobj
 26 0 obj
@@ -1348,39 +1397,39 @@ endobj
 xref
 0 27
 0000000000 65535 f 
-0000020960 00000 n 
-0000022800 00000 n 
+0000021986 00000 n 
+0000023826 00000 n 
 0000000015 00000 n 
 0000000120 00000 n 
 0000005324 00000 n 
 0000005429 00000 n 
-0000010771 00000 n 
-0000010876 00000 n 
-0000016525 00000 n 
-0000016631 00000 n 
-0000021035 00000 n 
-0000021161 00000 n 
-0000021292 00000 n 
-0000021426 00000 n 
-0000021564 00000 n 
-0000021688 00000 n 
-0000021817 00000 n 
-0000021949 00000 n 
-0000022085 00000 n 
-0000022213 00000 n 
-0000022340 00000 n 
-0000022469 00000 n 
-0000022602 00000 n 
-0000022704 00000 n 
-0000023053 00000 n 
-0000023139 00000 n 
+0000011134 00000 n 
+0000011239 00000 n 
+0000016888 00000 n 
+0000016994 00000 n 
+0000022061 00000 n 
+0000022187 00000 n 
+0000022318 00000 n 
+0000022452 00000 n 
+0000022590 00000 n 
+0000022714 00000 n 
+0000022843 00000 n 
+0000022975 00000 n 
+0000023111 00000 n 
+0000023239 00000 n 
+0000023366 00000 n 
+0000023495 00000 n 
+0000023628 00000 n 
+0000023730 00000 n 
+0000024079 00000 n 
+0000024165 00000 n 
 trailer
 <<
 /Size 27
 /Root 26 0 R
 /Info 25 0 R
-/ID [ <C796FA9227B28E48BC2A16E618421E52> <C796FA9227B28E48BC2A16E618421E52> ]
+/ID [ <DF1EA9ADC54E92E86D31B609405FD1CF> <DF1EA9ADC54E92E86D31B609405FD1CF> ]
 >>
 startxref
-23243
+24269
 %%EOF
