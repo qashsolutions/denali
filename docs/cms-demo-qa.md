@@ -76,7 +76,7 @@ AWS Secrets Manager, encrypted at rest, accessed only by the ECS task role via I
 
 **7. How your application will store and secure the enrollee's authorization token**
 
-OAuth tokens are stored in the ehr_connections table with app-layer AES-256-GCM encryption on top of RDS encryption. Tokens are scoped per-user and deleted on disconnect or account deletion. The encryption key is stored in AWS Secrets Manager. Tokens are never logged.
+OAuth tokens are stored in the ehr_connections table with app-layer AES-256-GCM encryption on top of RDS encryption. Tokens are scoped per-user and deleted on disconnect or account deletion. The encryption key is stored in AWS Secrets Manager. Tokens are never logged. Access tokens are refreshed silently - the user never re-authenticates for day-to-day use. When the 13-month CMS authorization window expires, the connection is marked expired and the user sees the Connect Medicare flow again. We never store or retry credentials beyond what CMS grants.
 
 **8. The lifecycle of claims data as it moves through your application**
 

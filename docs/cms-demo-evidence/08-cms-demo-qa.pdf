@@ -305,7 +305,7 @@ endobj
 endobj
 6 0 obj
 <<
-/Length 5653
+/Length 5707
 >>
 stream
 0.6 w
@@ -600,7 +600,7 @@ BT
 11.5 TL
 0 g
 64. 78. Td
-(stored in AWS Secrets Manager. Tokens are never logged.) Tj
+(stored in AWS Secrets Manager. Tokens are never logged. Access tokens are refreshed silently - the user never) Tj
 ET
 BT
 /F1 8 Tf
@@ -621,300 +621,300 @@ endobj
 endobj
 8 0 obj
 <<
-/Length 5597
+/Length 5584
 >>
 stream
 0.4 w
 0.78 G
 BT
+/F1 10 Tf
+11.5 TL
+0 g
+64. 738. Td
+(re-authenticates for day-to-day use. When the 13-month CMS authorization window expires, the connection is) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+64. 725. Td
+(marked expired and the user sees the Connect Medicare flow again. We never store or retry credentials beyond) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+64. 712. Td
+(what CMS grants.) Tj
+ET
+BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 738. Td
+54. 689. Td
 (8. The lifecycle of claims data as it moves through your application) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 722. Td
+64. 673. Td
 (Raw FHIR bundles are fetched from the Blue Button API, processed in memory by 8 extractors \(conditions,) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 709. Td
+64. 660. Td
 (medications, screenings, coverage, providers, hospitalizations, DME, hospice\), and discarded. Raw bundles are) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 696. Td
+64. 647. Td
 (never stored. Transformed summaries are cached in PostgreSQL \(RDS AES-256\). The cache refreshes every) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 683. Td
+64. 634. Td
 (24 hours. Data is deleted on disconnect or account deletion. When the AI consent toggle is ON, the transformed) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 670. Td
+64. 621. Td
 (summaries are sent to Claude via AWS Bedrock — conditions, medications \(detailed for diabetes/obesity,) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 657. Td
+64. 608. Td
 (count-only for others\), coverage, and recent claims.) Tj
 ET
 0.78 G
 0.4 w
-54. 630. m
-558. 630. l
+54. 581. m
+558. 581. l
 S
 BT
 /F2 13 Tf
 14.9499999999999993 TL
 0 g
-54. 616. Td
+54. 567. Td
 (Section 3 — We Will Assess) Tj
 ET
 BT
 /F3 9.5 Tf
 10.9249999999999989 TL
 0 g
-54. 597. Td
+54. 548. Td
 (The four criteria CMS said they would evaluate against while watching the demo.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 575. Td
+54. 526. Td
 (1. Is it clear to the Medicare enrollee what their data is being used for?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 559. Td
+64. 510. Td
 (Yes. The Connect Medicare page explains data usage before authorization. Three consent toggles in Settings) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 546. Td
+64. 497. Td
 (each describe their purpose in plain English. The AI toggle specifically discloses "This data is sent to Anthropic's) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 533. Td
+64. 484. Td
 (Claude AI to generate personalized guidance." Every AI response is labeled "AI-generated · May contain errors ·) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 520. Td
+64. 471. Td
 (Not medical advice.") Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 497. Td
+54. 448. Td
 (2. Does the explanation occur prior to authorization or during the process?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 481. Td
+64. 432. Td
 (Prior. The Connect Medicare page shows a 3-step explainer, "read-only access" language, "Your data stays) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 468. Td
+64. 419. Td
 (private and encrypted," and the CMS attribution notice — all before the user clicks "Connect Medicare" and is) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 455. Td
+64. 406. Td
 (redirected to Medicare.gov.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 432. Td
+54. 383. Td
 (3. Are your privacy policy and terms of service easily accessible?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 416. Td
+64. 367. Td
 (Yes. Linked in the footer on every page. Linked on the signup page before any data entry. Linked on the) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 403. Td
+64. 354. Td
 (Connect Medicare page. Both are publicly accessible without authentication.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 380. Td
+54. 331. Td
 (4. Is it clear to the user that their Medicare data will not be sold?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 364. Td
+64. 315. Td
 (Yes. Privacy Policy §5 states "We do not sell your personal information or health data" and §14 \(CCPA/CPRA) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 351. Td
+64. 302. Td
 (Rights\) reaffirms this. Both lines are referenced by line number in our internal audit.) Tj
 ET
 0.78 G
 0.4 w
-54. 324. m
-558. 324. l
+54. 275. m
+558. 275. l
 S
 BT
 /F2 13 Tf
 14.9499999999999993 TL
 0 g
-54. 310. Td
+54. 261. Td
 (Section 4 — Additional Q&A) Tj
 ET
 BT
 /F3 9.5 Tf
 10.9249999999999989 TL
 0 g
-54. 291. Td
+54. 242. Td
 (Likely follow-up questions not on the checklist but within the scope of the review.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 269. Td
+54. 220. Td
 (Q: What is the CMS attribution notice and where does it appear?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 253. Td
+64. 204. Td
 (The exact verbatim text — "This product uses the Blue Button APIs but is not endorsed or certified by the) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 240. Td
+64. 191. Td
 (Centers for Medicare & Medicaid Services or the U.S. Department of Health and Human Services" — appears in) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 227. Td
+64. 178. Td
 (9 locations: Terms §14, site footer, Connect Medicare page, CMS Pledge component, health report view, health) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 214. Td
+64. 165. Td
 (page, appeal letter modal \(2 locations\), and appeal PDF.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 191. Td
+54. 142. Td
 (Q: How does the appeal letter feature work?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 175. Td
+64. 126. Td
 (The user describes the denial in plain English. The AI \(Opus 4.6\) identifies the denial type, looks up ICD-10/CPT) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 162. Td
+64. 113. Td
 (codes, searches Medicare coverage policies \(LCDs/NCDs\), pulls PubMed clinical evidence, verifies the provider) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 149. Td
+64. 100. Td
 (via the NPI Registry, and generates a formal Level 1/2/3 appeal letter. The letter uses blank lines for sensitive) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 136. Td
+64. 87. Td
 (fields \(MBI, claim number, date of service\) that the user fills in by hand. Every letter carries the prominent) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 123. Td
+64. 74. Td
 (disclaimer: "This is a DRAFT letter generated by AI. It is NOT legal advice.") Tj
-ET
-BT
-/F2 10.5 Tf
-12.0749999999999993 TL
-0 g
-54. 100. Td
-(Q: What audit trail exists?) Tj
-ET
-BT
-/F1 10 Tf
-11.5 TL
-0 g
-64. 84. Td
-(An append-only audit_logs table with REVOKE UPDATE/DELETE/TRUNCATE applied at the database level.) Tj
-ET
-BT
-/F1 10 Tf
-11.5 TL
-0 g
-64. 71. Td
-(Logged events include login, logout, FHIR data access, appeal generation, appeal outcomes, and account) Tj
 ET
 BT
 /F1 8 Tf
@@ -935,274 +935,295 @@ endobj
 endobj
 10 0 obj
 <<
-/Length 4939
+/Length 5318
 >>
 stream
 0.4 w
 0.78 G
 BT
+/F2 10.5 Tf
+12.0749999999999993 TL
+0 g
+54. 738. Td
+(Q: What audit trail exists?) Tj
+ET
+BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 738. Td
+64. 722. Td
+(An append-only audit_logs table with REVOKE UPDATE/DELETE/TRUNCATE applied at the database level.) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+64. 709. Td
+(Logged events include login, logout, FHIR data access, appeal generation, appeal outcomes, and account) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+64. 696. Td
 (deletion. Audit logs survive account deletion with user_id set to NULL per HIPAA 6-year retention.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 715. Td
+54. 673. Td
 (Q: Is payment processing live?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 699. Td
+64. 657. Td
 (Stripe is integrated in test mode — the full subscription flow works \(plan selection, upgrade, cancellation\) but no) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 686. Td
+64. 644. Td
 (real charges are processed. We will switch to Stripe production mode after receiving CMS production access) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 673. Td
+64. 631. Td
 (approval. Stripe is PCI DSS certified.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 650. Td
+54. 608. Td
 (Q: What is the readability level of your privacy policy?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 634. Td
+64. 592. Td
 (We ran Flesch-Kincaid analysis using textstat. Prose sections score grade 9-13 after our simplification pass.) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 621. Td
+64. 579. Td
 (The aggregate score is higher \(15.4\) because bullet-list formatting inflates the tool's calculation. The actual) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 608. Td
+64. 566. Td
 (prose content is accessible to a Medicare audience.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 585. Td
+54. 543. Td
 (Q: Do you use "Blue Button" in any user-facing text?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 569. Td
+64. 527. Td
 (Only in the CMS-mandated attribution notice. All other references use "Medicare" - "Connect Medicare,") Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 556. Td
+64. 514. Td
 ("Medicare data," "Medicare account." We removed "Blue Button" from email footers, PDF footers, and AI system) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 543. Td
+64. 501. Td
 (prompts during our compliance audit.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 520. Td
+54. 478. Td
 (Q: What happens if your company is sold?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 504. Td
+64. 462. Td
 (Privacy Policy §5 requires us to notify CMS as soon as possible. Our access to Medicare data is tied to our) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 491. Td
+64. 449. Td
 (specific company - if ownership changes, CMS must review and re-approve the new owner. Users are notified) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 478. Td
+64. 436. Td
 (of any ownership change that could affect their data.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 455. Td
+54. 413. Td
 (Q: How do you handle a data breach?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 439. Td
+64. 397. Td
 (We follow the FTC Health Breach Notification Rule \(16 CFR Part 318\) and the HITECH Act. Affected users are) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 426. Td
+64. 384. Td
 (notified within 60 days via email explaining what happened, what data was involved, and steps they can take -) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 413. Td
+64. 371. Td
 (including checking Medicare Summary Notices for unfamiliar claims, calling 1-800-MEDICARE if they suspect) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 400. Td
+64. 358. Td
 (misuse, and reviewing their credit report. CMS is notified at the earliest practicable time.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 377. Td
+54. 335. Td
 (Q: What BAAs do you have and with whom?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 361. Td
+64. 319. Td
 (AWS BAA signed February 25, 2026, covering RDS \(database\), ECS/Fargate \(hosting\), Bedrock \(AI) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 348. Td
+64. 306. Td
 (processing\), and SES \(email\). Stripe is PCI DSS certified for payment processing. No other vendors handle) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 335. Td
+64. 293. Td
 (Medicare data.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 312. Td
+54. 270. Td
 (Q: What data does the AI actually see?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 296. Td
+64. 254. Td
 (When the health data consent toggle is ON, Claude receives: patient age and gender, active coverage types,) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 283. Td
+64. 241. Td
 (recent claims \(top 5 with procedure/diagnosis codes and amounts\), diabetes and obesity diagnoses with ICD-10) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 270. Td
+64. 228. Td
 (codes, diabetes and obesity medications with details, a count-only summary of other medications \(no names\),) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 257. Td
+64. 215. Td
 (screening dates and overdue flags, and provider specialties. It never sees names, DOB, addresses, MBI, or raw) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 244. Td
+64. 202. Td
 (FHIR bundles.) Tj
 ET
 BT
 /F2 10.5 Tf
 12.0749999999999993 TL
 0 g
-54. 221. Td
+54. 179. Td
 (Q: How do you demonstrate the opt-out mechanism during the demo?) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 205. Td
+64. 163. Td
 (We demonstrate with a Plus-tier or Unlimited-tier account so the toggle switches render. Each toggle reads the) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 192. Td
+64. 150. Td
 (user's alert_preferences row from the database before every email send. If the toggle is OFF - or the row does) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 179. Td
+64. 137. Td
 (not exist, since we default to OFF per our opt-in policy - the alert engine skips that user for that alert type and no) Tj
 ET
 BT
 /F1 10 Tf
 11.5 TL
 0 g
-64. 166. Td
+64. 124. Td
 (email is sent.) Tj
 ET
 0.78 G
 0.4 w
-54. 139. m
-558. 139. l
+54. 97. m
+558. 97. l
 S
 BT
 /F1 8 Tf
@@ -1383,7 +1404,7 @@ endobj
 25 0 obj
 <<
 /Producer (jsPDF 4.2.1)
-/CreationDate (D:20260416095903-05'00')
+/CreationDate (D:20260416112217-05'00')
 >>
 endobj
 26 0 obj
@@ -1397,39 +1418,39 @@ endobj
 xref
 0 27
 0000000000 65535 f 
-0000021986 00000 n 
-0000023826 00000 n 
+0000022406 00000 n 
+0000024246 00000 n 
 0000000015 00000 n 
 0000000120 00000 n 
 0000005324 00000 n 
 0000005429 00000 n 
-0000011134 00000 n 
-0000011239 00000 n 
-0000016888 00000 n 
-0000016994 00000 n 
-0000022061 00000 n 
-0000022187 00000 n 
-0000022318 00000 n 
-0000022452 00000 n 
-0000022590 00000 n 
-0000022714 00000 n 
-0000022843 00000 n 
-0000022975 00000 n 
-0000023111 00000 n 
-0000023239 00000 n 
-0000023366 00000 n 
-0000023495 00000 n 
-0000023628 00000 n 
-0000023730 00000 n 
-0000024079 00000 n 
-0000024165 00000 n 
+0000011188 00000 n 
+0000011293 00000 n 
+0000016929 00000 n 
+0000017035 00000 n 
+0000022481 00000 n 
+0000022607 00000 n 
+0000022738 00000 n 
+0000022872 00000 n 
+0000023010 00000 n 
+0000023134 00000 n 
+0000023263 00000 n 
+0000023395 00000 n 
+0000023531 00000 n 
+0000023659 00000 n 
+0000023786 00000 n 
+0000023915 00000 n 
+0000024048 00000 n 
+0000024150 00000 n 
+0000024499 00000 n 
+0000024585 00000 n 
 trailer
 <<
 /Size 27
 /Root 26 0 R
 /Info 25 0 R
-/ID [ <DF1EA9ADC54E92E86D31B609405FD1CF> <DF1EA9ADC54E92E86D31B609405FD1CF> ]
+/ID [ <FE1CF4B78E2DF3B0D58D14E171D54896> <FE1CF4B78E2DF3B0D58D14E171D54896> ]
 >>
 startxref
-24269
+24689
 %%EOF
