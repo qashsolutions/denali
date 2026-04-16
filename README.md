@@ -1,48 +1,54 @@
-# denali.health — Medicare Claims Simplified
+# Denali Health — Medicare Coverage Intelligence
 
-A conversational assistant that helps Medicare patients:
+A conversational AI assistant that helps Medicare patients understand
+their coverage, track diabetes and obesity care, and fight claim denials
+with evidence-based appeal letters.
 
-1. Understand what Medicare requires to approve a service
-2. Know what to ask their doctor to document
-3. If denied — build an appeal with Medicare policy citations and clinical evidence
+## What It Does
 
-**Key Insight:** Proactive denial prevention, not reactive appeals. That's a much better value prop for patients.
+1. **Coverage Guidance** — Answers Medicare coverage questions in plain
+   English using the patient's own claims data
+2. **Diabetes & Obesity Tracking** — Monitors A1C screenings, medications,
+   refill gaps, and preventive care from Medicare claims
+3. **Appeal Letters** — Generates formal appeal letters with ICD-10/CPT
+   codes, LCD/NCD policy citations, and PubMed clinical evidence
+4. **Proactive Alerts** — Notifies patients of upcoming appeal deadlines,
+   medication refill gaps, and new claim denials
+
+## Technology Stack
+
+| Component | Technology |
+|-----------|------------|
+| Frontend | Next.js 16, React 19, TypeScript strict |
+| Hosting | AWS ECS Fargate |
+| Database | PostgreSQL 16.9 on AWS RDS (AES-256) |
+| AI | Claude Sonnet 4.6 + Opus 4.6 via AWS Bedrock |
+| Auth | AWS Cognito + SES (OTP, HIPAA 30-min timeout) |
+| Payments | Stripe (PCI DSS certified) |
+| Email | AWS SES (BAA signed Feb 25, 2026) |
+| Data Sources | Blue Button 2.0 API (FHIR R4), ICD-10, CPT, NPI Registry, NCD/LCD, PubMed |
+
+## Key Design Principles
+
+| Principle | Implementation |
+|-----------|----------------|
+| Privacy by Default | All consent toggles OFF, no raw FHIR stored, PHI never logged |
+| Minimum Necessary | AI sees only relevant transformed data, not full claims |
+| User Control | Disconnect Medicare and delete account with confirmation dialogs |
+| Transparency | "AI-generated - Not medical advice" on every response |
+| HIPAA Compliant | BAA with AWS, append-only audit logs, AES-256-GCM token encryption |
+
+## CMS Blue Button 2.0
+
+This product uses the Blue Button APIs but is not endorsed or certified
+by the Centers for Medicare & Medicaid Services or the U.S. Department
+of Health and Human Services.
+
+## Documentation
+
+Project documentation is maintained in CLAUDE.md. CMS demo evidence
+documents are in docs/cms-demo-evidence/.
 
 ---
 
-## Documentation Index
-
-| File | Contents |
-|------|----------|
-| [01-scope.md](01-scope.md) | Locked scope, data inventory, payer gap analysis |
-| [02-user-flow.md](02-user-flow.md) | Patient flow, use case, outputs |
-| [03-architecture.md](03-architecture.md) | High-level architecture, components, tool layer |
-| [04-skills.md](04-skills.md) | Skills directory, registry, all skill definitions |
-| [05-database.md](05-database.md) | Supabase tables, RLS, schema |
-| [06-business.md](06-business.md) | Pricing, auth, gating logic |
-| [07-ui.md](07-ui.md) | UI/UX principles, mockups |
-| [08-learning.md](08-learning.md) | Agentic learning system, feedback loops |
-| [09-app-tree.md](09-app-tree.md) | **Complete app tree** - screens, flows, DB, functions |
-| [sql/001-schema.sql](sql/001-schema.sql) | Full PostgreSQL schema (16 tables, 17 functions) |
-
----
-
-## Core Principles
-
-| Principle | What It Means |
-|-----------|---------------|
-| Modular | Each function is a standalone component — swap, upgrade, reuse |
-| Componentized | UI and logic separated, reusable across screens |
-| 100% Agentic | Claude drives the conversation, decision-making, and learning — not rigid forms |
-| Self-Learning | Every user interaction improves the system over time |
-| Medicare Only | No commercial payer dependency — NCDs/LCDs are our source of truth |
-| Simple English | Patient talks like a human, not a coder or biller |
-
----
-
-## Quick Reference
-
-- **Target User:** Medicare patients & caregivers
-- **Payer:** Original Medicare only (not MA)
-- **Backend:** Supabase + Edge functions + Claude
-- **Data Sources:** ICD-10, CPT (dev), NPI, NCD/LCD, SAD list, PubMed
+Qash Solutions Inc - 2026
