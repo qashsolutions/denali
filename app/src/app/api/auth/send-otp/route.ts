@@ -39,7 +39,7 @@ async function sendOtpEmail(email: string, otp: string): Promise<void> {
   });
 
   if (!result.messageId) {
-    console.error("[send-otp] SES email failed for:", email);
+    console.error("[send-otp] SES email failed (no messageId returned)");
   }
 }
 

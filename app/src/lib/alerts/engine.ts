@@ -133,7 +133,7 @@ export async function processAlerts(dryRun: boolean = false): Promise<ProcessRes
           });
 
           if (!emailResult.messageId) {
-            console.error(`[Alerts] SES send failed for ${user.email}`);
+            console.error(`[Alerts] SES send failed for user ${user.id}`);
             await logAlertSend(user.id, candidate, user.email, null, "failed");
             result.errors++;
             result.details.push({
@@ -162,7 +162,7 @@ export async function processAlerts(dryRun: boolean = false): Promise<ProcessRes
             status: "sent",
           });
         } catch (err) {
-          console.error(`[Alerts] Send error for ${user.email}:`, err);
+          console.error(`[Alerts] Send error for user ${user.id}:`, err instanceof Error ? err.message : "unknown error");
           result.errors++;
           result.details.push({
             userId: user.id,

@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
   let sent = 0;
   let failed = 0;
-  const errors: Array<{ email: string; error: string }> = [];
+  const errors: Array<{ email: string; error: string } | { userId: string; error: string }> = [];
 
   for (const user of users.rows) {
     try {
@@ -84,16 +84,16 @@ export async function POST(request: NextRequest) {
       });
 
       if (!result.messageId) {
-        console.error(`[admin/email/policy-change] Failed for ${user.email}`);
+        console.error(`[admin/email/policy-change] Failed for user ${user.id}`);
         failed++;
         errors.push({ email: user.email, error: "SES send failed" });
       } else {
         sent++;
       }
     } catch (err) {
-      console.error(`[admin/email/policy-change] Error for ${user.email}:`, err);
+      console.error(`[admin/email/policy-change] Error for user ${user.id}:`, err instanceof Error ? err.message : "unknown error");
       failed++;
-      errors.push({ email: user.email, error: String(err) });
+      errors.push({ userId: user.id, error: err instanceof Error ? err.message : "unknown error" });
     }
 
     // Small delay to avoid SES rate limits
