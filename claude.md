@@ -138,6 +138,26 @@ Commits today: `077f1e8`, `4f2b7bf`, `1085008`, `e661b79`, `eb4f5f6`, `2b7826a`,
 
 Demo materials: `docs/cms-demo-evidence/08-cms-demo-qa.pdf` (22 Q&As)
 
+## Session Summary — 2026-04-15/16 (Pre-Demo Final Prep)
+
+- Alert preferences default changed from opt-out to opt-in (engine.ts, preferences/route.ts, useAlertPreferences.ts) — commit `1e33970`
+- Outcome followup emails now gated behind hasAnyAlertEnabled check
+- Typecheck hook patched for macOS (missing timeout binary fallback)
+- CMS demo Q&A PDF updated to v3: 25 Q&As across 4 sections, aligned to exact CMS email checklist (20 items + 5 additional)
+- Email alerts UI verified across 3 tiers: admin (Unlimited badges), trial (Plus badges + upgrade CTA), Plus (interactive toggles)
+- Token refresh behavior documented: silent refresh within 13-month window, graceful degradation to connect flow after expiry
+- Stripe test mode: admin@myguide.health upgraded to Plus ($20) for demo purposes
+- Active opt-in checkbox re-verified in production
+- All 3 consent toggles (Privacy & Data) verified OFF by default
+
+Demo accounts prepared:
+- Admin account (Unlimited) — health data, appeals, full access
+- Plus account ($20/month) — email alert toggles visible
+
+Final checklist: 20/20 CMS items verified, 25 Q&As prepared, Q&A PDF at `docs/cms-demo-evidence/08-cms-demo-qa.pdf`
+
+Commits this session: `1e33970` (alert opt-in), `c3d0b26` (Q&A restructure), `d310232` (arrow rendering fix), `8a67393` (5 additional Q&As), `0dd6eb8` (Section 1 Item 8 + demo opt-out Q&A), `d2ec188` (token refresh in Section 2 Item 7)
+
 ## Table of Contents
 
 - [Quick Reference](#quick-reference)

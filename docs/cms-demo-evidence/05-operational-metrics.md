@@ -41,3 +41,4 @@ Post-hardening session metrics confirming system health.
 | `abb3482` | FHIR audit log semantics: success vs failure, 5-min dedup                   |
 | `2b7826a` | CMS compliance: Blue Button labeling, attribution, disconnect confirmation  |
 | `a81cd0c` | Privacy policy readability improvements                                     |
+| `1e33970` | Alert preferences default to OFF (opt-in) + outcome followup respects prefs |
