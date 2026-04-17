@@ -31,6 +31,18 @@
 
 > Medicare claims intelligence PWA. Claude is the brain — driving conversations, calling tools, synthesizing coverage guidance, and learning from interactions. Focus: **proactive denial prevention** through plain English.
 
+## Design Reference
+
+The product scope, guardrails architecture, safety triggers, pipeline
+design, and build sequencing are maintained in the design doc:
+
+`docs/design/denali-design-v1.1.md`
+
+This doc is the source of truth. When a Claude Code prompt conflicts
+with the doc, the doc wins — update the doc first if a change is
+genuinely intended. When making substantive changes, bump the version
+and add a dated changelog entry per Part 13 of the doc.
+
 ## Session Summary — 2026-04-12
 
 CMS Blue Button production access demo prep. All findings from prior hardening sessions verified. Additional compliance fixes:
