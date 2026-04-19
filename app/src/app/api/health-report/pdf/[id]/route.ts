@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { AUTH, SYSTEM } from "@/config/messages";
+import { DISCLAIMER_LONG } from "@/config/disclaimers";
 import type { HealthReport } from "@/lib/health-report";
 
 export async function GET(
@@ -71,6 +72,10 @@ function buildReportText(report: HealthReport): string {
   lines.push(
     `Generated: ${new Date(report.generatedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`,
   );
+  lines.push("");
+  lines.push("DISCLAIMER:");
+  lines.push(DISCLAIMER_LONG);
+  lines.push("───────────────────────────────────────────────────");
   lines.push("");
 
   // Patient Summary
@@ -214,8 +219,8 @@ function buildReportText(report: HealthReport): string {
     "This report was generated from Medicare claims data via the Medicare claims API.",
   );
   lines.push("Not endorsed or certified by CMS or HHS.");
-  lines.push("This is coverage guidance, not medical advice.");
-  lines.push("Always consult with your healthcare provider.");
+  lines.push("");
+  lines.push(DISCLAIMER_LONG);
   lines.push("═══════════════════════════════════════════════════");
 
   return lines.join("\n");

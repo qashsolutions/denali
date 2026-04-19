@@ -3,6 +3,7 @@
 import { useCallback, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { BRAND } from "@/config";
+import { DISCLAIMER_LONG } from "@/config/disclaimers";
 
 export interface ChecklistData {
   patientName?: string;
@@ -137,10 +138,7 @@ export function PrintableChecklist({
 
           {/* Footer */}
           <div className="border-t-2 border-black pt-4 text-xs text-gray-600 text-center">
-            <p>
-              This guidance is based on Medicare policies as of {data.generatedDate}.
-            </p>
-            <p>Your doctor makes the final decisions about your care.</p>
+            <p>{DISCLAIMER_LONG}</p>
             <p className="mt-2">Questions? Visit {BRAND.DOMAIN}</p>
           </div>
         </div>

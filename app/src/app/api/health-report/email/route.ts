@@ -10,6 +10,7 @@ import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
 import { AUTH, VALIDATION, SYSTEM } from "@/config/messages";
+import { DISCLAIMER_LONG } from "@/config/disclaimers";
 import type { HealthReport } from "@/lib/health-report";
 
 /** Escape HTML entities to prevent XSS in email content */
@@ -173,11 +174,15 @@ function buildEmailHtml(report: HealthReport, greeting: string): string {
   <p>${greeting}</p>
   <p>Attached is a summary of your Medicare health data, including conditions, medications, screenings, and personalized recommendations based on your claims history.</p>
 
+  <div style="border-left:3px solid #f59e0b;padding:12px 16px;background:#fffbeb;margin:16px 0;font-size:14px;color:#78350f;">
+    <strong>AI-Generated Content:</strong> ${DISCLAIMER_LONG}
+  </div>
+
   ${sections.join("")}
 
   <div style="margin-top:32px;padding-top:16px;border-top:1px solid #E8DFD3;font-size:12px;color:#666;">
     <p>Generated from Medicare claims data via the Medicare claims API. Not endorsed or certified by CMS or HHS.</p>
-    <p>This is coverage guidance, not medical advice. Always consult with your healthcare provider.</p>
+    <p>${DISCLAIMER_LONG}</p>
     <p>&copy; ${new Date().getFullYear()} Qash Solutions Inc — <a href="https://denali.health">denali.health</a></p>
   </div>
 </body>

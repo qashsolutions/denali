@@ -8,6 +8,7 @@ import { query } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import { getAuthUser } from "@/lib/auth-server";
 import { AUTH, VALIDATION, SYSTEM } from "@/config/messages";
+import { DISCLAIMER_LONG } from "@/config/disclaimers";
 
 /** Escape HTML entities to prevent XSS in email content */
 function escapeHtml(str: string): string {
@@ -112,6 +113,9 @@ function buildEmailHTML(checklist: ChecklistData): string {
       <table style="width: 100%; border-collapse: collapse; background: #f8fafc; border-radius: 8px; overflow: hidden;">${itemsHTML}</table>
       ${talkingPointsHTML}
       ${tipsHTML}
+      <div style="border-left: 3px solid #f59e0b; padding: 12px 16px; background: #fffbeb; margin: 24px 0 0 0; font-size: 14px; color: #78350f;">
+        <strong>AI-Generated Content:</strong> ${DISCLAIMER_LONG}
+      </div>
       <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0; text-align: center; color: #94a3b8; font-size: 14px;">
         <p>Print this checklist and bring it to your appointment.</p>
         <p style="margin-top: 16px;"><a href="https://denali.health" style="color: #3b82f6; text-decoration: none;">denali.health</a> — Medicare coverage guidance</p>
