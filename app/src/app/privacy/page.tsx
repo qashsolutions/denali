@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BRAND } from "@/config";
 import { LandingFooter } from "@/components/landing";
 
-const EFFECTIVE_DATE = "March 5, 2026";
+const EFFECTIVE_DATE = "April 18, 2026";
 
 const SECTIONS = [
   {
@@ -217,8 +217,24 @@ const SECTIONS = [
     ],
   },
   {
+    id: "ai-disclosure",
+    title: "12. Responsible Disclosure of AI Results",
+    paragraphs: [
+      `${BRAND.NAME} uses AI (Claude, via AWS Bedrock) to generate chat responses, appeal letters, health summary reports, and diabetes insights. AI output is not medical advice and may occasionally contain errors, omissions, or results that seem abnormal, unexpected, or concerning.`,
+      "If you receive an AI response that looks wrong, misleading, or concerning, please tell us so we can review and improve it. You can report it in two ways:",
+    ],
+    items: [
+      "Use the thumbs-down button below any chat response to flag it. You can add a short comment to explain what was wrong. This sends the response and your feedback directly to our review queue.",
+      "Email admin@denali.health with a description of the issue. Include the approximate date and time, what you asked, and what the AI returned (or a screenshot). Do not include your Medicare number, date of birth, or other sensitive identifiers — your email address is enough for us to follow up.",
+    ],
+    afterItems: [
+      "What we do with reports: We review every report, investigate the root cause, and use the findings to improve our AI prompts, safety guardrails, and tool behavior. If you included contact information, we will follow up with you once we have reviewed the report. Reports are logged and retained as part of our audit trail.",
+      "AI output from Denali is not a substitute for professional medical advice, diagnosis, or treatment. If an AI response raises an urgent clinical concern — for example, a symptom that might be serious or a medication issue — contact your healthcare provider right away. For medical emergencies, call 911 or go to the nearest emergency room.",
+    ],
+  },
+  {
     id: "cookies",
-    title: "12. Cookies & Local Storage",
+    title: "13. Cookies & Local Storage",
     items: [
       "Authentication cookies: Secure, httpOnly session cookies for login state",
       "PKCE cookies: Temporary httpOnly cookies during Medicare OAuth (cleared after authorization)",
@@ -229,7 +245,7 @@ const SECTIONS = [
   },
   {
     id: "your-rights",
-    title: "13. Your Rights",
+    title: "14. Your Rights",
     paragraphs: ["Depending on your jurisdiction, you may have the right to:"],
     items: [
       "Access: View all data we hold about you (conversation history, appeals, health data cache)",
@@ -244,14 +260,14 @@ const SECTIONS = [
   },
   {
     id: "children",
-    title: "14. Children's Privacy",
+    title: "15. Children's Privacy",
     paragraphs: [
       "Our Service is designed for Medicare beneficiaries (generally age 65+) and their caregivers. We do not knowingly collect information from children under 13. If you believe we have inadvertently collected such information, please contact us and we will delete it promptly.",
     ],
   },
   {
     id: "changes",
-    title: "15. Changes to This Policy",
+    title: "16. Changes to This Policy",
     paragraphs: [
       "We may update this Privacy Policy from time to time. For material changes, we will notify registered users via email at least 30 days before the new policy takes effect, with a summary of what changed.",
       "If changes are due to new CMS rules, we will tell you what changed and how it affects your Medicare data.",
@@ -260,7 +276,7 @@ const SECTIONS = [
   },
   {
     id: "contact",
-    title: "16. Contact Us",
+    title: "17. Contact Us",
     paragraphs: [
       "If you have questions about this Privacy Policy, your data, or your rights, you can:",
     ],
@@ -277,7 +293,7 @@ interface Section {
   content?: string;
   paragraphs?: string[];
   items?: string[];
-  afterItems?: string;
+  afterItems?: string | string[];
   afterLink?: { href: string; text: string };
   subsections?: {
     title: string;
@@ -320,11 +336,18 @@ function SectionBlock({ section }: { section: Section }) {
         </ul>
       )}
 
-      {section.afterItems && (
-        <p className="text-sm text-[var(--text-secondary)] leading-relaxed mb-2">
-          {section.afterItems}
-        </p>
-      )}
+      {section.afterItems &&
+        (Array.isArray(section.afterItems)
+          ? section.afterItems
+          : [section.afterItems]
+        ).map((p, i) => (
+          <p
+            key={i}
+            className="text-sm text-[var(--text-secondary)] leading-relaxed mb-2"
+          >
+            {p}
+          </p>
+        ))}
 
       {section.afterLink && (
         <Link
