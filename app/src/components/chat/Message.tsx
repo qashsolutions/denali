@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils";
 import { MarkdownContent } from "./MarkdownContent";
+import { DISCLAIMER_SHORT } from "@/config/disclaimers";
 
 export interface MessageProps {
   id: string;
@@ -91,7 +92,7 @@ export function Message({
         {!isUser && (
           <div className="flex items-center gap-1.5 mt-2 text-[10px] text-[var(--text-muted)]">
             <SparkleIcon className="w-3 h-3" />
-            <span>AI-generated · Not medical advice</span>
+            <span>{DISCLAIMER_SHORT}</span>
           </div>
         )}
 
