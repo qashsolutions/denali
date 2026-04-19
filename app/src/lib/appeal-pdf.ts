@@ -7,6 +7,7 @@
  */
 
 import jsPDF from "jspdf";
+import { DISCLAIMER_LONG } from "@/config/disclaimers";
 
 /**
  * Extract the formal letter portion from Claude's full response.
@@ -107,9 +108,30 @@ export function buildPDF(
     y += lineHeight;
   }
 
-  // --- Page 2: Instructions for the User ---
+  // --- Page 2: AI-Generated Disclaimer + Instructions for the User ---
   doc.addPage();
   y = margin;
+
+  // Disclaimer block — separated above/below by horizontal rules
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 18;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("AI-GENERATED DRAFT", margin, y);
+  y += 18;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  const disclaimerLines = doc.splitTextToSize(DISCLAIMER_LONG, lineWidth);
+  for (const line of disclaimerLines) {
+    doc.text(line, margin, y);
+    y += 12;
+  }
+  y += 6;
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 28;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);

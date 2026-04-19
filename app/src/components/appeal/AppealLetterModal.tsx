@@ -6,6 +6,7 @@ import { AppealGate } from "./AppealGate";
 import { MarkdownContent } from "@/components/chat/MarkdownContent";
 import { BRAND } from "@/config";
 import { extractLetterContent, getCleanLetter, buildPDF, calculateDeadlineInfo } from "@/lib/appeal-pdf";
+import { AIDisclaimer } from "@/components/health/AIDisclaimer";
 import type { AppealLetterData } from "@/hooks/useChat";
 
 interface AppealLetterModalProps {
@@ -96,6 +97,9 @@ export function AppealLetterModal({
 
           {/* Guidance content — scrollable */}
           <div className="p-6 space-y-4">
+            {/* AI disclaimer — informational guidance is AI-generated */}
+            <AIDisclaimer />
+
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
               <p className="text-sm font-medium text-amber-900 mb-1">Guidance Only</p>
               <p className="text-sm text-amber-800">
@@ -223,6 +227,11 @@ export function AppealLetterModal({
               </ul>
             </div>
           )}
+
+          {/* AI disclaimer — the draft letter below is AI-generated */}
+          <div className="border-b px-4 py-2">
+            <AIDisclaimer />
+          </div>
         </div>
 
         {/* Letter content — scrollable independently */}

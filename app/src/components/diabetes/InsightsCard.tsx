@@ -1,5 +1,7 @@
 "use client";
 
+import { DISCLAIMER_SHORT } from "@/config/disclaimers";
+
 interface Insight {
   summary: string;
   recommendations: string[];
@@ -69,20 +71,25 @@ export function InsightsCard({ insight, isLoading, onRefresh }: InsightsCardProp
           </div>
         )}
 
-        <div className="flex items-center justify-between text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
-          <span>
-            AI-generated &middot; Updated{" "}
-            {new Date(insight.generated_at).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-            })}
-          </span>
-          <button
-            onClick={onRefresh}
-            className="text-[var(--accent-primary)] hover:underline"
-          >
-            Refresh
-          </button>
+        <div className="pt-2 border-t border-[var(--border)] space-y-1">
+          <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
+            <span>
+              Updated{" "}
+              {new Date(insight.generated_at).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+              })}
+            </span>
+            <button
+              onClick={onRefresh}
+              className="text-[var(--accent-primary)] hover:underline"
+            >
+              Refresh
+            </button>
+          </div>
+          <p className="text-xs text-[var(--text-muted)]">
+            {DISCLAIMER_SHORT}
+          </p>
         </div>
       </div>
     </section>
