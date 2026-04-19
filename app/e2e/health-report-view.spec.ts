@@ -111,7 +111,7 @@ test.describe("Health Report — View Renders Sections (#41)", () => {
 
     // Disclaimer footer (use .first() — text also appears in landing footer)
     await expect(
-      page.getByText("This is coverage guidance only, not medical advice")
+      page.getByText("This content is AI-generated and can have errors")
     ).toBeVisible();
   });
 });

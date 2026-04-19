@@ -11,6 +11,7 @@ import { useDiabetesSnapshots } from "@/hooks/useDiabetesSnapshots";
 import { useDiabetesLog } from "@/hooks/useDiabetesLog";
 import { useDiabetesInsights } from "@/hooks/useDiabetesInsights";
 import { PreDiabetesRiskCard } from "@/components/health";
+import { AIDisclaimer } from "@/components/health/AIDisclaimer";
 import {
   A1CTrendChart,
   ScreeningReminders,
@@ -59,6 +60,9 @@ export default function DiabetesPage() {
           </p>
         </div>
       </div>
+
+      {/* AI disclaimer — shown whenever connected (AI content may render below) */}
+      {isConnected && <AIDisclaimer />}
 
       {/* Risk Alerts (connected + alerts exist) */}
       {isConnected && !isLoading && classification && classification !== "none" && (

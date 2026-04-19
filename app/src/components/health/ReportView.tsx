@@ -9,6 +9,8 @@
  */
 
 import type { HealthReport } from "@/lib/health-report";
+import { AIDisclaimer } from "@/components/health/AIDisclaimer";
+import { DISCLAIMER_LONG } from "@/config/disclaimers";
 
 interface ReportViewProps {
   report: HealthReport;
@@ -42,6 +44,9 @@ export function ReportView({ report, expiresAt, isPublic }: ReportViewProps) {
           </p>
         )}
       </header>
+
+      {/* AI disclaimer — report body is AI-generated */}
+      <AIDisclaimer />
 
       {/* Patient Summary */}
       <section className="flex gap-4 flex-wrap text-sm">
@@ -296,9 +301,7 @@ export function ReportView({ report, expiresAt, isPublic }: ReportViewProps) {
         <p>
           Generated from Medicare claims data. This product uses the Blue Button APIs but is not endorsed or certified by CMS or HHS.
         </p>
-        <p>
-          This is coverage guidance only, not medical advice. Always consult with your healthcare provider for medical decisions.
-        </p>
+        <p>{DISCLAIMER_LONG}</p>
         {isPublic && (
           <p className="mt-4">
             <a href="https://denali.health" className="text-[var(--accent-primary)] hover:underline">
