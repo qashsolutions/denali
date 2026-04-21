@@ -12,6 +12,7 @@ import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
+import { AUTH, VALIDATION } from "@/config/messages";
 
 interface PolicyChangeRequest {
   effectiveDate: string;
@@ -35,24 +36,24 @@ async function requireAdmin(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin(request);
   if (!admin) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: AUTH.ADMIN_ONLY }, { status: 403 });
   }
 
   const body = await request.json().catch(() => null) as PolicyChangeRequest | null;
   if (!body) {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: VALIDATION.INVALID_INPUT }, { status: 400 });
   }
 
   const { effectiveDate, summary, changes, cmsRelated, dryRun } = body;
 
   if (!effectiveDate || typeof effectiveDate !== "string") {
-    return NextResponse.json({ error: "effectiveDate is required" }, { status: 400 });
+    return NextResponse.json({ error: VALIDATION.POLICY_DATE_REQUIRED }, { status: 400 });
   }
   if (!summary || typeof summary !== "string") {
-    return NextResponse.json({ error: "summary is required" }, { status: 400 });
+    return NextResponse.json({ error: VALIDATION.POLICY_SUMMARY_REQUIRED }, { status: 400 });
   }
   if (!Array.isArray(changes) || changes.length === 0) {
-    return NextResponse.json({ error: "changes must be a non-empty array" }, { status: 400 });
+    return NextResponse.json({ error: VALIDATION.POLICY_CHANGES_REQUIRED }, { status: 400 });
   }
 
   // Get all registered users
@@ -77,7 +78,6 @@ export async function POST(request: NextRequest) {
   for (const user of users.rows) {
     try {
       const result = await sendEmail({
-        from: "denali.health <no-reply@denali.health>",
         to: [user.email],
         subject: `Policy Update Notice — Effective ${effectiveDate}`,
         html,

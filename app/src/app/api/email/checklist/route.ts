@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
     to: [email],
     subject,
     html,
-    from: "denali.health <no-reply@denali.health>",
   });
 
   if (!result.messageId) {

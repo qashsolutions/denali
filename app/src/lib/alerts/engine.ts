@@ -126,7 +126,6 @@ export async function processAlerts(dryRun: boolean = false): Promise<ProcessRes
 
         try {
           const emailResult = await sendEmail({
-            from: "denali.health <no-reply@denali.health>",
             to: [user.email],
             subject,
             html,
