@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BRAND } from "@/config";
 import { LandingFooter } from "@/components/landing";
 
-const EFFECTIVE_DATE = "April 18, 2026";
+const EFFECTIVE_DATE = "April 21, 2026";
 
 const SECTIONS = [
   {
@@ -200,25 +200,8 @@ const SECTIONS = [
     ],
   },
   {
-    id: "cms-framework",
-    title: "11. CMS Interoperability Framework",
-    paragraphs: [
-      "We are part of the CMS Health Technology Ecosystem. Our app is listed under two categories: Conversational AI and Diabetes & Obesity Prevention. As part of this framework, we commit to:",
-    ],
-    items: [
-      "Supporting patient identity verification through CMS-approved services (Medicare OAuth with IAL2/AAL2)",
-      "Maintaining transparent audit logs of all data access",
-      "Honoring patient consent preferences across all data operations",
-      "Including request purpose codes on all health data queries",
-      "Providing a 14-day free trial for Medicare beneficiaries",
-      "Making our application available for CMS review and directory listing",
-      "Clearly marking all AI-generated content and distinguishing it from clinical guidance",
-      "Using 'Medicare' as the data source name in all user-facing communications, consistent with CMS guidance",
-    ],
-  },
-  {
     id: "ai-disclosure",
-    title: "12. Responsible Disclosure of AI Results",
+    title: "11. Responsible Disclosure of AI Results",
     paragraphs: [
       `${BRAND.NAME} uses AI (Claude, via AWS Bedrock) to generate chat responses, appeal letters, health summary reports, and diabetes insights. AI output is not medical advice and may occasionally contain errors, omissions, or results that seem abnormal, unexpected, or concerning.`,
       "If you receive an AI response that looks wrong, misleading, or concerning, please tell us so we can review and improve it. You can report it in two ways:",
@@ -234,7 +217,7 @@ const SECTIONS = [
   },
   {
     id: "cookies",
-    title: "13. Cookies & Local Storage",
+    title: "12. Cookies & Local Storage",
     items: [
       "Authentication cookies: Secure, httpOnly session cookies for login state",
       "PKCE cookies: Temporary httpOnly cookies during Medicare OAuth (cleared after authorization)",
@@ -245,7 +228,7 @@ const SECTIONS = [
   },
   {
     id: "your-rights",
-    title: "14. Your Rights",
+    title: "13. Your Rights",
     paragraphs: ["Depending on your jurisdiction, you may have the right to:"],
     items: [
       "Access: View all data we hold about you (conversation history, appeals, health data cache)",
@@ -260,14 +243,14 @@ const SECTIONS = [
   },
   {
     id: "children",
-    title: "15. Children's Privacy",
+    title: "14. Children's Privacy",
     paragraphs: [
       "Our Service is designed for Medicare beneficiaries (generally age 65+) and their caregivers. We do not knowingly collect information from children under 13. If you believe we have inadvertently collected such information, please contact us and we will delete it promptly.",
     ],
   },
   {
     id: "changes",
-    title: "16. Changes to This Policy",
+    title: "15. Changes to This Policy",
     paragraphs: [
       "We may update this Privacy Policy from time to time. For material changes, we will notify registered users via email at least 30 days before the new policy takes effect, with a summary of what changed.",
       "If changes are due to new CMS rules, we will tell you what changed and how it affects your Medicare data.",
@@ -276,7 +259,7 @@ const SECTIONS = [
   },
   {
     id: "contact",
-    title: "17. Contact Us",
+    title: "16. Contact Us",
     paragraphs: [
       "If you have questions about this Privacy Policy, your data, or your rights, you can:",
     ],
