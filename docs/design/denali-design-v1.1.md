@@ -2,7 +2,7 @@
 
 **Master reference for product scope, guardrails, safety, pipeline architecture, and sequencing**
 
-*Version 1.1 — April 17, 2026*
+*Version 1.2 — April 22, 2026*
 *Status: Living document. Every Claude Code prompt after this references this doc.*
 *Prior basis: CMS demo Q&A (Apr 15), discovery inventory (Apr 17), research memos A and B (Apr 17)*
 *Related repo reference: also referenced in CLAUDE.md*
@@ -350,7 +350,7 @@ Sequenced by dependency, not by calendar. Timing is decided by the operator.
 Sequenced by severity. Integrated into build order above.
 
 ### Critical
-1. ~~No DOB collected~~ → resolved by `birth_year` collection
+1. No DOB collected — **STILL OPEN** (`birth_year` column not yet added; planned in Foundation Stage 1)
 2. No prompt injection defense → Foundation (Layer 1)
 3. No output filtering → Scope wave 2 (Layer 4)
 4. No mental health / self-harm detection → Foundation (Layer 5)
@@ -362,13 +362,18 @@ Sequenced by severity. Integrated into build order above.
 8. No body-size limit on chat text → Foundation (quick fix)
 9. Off-topic relies on prompt → Foundation (Layer 1 scope enforcement)
 10. `diabetes_snapshots` misleading name → Foundation (rename or populate via Apple Health)
+16. Rate-limit check fail-open on RDS error in `/api/chat` — try/catch around `check_and_increment_chat` and `check_weekly_frequency` swallows errors and lets requests through unlimited. Comment says intentional, but means RDS outage = no rate limiting. Discovered 2026-04-22.
+17. Appeal credit enforcement is client-only on server save path — `decrement_appeal_credit` returns -1 when balance is 0 but doesn't abort the transaction; appeal INSERT succeeds regardless. Gating enforced by `AppealGate.tsx` UI only. Direct API caller bypasses enforcement. Discovered 2026-04-22.
 
 ### Cleanup
 11. `learning_queue` no consumer → Later extensions (wire up or drop)
 12. Dormant TOTP code → Later extensions (re-enable or remove)
 13. Phone OTP columns unused → Later extensions (remove if not wiring SMS)
-14. `hipaa-security-reviewer` has write access → Foundation (fix agent permissions)
+14. `hipaa-security-reviewer` has write access — **STILL OPEN** (investigation planned in Foundation Stage 2)
 15. Appeal letter hash not audit-logged → Scope wave 2 (extend audit metadata)
+18. `scripts/seed-blog-posts.sql` is a duplicate of `scripts/migrate-blog.sql` without ON CONFLICT guards; never include in apply order.
+19. `scripts/migrate-appeal-levels.sql` has obsolete `CREATE OR REPLACE FUNCTION` that conflicts with prod-evolved signature; header comment marks it obsolete (commit 322a4c9). File can be removed entirely in a cleanup pass.
+20. `/api/auth/send-otp` route returns 200 even when `sendEmail()` returns null messageId — misleads user. Fix by checking return value and returning 500 on failure.
 
 ---
 
@@ -415,3 +420,34 @@ Every substantive change requires:
 ### Changelog
 - **v1.0 (2026-04-17)** — Initial consolidated design doc. Synthesized from CMS demo Q&A, discovery inventory, research Memo A (condition scope), research Memo B (safety triggers), pipeline architecture discussions.
 - **v1.1 (2026-04-17)** — North Star simplified: "Medicare and pre-Medicare" removed; "55+" covers both inherently. Build order converted from timed phases to dependency-sequenced blocks (operator decides pace). CLAUDE.md reference added.
+- **v1.2 (2026-04-22)** — Added Part 14: Environment Status (staging operational, prod ANTHROPIC_MODEL fixed, CMS prod access in progress). Part 10 Cleanup Backlog: added items #16–20 discovered during staging bootstrap smoke-testing session. No scope changes to Parts 2, 3, 4, 5, 6, 7 (condition scope, pipeline, guardrails unchanged).
+
+---
+
+## Part 14 — Environment Status (as of 2026-04-22)
+
+### Production
+- Service: denali-web in cluster denali, task def denali:164
+- ANTHROPIC_MODEL: Sonnet 4.6 (chat), Opus 4.6 (appeals) — fixed 2026-04-22 after discovering chat was misconfigured on Opus
+- Stripe: live-mode webhook active
+- CMS Blue Button 2.0: production access approved 2026-04-17 (transition in progress)
+
+### Staging
+- Service: denali-staging-web in cluster denali-staging, task def denali-staging:2
+- URL: https://staging.denali.health
+- Status: Smoke-tested 2026-04-22 — OTP sign-in + chat both end-to-end green on Sonnet 4.6
+- RDS: 41 tables + 5 views + 1 matview + 37 functions + 4 extensions (pgcrypto, pg_trgm, btree_gin, plpgsql), identical schema to prod
+- Secrets: denali/staging/app-IpWtpX (13 keys populated)
+- SES: DKIM verified for staging.denali.health, IAM whitelist includes no-reply@staging.denali.health
+- Stripe: test-mode webhook registered
+- Test user: ramanac@gmail.com (trial plan)
+
+### CARIN
+- Submitted to CARIN myhealthapplication.com
+
+### Known Gaps (Foundation-scope)
+- Rate-limit fail-open on RDS error (both envs)
+- Appeal credit enforcement client-only (both envs)
+- STARTER Stripe checkout mode:subscription bug (both envs, pre-existing)
+- ID.me code paths still present but flagged deprecated
+- `sql/001-schema.sql` was Supabase-era stale; replaced with fresh prod pg_dump on 2026-04-22
