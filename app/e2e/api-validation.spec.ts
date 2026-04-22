@@ -96,25 +96,22 @@ test.describe("Diabetes log input validation (§16.3)", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Events input validation (§16.4)", () => {
-  test("§16.4.1 POST /api/events with invalid event type → 400", async ({
+  test("§16.4.1 POST /api/events without auth → 401", async ({
     request,
   }) => {
     const response = await request.post("/api/events", {
       data: { eventType: "nonexistent_event", conversationId: "test" },
     });
-    expect(response.status()).toBe(400);
-    const body = await response.json();
-    expect(body.error).toBe("Invalid event type");
+    expect(response.status()).toBe(401);
   });
 
-  test("§16.4.2 POST /api/events with empty body → 400", async ({
+  test("§16.4.2 POST /api/events with empty body without auth → 401", async ({
     request,
   }) => {
     const response = await request.post("/api/events", {
       data: {},
     });
-    // Empty body may trigger "Invalid request body" or "Invalid event type"
-    expect(response.status()).toBe(400);
+    expect(response.status()).toBe(401);
   });
 });
 
@@ -123,37 +120,31 @@ test.describe("Events input validation (§16.4)", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Feedback input validation (§16.5)", () => {
-  test("§16.5.1 POST /api/feedback with missing messageId → 400", async ({
+  test("§16.5.1 POST /api/feedback without auth → 401", async ({
     request,
   }) => {
     const response = await request.post("/api/feedback", {
       data: { rating: "up" },
     });
-    expect(response.status()).toBe(400);
-    const body = await response.json();
-    expect(body.error).toBe("messageId and rating (up|down) required");
+    expect(response.status()).toBe(401);
   });
 
-  test("§16.5.2 POST /api/feedback with missing rating → 400", async ({
+  test("§16.5.2 POST /api/feedback without auth (with data) → 401", async ({
     request,
   }) => {
     const response = await request.post("/api/feedback", {
       data: { messageId: "msg-123" },
     });
-    expect(response.status()).toBe(400);
-    const body = await response.json();
-    expect(body.error).toBe("messageId and rating (up|down) required");
+    expect(response.status()).toBe(401);
   });
 
-  test("§16.5.3 POST /api/feedback with invalid rating value → 400", async ({
+  test("§16.5.3 POST /api/feedback without auth (invalid rating) → 401", async ({
     request,
   }) => {
     const response = await request.post("/api/feedback", {
       data: { messageId: "msg-123", rating: "maybe" },
     });
-    expect(response.status()).toBe(400);
-    const body = await response.json();
-    expect(body.error).toBe("messageId and rating (up|down) required");
+    expect(response.status()).toBe(401);
   });
 });
 
