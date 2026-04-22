@@ -1,10 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { AUTH, SYSTEM, VALIDATION } from "@/config/messages";
+
+async function requireCounselor(request: NextRequest) {
+  const user = await getAuthUser(request);
+  if (!user) return null;
+  const result = await query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [user.userId]);
+  if (result.rows[0]?.role !== "counselor") return null;
+  return user;
+}
 
 export async function GET(request: NextRequest) {
-  const user = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const user = await requireCounselor(request);
+  if (!user) return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 403 });
 
   try {
     const result = await query<{
@@ -32,18 +41,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ cases: result.rows });
   } catch (err) {
     console.error("[counselor/cases] GET failed:", err);
-    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.GENERIC_ERROR }, { status: 500 });
   }
 }
 
 export async function PATCH(request: NextRequest) {
-  const user = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const user = await requireCounselor(request);
+  if (!user) return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 403 });
 
   try {
     const { caseId, outcome } = await request.json();
     if (!caseId || !outcome) {
-      return NextResponse.json({ error: "caseId and outcome required" }, { status: 400 });
+      return NextResponse.json({ error: VALIDATION.CASE_FIELDS_REQUIRED }, { status: 400 });
     }
 
     await query(
@@ -56,6 +65,6 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[counselor/cases] PATCH failed:", err);
-    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.GENERIC_ERROR }, { status: 500 });
   }
 }

@@ -32,7 +32,7 @@ export function BlogArticle({ post }: BlogArticleProps) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
 
       <article className="max-w-2xl mx-auto">

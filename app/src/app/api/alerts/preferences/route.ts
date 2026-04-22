@@ -13,12 +13,13 @@ import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { ALERT_TYPES, getEligibleAlertTypes } from "@/config/alerts";
 import type { AlertType } from "@/config/alerts";
+import { AUTH, VALIDATION, SYSTEM } from "@/config/messages";
 
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 401 });
     }
 
     // Get user's plan
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("[Alert Prefs] GET error:", error);
     return NextResponse.json(
-      { error: "Unable to load alert preferences. Please refresh the page." },
+      { error: SYSTEM.LOAD_PREFERENCES },
       { status: 500 }
     );
   }
@@ -60,18 +61,18 @@ export async function PUT(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 401 });
     }
 
     const body = await request.json();
     const { alertType, enabled } = body as { alertType: string; enabled: boolean };
 
     if (!ALERT_TYPES.includes(alertType as AlertType)) {
-      return NextResponse.json({ error: "Invalid alert type" }, { status: 400 });
+      return NextResponse.json({ error: VALIDATION.INVALID_ALERT_TYPE }, { status: 400 });
     }
 
     if (typeof enabled !== "boolean") {
-      return NextResponse.json({ error: "enabled must be a boolean" }, { status: 400 });
+      return NextResponse.json({ error: VALIDATION.ALERT_TOGGLE_INVALID }, { status: 400 });
     }
 
     const now = new Date().toISOString();
@@ -96,7 +97,7 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error("[Alert Prefs] PUT error:", error);
     return NextResponse.json(
-      { error: "Unable to save alert preference. Please try again." },
+      { error: SYSTEM.SAVE_PREFERENCE },
       { status: 500 }
     );
   }

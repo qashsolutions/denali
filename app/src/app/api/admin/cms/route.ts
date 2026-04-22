@@ -8,9 +8,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { AUTH, VALIDATION } from "@/config/messages";
 
 const ALLOWED_TABLES = ["site_settings", "landing_content", "pricing_plans", "testimonials"] as const;
 type AllowedTable = typeof ALLOWED_TABLES[number];
+
+/** Allowed columns per table — prevents SQL injection via column name interpolation */
+const ALLOWED_COLUMNS: Record<AllowedTable, Set<string>> = {
+  site_settings: new Set(["key", "value", "description"]),
+  landing_content: new Set(["section_key", "heading", "subheading", "body", "cta_text", "cta_url", "display_order", "visible"]),
+  pricing_plans: new Set(["name", "price", "description", "features", "cta_text", "display_order", "highlighted", "visible"]),
+  testimonials: new Set(["quote", "author", "role", "visible"]),
+};
 
 async function requireAdmin(request: NextRequest) {
   const user = await getAuthUser(request);
@@ -25,7 +34,7 @@ async function requireAdmin(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const user = await requireAdmin(request);
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!user) return NextResponse.json({ error: AUTH.ADMIN_ONLY }, { status: 403 });
 
   const [settings, sections, pricing, testimonials] = await Promise.all([
     query(`SELECT * FROM site_settings ORDER BY key`),
@@ -44,7 +53,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   const user = await requireAdmin(request);
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!user) return NextResponse.json({ error: AUTH.ADMIN_ONLY }, { status: 403 });
 
   const { table, id, data } = await request.json() as {
     table: string;
@@ -53,14 +62,20 @@ export async function PATCH(request: NextRequest) {
   };
 
   if (!ALLOWED_TABLES.includes(table as AllowedTable)) {
-    return NextResponse.json({ error: "Invalid table" }, { status: 400 });
+    return NextResponse.json({ error: VALIDATION.INVALID_TABLE }, { status: 400 });
   }
 
-  // Build SET clause from data keys (safe — keys come from server code)
-  const keys = Object.keys(data);
+  // Build SET clause — validate column names against allowlist to prevent SQL injection
+  const allowedCols = ALLOWED_COLUMNS[table as AllowedTable];
+  const keys = Object.keys(data).filter((k) => allowedCols.has(k));
   if (keys.length === 0) return NextResponse.json({ ok: true });
 
-  const setClauses = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
+  const invalidKeys = Object.keys(data).filter((k) => !allowedCols.has(k));
+  if (invalidKeys.length > 0) {
+    return NextResponse.json({ error: VALIDATION.INVALID_COLUMNS(invalidKeys) }, { status: 400 });
+  }
+
+  const setClauses = keys.map((k, i) => `"${k}" = $${i + 1}`).join(", ");
   const values = [...Object.values(data), id];
 
   await query(

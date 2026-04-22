@@ -1,10 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { AUTH, SYSTEM } from "@/config/messages";
 
 export async function GET(request: NextRequest) {
   const user = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 401 });
+
+  // Verify counselor role
+  const roleResult = await query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [user.userId]);
+  if (roleResult.rows[0]?.role !== "counselor") {
+    return NextResponse.json({ error: AUTH.ADMIN_ONLY }, { status: 403 });
+  }
 
   try {
     const result = await query<{
@@ -20,6 +27,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ stats: result.rows[0] ?? null });
   } catch (err) {
     console.error("[counselor/stats] Failed:", err);
-    return NextResponse.json({ error: "Unable to load stats. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.LOAD_STATS }, { status: 500 });
   }
 }

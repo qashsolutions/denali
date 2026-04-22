@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { SYSTEM } from "@/config/messages";
 
 export async function GET(
   request: NextRequest,
@@ -32,7 +33,7 @@ export async function GET(
 
     if (result.rows.length === 0) {
       return NextResponse.json(
-        { error: "Report not found or expired" },
+        { error: SYSTEM.REPORT_NOT_FOUND },
         { status: 404 }
       );
     }
@@ -56,6 +57,6 @@ export async function GET(
     });
   } catch (error) {
     console.error("[HealthReport] Share error:", error);
-    return NextResponse.json({ error: "Unable to load this report. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.LOAD_REPORT }, { status: 500 });
   }
 }

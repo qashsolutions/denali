@@ -9,16 +9,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { verifyTotp } from "@/lib/totp";
+import { AUTH } from "@/config/messages";
 
 export async function POST(request: NextRequest) {
   const user = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 401 });
 
   const body = await request.json();
   const code = (body.code as string | undefined)?.trim();
 
   if (!code || !/^\d{6}$/.test(code)) {
-    return NextResponse.json({ error: "A 6-digit code is required" }, { status: 400 });
+    return NextResponse.json({ error: AUTH.MFA_CODE_REQUIRED }, { status: 400 });
   }
 
   const result = await query<{ totp_secret: string | null; totp_enrolled_at: string | null }>(
@@ -29,13 +30,13 @@ export async function POST(request: NextRequest) {
 
   if (!ver?.totp_secret || !ver.totp_enrolled_at) {
     return NextResponse.json(
-      { error: "Authenticator not enrolled. Please set it up in Settings > Security." },
+      { error: AUTH.MFA_NOT_ENROLLED },
       { status: 400 }
     );
   }
 
   if (!verifyTotp(ver.totp_secret, code)) {
-    return NextResponse.json({ error: "Invalid code. Please try again." }, { status: 400 });
+    return NextResponse.json({ error: AUTH.OTP_INVALID }, { status: 400 });
   }
 
   // Grant AAL2

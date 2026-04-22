@@ -13,10 +13,11 @@ import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { generateTotpSecret, generateTotpUri } from "@/lib/totp";
 import QRCode from "qrcode";
+import { AUTH } from "@/config/messages";
 
 export async function POST(request: NextRequest) {
   const user = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 401 });
 
   // Generate fresh secret
   const secret = generateTotpSecret();

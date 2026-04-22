@@ -166,7 +166,7 @@ export function buildDashboardContext(input: BuildContextInput): DashboardContex
     user: {
       firstName,
       lastLogin: new Date().toISOString(),
-      hasCompletedWalkthrough: false, // TODO: read from user profile API
+      hasCompletedWalkthrough: false, // Persisted in localStorage (UI pref, not health data)
       plan: authState.plan,
     },
     coverage: {

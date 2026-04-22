@@ -7,12 +7,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { refreshCognitoTokens } from "@/lib/auth-server";
+import { withMetrics } from "@/lib/metrics";
+import { AUTH, SYSTEM } from "@/config/messages";
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   const refreshToken = request.cookies.get("refresh_token")?.value;
 
   if (!refreshToken) {
-    return NextResponse.json({ error: "No refresh token" }, { status: 401 });
+    return NextResponse.json({ error: AUTH.SESSION_EXPIRED }, { status: 401 });
   }
 
   try {
@@ -30,11 +32,38 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("[refresh] Token refresh failed:", error);
-    // Clear stale cookies so the client knows to re-authenticate
-    const response = NextResponse.json({ error: "Session expired. Please sign in again." }, { status: 401 });
-    const clearOpts = { httpOnly: true, secure: process.env.NODE_ENV === "production", path: "/" };
-    response.cookies.set("access_token", "", { ...clearOpts, maxAge: 0 });
-    response.cookies.set("refresh_token", "", { ...clearOpts, maxAge: 0 });
-    return response;
+
+    // Distinguish transient infrastructure failures from genuinely invalid tokens.
+    // Invalid/revoked tokens throw with specific Cognito error codes — clear cookies.
+    // Everything else (network timeout, DNS, Cognito outage) is transient — return 503
+    // and preserve the refresh token so the session recovers automatically.
+    const errMsg = error instanceof Error ? error.message : "";
+    const isInvalidToken =
+      errMsg.includes("NotAuthorizedException") ||
+      errMsg.includes("invalid_grant") ||
+      errMsg.includes("Invalid Refresh Token");
+
+    if (isInvalidToken) {
+      const response = NextResponse.json(
+        { error: AUTH.SESSION_EXPIRED },
+        { status: 401 },
+      );
+      const clearOpts = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+      };
+      response.cookies.set("access_token", "", { ...clearOpts, maxAge: 0 });
+      response.cookies.set("refresh_token", "", { ...clearOpts, maxAge: 0 });
+      return response;
+    }
+
+    // Transient failure — keep cookies intact so retry works once service recovers
+    return NextResponse.json(
+      { error: SYSTEM.SERVICE_UNAVAILABLE },
+      { status: 503 },
+    );
   }
 }
+
+export const POST = withMetrics(_POST, "/api/auth/refresh");

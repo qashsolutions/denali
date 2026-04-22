@@ -14,19 +14,55 @@ import { initiateCognitoAuth } from "@/lib/auth-server";
 import { logAudit } from "@/lib/audit";
 import { PRICING } from "@/config";
 import { normalizeEmail } from "@/lib/normalize-email";
+import { withMetrics } from "@/lib/metrics";
+import { AUTH, VALIDATION } from "@/config/messages";
 
-export async function POST(request: NextRequest) {
+/** In-memory rate limiter for OTP verification: max 5 attempts per email per 10 min */
+const otpVerifyLimits = new Map<string, { count: number; resetAt: number }>();
+const OTP_VERIFY_WINDOW_MS = 10 * 60 * 1000;
+const OTP_VERIFY_MAX_ATTEMPTS = 5;
+
+function checkOtpVerifyLimit(email: string): boolean {
+  const now = Date.now();
+  const entry = otpVerifyLimits.get(email);
+  if (!entry || now > entry.resetAt) {
+    otpVerifyLimits.set(email, {
+      count: 1,
+      resetAt: now + OTP_VERIFY_WINDOW_MS,
+    });
+    return true;
+  }
+  if (entry.count >= OTP_VERIFY_MAX_ATTEMPTS) return false;
+  entry.count++;
+  return true;
+}
+
+async function _POST(request: NextRequest) {
   try {
     const body = await request.json();
     const rawEmail = (body.email as string | undefined)?.toLowerCase().trim();
     const otp = (body.otp as string | undefined)?.trim();
 
     if (!rawEmail || !otp) {
-      return NextResponse.json({ error: "Email and code are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: VALIDATION.CODE_REQUIRED },
+        { status: 400 },
+      );
     }
 
     if (!/^\d{6}$/.test(otp)) {
-      return NextResponse.json({ error: "Code must be 6 digits" }, { status: 400 });
+      return NextResponse.json(
+        { error: VALIDATION.CODE_FORMAT },
+        { status: 400 },
+      );
+    }
+
+    // Rate limit: prevent brute-force OTP guessing
+    if (!checkOtpVerifyLimit(rawEmail)) {
+      return NextResponse.json(
+        { error: AUTH.OTP_VERIFY_RATE_LIMIT },
+        { status: 429 },
+      );
     }
 
     // Normalize Gmail plus addressing to match the account created in send-otp
@@ -44,22 +80,22 @@ export async function POST(request: NextRequest) {
        JOIN users u ON u.id = uv.user_id
        WHERE u.email = $1
        LIMIT 1`,
-      [email]
+      [email],
     );
     const ver = verResult.rows[0] ?? null;
 
     if (!ver || !ver.otp_code) {
-      return NextResponse.json({ error: "No verification code found. Please request a new code." }, { status: 400 });
+      return NextResponse.json({ error: AUTH.OTP_NOT_FOUND }, { status: 400 });
     }
 
     // 2. Check expiry
     if (!ver.otp_expires_at || new Date(ver.otp_expires_at) < new Date()) {
-      return NextResponse.json({ error: "Code has expired. Please request a new code." }, { status: 400 });
+      return NextResponse.json({ error: AUTH.OTP_EXPIRED }, { status: 400 });
     }
 
     // 3. Check OTP matches
     if (ver.otp_code !== otp) {
-      return NextResponse.json({ error: "Invalid code. Please try again." }, { status: 400 });
+      return NextResponse.json({ error: AUTH.OTP_INVALID }, { status: 400 });
     }
 
     // 4. Authenticate with Cognito → get tokens
@@ -68,7 +104,7 @@ export async function POST(request: NextRequest) {
       tokens = await initiateCognitoAuth(email, `Otp.${otp}!`);
     } catch (cognitoErr) {
       console.error("[verify-otp] Cognito auth failed:", cognitoErr);
-      return NextResponse.json({ error: "Authentication failed. Please request a new code." }, { status: 400 });
+      return NextResponse.json({ error: AUTH.SIGN_IN_FAILED }, { status: 400 });
     }
 
     // 5. Invalidate OTP (clear code, mark email verified)
@@ -76,7 +112,7 @@ export async function POST(request: NextRequest) {
       `UPDATE user_verification
        SET otp_code = NULL, otp_expires_at = NULL, email_verified = true, email_verified_at = $1
        WHERE user_id = $2`,
-      [new Date().toISOString(), ver.user_id]
+      [new Date().toISOString(), ver.user_id],
     );
 
     // 6. Initialize usage record (0 appeal credits — trial has no appeal access)
@@ -84,14 +120,14 @@ export async function POST(request: NextRequest) {
       `INSERT INTO usage (user_id, email, appeal_count, appeal_credits)
        VALUES ($1, $2, 0, 0)
        ON CONFLICT (email) DO NOTHING`,
-      [ver.user_id, email]
+      [ver.user_id, email],
     );
 
     // 7. Start trial on first sign-in (inline — no self-referencing HTTP fetch)
     try {
       const existingSub = await query<{ trial_start: string | null }>(
         `SELECT trial_start FROM subscriptions WHERE user_id = $1 LIMIT 1`,
-        [ver.user_id]
+        [ver.user_id],
       );
       if (!existingSub.rows[0]?.trial_start) {
         const now = new Date();
@@ -104,7 +140,7 @@ export async function POST(request: NextRequest) {
              SET plan = EXCLUDED.plan, status = EXCLUDED.status,
                  trial_start = EXCLUDED.trial_start, trial_end = EXCLUDED.trial_end,
                  trial_converted = EXCLUDED.trial_converted`,
-          [ver.user_id, now.toISOString(), trialEnd.toISOString()]
+          [ver.user_id, now.toISOString(), trialEnd.toISOString()],
         );
       }
     } catch (trialErr) {
@@ -153,6 +189,8 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("[verify-otp] Error:", error);
-    return NextResponse.json({ error: "Verification failed. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: AUTH.SIGN_IN_ERROR }, { status: 500 });
   }
 }
+
+export const POST = withMetrics(_POST, "/api/auth/verify-otp");

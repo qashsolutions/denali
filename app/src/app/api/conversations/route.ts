@@ -10,8 +10,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { withMetrics } from "@/lib/metrics";
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const user = await getAuthUser(request);
 
   if (!user) {
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
        WHERE user_id = $1
        ORDER BY created_at DESC
        LIMIT 50`,
-      [user.userId]
+      [user.userId],
     );
 
     if (convsResult.rows.length === 0) {
@@ -50,29 +51,41 @@ export async function GET(request: NextRequest) {
        FROM messages
        WHERE conversation_id = ANY($1::uuid[])
        ORDER BY created_at ASC`,
-      [convIds]
+      [convIds],
     );
 
-    const messagesByConv = new Map<string, Array<{ role: string; content: string }>>();
+    const messagesByConv = new Map<
+      string,
+      Array<{ role: string; content: string }>
+    >();
     for (const msg of msgsResult.rows) {
       const list = messagesByConv.get(msg.conversation_id) ?? [];
       list.push({ role: msg.role, content: msg.content });
       messagesByConv.set(msg.conversation_id, list);
     }
 
-    const result = convsResult.rows.map((conv: { id: string; title: string; is_appeal: boolean; created_at: string }) => {
-      const msgs = messagesByConv.get(conv.id) ?? [];
-      const firstUser = msgs.find((m) => m.role === "user");
-      const lastAssistant = [...msgs].reverse().find((m) => m.role === "assistant");
-      return {
-        id: conv.id,
-        title: conv.title,
-        isAppeal: conv.is_appeal || false,
-        createdAt: conv.created_at,
-        firstUserMessage: firstUser?.content ?? null,
-        lastAssistantMessage: lastAssistant?.content ?? null,
-      };
-    });
+    const result = convsResult.rows.map(
+      (conv: {
+        id: string;
+        title: string;
+        is_appeal: boolean;
+        created_at: string;
+      }) => {
+        const msgs = messagesByConv.get(conv.id) ?? [];
+        const firstUser = msgs.find((m) => m.role === "user");
+        const lastAssistant = [...msgs]
+          .reverse()
+          .find((m) => m.role === "assistant");
+        return {
+          id: conv.id,
+          title: conv.title,
+          isAppeal: conv.is_appeal || false,
+          createdAt: conv.created_at,
+          firstUserMessage: firstUser?.content ?? null,
+          lastAssistantMessage: lastAssistant?.content ?? null,
+        };
+      },
+    );
 
     return NextResponse.json({ conversations: result, authenticated: true });
   } catch (err) {
@@ -80,3 +93,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ conversations: [], authenticated: true });
   }
 }
+
+export const GET = withMetrics(_GET, "/api/conversations");

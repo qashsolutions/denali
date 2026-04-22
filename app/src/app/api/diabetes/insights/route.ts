@@ -11,67 +11,90 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { withMetrics } from "@/lib/metrics";
+import { AUTH, SYSTEM } from "@/config/messages";
 import {
   generateDiabetesInsight,
   computeDataHash,
   type InsightInput,
 } from "@/lib/diabetes-insights";
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
+      );
     }
 
     const result = await query(
       `SELECT * FROM diabetes_insights WHERE user_id = $1 LIMIT 1`,
-      [user.userId]
+      [user.userId],
     );
 
     return NextResponse.json({ insight: result.rows[0] ?? null });
   } catch {
-    return NextResponse.json({ error: "Unable to load your health insights. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.INSIGHT_FAILED }, { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
+      );
     }
 
     // Check health_data_ai consent
     const consentResult = await query<{ granted: boolean }>(
       `SELECT granted FROM consent_preferences WHERE user_id = $1 AND consent_type = 'health_data_ai'`,
-      [user.userId]
+      [user.userId],
     );
     const hasConsent = consentResult.rows.some((r) => r.granted);
     if (!hasConsent) {
-      return NextResponse.json({ error: "Health data AI consent required" }, { status: 403 });
+      return NextResponse.json(
+        { error: SYSTEM.HEALTH_CONSENT_REQUIRED },
+        { status: 403 },
+      );
     }
 
     // Gather data in parallel
     const [snapshotsResult, cacheResult, logResult] = await Promise.all([
-      query<{ loinc_code: string; lab_name: string; value: string; unit: string; observed_date: string }>(
+      query<{
+        loinc_code: string;
+        lab_name: string;
+        value: string;
+        unit: string;
+        observed_date: string;
+      }>(
         `SELECT loinc_code, lab_name, value, unit, observed_date
          FROM diabetes_snapshots
          WHERE user_id = $1
          ORDER BY observed_date ASC`,
-        [user.userId]
+        [user.userId],
       ),
       query<{ resource_type: string; data: unknown }>(
         `SELECT resource_type, data FROM fhir_cache WHERE user_id = $1`,
-        [user.userId]
+        [user.userId],
       ),
-      query<{ entry_type: string; logged_at: string; glucose_value: string | null; activity_minutes: number | null; note: string | null }>(
+      query<{
+        entry_type: string;
+        logged_at: string;
+        glucose_value: string | null;
+        activity_minutes: number | null;
+        note: string | null;
+      }>(
         `SELECT entry_type, logged_at, glucose_value, activity_minutes, note
          FROM diabetes_log
          WHERE user_id = $1
          ORDER BY logged_at DESC
          LIMIT 10`,
-        [user.userId]
+        [user.userId],
       ),
     ]);
 
@@ -81,9 +104,25 @@ export async function POST(request: NextRequest) {
       cacheMap.set(row.resource_type, row.data);
     }
 
-    const labs = (cacheMap.get("labs") as Array<{ name: string; value: number; unit: string; date: string }>) ?? [];
-    const conditions = (cacheMap.get("conditions") as Array<{ code: string; name: string; category: string }>) ?? [];
-    const medications = (cacheMap.get("medications") as Array<{ name: string; status: string; isDiabetesMed: boolean }>) ?? [];
+    const labs =
+      (cacheMap.get("labs") as Array<{
+        name: string;
+        value: number;
+        unit: string;
+        date: string;
+      }>) ?? [];
+    const conditions =
+      (cacheMap.get("conditions") as Array<{
+        code: string;
+        name: string;
+        category: string;
+      }>) ?? [];
+    const medications =
+      (cacheMap.get("medications") as Array<{
+        name: string;
+        status: string;
+        isDiabetesMed: boolean;
+      }>) ?? [];
 
     // Build a1c history from snapshots
     const a1cHistory = snapshotsResult.rows
@@ -95,7 +134,7 @@ export async function POST(request: NextRequest) {
     const { classification } = classifyDiabetesStatus(
       conditions as Parameters<typeof classifyDiabetesStatus>[0],
       labs as Parameters<typeof classifyDiabetesStatus>[1],
-      medications as Parameters<typeof classifyDiabetesStatus>[2]
+      medications as Parameters<typeof classifyDiabetesStatus>[2],
     );
 
     const inputData: InsightInput = {
@@ -127,7 +166,7 @@ export async function POST(request: NextRequest) {
     }>(
       `SELECT id, data_hash, summary, recommendations, risk_alerts, screening_reminders, generated_at
        FROM diabetes_insights WHERE user_id = $1 LIMIT 1`,
-      [user.userId]
+      [user.userId],
     );
     const existing = existingResult.rows[0] ?? null;
 
@@ -163,7 +202,7 @@ export async function POST(request: NextRequest) {
         dataHash,
         now,
         now,
-      ]
+      ],
     );
 
     const upsertedId = upsertResult.rows[0]?.id;
@@ -175,9 +214,15 @@ export async function POST(request: NextRequest) {
       metadata: { classification, data_hash: dataHash },
     }).catch(() => {});
 
-    return NextResponse.json({ insight: { id: upsertedId, ...inputData, summary: output.summary }, cached: false });
+    return NextResponse.json({
+      insight: { id: upsertedId, ...inputData, summary: output.summary },
+      cached: false,
+    });
   } catch (error) {
     console.error("[DiabetesInsights] Error:", error);
-    return NextResponse.json({ error: "Failed to generate insight" }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.INSIGHT_FAILED }, { status: 500 });
   }
 }
+
+export const GET = withMetrics(_GET, "/api/diabetes/insights");
+export const POST = withMetrics(_POST, "/api/diabetes/insights");

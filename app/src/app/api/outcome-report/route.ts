@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { recordAppealOutcome } from "@/lib/learning";
+import { VALIDATION, SYSTEM } from "@/config/messages";
 
 interface OutcomeReportRequest {
   token: string;
@@ -22,13 +23,13 @@ export async function POST(request: NextRequest) {
 
     // Validate
     if (!body.token) {
-      return NextResponse.json({ error: "Token is required" }, { status: 400 });
+      return NextResponse.json({ error: VALIDATION.TOKEN_REQUIRED }, { status: 400 });
     }
 
     const validOutcomes = ["approved", "denied", "partial", "pending"];
     if (!body.outcome || !validOutcomes.includes(body.outcome)) {
       return NextResponse.json(
-        { error: "Valid outcome is required (approved, denied, partial, or pending)" },
+        { error: VALIDATION.OUTCOME_REQUIRED },
         { status: 400 }
       );
     }
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     if (!followup) {
       return NextResponse.json(
-        { error: "Invalid or expired token." },
+        { error: VALIDATION.TOKEN_INVALID },
         { status: 404 }
       );
     }
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[outcome-report] Error:", error);
     return NextResponse.json(
-      { error: "An error occurred. Please try again." },
+      { error: SYSTEM.GENERIC_ERROR },
       { status: 500 }
     );
   }

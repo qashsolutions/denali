@@ -93,9 +93,15 @@ export async function middleware(request: NextRequest) {
           }
           return response;
         }
+      } else if (refreshRes.status === 503) {
+        // Transient infrastructure issue (Cognito down) — don't redirect to landing.
+        // Let the user stay on the page; API routes will fail individually but
+        // the session will recover automatically once the service comes back.
+        return NextResponse.next();
       }
     } catch {
-      // Refresh failed — treat as anonymous
+      // Network error reaching refresh endpoint — also transient, don't kick user out
+      return NextResponse.next();
     }
   }
 

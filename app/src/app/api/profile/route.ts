@@ -10,8 +10,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { withMetrics } from "@/lib/metrics";
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const user = await getAuthUser(request);
 
   if (!user) {
@@ -21,15 +22,19 @@ export async function GET(request: NextRequest) {
   const [profileResult, usageResult, verificationResult] = await Promise.all([
     query<{ plan: string; role: string; is_admin: boolean }>(
       `SELECT plan, role, is_admin FROM users WHERE id = $1 LIMIT 1`,
-      [user.userId]
+      [user.userId],
     ),
     query<{ appeal_count: number; appeal_credits: number }>(
       `SELECT appeal_count, appeal_credits FROM usage WHERE email = $1 LIMIT 1`,
-      [user.email]
+      [user.email],
     ),
-    query<{ idme_verified: boolean; idme_first_name: string | null; idme_gender: string | null }>(
+    query<{
+      idme_verified: boolean;
+      idme_first_name: string | null;
+      idme_gender: string | null;
+    }>(
       `SELECT COALESCE(idme_verified, false) as idme_verified, idme_first_name, idme_gender FROM user_verification WHERE user_id = $1 LIMIT 1`,
-      [user.userId]
+      [user.userId],
     ),
   ]);
 
@@ -52,6 +57,9 @@ export async function GET(request: NextRequest) {
     // Feature flag: whether app requires ID.me identity verification before Blue Button
     // false = Connected Apps Directory (BB works without ID.me)
     // true = Medicare App Library (ID.me required before BB)
-    requireIdentityVerification: process.env.REQUIRE_IDENTITY_VERIFICATION === "true",
+    requireIdentityVerification:
+      process.env.REQUIRE_IDENTITY_VERIFICATION === "true",
   });
 }
+
+export const GET = withMetrics(_GET, "/api/profile");
