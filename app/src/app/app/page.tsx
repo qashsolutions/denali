@@ -580,8 +580,8 @@ export default function AppHomePage() {
     if (walkthroughChecked.current || !ctx) return;
     walkthroughChecked.current = true;
 
-    const completed = sessionStorage.getItem("denali_walkthrough_done");
-    if (!completed && !ctx.user.hasCompletedWalkthrough) {
+    const completed = localStorage.getItem("denali_walkthrough_done");
+    if (!completed) {
       setShowWalkthrough(true);
     }
   }, [ctx]);
@@ -603,7 +603,7 @@ export default function AppHomePage() {
 
   const dismissWalkthrough = useCallback(() => {
     setShowWalkthrough(false);
-    sessionStorage.setItem("denali_walkthrough_done", "1");
+    localStorage.setItem("denali_walkthrough_done", "1");
   }, []);
 
   // Show skeleton while auth is loading

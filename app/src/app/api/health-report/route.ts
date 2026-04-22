@@ -7,12 +7,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { withMetrics } from "@/lib/metrics";
+import { AUTH, SYSTEM } from "@/config/messages";
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
+      );
     }
 
     const result = await query<{
@@ -29,7 +34,7 @@ export async function GET(request: NextRequest) {
        WHERE user_id = $1
        ORDER BY created_at DESC
        LIMIT 1`,
-      [user.userId]
+      [user.userId],
     );
 
     if (result.rows.length === 0) {
@@ -50,6 +55,8 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("[HealthReport] GET error:", error);
-    return NextResponse.json({ error: "Unable to load your health report. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.LOAD_REPORT }, { status: 500 });
   }
 }
+
+export const GET = withMetrics(_GET, "/api/health-report");

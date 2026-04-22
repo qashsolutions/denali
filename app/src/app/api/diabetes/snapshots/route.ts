@@ -7,11 +7,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { AUTH, SYSTEM } from "@/config/messages";
 
 export async function GET(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 401 });
   }
 
   try {
@@ -40,6 +41,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ snapshots });
   } catch (err) {
     console.error("[Diabetes/snapshots API] Error:", err);
-    return NextResponse.json({ error: "Unable to load your lab history. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.LOAD_LAB_HISTORY }, { status: 500 });
   }
 }

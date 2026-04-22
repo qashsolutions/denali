@@ -13,8 +13,28 @@ import { query } from "@/lib/db";
 import { createOrGetCognitoUser, setCognitoPassword } from "@/lib/auth-server";
 import { sendEmail } from "@/lib/email";
 import { normalizeEmail } from "@/lib/normalize-email";
+import { withMetrics } from "@/lib/metrics";
+import { AUTH, VALIDATION } from "@/config/messages";
 
 const OTP_TTL_MINUTES = 10;
+
+/** In-memory rate limiter for OTP sends: max 3 per email per 15 min, max 10 per IP per 15 min */
+const otpSendLimits = new Map<string, { count: number; resetAt: number }>();
+const OTP_SEND_WINDOW_MS = 15 * 60 * 1000;
+const OTP_SEND_MAX_PER_EMAIL = 3;
+const OTP_SEND_MAX_PER_IP = 10;
+
+function checkOtpSendLimit(key: string, max: number): boolean {
+  const now = Date.now();
+  const entry = otpSendLimits.get(key);
+  if (!entry || now > entry.resetAt) {
+    otpSendLimits.set(key, { count: 1, resetAt: now + OTP_SEND_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= max) return false;
+  entry.count++;
+  return true;
+}
 
 function generateOtp(): string {
   // 6-digit OTP, cryptographically random
@@ -43,13 +63,33 @@ async function sendOtpEmail(email: string, otp: string): Promise<void> {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const body = await request.json();
     const rawEmail = (body.email as string | undefined)?.toLowerCase().trim();
 
     if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
-      return NextResponse.json({ error: "Valid email is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: VALIDATION.EMAIL_REQUIRED },
+        { status: 400 },
+      );
+    }
+
+    // Rate limit: prevent email bombing and abuse
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      "unknown";
+    if (!checkOtpSendLimit(`email:${rawEmail}`, OTP_SEND_MAX_PER_EMAIL)) {
+      return NextResponse.json(
+        { error: AUTH.OTP_RATE_LIMIT_EMAIL },
+        { status: 429 },
+      );
+    }
+    if (!checkOtpSendLimit(`ip:${ip}`, OTP_SEND_MAX_PER_IP)) {
+      return NextResponse.json(
+        { error: AUTH.OTP_RATE_LIMIT_IP },
+        { status: 429 },
+      );
     }
 
     // Normalize Gmail plus addressing: user+tag@gmail.com → user@gmail.com
@@ -72,7 +112,7 @@ export async function POST(request: NextRequest) {
     await query(
       `INSERT INTO users (id, email, plan) VALUES ($1, $2, 'trial')
        ON CONFLICT (id) DO NOTHING`,
-      [userId, email]
+      [userId, email],
     );
 
     // 5. Upsert OTP into user_verification
@@ -82,7 +122,7 @@ export async function POST(request: NextRequest) {
        ON CONFLICT (user_id) DO UPDATE
          SET otp_code = EXCLUDED.otp_code,
              otp_expires_at = EXCLUDED.otp_expires_at`,
-      [userId, otp, expiresAt.toISOString()]
+      [userId, otp, expiresAt.toISOString()],
     );
 
     // 6. Send OTP to the ORIGINAL address (Gmail delivers +tag to the base inbox)
@@ -91,6 +131,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[send-otp] Error:", error);
-    return NextResponse.json({ error: "Failed to send code. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: AUTH.OTP_SEND_FAILED }, { status: 500 });
   }
 }
+
+export const POST = withMetrics(_POST, "/api/auth/send-otp");

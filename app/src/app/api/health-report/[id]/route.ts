@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { AUTH, SYSTEM } from "@/config/messages";
 
 export async function GET(
   request: NextRequest,
@@ -15,7 +16,7 @@ export async function GET(
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 401 });
     }
 
     const { id } = await params;
@@ -35,7 +36,7 @@ export async function GET(
     );
 
     if (result.rows.length === 0) {
-      return NextResponse.json({ error: "Report not found" }, { status: 404 });
+      return NextResponse.json({ error: SYSTEM.REPORT_NOT_FOUND }, { status: 404 });
     }
 
     const row = result.rows[0];
@@ -51,6 +52,6 @@ export async function GET(
     });
   } catch (error) {
     console.error("[HealthReport] GET by ID error:", error);
-    return NextResponse.json({ error: "Unable to load your health report. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.LOAD_REPORT }, { status: 500 });
   }
 }

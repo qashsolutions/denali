@@ -15,6 +15,7 @@ import { getAuthUser } from "@/lib/auth-server";
 import { API_CONFIG, getBaseUrl } from "@/config";
 import { randomBytes, createHash } from "crypto";
 import { logAudit } from "@/lib/audit";
+import { AUTH } from "@/config/messages";
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { error: "You must be signed in to verify your identity" },
+        { error: AUTH.SIGN_IN_REQUIRED },
         { status: 401 }
       );
     }
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
     if (!idme.clientId) {
       console.error("[ID.me authorize] Missing IDME_CLIENT_ID");
       return NextResponse.json(
-        { error: "Identity verification is temporarily unavailable. Please try again later." },
+        { error: AUTH.IDME_UNAVAILABLE },
         { status: 500 }
       );
     }
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("[ID.me authorize] Error:", error);
     return NextResponse.json(
-      { error: "Unable to start identity verification. Please try again." },
+      { error: AUTH.IDME_FAILED },
       { status: 500 }
     );
   }

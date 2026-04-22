@@ -4,6 +4,7 @@ import {
   fulfillCheckoutSession,
   handleSubscriptionEvent,
 } from "@/lib/stripe-fulfillment";
+import { WEBHOOK } from "@/config/messages";
 
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
   if (!WEBHOOK_SECRET) {
     console.error("[STRIPE WEBHOOK] Missing STRIPE_WEBHOOK_SECRET");
     return NextResponse.json(
-      { error: "Webhook not configured" },
+      { error: WEBHOOK.NOT_CONFIGURED },
       { status: 500 }
     );
   }
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
   const signature = request.headers.get("stripe-signature");
 
   if (!signature) {
-    return NextResponse.json({ error: "Missing signature" }, { status: 400 });
+    return NextResponse.json({ error: WEBHOOK.MISSING_SIGNATURE }, { status: 400 });
   }
 
   let event: Stripe.Event;
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error(`[STRIPE WEBHOOK] Signature verification failed: ${message}`);
     return NextResponse.json(
-      { error: "Invalid signature" },
+      { error: WEBHOOK.INVALID_SIGNATURE },
       { status: 400 }
     );
   }

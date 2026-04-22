@@ -8,11 +8,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { AUTH, VALIDATION, SYSTEM } from "@/config/messages";
 
 export async function POST(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 401 });
   }
 
   let conversationId: string;
@@ -20,11 +21,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     conversationId = body.conversationId;
   } catch {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json({ error: VALIDATION.INVALID_INPUT }, { status: 400 });
   }
 
   if (!conversationId) {
-    return NextResponse.json({ error: "conversationId required" }, { status: 400 });
+    return NextResponse.json({ error: VALIDATION.CONVERSATION_ID_REQUIRED }, { status: 400 });
   }
 
   try {
@@ -36,6 +37,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ claimed });
   } catch (err) {
     console.error("[Conversations/claim API] Error:", err);
-    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.GENERIC_ERROR }, { status: 500 });
   }
 }

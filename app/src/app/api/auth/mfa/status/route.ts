@@ -7,10 +7,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { AUTH } from "@/config/messages";
 
 export async function GET(request: NextRequest) {
   const user = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 401 });
 
   const result = await query<{ totp_enrolled_at: string | null }>(
     `SELECT totp_enrolled_at FROM user_verification WHERE user_id = $1 LIMIT 1`,

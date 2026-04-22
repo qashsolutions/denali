@@ -11,33 +11,48 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { getCachedHealthData } from "@/lib/fhir/sync";
-import { classifyDiabetesStatus, classifyObesityStatus } from "@/lib/fhir/transforms";
-import { generateHealthReport, computeReportHash, type ReportInput } from "@/lib/health-report";
+import {
+  classifyDiabetesStatus,
+  classifyObesityStatus,
+} from "@/lib/fhir/transforms";
+import {
+  generateHealthReport,
+  computeReportHash,
+  type ReportInput,
+} from "@/lib/health-report";
 import { logAudit } from "@/lib/audit";
+import { withMetrics } from "@/lib/metrics";
+import { AUTH, SYSTEM } from "@/config/messages";
 import type { SessionState } from "@/lib/session-state";
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
+      );
     }
 
     // Get cached health data
     const healthData = await getCachedHealthData(user.userId);
     if (!healthData) {
-      return NextResponse.json({ error: "No health data available. Connect Medicare first." }, { status: 404 });
+      return NextResponse.json(
+        { error: SYSTEM.NO_HEALTH_DATA },
+        { status: 404 },
+      );
     }
 
     // Build classifications
     const { classification: diabetesClassification } = classifyDiabetesStatus(
       healthData.conditions,
       healthData.labs,
-      healthData.medications
+      healthData.medications,
     );
     const { classification: obesityClassification } = classifyObesityStatus(
       healthData.conditions,
-      healthData.medications
+      healthData.medications,
     );
 
     // Build report input
@@ -51,7 +66,10 @@ export async function POST(request: NextRequest) {
 
     const input: ReportInput = {
       patient: healthData.patient,
-      coverage: healthData.coverage.map((c) => ({ type: c.type, status: c.status })),
+      coverage: healthData.coverage.map((c) => ({
+        type: c.type,
+        status: c.status,
+      })),
       conditions: healthData.conditions,
       medications: healthData.medications,
       screenings: healthData.screenings,
@@ -66,11 +84,15 @@ export async function POST(request: NextRequest) {
 
     // Check hash — skip regeneration if data unchanged
     const sourceHash = computeReportHash(input);
-    const existing = await query<{ id: string; share_token: string; status: string }>(
+    const existing = await query<{
+      id: string;
+      share_token: string;
+      status: string;
+    }>(
       `SELECT id, share_token, status FROM health_reports
        WHERE user_id = $1 AND source_hash = $2 AND status = 'ready'
        ORDER BY created_at DESC LIMIT 1`,
-      [user.userId, sourceHash]
+      [user.userId, sourceHash],
     );
     if (existing.rows.length > 0) {
       return NextResponse.json({
@@ -86,7 +108,7 @@ export async function POST(request: NextRequest) {
       `INSERT INTO health_reports (user_id, status, source_hash)
        VALUES ($1, 'generating', $2)
        RETURNING id, share_token`,
-      [user.userId, sourceHash]
+      [user.userId, sourceHash],
     );
     const reportId = insertResult.rows[0].id;
     const shareToken = insertResult.rows[0].share_token;
@@ -95,7 +117,9 @@ export async function POST(request: NextRequest) {
     const sessionState: SessionState = {
       userName: null,
       userZip: null,
-      medicareType: healthData.coverage.some((c) => c.type.includes("Part C")) ? "advantage" : "original",
+      medicareType: healthData.coverage.some((c) => c.type.includes("Part C"))
+        ? "advantage"
+        : "original",
       symptoms: [],
       duration: null,
       severity: null,
@@ -130,7 +154,11 @@ export async function POST(request: NextRequest) {
       healthDataAvailable: true,
       consentHealthDataAi: true,
       activeCoverage: healthData.coverage.map((c) => c.type),
-      conditions: healthData.conditions.map((c) => ({ code: c.code, name: c.name, category: c.category })),
+      conditions: healthData.conditions.map((c) => ({
+        code: c.code,
+        name: c.name,
+        category: c.category,
+      })),
       medications: healthData.medications.map((m) => ({
         name: m.name,
         status: m.status,
@@ -194,7 +222,7 @@ export async function POST(request: NextRequest) {
       await query(
         `UPDATE health_reports SET status = 'ready', report_data = $1, updated_at = NOW()
          WHERE id = $2`,
-        [JSON.stringify(report), reportId]
+        [JSON.stringify(report), reportId],
       );
 
       logAudit("HEALTH_REPORT_GENERATED", {
@@ -209,12 +237,20 @@ export async function POST(request: NextRequest) {
       console.error("[HealthReport] Generation failed:", genError);
       await query(
         `UPDATE health_reports SET status = 'failed', updated_at = NOW() WHERE id = $1`,
-        [reportId]
+        [reportId],
       );
-      return NextResponse.json({ error: "Report generation failed" }, { status: 500 });
+      return NextResponse.json(
+        { error: SYSTEM.REPORT_GENERATION_FAILED },
+        { status: 500 },
+      );
     }
   } catch (error) {
     console.error("[HealthReport] Error:", error);
-    return NextResponse.json({ error: "Unable to generate your report. Please try again." }, { status: 500 });
+    return NextResponse.json(
+      { error: SYSTEM.REPORT_GENERATION_FAILED },
+      { status: 500 },
+    );
   }
 }
+
+export const POST = withMetrics(_POST, "/api/health-report/generate");

@@ -9,15 +9,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { withMetrics } from "@/lib/metrics";
+import { VALIDATION, SYSTEM } from "@/config/messages";
 
-export async function GET(
+async function _GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: conversationId } = await params;
 
   if (!conversationId) {
-    return NextResponse.json({ error: "Conversation ID required" }, { status: 400 });
+    return NextResponse.json(
+      { error: VALIDATION.CONVERSATION_ID_REQUIRED },
+      { status: 400 },
+    );
   }
 
   try {
@@ -37,7 +42,7 @@ export async function GET(
       `SELECT id, title, status, is_appeal, created_at, completed_at, user_id, last_suggestions
        FROM conversations
        WHERE id = $1`,
-      [conversationId]
+      [conversationId],
     );
 
     if (convResult.rows.length === 0) {
@@ -66,7 +71,7 @@ export async function GET(
        FROM messages
        WHERE conversation_id = $1
        ORDER BY created_at ASC`,
-      [conversationId]
+      [conversationId],
     );
 
     return NextResponse.json({
@@ -92,6 +97,14 @@ export async function GET(
     });
   } catch (err) {
     console.error("[Conversations/[id] API] Error:", err);
-    return NextResponse.json({ error: "Unable to load this conversation. Please try again." }, { status: 500 });
+    return NextResponse.json(
+      { error: SYSTEM.LOAD_CONVERSATION },
+      { status: 500 },
+    );
   }
 }
+
+export const GET = withMetrics(
+  _GET as (req: NextRequest, ctx?: unknown) => Promise<Response>,
+  "/api/conversations/[id]",
+);

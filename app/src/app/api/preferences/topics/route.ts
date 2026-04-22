@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { AUTH, VALIDATION, SYSTEM } from "@/config/messages";
 import type { HealthTopic } from "@/types/cms";
 
 const VALID_TOPICS: HealthTopic[] = ["diabetes", "obesity", "medicare-general"];
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 401 });
     }
 
     const result = await query<{ topic: string }>(
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ topics: result.rows.map((r) => r.topic) });
   } catch (error) {
     console.error("[TopicPreferences] GET error:", error);
-    return NextResponse.json({ error: "Failed to load preferences" }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.TOPICS_LOAD_FAILED }, { status: 500 });
   }
 }
 
@@ -39,24 +40,24 @@ export async function PUT(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json({ error: AUTH.SIGN_IN_REQUIRED }, { status: 401 });
     }
 
     const body = await request.json();
     const { topics } = body as { topics: string[] };
 
     if (!Array.isArray(topics)) {
-      return NextResponse.json({ error: "topics must be an array" }, { status: 400 });
+      return NextResponse.json({ error: VALIDATION.INVALID_TOPICS }, { status: 400 });
     }
 
     if (topics.length > MAX_TOPICS) {
-      return NextResponse.json({ error: `Maximum ${MAX_TOPICS} topics allowed` }, { status: 400 });
+      return NextResponse.json({ error: VALIDATION.TOPICS_MAX(MAX_TOPICS) }, { status: 400 });
     }
 
     // Validate each topic
     for (const topic of topics) {
       if (!VALID_TOPICS.includes(topic as HealthTopic)) {
-        return NextResponse.json({ error: `Invalid topic: ${topic}` }, { status: 400 });
+        return NextResponse.json({ error: VALIDATION.INVALID_TOPIC(topic) }, { status: 400 });
       }
     }
 
@@ -82,6 +83,6 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: true, topics });
   } catch (error) {
     console.error("[TopicPreferences] PUT error:", error);
-    return NextResponse.json({ error: "Failed to update preferences" }, { status: 500 });
+    return NextResponse.json({ error: SYSTEM.TOPICS_SAVE_FAILED }, { status: 500 });
   }
 }

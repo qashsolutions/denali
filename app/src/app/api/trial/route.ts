@@ -12,14 +12,19 @@ import { getAuthUser } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { PRICING } from "@/config";
+import { withMetrics } from "@/lib/metrics";
+import { AUTH, SYSTEM } from "@/config/messages";
 
 const TRIAL_DURATION_DAYS = PRICING.TRIAL_DURATION_DAYS;
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
+      );
     }
 
     const subResult = await query<{
@@ -29,7 +34,7 @@ export async function GET(request: NextRequest) {
       status: string | null;
     }>(
       `SELECT trial_start, trial_end, trial_converted, status FROM subscriptions WHERE user_id = $1 LIMIT 1`,
-      [user.userId]
+      [user.userId],
     );
     const sub = subResult.rows[0] ?? null;
 
@@ -46,7 +51,7 @@ export async function GET(request: NextRequest) {
 
     if (end > now) {
       const daysRemaining = Math.ceil(
-        (end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        (end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
       );
       return NextResponse.json({ status: "active", daysRemaining });
     }
@@ -54,35 +59,45 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: "expired", daysRemaining: 0 });
   } catch (error) {
     console.error("[Trial] GET error:", error);
-    return NextResponse.json({ error: "Failed to check trial" }, { status: 500 });
+    return NextResponse.json(
+      { error: SYSTEM.TRIAL_CHECK_FAILED },
+      { status: 500 },
+    );
   }
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
+      );
     }
 
     // Check if already has a trial or active subscription
-    const existingResult = await query<{ id: string; trial_start: string | null; status: string | null }>(
+    const existingResult = await query<{
+      id: string;
+      trial_start: string | null;
+      status: string | null;
+    }>(
       `SELECT id, trial_start, status FROM subscriptions WHERE user_id = $1 LIMIT 1`,
-      [user.userId]
+      [user.userId],
     );
     const existing = existingResult.rows[0] ?? null;
 
     if (existing?.trial_start) {
       return NextResponse.json(
-        { error: "Trial already used" },
-        { status: 409 }
+        { error: SYSTEM.TRIAL_ALREADY_USED },
+        { status: 409 },
       );
     }
 
     if (existing?.status === "active") {
       return NextResponse.json(
-        { error: "Already has active subscription" },
-        { status: 409 }
+        { error: SYSTEM.ACTIVE_SUBSCRIPTION },
+        { status: 409 },
       );
     }
 
@@ -100,19 +115,26 @@ export async function POST(request: NextRequest) {
              trial_start = EXCLUDED.trial_start,
              trial_end = EXCLUDED.trial_end,
              trial_converted = EXCLUDED.trial_converted`,
-      [user.userId, "trial", "trialing", now.toISOString(), trialEnd.toISOString(), false]
+      [
+        user.userId,
+        "trial",
+        "trialing",
+        now.toISOString(),
+        trialEnd.toISOString(),
+        false,
+      ],
     );
 
     // Update user plan to trial
-    await query(
-      `UPDATE users SET plan = 'trial' WHERE id = $1`,
-      [user.userId]
-    );
+    await query(`UPDATE users SET plan = 'trial' WHERE id = $1`, [user.userId]);
 
     logAudit("TRIAL_STARTED", {
       userId: user.userId,
       resourceType: "subscription",
-      metadata: { trialEnd: trialEnd.toISOString(), durationDays: TRIAL_DURATION_DAYS },
+      metadata: {
+        trialEnd: trialEnd.toISOString(),
+        durationDays: TRIAL_DURATION_DAYS,
+      },
     }).catch(() => {});
 
     return NextResponse.json({
@@ -122,6 +144,12 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("[Trial] POST error:", error);
-    return NextResponse.json({ error: "Failed to start trial" }, { status: 500 });
+    return NextResponse.json(
+      { error: SYSTEM.TRIAL_START_FAILED },
+      { status: 500 },
+    );
   }
 }
+
+export const GET = withMetrics(_GET, "/api/trial");
+export const POST = withMetrics(_POST, "/api/trial");

@@ -11,6 +11,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { PRICING, getBaseUrl } from "@/config";
 import { getAuthUser } from "@/lib/auth-server";
 import { logAudit } from "@/lib/audit";
+import { withMetrics } from "@/lib/metrics";
+import { VALIDATION, AUTH, SYSTEM } from "@/config/messages";
 
 // Stripe is imported dynamically to avoid build errors when key is not set
 type Stripe = typeof import("stripe").default;
@@ -28,15 +30,15 @@ const STRIPE_PRICES: Record<PlanType, string> = {
   unlimited: PRICING.UNLIMITED.stripePriceId,
 };
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const body: CheckoutRequestBody = await request.json();
 
     // Validate request
     if (!body.plan || !["starter", "plus", "unlimited"].includes(body.plan)) {
       return NextResponse.json(
-        { error: "Invalid plan type" },
-        { status: 400 }
+        { error: VALIDATION.INVALID_PLAN },
+        { status: 400 },
       );
     }
 
@@ -45,8 +47,8 @@ export async function POST(request: NextRequest) {
     if (!stripeKey) {
       console.error("[CHECKOUT] STRIPE_SECRET_KEY not configured");
       return NextResponse.json(
-        { error: "Payment system not configured. Please try again later." },
-        { status: 503 }
+        { error: SYSTEM.PAYMENT_NOT_CONFIGURED },
+        { status: 503 },
       );
     }
 
@@ -59,8 +61,8 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
+        { error: AUTH.SIGN_IN_REQUIRED },
+        { status: 401 },
       );
     }
 
@@ -104,13 +106,15 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.message.includes("No such price")) {
       return NextResponse.json(
         { error: "Payment system is being set up. Please try again later." },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     return NextResponse.json(
-      { error: "Unable to start checkout. Please try again or contact support." },
-      { status: 500 }
+      { error: SYSTEM.CHECKOUT_FAILED },
+      { status: 500 },
     );
   }
 }
+
+export const POST = withMetrics(_POST, "/api/checkout");

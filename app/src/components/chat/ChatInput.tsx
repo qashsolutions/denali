@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { FileAttachment, AttachmentMediaType } from "@/types/attachment";
 import { ALLOWED_MEDIA_TYPES, FILE_INPUT_ACCEPT } from "@/types/attachment";
 import { formatFileSize } from "@/config/pricing";
+import { VALIDATION } from "@/config/messages";
 
 export interface ChatInputProps {
   onSend: (message: string, attachment?: FileAttachment) => void;
@@ -100,13 +101,13 @@ export function ChatInput({
 
     // Validate type
     if (!ALLOWED_MEDIA_TYPES.includes(file.type as AttachmentMediaType)) {
-      setFileError("Only PDF, PNG, and JPEG files are supported.");
+      setFileError(VALIDATION.FILE_TYPE_UNSUPPORTED);
       return;
     }
 
     // Validate size (-1 = unlimited, skip check)
     if (maxFileSizeBytes && maxFileSizeBytes > 0 && file.size > maxFileSizeBytes) {
-      setFileError(`File too large. Your plan allows up to ${formatFileSize(maxFileSizeBytes)}.`);
+      setFileError(VALIDATION.FILE_TOO_LARGE(formatFileSize(maxFileSizeBytes)));
       return;
     }
 
@@ -117,7 +118,7 @@ export function ChatInput({
       // Strip the data URL prefix (e.g., "data:application/pdf;base64,")
       const base64Data = result.split(",")[1];
       if (!base64Data) {
-        setFileError("Failed to read file.");
+        setFileError(VALIDATION.FILE_READ_FAILED);
         return;
       }
       setAttachment({
@@ -129,7 +130,7 @@ export function ChatInput({
       setFileError(null);
     };
     reader.onerror = () => {
-      setFileError("Failed to read file.");
+      setFileError(VALIDATION.FILE_READ_FAILED);
     };
     reader.readAsDataURL(file);
   };

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRICING, formatPrice } from "@/config";
+import { SYSTEM } from "@/config/messages";
 
 interface PaywallModalProps {
   isOpen: boolean;
@@ -94,7 +95,7 @@ export function PaywallModal({
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Unable to start checkout. Please try again.");
+        throw new Error(data.error || SYSTEM.CHECKOUT_FAILED);
       }
 
       const { url } = await response.json();
@@ -102,10 +103,10 @@ export function PaywallModal({
       if (url) {
         window.location.href = url;
       } else {
-        throw new Error("Unable to start checkout. Please try again.");
+        throw new Error(SYSTEM.CHECKOUT_FAILED);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong with payment. Please try again.");
+      setError(err instanceof Error ? err.message : SYSTEM.GENERIC_ERROR);
       setIsProcessing(false);
     }
   };

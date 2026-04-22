@@ -56,8 +56,10 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
-  // Check access on mount and when email verification status changes
-  // Only depends on isEmailVerified (not the whole authState) to avoid re-running on every loading toggle
+  // Check access on mount and when auth state settles
+  // Depends on isEmailVerified + plan + isAdmin so the gate re-evaluates
+  // after loadProfileData() completes (avoids stale closure race).
+  // Does NOT depend on the full authState to avoid re-running on every loading toggle.
   useEffect(() => {
     const check = async () => {
       if (!authState.isEmailVerified) {
@@ -78,7 +80,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
 
     check();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authState.isEmailVerified]);
+  }, [authState.isEmailVerified, authState.plan, authState.isAdmin]);
 
   // Handle successful email verification
   const handleEmailVerified = async () => {
