@@ -64,3 +64,16 @@ npm-debug.log*
 *.swo
 .vercel
 .env*.local
+
+# Next.js (root-level build output; app/.next/ already covered by app/.gitignore)
+/.next/
+
+# Claude Code (app-level local state — root-level .claude/* already covered above)
+app/.claude/
+
+# AWS Session Manager Plugin (tooling download, not source)
+sessionmanager-bundle/
+sessionmanager-bundle.zip
+
+# Lambda deployment artifacts (Lambda source lives in denali-monitor/index.py — tracked)
+denali-monitor.zip
