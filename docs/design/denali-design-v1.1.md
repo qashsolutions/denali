@@ -2,7 +2,7 @@
 
 **Master reference for product scope, guardrails, safety, pipeline architecture, and sequencing**
 
-*Version 1.2 — April 22, 2026*
+*Version 1.3 — April 22, 2026*
 *Status: Living document. Every Claude Code prompt after this references this doc.*
 *Prior basis: CMS demo Q&A (Apr 15), discovery inventory (Apr 17), research memos A and B (Apr 17)*
 *Related repo reference: also referenced in CLAUDE.md*
@@ -374,6 +374,8 @@ Sequenced by severity. Integrated into build order above.
 18. `scripts/seed-blog-posts.sql` is a duplicate of `scripts/migrate-blog.sql` without ON CONFLICT guards; never include in apply order.
 19. `scripts/migrate-appeal-levels.sql` has obsolete `CREATE OR REPLACE FUNCTION` that conflicts with prod-evolved signature; header comment marks it obsolete (commit 322a4c9). File can be removed entirely in a cleanup pass.
 20. `/api/auth/send-otp` route returns 200 even when `sendEmail()` returns null messageId — misleads user. Fix by checking return value and returning 500 on failure.
+21. **Important.** No staging CI workflow — `.github/workflows/deploy.yml` is the only workflow and it auto-deploys every push to `main` straight to prod (`denali` cluster / `denali-web` service). Staging deploys are manual. Blocks the "staging-only default" cadence policy in BUILD_STATUS.md until a staging workflow or branch-based strategy is in place. Discovered 2026-04-22 pre-build audit.
+22. **Important.** Tests never run in CI — `deploy.yml` has no test step; recent SUCCESS runs reflect build-only. Separately, 26 of 70 test files are untracked in git as of 2026-04-22. Fix: add test step to `deploy.yml` (or sibling workflow) AND commit the untracked test files.
 
 ---
 
@@ -421,13 +423,14 @@ Every substantive change requires:
 - **v1.0 (2026-04-17)** — Initial consolidated design doc. Synthesized from CMS demo Q&A, discovery inventory, research Memo A (condition scope), research Memo B (safety triggers), pipeline architecture discussions.
 - **v1.1 (2026-04-17)** — North Star simplified: "Medicare and pre-Medicare" removed; "55+" covers both inherently. Build order converted from timed phases to dependency-sequenced blocks (operator decides pace). CLAUDE.md reference added.
 - **v1.2 (2026-04-22)** — Added Part 14: Environment Status (staging operational, prod ANTHROPIC_MODEL fixed, CMS prod access in progress). Part 10 Cleanup Backlog: added items #16–20 discovered during staging bootstrap smoke-testing session. No scope changes to Parts 2, 3, 4, 5, 6, 7 (condition scope, pipeline, guardrails unchanged).
+- **v1.3 (2026-04-22)** — Pre-Foundation audit findings folded in. Part 10 Cleanup Backlog: added items #21 (no staging CI workflow) and #22 (tests not in CI, 26 test files untracked). Part 14 prod task def bumped :164 → :165 (auto-deployed by the v1.2 doc commit itself); new Known Gaps entries for CI deficits; new "Pre-Foundation Audit — 2026-04-22" subsection confirming Stage 1 preconditions clean. No scope changes to Parts 2, 3, 4, 5, 6, 7.
 
 ---
 
 ## Part 14 — Environment Status (as of 2026-04-22)
 
 ### Production
-- Service: denali-web in cluster denali, task def denali:164
+- Service: denali-web in cluster denali, task def denali:165 (bumped from :164 on 2026-04-22 by the v1.2 doc-commit auto-deploy)
 - ANTHROPIC_MODEL: Sonnet 4.6 (chat), Opus 4.6 (appeals) — fixed 2026-04-22 after discovering chat was misconfigured on Opus
 - Stripe: live-mode webhook active
 - CMS Blue Button 2.0: production access approved 2026-04-17 (transition in progress)
@@ -451,3 +454,10 @@ Every substantive change requires:
 - STARTER Stripe checkout mode:subscription bug (both envs, pre-existing)
 - ID.me code paths still present but flagged deprecated
 - `sql/001-schema.sql` was Supabase-era stale; replaced with fresh prod pg_dump on 2026-04-22
+- **No staging CI workflow** — every push to `main` auto-deploys to prod (see Part 10 Cleanup #21)
+- **Tests not wired into CI** — 70 test files, 26 untracked; CI deploy.yml has no test step (see Part 10 Cleanup #22)
+
+### Pre-Foundation Audit — 2026-04-22
+- Working tree carries 48 modified tracked files + 30+ untracked paths (most dated 2026-04-17, residue of pre-demo hardening). Recommended path: one "pre-foundation hygiene" commit of auth/API edits + 25 untracked unit tests + 1 untracked E2E spec + vitest coverage config + 2 deletions; separately handle infra/binaries/scratch docs.
+- Stage 1 preconditions CLEAN: `users.birth_year`, `users.is_on_medicare`, `user_conditions` table — none exist in fresh prod pg_dump (`sql/001-schema.sql` dated 2026-04-21 21:32). Purely additive migration, no conflicts.
+- `scripts/migrate-prod-drift-recovery.sql` exists as the staging-bootstrap catch-up (already applied to staging per Part 14 schema parity). Not a Stage 1 concern.
