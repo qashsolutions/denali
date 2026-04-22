@@ -1,3 +1,25 @@
+-- ============================================================================
+-- OBSOLETE — DO NOT APPLY
+--
+-- Status:    Obsolete as of 2026-04-21
+-- Reason:    Conflicts with prod-derived baseline (sql/001-schema.sql).
+--            Prod evolved beyond this migration's function signature:
+--              - Baseline get_unreported_outcome(text) returns 5 columns;
+--                this migration tries CREATE OR REPLACE with 8 columns,
+--                different denial_date type, different body logic.
+--            PostgreSQL rejects CREATE OR REPLACE FUNCTION when OUT
+--            parameters differ from existing signature.
+--            Applying the DROP-then-CREATE workaround would regress prod's
+--            evolved definition back to this stale version.
+--
+-- Safe to skip: All column additions (appeal_level, prior_appeal_id),
+--               DO-block constraint, and index defined by this migration
+--               are already present in the prod-derived baseline.
+--
+-- History:   Original migration added multi-level appeal tracking before
+--            prod was pg_dumped into sql/001-schema.sql on 2026-04-21.
+-- ============================================================================
+
 -- migrate-appeal-levels.sql
 -- Adds multi-level appeal tracking to the appeals table.
 -- Idempotent: safe to run multiple times.
