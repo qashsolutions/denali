@@ -124,7 +124,7 @@ updates), all no-ops for functional behavior.
 **Prerequisites:**
 - Clean working tree ✓
 - develop branch with staging pipeline ✓
-- Design doc v1.2 as source of truth ✓
+- Design doc v1.3 as source of truth ✓
 - Staging smoke-tested ✓
 
 **Stage 1 scope** (per Claude Code's 10-stage plan and design
