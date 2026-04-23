@@ -30,6 +30,8 @@ export interface User {
   theme: "auto" | "light" | "dark";
   textSize: number;
   highContrast: boolean;
+  birthYear?: number | null;
+  isOnMedicare: boolean;
 }
 
 // Chat response from Edge function
