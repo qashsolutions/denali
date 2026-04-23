@@ -30,6 +30,8 @@ export interface AuthState {
   isLoading: boolean;
   error: string | null;
   requireIdentityVerification: boolean; // Feature flag: true = Medicare App Library (ID.me required), false = Connected Apps Directory
+  birthYear: number | null; // Foundation Stage 1 — null until captured via ProfileCompletionModal
+  isOnMedicare: boolean; // Foundation Stage 1 — gates Medicare-specific features
 }
 
 export type AppealAccessStatus = "available" | "paywall" | "allowed";
@@ -70,6 +72,8 @@ const DEFAULT_AUTH_STATE: AuthState = {
   isLoading: true,
   error: null,
   requireIdentityVerification: false,
+  birthYear: null,
+  isOnMedicare: false,
 };
 
 // Module-level cache: survives SPA navigations
@@ -146,6 +150,11 @@ export function useAuth(): UseAuthReturn {
       const gender = profileData?.gender || null;
       const requireIdentityVerification =
         profileData?.requireIdentityVerification || false;
+      const birthYear =
+        typeof profileData?.birthYear === "number"
+          ? profileData.birthYear
+          : null;
+      const isOnMedicare = profileData?.isOnMedicare === true;
 
       let trialStatus: AuthState["trialStatus"] = "none";
       let trialDaysRemaining = 0;
@@ -170,6 +179,8 @@ export function useAuth(): UseAuthReturn {
         trialDaysRemaining,
         isAdmin,
         requireIdentityVerification,
+        birthYear,
+        isOnMedicare,
       }));
 
       cacheSet(STORES.PROFILE, "profile", {
@@ -184,6 +195,8 @@ export function useAuth(): UseAuthReturn {
         trialStatus,
         trialDaysRemaining,
         requireIdentityVerification,
+        birthYear,
+        isOnMedicare,
       });
     } catch (error) {
       console.error("Error loading profile data:", error);
@@ -200,6 +213,8 @@ export function useAuth(): UseAuthReturn {
         trialStatus: string;
         trialDaysRemaining: number;
         requireIdentityVerification?: boolean;
+        birthYear?: number | null;
+        isOnMedicare?: boolean;
       }>(STORES.PROFILE, "profile", TTL.PROFILE);
       if (cached) {
         const d = cached.data;
@@ -216,6 +231,8 @@ export function useAuth(): UseAuthReturn {
           trialStatus: d.trialStatus as AuthState["trialStatus"],
           trialDaysRemaining: d.trialDaysRemaining,
           requireIdentityVerification: d.requireIdentityVerification || false,
+          birthYear: typeof d.birthYear === "number" ? d.birthYear : null,
+          isOnMedicare: d.isOnMedicare === true,
         }));
       }
     }
