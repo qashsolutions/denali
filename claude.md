@@ -181,6 +181,7 @@ Commits this session: `1e33970` (alert opt-in), `c3d0b26` (Q&A restructure), `d3
 - [Skills & Prompt System](#skills--prompt-system) — [Skill Loading Order](#skill-loading-order--gates) · [Base Prompt](#base-prompt-always-loaded) · [Additional Skills](#additional-skills-loaded-contextually)
 - [Orchestration Flows](#orchestration-flows) — [Coverage Guidance](#flow-1-coverage-guidance-proactive-denial-prevention) · [Appeal](#flow-2-appeal-reactive-denial-response) · [Denial Code Lookup](#flow-3-quick-denial-code-lookup) · [Coverage-to-Appeal Bridge](#flow-4-coverage-to-appeal-bridge) · [EOB Explainer](#flow-5-eob-explainer-bill-understanding)
 - [Business Model, Auth & Payments](#business-model-auth--payments) — [Pricing](#pricing) · [Auth Gating](#auth-gating) · [Appeal Gating](#appeal-gating-logic) · [Stripe](#stripe-payment-architecture)
+- [Infrastructure Architecture](#infrastructure-architecture) — [AWS Resources](#aws-resources) · [ECR Lifecycle Policies](#ecr-lifecycle-policies) · [IAM Roles](#iam-roles-for-github-actions) · [CloudWatch Alarms](#cloudwatch-alarms-prod) · [Protected ECR Tags](#protected-ecr-tags) · [Docker Base Image](#docker-base-image)
 - [Blue Button 2.0](#blue-button-20-medicare-fhir-api) — [OAuth Flow](#oauth-flow-pkce) · [EOB Extraction Pipeline](#eob-extraction-pipeline) · [Condition Severity Classification](#condition-severity-classification)
 - [UI/UX Guidelines](#uiux-guidelines) — [Layout Architecture](#layout-architecture) · [Theme](#theme) · [Accessibility](#accessibility)
 - [PWA Offline & Low-Bandwidth](#pwa-offline--low-bandwidth) — [Service Worker](#service-worker-strategies) · [IndexedDB Cache](#indexeddb-cache) · [Offline Write Queue](#offline-write-queue) · [Hook Integration](#hook-integration-pattern)
@@ -872,7 +873,7 @@ All 5 alarms → `denali-monitor-alerts` SNS topic. Logs Insights queries in `in
 
 ### Lifecycle Policies
 
-- **ECR**: Keep last 3 images, auto-expire older (set 2026-02-27)
+- **ECR**: 5-rule per-prefix policy as of 2026-04-23 (replaces earlier "keep last 3, any tag" rule that caused prod outage). See [Infrastructure Architecture → ECR Lifecycle Policies](#ecr-lifecycle-policies) for full rules.
 - **S3 CloudTrail bucket**: Expire logs after 30 days (set 2026-02-27)
 
 ### AWS Resource Inventory (2026-02-28)
@@ -897,6 +898,93 @@ All 5 alarms → `denali-monitor-alerts` SNS topic. Logs Insights queries in `in
 | CloudFormation     | 2 stacks                            | denali-scheduler, denali-monitor                                          | $0                |
 | **TOTAL**          |                                     | **24/7 runtime**                                                          | **~$48/mo**       |
 | **With scheduler** |                                     | **~16hr/day weekdays**                                                    | **~$30-35/mo**    |
+
+---
+
+## Infrastructure Architecture
+
+> Target-state reference. Items marked `✓` are live; items marked `PLANNED` are
+> remediation tasks following the 2026-04-23 ECR eviction outage
+> (see `docs/incidents/2026-04-23-ecr-eviction.md`). As items complete,
+> update the status marker inline.
+
+### AWS Resources
+
+**Prod environment:**
+- Cluster: `denali`
+- Service: `denali-web`
+- Task family: `denali`
+- ECR repo: `denali` ✓ (isolated from staging as of 2026-04-23)
+- RDS: `denali-prod.ca5m0qc8e5h8.us-east-1.rds.amazonaws.com`
+- URL: https://denali.health
+
+**Staging environment:**
+- Cluster: `denali-staging`
+- Service: `denali-staging-web`
+- Task family: `denali-staging`
+- ECR repo: `denali-staging` (PLANNED; currently `denali`
+  shared — split on 2026-04-23)
+- RDS: `denali-staging.ca5m0qc8e5h8.us-east-1.rds.amazonaws.com`
+- URL: https://staging.denali.health
+
+### ECR Lifecycle Policies
+
+**`denali` repo (prod) — 5-rule policy applied 2026-04-23:**
+1. `prod-stable` tag: never expires (9999 retention)
+2. Prod SHA tags (hex 0-7 prefix): keep last 10
+3. Prod SHA tags (hex 8-f prefix): keep last 10
+4. `staging-` prefix: keep last 5 (transitional; will move to
+   `denali-staging` repo)
+5. Untagged: expire after 1 day
+
+**`denali-staging` repo — PLANNED:**
+- `staging-` prefix: keep last 5
+- Untagged: expire after 1 day
+
+### IAM Roles for GitHub Actions
+
+**Current:** `denali-github-actions-role` — shared role trusting
+both `main` and `develop` refs. Works but violates principle
+of least privilege.
+
+**Target (in progress 2026-04-23):**
+- `denali-prod-deploy-role` — trusts `refs/heads/main` only
+- `denali-staging-deploy-role` — trusts `refs/heads/develop`
+  only
+
+### CloudWatch Alarms (Prod)
+
+**SNS topic:** `denali-prod-alerts`
+
+**Subscriptions:**
+- admin@denali.health
+- ramanac@gmail.com
+
+**Alarms (PLANNED 2026-04-23):**
+- ECS `RunningTaskCount` < `DesiredCount` for denali-web
+- ALB `HTTPCode_ELB_5XX_Count` > 5% over 5 min
+- Log metric filter: `CannotPullContainerError` count > 0 over
+  5 min
+
+### Protected ECR Tags
+
+**`prod-stable`** — never expires per lifecycle rule 1. Updated
+on every successful prod deploy to point to the current
+deployed SHA. Provides a guaranteed rollback target regardless
+of other retention rules.
+
+### Docker Base Image
+
+**Current:** `FROM node:20-alpine` (tag-floating; PLANNED to
+digest-pin 2026-04-23).
+
+**Target:** `FROM node:20-alpine@sha256:<digest>` — reproducible
+rebuilds for audit compliance.
+
+### Incident Response
+
+See `docs/incidents/` for postmortems and `docs/runbooks/` for
+recovery procedures.
 
 ---
 
