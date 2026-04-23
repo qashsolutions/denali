@@ -1,0 +1,40 @@
+{
+  "family": "denali-staging-dbinit",
+  "taskRoleArn": "arn:aws:iam::236823123138:role/denali-ecs-task-role",
+  "executionRoleArn": "arn:aws:iam::236823123138:role/denali-ecs-execution-role",
+  "networkMode": "awsvpc",
+  "cpu": "256",
+  "memory": "512",
+  "requiresCompatibilities": ["FARGATE"],
+  "containerDefinitions": [
+    {
+      "name": "dbinit",
+      "image": "postgres:16-alpine",
+      "essential": true,
+      "command": ["sh", "-c", "psql -c 'CREATE DATABASE denali;'"],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/denali-staging",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "dbinit"
+        }
+      },
+      "environment": [
+        { "name": "PGHOST", "value": "denali-staging.ca5m0qc8e5h8.us-east-1.rds.amazonaws.com" },
+        { "name": "PGPORT", "value": "5432" },
+        { "name": "PGDATABASE", "value": "postgres" },
+        { "name": "PGSSLMODE", "value": "require" }
+      ],
+      "secrets": [
+        { "name": "PGUSER", "valueFrom": "arn:aws:secretsmanager:us-east-1:236823123138:secret:rds!db-20e493ba-f3bb-4d96-8178-ea4fc039ebe3-QlRFZ9:username::" },
+        { "name": "PGPASSWORD", "valueFrom": "arn:aws:secretsmanager:us-east-1:236823123138:secret:rds!db-20e493ba-f3bb-4d96-8178-ea4fc039ebe3-QlRFZ9:password::" }
+      ]
+    }
+  ],
+  "tags": [
+    { "key": "Environment", "value": "staging" },
+    { "key": "ManagedBy", "value": "denali-pass1" },
+    { "key": "Purpose", "value": "one-off-db-init" }
+  ]
+}
