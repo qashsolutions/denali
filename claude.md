@@ -181,7 +181,7 @@ Commits this session: `1e33970` (alert opt-in), `c3d0b26` (Q&A restructure), `d3
 - [Skills & Prompt System](#skills--prompt-system) — [Skill Loading Order](#skill-loading-order--gates) · [Base Prompt](#base-prompt-always-loaded) · [Additional Skills](#additional-skills-loaded-contextually)
 - [Orchestration Flows](#orchestration-flows) — [Coverage Guidance](#flow-1-coverage-guidance-proactive-denial-prevention) · [Appeal](#flow-2-appeal-reactive-denial-response) · [Denial Code Lookup](#flow-3-quick-denial-code-lookup) · [Coverage-to-Appeal Bridge](#flow-4-coverage-to-appeal-bridge) · [EOB Explainer](#flow-5-eob-explainer-bill-understanding)
 - [Business Model, Auth & Payments](#business-model-auth--payments) — [Pricing](#pricing) · [Auth Gating](#auth-gating) · [Appeal Gating](#appeal-gating-logic) · [Stripe](#stripe-payment-architecture)
-- [Infrastructure Architecture](#infrastructure-architecture) — [AWS Resources](#aws-resources) · [ECR Lifecycle Policies](#ecr-lifecycle-policies) · [IAM Roles](#iam-roles-for-github-actions) · [CloudWatch Alarms](#cloudwatch-alarms-prod) · [Protected ECR Tags](#protected-ecr-tags) · [Docker Base Image](#docker-base-image)
+- [Infrastructure Architecture](#infrastructure-architecture) — [AWS Resources](#aws-resources) · [ECR Lifecycle Policies](#ecr-lifecycle-policies) · [IAM Roles](#iam-roles-for-github-actions) · [CloudWatch Alarms](#cloudwatch-alarms-prod) · [Protected ECR Tags](#protected-ecr-tags) · [Docker Base Image](#docker-base-image) · [GitHub Actions Pinning](#github-actions-pinning)
 - [Blue Button 2.0](#blue-button-20-medicare-fhir-api) — [OAuth Flow](#oauth-flow-pkce) · [EOB Extraction Pipeline](#eob-extraction-pipeline) · [Condition Severity Classification](#condition-severity-classification)
 - [UI/UX Guidelines](#uiux-guidelines) — [Layout Architecture](#layout-architecture) · [Theme](#theme) · [Accessibility](#accessibility)
 - [PWA Offline & Low-Bandwidth](#pwa-offline--low-bandwidth) — [Service Worker](#service-worker-strategies) · [IndexedDB Cache](#indexeddb-cache) · [Offline Write Queue](#offline-write-queue) · [Hook Integration](#hook-integration-pattern)
@@ -922,8 +922,7 @@ All 5 alarms → `denali-monitor-alerts` SNS topic. Logs Insights queries in `in
 - Cluster: `denali-staging`
 - Service: `denali-staging-web`
 - Task family: `denali-staging`
-- ECR repo: `denali-staging` (PLANNED; currently `denali`
-  shared — split on 2026-04-23)
+- ECR repo: `denali-staging` ✓ (split from `denali` 2026-04-23)
 - RDS: `denali-staging.ca5m0qc8e5h8.us-east-1.rds.amazonaws.com`
 - URL: https://staging.denali.health
 
@@ -937,20 +936,28 @@ All 5 alarms → `denali-monitor-alerts` SNS topic. Logs Insights queries in `in
    `denali-staging` repo)
 5. Untagged: expire after 1 day
 
-**`denali-staging` repo — PLANNED:**
-- `staging-` prefix: keep last 5
+**`denali-staging` repo ✓ (applied 2026-04-23):**
+- `staging-` prefix: keep last 10
 - Untagged: expire after 1 day
 
 ### IAM Roles for GitHub Actions
 
-**Current:** `denali-github-actions-role` — shared role trusting
-both `main` and `develop` refs. Works but violates principle
-of least privilege.
-
-**Target (in progress 2026-04-23):**
-- `denali-prod-deploy-role` — trusts `refs/heads/main` only
+**Current ✓ (split 2026-04-23):**
+- `denali-prod-deploy-role` — trusts `refs/heads/main` only,
+  scoped to `denali` ECR repo + `denali-web` service in
+  `denali` cluster
 - `denali-staging-deploy-role` — trusts `refs/heads/develop`
-  only
+  only, scoped to `denali-staging` ECR repo +
+  `denali-staging-web` service in `denali-staging` cluster
+
+**Legacy (disarmed):**
+- `denali-github-actions-role` — shell preserved as rollback
+  target. Inline policy detached 2026-04-23 Phase C Step 13;
+  policy preserved at
+  `docs/runbooks/rollback-artifacts/denali-deploy-policy.json`.
+  Role can still be assumed from main or develop but has zero
+  permissions. 90-day review cadence — delete once new roles
+  proven stable.
 
 ### CloudWatch Alarms (Prod)
 
@@ -960,31 +967,80 @@ of least privilege.
 - admin@denali.health
 - ramanac@gmail.com
 
-**Alarms (PLANNED 2026-04-23):**
-- ECS `RunningTaskCount` < `DesiredCount` for denali-web
-- ALB `HTTPCode_ELB_5XX_Count` > 5% over 5 min
-- Log metric filter: `CannotPullContainerError` count > 0 over
-  5 min
+**Alarms ✓ (applied 2026-04-23):**
+- `denali-prod-ecs-running-below-desired` — CloudWatch alarm,
+  fires when ECS RunningTaskCount < DesiredCount for 2
+  consecutive 1-min periods. Uses ECS/ContainerInsights
+  namespace (Container Insights enabled on both clusters).
+- `denali-prod-alb-5xx-rate-high` — CloudWatch alarm, fires
+  when Target 5xx rate > 5% over 5 min with volume gate at
+  20 req/5min to suppress low-traffic false positives.
+- `denali-prod-ecs-task-failed-to-start` — EventBridge rule
+  (not CloudWatch alarm) catching ECS Task State Change
+  events where stopCode=TaskFailedToStart. Covers
+  CannotPullContainerError, ResourceInitializationError,
+  and other infrastructure-level task start failures. Direct
+  SNS target.
+
+All three publish to `denali-prod-alerts` SNS topic.
 
 ### Protected ECR Tags
 
-**`prod-stable`** — never expires per lifecycle rule 1. Updated
-on every successful prod deploy to point to the current
-deployed SHA. Provides a guaranteed rollback target regardless
-of other retention rules.
+**`prod-stable`** ✓ (automation added 2026-04-23):
+- Never expires per lifecycle rule 1 (`countNumber: 9999`)
+- Automatically retagged on every successful prod deploy via
+  `deploy.yml` post-deploy step (after ECS service stability
+  wait completes)
+- Provides absolute rollback floor: guaranteed to exist in ECR
+  regardless of SHA-bucket retention rules, lifecycle policy
+  changes, or accidental eviction
+- Current holder: image built from main tip
+
+To roll back to `prod-stable`, register a new task def with
+image URI `<ECR>/denali:prod-stable` and update the service.
+See `docs/runbooks/ecr-eviction-recovery.md` for exact
+commands.
 
 ### Docker Base Image
 
-**Current:** `FROM node:20-alpine` (tag-floating; PLANNED to
-digest-pin 2026-04-23).
+**Current ✓ (digest-pinned 2026-04-23):**
+`FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293`
 
-**Target:** `FROM node:20-alpine@sha256:<digest>` — reproducible
-rebuilds for audit compliance.
+Both staging (develop commit 05d9655) and prod (main commit
+be8f409) build against this digest. Verified reproducible:
+two independent builds of the same source commit produce
+bit-identical base layers.
+
+Future base image updates should bump this digest via
+deliberate PR, not via tag floating.
+
+### GitHub Actions Pinning
+
+All `uses:` references in both `.github/workflows/deploy.yml`
+and `.github/workflows/deploy-staging.yml` are pinned to
+40-character commit SHAs ✓ (applied 2026-04-23 to develop in
+commit ad1b387, cherry-picked to main in 335da77). Comments
+preserve human-readable version tags.
+
+Rationale: action tag immutability on GitHub is advisory. A
+compromised action author could force-push a version tag to
+malicious code. SHA-pinning ensures we pull the audited commit
+regardless of tag changes.
+
+Updating action versions is now a deliberate code change:
+resolve new tag to SHA, update workflow, review diff.
 
 ### Incident Response
 
-See `docs/incidents/` for postmortems and `docs/runbooks/` for
-recovery procedures.
+**Postmortems:** `docs/incidents/`
+- `2026-04-23-ecr-eviction.md` — prod outage caused by ECR
+  lifecycle eviction, same-day remediation
+
+**Runbooks:** `docs/runbooks/`
+- `ecr-eviction-recovery.md` — step-by-step recovery + all
+  verification commands for preventive measures
+- `rollback-artifacts/` — emergency-restore IAM policies +
+  config documents
 
 ---
 
