@@ -1,10 +1,105 @@
 # Runbook: ECR Eviction Recovery
 
 **Applies to:** Denali prod (and staging by analogy)
-**Last updated:** 2026-04-23
+**Last updated:** 2026-04-24
 **Based on incident:** `docs/incidents/2026-04-23-ecr-eviction.md`
 
+## Scheduled Downtime (Pre-Launch Cost Optimization)
+
+**Important context for responders:** Denali prod is scheduled to run only during business hours as a cost optimization measure pre-launch. Outside these hours, the service is intentionally down.
+
+**Schedule:**
+- **23:00 CDT (04:00 UTC)** — Service scales to 0, RDS stops
+- **08:00 CDT (13:00 UTC)** — RDS starts, service scales to 1
+
+**Driven by:**
+- EventBridge rule `denali-shutdown-nightly` → Lambda `denali-shutdown`
+- EventBridge rule `denali-startup-daily` → Lambda `denali-startup`
+- Both Lambdas use IAM role `denali-scheduler-lambda-role`
+
+### Alarm Behavior During Scheduled Downtime
+
+During the 23:00–08:00 CDT window, CloudWatch alarm actions are automatically disabled by the shutdown Lambda and re-enabled by the startup Lambda. This applies to:
+- `denali-prod-ecs-running-below-desired`
+- `denali-prod-alb-5xx-rate-high`
+
+**Implication:** No alarm emails are sent during the quiet window, even if alarms enter ALARM state due to missing metrics. A **real outage during this window will NOT page you automatically.**
+
+If you need to monitor prod during the quiet window for any reason (deploy test, late-night maintenance), you can manually re-enable actions:
+
+```bash
+aws cloudwatch enable-alarm-actions \
+  --alarm-names denali-prod-ecs-running-below-desired \
+                denali-prod-alb-5xx-rate-high
+```
+
+Remember to disable again before the next scheduled shutdown, or let the startup Lambda handle it at 08:00 CDT.
+
+### How to Distinguish Scheduled Downtime from an Outage
+
+Before diagnosing a 503 on denali.health or missing alarm emails, check the service state:
+
+```bash
+aws ecs describe-services --cluster denali --services denali-web \
+  --query 'services[0].{desired:desiredCount,running:runningCount}'
+```
+
+| desired | running | Meaning |
+|---------|---------|---------|
+| 0 | 0 | Scheduled downtime — not an outage |
+| 1 | 1 | Healthy — 503 likely app-layer issue |
+| 1 | 0 | **Real outage** — proceed to Recovery paths below |
+| 1 | 2 | Mid-deploy rollover — wait 2 min and recheck |
+
+### Real Incident During Scheduled Downtime
+
+If you need to recover prod before the 08:00 CDT scheduled startup (e.g., urgent user access required), manually invoke the startup Lambda:
+
+```bash
+aws lambda invoke \
+  --function-name denali-startup \
+  --invocation-type RequestResponse \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{}' \
+  /tmp/startup-response.json
+cat /tmp/startup-response.json
+```
+
+The Lambda will:
+1. Start RDS (up to 10 min)
+2. Scale ECS service to 1
+3. Poll for task READY (up to 3 min)
+4. Re-enable alarm actions
+
+Total time to healthy: ~13 min.
+
+Alternative — manual sequence without the Lambda:
+
+```bash
+# 1. Start RDS
+aws rds start-db-instance --db-instance-identifier denali-prod
+
+# 2. Wait for RDS available
+aws rds wait db-instance-available \
+  --db-instance-identifier denali-prod
+
+# 3. Scale ECS
+aws ecs update-service --cluster denali --service denali-web \
+  --desired-count 1
+
+# 4. Re-enable alarms (important — otherwise you're flying blind)
+aws cloudwatch enable-alarm-actions \
+  --alarm-names denali-prod-ecs-running-below-desired \
+                denali-prod-alb-5xx-rate-high
+```
+
+After manual recovery, the next scheduled shutdown at 23:00 CDT will re-run as normal.
+
 ## Symptoms
+
+**Before troubleshooting:** If it's between 23:00 CDT and 08:00 CDT, see the "Scheduled Downtime" section above first. Most 503s and absent alarms during that window are expected behavior, not incidents.
+
+Genuine incident symptoms:
 
 - `denali.health` or `staging.denali.health` returns 502 or times out
 - ECS service shows `desiredCount=1, runningCount=0`
@@ -232,6 +327,37 @@ aws sns get-topic-attributes \
 
 Expected: both alarms in `OK` state, EventBridge rule `ENABLED` with SNS target, `SubscriptionsConfirmed = 2`.
 
+### 7. Scheduler Lambda Alarm Suppression
+
+The `denali-shutdown` Lambda calls `cloudwatch:DisableAlarmActions` on prod alarms before scaling ECS to 0. The `denali-startup` Lambda re-enables after the service is verified running. Prevents false-positive alarm emails during the nightly scheduled downtime window without sacrificing real-incident detection during uptime hours.
+
+IAM permission granted on `denali-scheduler-lambda-role` (statement 4 of `denali-scheduler-permissions` inline policy), scoped to the two prod alarm ARNs only.
+
+Verify deployed:
+
+```bash
+aws lambda get-function-configuration \
+  --function-name denali-shutdown \
+  --query 'CodeSha256'
+
+aws lambda get-function-configuration \
+  --function-name denali-startup \
+  --query 'CodeSha256'
+```
+
+Compare SHAs against the deployment record (incident postmortem, Step 24).
+
+Verify IAM:
+
+```bash
+aws iam get-role-policy \
+  --role-name denali-scheduler-lambda-role \
+  --policy-name denali-scheduler-permissions \
+  --query 'PolicyDocument.Statement | length'
+```
+
+Expected: 4.
+
 ## Forensic Information
 
 If investigating an incident, these INACTIVE task defs preserve historical state for audit:
@@ -251,6 +377,8 @@ aws ecs describe-task-definition \
 1. **`denali-prod-ecs-running-below-desired` fires briefly during normal deploys.** Task rollover creates momentary windows where a new task is launching and the old is stopping. The 2-of-2-datapoints evaluation should mask rollovers under 2 min, but sustained deploys > 2 min may trigger. Check `rolloutState: IN_PROGRESS` before escalating.
 
 2. **EventBridge `TaskFailedToStart` can fire for transient infrastructure issues.** E.g., brief Secrets Manager or STS throttling. If the next task attempt succeeds and the service recovers, this is noise. Persistent (>2 events in 5 min) indicates real problem.
+
+3. **Alarms appear stale during scheduled downtime window.** Between 23:00–08:00 CDT, alarm actions are disabled by design (see "Scheduled Downtime" section above). If you see `ActionsEnabled: false` on either prod alarm during this window, it's expected. If you see it during uptime hours (08:00–23:00 CDT), something is wrong — investigate why `denali-startup` Lambda failed to re-enable, and manually re-enable alarm actions.
 
 ## Further reading
 
