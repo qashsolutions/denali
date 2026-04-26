@@ -1,7 +1,7 @@
 # Runbook: ECR Eviction Recovery
 
 **Applies to:** Denali prod (and staging by analogy)
-**Last updated:** 2026-04-24
+**Last updated:** 2026-04-26
 **Based on incident:** `docs/incidents/2026-04-23-ecr-eviction.md`
 
 ## Scheduled Downtime (Pre-Launch Cost Optimization)
@@ -57,12 +57,33 @@ If you need to recover prod before the 08:00 CDT scheduled startup (e.g., urgent
 
 ```bash
 aws lambda invoke \
+  --cli-read-timeout 720 \
+  --cli-connect-timeout 60 \
   --function-name denali-startup \
   --invocation-type RequestResponse \
   --cli-binary-format raw-in-base64-out \
   --payload '{}' \
   /tmp/startup-response.json
 cat /tmp/startup-response.json
+```
+
+**Important: include `--cli-read-timeout 720`.** The startup Lambda has a 660s timeout (it polls RDS for up to 10 min). The AWS CLI's default read timeout is 60s, so without the flag override, the CLI will retry the invocation up to 3 times — producing 3 concurrent Lambda executions. The Lambdas are idempotent so this is operationally harmless (the second and third invocations see RDS already starting and converge to the same end state), but it's confusing in CloudWatch Logs and wastes Lambda compute. The 720s flag value gives the Lambda its full timeout plus 60s buffer.
+
+If you don't need the response synchronously, use async invocation instead:
+
+```bash
+aws lambda invoke \
+  --function-name denali-startup \
+  --invocation-type Event \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{}' \
+  /tmp/startup-response.json
+```
+
+This returns immediately. Check CloudWatch Logs for the result:
+
+```bash
+aws logs tail /aws/lambda/denali-startup --follow
 ```
 
 The Lambda will:
@@ -72,6 +93,8 @@ The Lambda will:
 4. Re-enable alarm actions
 
 Total time to healthy: ~13 min.
+
+**Staging equivalent:** the same pattern applies to `denali-staging-startup` and `denali-staging-shutdown`. Same CLI timeout guidance, same async-invoke alternative. Staging Lambdas have a 660s timeout (startup) and 30s timeout (shutdown).
 
 Alternative — manual sequence without the Lambda:
 
