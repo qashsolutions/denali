@@ -28,8 +28,12 @@ async function _GET(request: NextRequest) {
       is_admin: boolean;
       birth_year: number | null;
       is_on_medicare: boolean;
+      birth_year_modal_dismissed_at: Date | null;
+      birth_year_modal_disabled: boolean;
     }>(
-      `SELECT plan, role, is_admin, birth_year, is_on_medicare FROM users WHERE id = $1 LIMIT 1`,
+      `SELECT plan, role, is_admin, birth_year, is_on_medicare,
+              birth_year_modal_dismissed_at, birth_year_modal_disabled
+       FROM users WHERE id = $1 LIMIT 1`,
       [user.userId],
     ),
     query<{ appeal_count: number; appeal_credits: number }>(
@@ -59,6 +63,9 @@ async function _GET(request: NextRequest) {
     isAdmin: profile?.is_admin || false,
     birthYear: profile?.birth_year ?? null,
     isOnMedicare: profile?.is_on_medicare ?? false,
+    birthYearModalDismissedAt:
+      profile?.birth_year_modal_dismissed_at?.toISOString() ?? null,
+    birthYearModalDisabled: profile?.birth_year_modal_disabled ?? false,
     appealCount: usage?.appeal_count || 0,
     appealCredits: usage?.appeal_credits || 0,
     idmeVerified: verification?.idme_verified || false,

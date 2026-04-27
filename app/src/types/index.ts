@@ -32,6 +32,8 @@ export interface User {
   highContrast: boolean;
   birthYear?: number | null;
   isOnMedicare: boolean;
+  birthYearModalDismissedAt?: string | null; // ISO timestamp or null
+  birthYearModalDisabled: boolean;
 }
 
 // Chat response from Edge function
