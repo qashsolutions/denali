@@ -31,7 +31,7 @@ function AppSettingsPageInner() {
   const { settings, setTextScale, resetSettings } = useSettings();
   const { consent, isLoading: consentLoading, updateConsent } = useConsent();
   const { topics: selectedTopics, isLoading: topicsLoading, toggleTopic } = useTopicPreferences();
-  const { authState, sendEmailOTP, verifyEmailOTP, enrollTOTP, unenrollTOTP, challengeAndVerifyTOTP, confirmTOTPEnrollment, signOut, clearError } = useAuth();
+  const { authState, sendEmailOTP, verifyEmailOTP, enrollTOTP, unenrollTOTP, challengeAndVerifyTOTP, confirmTOTPEnrollment, signOut, clearError, refetchProfile } = useAuth();
   const { preferences: alertPrefs, eligibility: alertEligibility, isLoading: alertsLoading, updatePreference: updateAlertPref } = useAlertPreferences();
   const [showTOTPEnroll, setShowTOTPEnroll] = useState(false);
   const [showTOTPRemoveConfirm, setShowTOTPRemoveConfirm] = useState(false);
@@ -55,6 +55,96 @@ function AppSettingsPageInner() {
   const [auditExpanded, setAuditExpanded] = useState(false);
   const [idmeMessage, setIdmeMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
   const [showIdmeConfirm, setShowIdmeConfirm] = useState(false);
+
+  // Stage 1.C: Profile section state (year-of-birth + reminder + Medicare)
+  const [yearInput, setYearInput] = useState(authState.birthYear?.toString() ?? "");
+  const [yearError, setYearError] = useState<string | null>(null);
+  const [yearSaving, setYearSaving] = useState(false);
+  const [reminderSaving, setReminderSaving] = useState(false);
+  const [medicareSaving, setMedicareSaving] = useState(false);
+
+  // Sync year input when authState.birthYear updates from a refetch
+  // (e.g., after Save success, or after navigating in mid-session)
+  useEffect(() => {
+    setYearInput(authState.birthYear?.toString() ?? "");
+  }, [authState.birthYear]);
+
+  const currentYear = new Date().getFullYear();
+  const computedAge = authState.birthYear !== null && authState.birthYear !== undefined
+    ? currentYear - authState.birthYear
+    : null;
+  const yearChanged = (() => {
+    const trimmed = yearInput.trim();
+    if (trimmed === "") return false;
+    if (!/^\d{4}$/.test(trimmed)) return false;
+    const parsed = Number(trimmed);
+    if (parsed < 1900 || parsed > currentYear) return false;
+    return parsed !== authState.birthYear;
+  })();
+
+  async function handleSaveYear() {
+    const trimmed = yearInput.trim();
+    if (trimmed === "") return; // Empty = no-op (no accidental clear)
+    if (!/^\d{4}$/.test(trimmed)) {
+      setYearError(`Year must be 4 digits between 1900 and ${currentYear}.`);
+      return;
+    }
+    const parsed = Number(trimmed);
+    if (parsed < 1900 || parsed > currentYear) {
+      setYearError(`Year must be between 1900 and ${currentYear}.`);
+      return;
+    }
+    setYearError(null);
+    setYearSaving(true);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ birth_year: parsed }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      await refetchProfile();
+    } catch {
+      setYearError("Couldn't save. Please try again.");
+    } finally {
+      setYearSaving(false);
+    }
+  }
+
+  async function handleReminderToggle(checked: boolean) {
+    setReminderSaving(true);
+    try {
+      const endpoint = checked
+        ? "/api/profile/birth-year-reminder/enable"
+        : "/api/profile/birth-year-reminder/disable";
+      const res = await fetch(endpoint, { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      await refetchProfile();
+    } catch (err) {
+      console.error("Reminder toggle failed:", err);
+    } finally {
+      setReminderSaving(false);
+    }
+  }
+
+  async function handleMedicareToggle(checked: boolean) {
+    setMedicareSaving(true);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_on_medicare: checked }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed");
+      await refetchProfile();
+    } catch (err) {
+      console.error("Medicare toggle failed:", err);
+    } finally {
+      setMedicareSaving(false);
+    }
+  }
 
   // Handle ID.me callback query params
   useEffect(() => {
@@ -432,6 +522,89 @@ function AppSettingsPageInner() {
           )}
         </div>
       </section>
+
+      {/* Profile (Stage 1.C) — birth year + reminder toggle + Medicare toggle */}
+      {authState.email && (
+        <section className="mb-8">
+          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">
+            Profile
+          </h2>
+          <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)] space-y-4">
+            {/* Year of birth */}
+            <div>
+              <label
+                htmlFor="birth-year"
+                className="block text-sm font-medium text-[var(--text-primary)] mb-2"
+              >
+                Year of birth
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  id="birth-year"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="e.g., 1953"
+                  value={yearInput}
+                  onChange={(e) => {
+                    setYearInput(e.target.value.replace(/\D/g, ""));
+                    if (yearError) setYearError(null);
+                  }}
+                  disabled={yearSaving}
+                  className="flex-1 px-4 py-3 rounded-xl bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+                <button
+                  onClick={handleSaveYear}
+                  disabled={!yearChanged || yearSaving}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {yearSaving ? "Saving..." : "Save"}
+                </button>
+                {computedAge !== null && (
+                  <span className="text-sm text-[var(--text-muted)] shrink-0">
+                    Age {computedAge}
+                  </span>
+                )}
+              </div>
+              {yearError && (
+                <p role="alert" className="text-xs text-red-600 dark:text-red-400 mt-1">
+                  {yearError}
+                </p>
+              )}
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Used to show Medicare information relevant to your age. Year only — month and day are not collected.
+              </p>
+            </div>
+
+            {/* Reminder toggle */}
+            <div className="pt-3 border-t border-[var(--border)]">
+              <ConsentToggle
+                label="Remind me to add my year of birth"
+                description={
+                  authState.birthYear !== null && authState.birthYear !== undefined
+                    ? "Your year of birth is set — no reminders needed."
+                    : "When this is on, we'll occasionally show a reminder if your year of birth is missing. Turn off to stop reminders permanently."
+                }
+                checked={!authState.birthYearModalDisabled}
+                loading={reminderSaving}
+                disabled={authState.birthYear !== null && authState.birthYear !== undefined}
+                onChange={handleReminderToggle}
+              />
+            </div>
+
+            {/* Medicare toggle */}
+            <div className="pt-3 border-t border-[var(--border)]">
+              <ConsentToggle
+                label="I'm enrolled in Medicare"
+                description="Helps us tailor health information to Medicare-specific topics like coverage, appeals, and benefits. You can turn this on or off any time."
+                checked={authState.isOnMedicare}
+                loading={medicareSaving}
+                onChange={handleMedicareToggle}
+              />
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Subscription */}
       {authState.email && (
@@ -965,14 +1138,17 @@ function ConsentToggle({
   description,
   checked,
   loading,
+  disabled = false,
   onChange,
 }: {
   label: string;
   description: string;
   checked: boolean;
   loading: boolean;
+  disabled?: boolean;
   onChange: (value: boolean) => void;
 }) {
+  const inert = loading || disabled;
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="flex-1 min-w-0">
@@ -982,11 +1158,14 @@ function ConsentToggle({
       <button
         role="switch"
         aria-checked={checked}
-        disabled={loading}
-        onClick={() => onChange(!checked)}
+        disabled={inert}
+        onClick={() => {
+          if (inert) return;
+          onChange(!checked);
+        }}
         className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${
           checked ? "bg-[var(--accent-primary)]" : "bg-[var(--bg-tertiary)]"
-        } ${loading ? "opacity-50" : ""}`}
+        } ${inert ? "opacity-50" : ""}`}
       >
         <span
           className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${

@@ -52,6 +52,7 @@ interface UseAuthReturn {
   checkAppealAccess: () => Promise<AppealAccessStatus>;
   signOut: () => Promise<void>;
   clearError: () => void;
+  refetchProfile: () => Promise<void>;
 }
 
 const DEFAULT_AUTH_STATE: AuthState = {
@@ -317,6 +318,16 @@ export function useAuth(): UseAuthReturn {
     return () =>
       window.removeEventListener("auth-state-change", handleAuthChange);
   }, [loadProfileData]);
+
+  // Stage 1.C: re-pull /api/profile + /api/trial + /api/auth/mfa/status
+  // and update authState. Used after Settings writes (PATCH or
+  // birth-year reminder endpoints) so the refreshed cadence/profile
+  // fields propagate to other consumers (modal gate, etc.) without
+  // a navigation. No-op when unauthenticated.
+  const refetchProfile = useCallback(async () => {
+    if (!authState.userId || !authState.email) return;
+    await loadProfileData(authState.userId, authState.email);
+  }, [authState.userId, authState.email, loadProfileData]);
 
   // Send OTP to email
   const sendEmailOTP = useCallback(async (email: string): Promise<boolean> => {
@@ -639,5 +650,6 @@ export function useAuth(): UseAuthReturn {
     checkAppealAccess,
     signOut,
     clearError,
+    refetchProfile,
   };
 }
