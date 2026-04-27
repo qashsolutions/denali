@@ -32,6 +32,8 @@ export interface AuthState {
   requireIdentityVerification: boolean; // Feature flag: true = Medicare App Library (ID.me required), false = Connected Apps Directory
   birthYear: number | null; // Foundation Stage 1 — null until captured via ProfileCompletionModal
   isOnMedicare: boolean; // Foundation Stage 1 — gates Medicare-specific features
+  birthYearModalDismissedAt: string | null; // Stage 1.C — ISO timestamp of last "Not now" click
+  birthYearModalDisabled: boolean; // Stage 1.C — true after "Don't show again" or Settings toggle off
 }
 
 export type AppealAccessStatus = "available" | "paywall" | "allowed";
@@ -74,6 +76,8 @@ const DEFAULT_AUTH_STATE: AuthState = {
   requireIdentityVerification: false,
   birthYear: null,
   isOnMedicare: false,
+  birthYearModalDismissedAt: null,
+  birthYearModalDisabled: false,
 };
 
 // Module-level cache: survives SPA navigations
@@ -155,6 +159,12 @@ export function useAuth(): UseAuthReturn {
           ? profileData.birthYear
           : null;
       const isOnMedicare = profileData?.isOnMedicare === true;
+      const birthYearModalDismissedAt =
+        typeof profileData?.birthYearModalDismissedAt === "string"
+          ? profileData.birthYearModalDismissedAt
+          : null;
+      const birthYearModalDisabled =
+        profileData?.birthYearModalDisabled === true;
 
       let trialStatus: AuthState["trialStatus"] = "none";
       let trialDaysRemaining = 0;
@@ -181,6 +191,8 @@ export function useAuth(): UseAuthReturn {
         requireIdentityVerification,
         birthYear,
         isOnMedicare,
+        birthYearModalDismissedAt,
+        birthYearModalDisabled,
       }));
 
       cacheSet(STORES.PROFILE, "profile", {
@@ -197,6 +209,8 @@ export function useAuth(): UseAuthReturn {
         requireIdentityVerification,
         birthYear,
         isOnMedicare,
+        birthYearModalDismissedAt,
+        birthYearModalDisabled,
       });
     } catch (error) {
       console.error("Error loading profile data:", error);
@@ -215,6 +229,8 @@ export function useAuth(): UseAuthReturn {
         requireIdentityVerification?: boolean;
         birthYear?: number | null;
         isOnMedicare?: boolean;
+        birthYearModalDismissedAt?: string | null;
+        birthYearModalDisabled?: boolean;
       }>(STORES.PROFILE, "profile", TTL.PROFILE);
       if (cached) {
         const d = cached.data;
@@ -233,6 +249,11 @@ export function useAuth(): UseAuthReturn {
           requireIdentityVerification: d.requireIdentityVerification || false,
           birthYear: typeof d.birthYear === "number" ? d.birthYear : null,
           isOnMedicare: d.isOnMedicare === true,
+          birthYearModalDismissedAt:
+            typeof d.birthYearModalDismissedAt === "string"
+              ? d.birthYearModalDismissedAt
+              : null,
+          birthYearModalDisabled: d.birthYearModalDisabled === true,
         }));
       }
     }

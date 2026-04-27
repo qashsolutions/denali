@@ -6,43 +6,62 @@ import { cn } from "@/lib/utils";
 /**
  * ProfileCompletionModal
  *
- * Foundation Stage 1.C — post-verification birth_year capture.
+ * Foundation Stage 1.C — birth-year capture with cadence cadence-aware
+ * UX. Three actions:
+ *   - Save: PATCH /api/profile { birth_year }, then close
+ *   - Not now: POST /api/profile/birth-year-reminder/dismiss (7-day cooldown), then close
+ *   - Don't show this again: POST /api/profile/birth-year-reminder/disable (permanent), then close
  *
- * Shown once per session when the authenticated user has a null
- * `birthYear` (design doc v1.3 Part 2 — soft gate). Dismissible with
- * "Remind me later" — no persisted dismiss state. On save, calls
- * PATCH /api/profile and closes on success; parent prevents re-open
- * for the remainder of the session.
+ * Eligibility (whether the modal should be open) is determined
+ * by the parent via canShowBirthYearModal() in lib/profile-cadence.
+ * This component is a presentation layer that calls handler
+ * props for the three actions; the parent owns the API calls
+ * and any local fast-path dismiss state.
  */
 
 interface ProfileCompletionModalProps {
   isOpen: boolean;
+  onSave: (birthYear: number) => Promise<void>;
+  onDismiss: () => Promise<void>;
+  onDisable: () => Promise<void>;
   onClose: () => void;
 }
 
 const CURRENT_YEAR = new Date().getFullYear();
 const MIN_YEAR = 1900;
 
+type ActiveAction = "save" | "dismiss" | "disable" | null;
+
 export function ProfileCompletionModal({
   isOpen,
+  onSave,
+  onDismiss,
+  onDisable,
   onClose,
 }: ProfileCompletionModalProps) {
   const [input, setInput] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [active, setActive] = useState<ActiveAction>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Early return unmounts the component when closed, so state is fresh
   // on next open — no reset effect needed.
   if (!isOpen) return null;
 
-  function validate(value: string): { ok: true; year: number } | { ok: false; error: string } {
+  const submitting = active !== null;
+
+  function validate(
+    value: string,
+  ): { ok: true; year: number } | { ok: false; error: string } {
     const trimmed = value.trim();
     if (!/^\d{4}$/.test(trimmed)) {
       return { ok: false, error: "Please enter a 4-digit year." };
     }
     const year = parseInt(trimmed, 10);
     if (year < MIN_YEAR || year > CURRENT_YEAR) {
-      return { ok: false, error: `Year must be between ${MIN_YEAR} and ${CURRENT_YEAR}.` };
+      return {
+        ok: false,
+        error: `Year must be between ${MIN_YEAR} and ${CURRENT_YEAR}.`,
+      };
     }
     return { ok: true, year };
   }
@@ -53,27 +72,40 @@ export function ProfileCompletionModal({
       setError(result.error);
       return;
     }
-    setSubmitting(true);
+    setActive("save");
     setError(null);
     try {
-      const res = await fetch("/api/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ birth_year: result.year }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        setError(body?.error ?? "We couldn't save that. Please try again.");
-        setSubmitting(false);
-        return;
-      }
+      await onSave(result.year);
       onClose();
     } catch {
-      setError("Something went wrong. Please try again.");
-      setSubmitting(false);
+      setError("We couldn't save that. Please try again.");
+      setActive(null);
     }
+  }
+
+  async function handleDismiss() {
+    setActive("dismiss");
+    setError(null);
+    try {
+      await onDismiss();
+    } catch {
+      // Don't block close on a failed dismiss write — the
+      // session-only fast-path in the parent still closes the
+      // modal, and the server state will be retried on next
+      // page load (gate stays inert because user just clicked).
+    }
+    onClose();
+  }
+
+  async function handleDisable() {
+    setActive("disable");
+    setError(null);
+    try {
+      await onDisable();
+    } catch {
+      // Same rationale as handleDismiss.
+    }
+    onClose();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -94,14 +126,20 @@ export function ProfileCompletionModal({
       <div className="relative z-10 w-full max-w-md mx-4 bg-[var(--bg-secondary)] rounded-2xl shadow-2xl border border-[var(--border)]">
         <div className="p-6 border-b border-[var(--border)]">
           <h2 className="text-xl font-semibold text-[var(--text-primary)]">
-            Help us tailor your experience
+            A quick question to help us serve you better
           </h2>
         </div>
 
         <div className="p-6 space-y-4">
           <p className="text-sm text-[var(--text-secondary)]">
-            We use your birth year to personalize Medicare coverage guidance and
-            relevant health insights.
+            Could you share your year of birth? It helps us:
+          </p>
+          <ul className="text-sm text-[var(--text-secondary)] space-y-1 list-disc pl-5">
+            <li>Show Medicare information that&apos;s relevant to your age</li>
+            <li>Tailor health guidance appropriately</li>
+          </ul>
+          <p className="text-xs text-[var(--text-muted)] italic">
+            Year only — we don&apos;t ask for month or day.
           </p>
 
           <div>
@@ -109,7 +147,7 @@ export function ProfileCompletionModal({
               htmlFor="birth-year"
               className="block text-sm font-medium text-[var(--text-secondary)] mb-2"
             >
-              Birth year
+              Year of birth
             </label>
             <input
               id="birth-year"
@@ -122,7 +160,7 @@ export function ProfileCompletionModal({
                 if (error) setError(null);
               }}
               onKeyDown={handleKeyDown}
-              placeholder="YYYY"
+              placeholder="e.g., 1953"
               disabled={submitting}
               autoFocus
               className={cn(
@@ -149,16 +187,31 @@ export function ProfileCompletionModal({
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleDisable}
               disabled={submitting}
               className={cn(
-                "px-4 py-2 rounded-xl text-sm font-medium",
-                "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+                "px-3 py-2 rounded-xl text-sm font-medium",
+                "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
+                "hover:underline",
                 "disabled:opacity-60 disabled:cursor-not-allowed",
                 "transition-colors",
               )}
             >
-              Remind me later
+              {active === "disable" ? "Saving..." : "Don't show this again"}
+            </button>
+            <button
+              type="button"
+              onClick={handleDismiss}
+              disabled={submitting}
+              className={cn(
+                "px-4 py-2 rounded-xl text-sm font-medium",
+                "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+                "border border-[var(--border)] hover:bg-[var(--bg-tertiary)]",
+                "disabled:opacity-60 disabled:cursor-not-allowed",
+                "transition-colors",
+              )}
+            >
+              {active === "dismiss" ? "Saving..." : "Not now"}
             </button>
             <button
               type="button"
@@ -172,7 +225,7 @@ export function ProfileCompletionModal({
                 "transition-opacity",
               )}
             >
-              {submitting ? "Saving..." : "Save"}
+              {active === "save" ? "Saving..." : "Save"}
             </button>
           </div>
         </div>
