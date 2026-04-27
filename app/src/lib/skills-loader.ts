@@ -1,13 +1,16 @@
 /**
  * Skills Loader
  *
- * ARCHITECTURE: BASE_PROMPT + CONDITIONAL_SKILLS
+ * ARCHITECTURE: MEDICARE_OVERLAY + BASE_CORE_PROMPT + CONDITIONAL_SKILLS
  *
- * BASE_PROMPT (always loaded):
- * - Identity & mission
- * - Conversation style rules (one question, short responses, etc.)
- * - Error handling guidelines
- * - Progressive disclosure
+ * Base prompt (always loaded for Medicare orchestration):
+ * - MEDICARE_OVERLAY_PROMPT — opening "Medicare coverage assistant" framing
+ * - BASE_CORE_PROMPT — identity, tone, conversation style, error handling,
+ *   plain-language translation, progressive disclosure
+ *
+ * Concatenated as MEDICARE_OVERLAY + BASE_CORE to reproduce the original
+ * BASE_PROMPT byte-for-byte. C.6.d's non-Medicare orchestration will load
+ * BASE_CORE only.
  *
  * CONDITIONAL_SKILLS (loaded by trigger detection):
  * - ONBOARDING: when !hasUserName || !hasUserZip
@@ -38,7 +41,8 @@ import {
 
 // Import all skill modules
 import {
-  BASE_PROMPT,
+  BASE_CORE_PROMPT,
+  MEDICARE_OVERLAY_PROMPT,
   TOOL_RESTRAINT,
   ONBOARDING_SKILL,
   MEDICARE_TYPE_SKILL,
@@ -292,8 +296,10 @@ export function buildSystemPrompt(
   triggers: SkillTriggers,
   sessionState?: SessionState,
 ): string {
-  // BASE_PROMPT is ALWAYS loaded (conversation style, error handling, etc.)
-  const sections: string[] = [BASE_PROMPT];
+  // Base prompt is ALWAYS loaded. Concatenated as a single string so
+  // sections.join("\n\n---\n\n") doesn't insert a separator between the
+  // overlay and core (which would change model-visible content).
+  const sections: string[] = [MEDICARE_OVERLAY_PROMPT + BASE_CORE_PROMPT];
 
   // ─────────────────────────────────────────────────────────────────────────
   // ROLE-BASED SKILLS - Loaded early to shape entire conversation behavior

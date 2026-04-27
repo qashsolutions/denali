@@ -1,5 +1,6 @@
 // Core skills
-export { BASE_PROMPT } from "./core/base";
+export { BASE_CORE_PROMPT } from "./core/base-core";
+export { MEDICARE_OVERLAY_PROMPT } from "./core/medicare-overlay";
 export { TOOL_RESTRAINT } from "./core/tool-restraint";
 export { ONBOARDING_SKILL } from "./core/onboarding";
 export { MEDICARE_TYPE_SKILL } from "./core/medicare-type";
