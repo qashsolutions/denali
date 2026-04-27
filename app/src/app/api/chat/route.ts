@@ -59,11 +59,13 @@ import {
 } from "@/lib/claude";
 import { logClaudeMetric, logFallbackMetric } from "@/lib/metrics/logger";
 import {
-  buildSystemPrompt,
-  buildSystemPromptWithLearning,
   detectTriggers,
   extractEntitiesFromMessages,
 } from "@/lib/skills-loader";
+import {
+  buildSystemPromptForUser,
+  buildSystemPromptForUserWithLearning,
+} from "@/lib/skills-loader-router";
 import { getToolDefinitions, createToolExecutorMap } from "@/lib/tools";
 import {
   updateSymptomMapping,
@@ -451,12 +453,16 @@ export async function POST(request: NextRequest) {
     // Build dynamic system prompt with learning context (async)
     // This injects learned symptom/procedure mappings and successful coverage paths
     // 10s timeout: learning context is additive — base prompt works without it
-    const basePrompt = buildSystemPrompt(triggers, sessionState);
+    const basePrompt = buildSystemPromptForUser(triggers, sessionState);
     const systemPrompt = await withFallback(
-      buildSystemPromptWithLearning(triggers, sessionState, body.messages),
+      buildSystemPromptForUserWithLearning(
+        triggers,
+        sessionState,
+        body.messages,
+      ),
       10_000,
       basePrompt,
-      "buildSystemPromptWithLearning",
+      "buildSystemPromptForUserWithLearning",
     );
     console.log("[Chat API] System prompt length:", systemPrompt.length);
     console.log(

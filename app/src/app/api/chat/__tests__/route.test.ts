@@ -70,8 +70,6 @@ vi.mock("@/lib/claude", () => ({
 }));
 
 vi.mock("@/lib/skills-loader", () => ({
-  buildSystemPrompt: vi.fn(() => "system prompt"),
-  buildSystemPromptWithLearning: vi.fn(() => Promise.resolve("system prompt with learning")),
   detectTriggers: vi.fn(() => ({})),
   extractEntitiesFromMessages: vi.fn(() => ({
     symptoms: [],
@@ -79,6 +77,11 @@ vi.mock("@/lib/skills-loader", () => ({
     medications: [],
     providers: [],
   })),
+}));
+
+vi.mock("@/lib/skills-loader-router", () => ({
+  buildSystemPromptForUser: vi.fn(() => "system prompt"),
+  buildSystemPromptForUserWithLearning: vi.fn(() => Promise.resolve("system prompt with learning")),
 }));
 
 vi.mock("@/lib/tools", () => ({
