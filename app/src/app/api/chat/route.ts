@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
       plan: string | null;
       is_admin: boolean | null;
       role: string | null;
+      is_on_medicare: boolean | null;
     } | null = null;
 
     // Fetch profile once — reused for rate limiting, attachment validation, AND role verification
@@ -156,9 +157,11 @@ export async function POST(request: NextRequest) {
         plan: string | null;
         is_admin: boolean | null;
         role: string | null;
-      }>(`SELECT plan, is_admin, role FROM users WHERE id = $1 LIMIT 1`, [
-        authUser.userId,
-      ]),
+        is_on_medicare: boolean | null;
+      }>(
+        `SELECT plan, is_admin, role, is_on_medicare FROM users WHERE id = $1 LIMIT 1`,
+        [authUser.userId],
+      ),
       5000,
       {
         rows: [],
@@ -170,6 +173,7 @@ export async function POST(request: NextRequest) {
         plan: string | null;
         is_admin: boolean | null;
         role: string | null;
+        is_on_medicare: boolean | null;
       }>,
       "profile lookup",
     );
@@ -332,6 +336,11 @@ export async function POST(request: NextRequest) {
 
     // Initialize or restore session state
     let sessionState = body.sessionState ?? createDefaultSessionState();
+
+    // Stage 1.C: server-trusted Medicare enrollment flag (never trust client value).
+    // Defaults to false if column is null (migration sets DEFAULT false, so existing
+    // rows always have a value — null only happens if profile lookup falls back).
+    sessionState.isOnMedicare = userProfile?.is_on_medicare ?? false;
 
     // Extract user info (name, ZIP, etc.) from messages
     sessionState = extractUserInfo(body.messages, sessionState);
