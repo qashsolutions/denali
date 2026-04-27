@@ -62,7 +62,6 @@ import {
   MEDICARE_NOTIFICATIONS_SKILL,
   DIABETES_PREVENTION_SKILL,
   OBESITY_PREVENTION_SKILL,
-  NON_MEDICARE_ACKNOWLEDGMENT_SKILL,
   EOB_EXPLAINER_SKILL,
 } from "@/skills";
 import { buildHealthContextForPrompt } from "@/lib/fhir/context";
@@ -296,11 +295,6 @@ export function buildSystemPrompt(
   // BASE_PROMPT is ALWAYS loaded (conversation style, error handling, etc.)
   const sections: string[] = [BASE_PROMPT];
 
-  // Stage 1.C — Medicare predicate.
-  // isOnMedicare === true OR undefined/null  → load Medicare-specific skills (default behavior).
-  // isOnMedicare === false (explicit toggle)  → suppress Medicare skills, load acknowledgment.
-  const isMedicare = sessionState?.isOnMedicare !== false;
-
   // ─────────────────────────────────────────────────────────────────────────
   // ROLE-BASED SKILLS - Loaded early to shape entire conversation behavior
   // ─────────────────────────────────────────────────────────────────────────
@@ -309,13 +303,6 @@ export function buildSystemPrompt(
   }
   if (triggers.isProvider) {
     sections.push(PROVIDER_PILOT_SKILL);
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // NON-MEDICARE ACKNOWLEDGMENT - Loaded when user explicitly NOT on Medicare
-  // ─────────────────────────────────────────────────────────────────────────
-  if (!isMedicare) {
-    sections.push(NON_MEDICARE_ACKNOWLEDGMENT_SKILL);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -348,23 +335,23 @@ export function buildSystemPrompt(
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // DIABETES PREVENTION - Personalized diabetes coaching (Medicare-specific)
+  // DIABETES PREVENTION - Personalized diabetes coaching
   // ─────────────────────────────────────────────────────────────────────────
-  if (triggers.hasDiabetesContext && isMedicare) {
+  if (triggers.hasDiabetesContext) {
     sections.push(DIABETES_PREVENTION_SKILL);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // OBESITY PREVENTION - Personalized obesity coaching (Medicare-specific)
+  // OBESITY PREVENTION - Personalized obesity coaching
   // ─────────────────────────────────────────────────────────────────────────
-  if (triggers.hasObesityContext && isMedicare) {
+  if (triggers.hasObesityContext) {
     sections.push(OBESITY_PREVENTION_SKILL);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   // MEDICARE NOTIFICATIONS - Alert users about recent changes
   // ─────────────────────────────────────────────────────────────────────────
-  if (triggers.hasHealthData && triggers.hasRecentChanges && isMedicare) {
+  if (triggers.hasHealthData && triggers.hasRecentChanges) {
     sections.push(MEDICARE_NOTIFICATIONS_SKILL);
   }
 
@@ -422,8 +409,7 @@ export function buildSystemPrompt(
     !triggers.hasMedicareType &&
     triggers.hasProblem &&
     !triggers.isAppeal &&
-    isOnboardingRequired &&
-    isMedicare
+    isOnboardingRequired
   ) {
     sections.push(TOOL_RESTRAINT);
     sections.push(MEDICARE_TYPE_SKILL);

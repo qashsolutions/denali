@@ -26,7 +26,6 @@ export { HEALTH_RECORDS_SKILL } from "@/lib/skills/health-records";
 export { MEDICARE_NOTIFICATIONS_SKILL } from "@/lib/skills/medicare-notifications";
 export { DIABETES_PREVENTION_SKILL } from "@/lib/skills/diabetes-prevention";
 export { OBESITY_PREVENTION_SKILL } from "@/lib/skills/obesity-prevention";
-export { NON_MEDICARE_ACKNOWLEDGMENT_SKILL } from "@/lib/skills/non-medicare-acknowledgment";
 
 // Channel skills
 export { COUNSELOR_SKILL } from "./channel/counselor";
