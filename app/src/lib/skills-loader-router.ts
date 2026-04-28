@@ -4,19 +4,19 @@
  * Branches on sessionState.isOnMedicare to determine which skill
  * orchestration to use:
  *
- * - true / undefined / null → Medicare orchestration (existing
- *   buildSystemPrompt / buildSystemPromptWithLearning).
- *   Default-safe: existing users who haven't toggled the new
- *   Settings switch keep current behavior.
+ * - true / undefined / null → Medicare orchestration
+ *   (buildSystemPrompt / buildSystemPromptWithLearning in
+ *   skills-loader.ts). Default-safe: existing users who haven't
+ *   toggled the Settings switch keep current behavior.
  *
- * - false → non-Medicare orchestration. Currently routes to the
- *   Medicare loader because the non-Medicare loader doesn't exist
- *   yet (lands in C.6.d). When C.6.d ships, only the false branch
- *   changes.
+ * - false → non-Medicare orchestration
+ *   (buildSystemPromptForNonMedicare /
+ *   buildSystemPromptForNonMedicareWithLearning in
+ *   skills-loader-non-medicare.ts). Activated by Stage 1.C C.6.f.
  *
- * Stage 1.C Step C.6.c. NO behavior change in this commit — both
- * branches produce identical output because both call the Medicare
- * loader.
+ * Stage 1.C Step C.6.c (initial scaffolding) → C.6.f (false branch
+ * wired to non-Medicare loader; behavior change for users with
+ * isOnMedicare === false).
  */
 
 import {
@@ -24,6 +24,10 @@ import {
   buildSystemPromptWithLearning,
   type SkillTriggers,
 } from "./skills-loader";
+import {
+  buildSystemPromptForNonMedicare,
+  buildSystemPromptForNonMedicareWithLearning,
+} from "./skills-loader-non-medicare";
 import type { SessionState } from "./claude";
 
 export function buildSystemPromptForUser(
@@ -31,8 +35,7 @@ export function buildSystemPromptForUser(
   sessionState?: SessionState,
 ): string {
   if (sessionState?.isOnMedicare === false) {
-    // TODO C.6.f: replace with buildSystemPromptForNonMedicare(triggers, sessionState)
-    return buildSystemPrompt(triggers, sessionState);
+    return buildSystemPromptForNonMedicare(triggers, sessionState);
   }
   return buildSystemPrompt(triggers, sessionState);
 }
@@ -43,8 +46,11 @@ export async function buildSystemPromptForUserWithLearning(
   messages?: Array<{ role: string; content: string }>,
 ): Promise<string> {
   if (sessionState?.isOnMedicare === false) {
-    // TODO C.6.f: replace with buildSystemPromptForNonMedicareWithLearning(...)
-    return buildSystemPromptWithLearning(triggers, sessionState, messages);
+    return buildSystemPromptForNonMedicareWithLearning(
+      triggers,
+      sessionState,
+      messages,
+    );
   }
   return buildSystemPromptWithLearning(triggers, sessionState, messages);
 }
