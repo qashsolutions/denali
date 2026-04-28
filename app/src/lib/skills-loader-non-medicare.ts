@@ -42,6 +42,7 @@
 
 import {
   BASE_CORE_PROMPT,
+  NON_MEDICARE_ACKNOWLEDGMENT_SKILL,
   COUNSELOR_SKILL,
   PROVIDER_PILOT_SKILL,
   RED_FLAG_SKILL,
@@ -58,10 +59,10 @@ export function buildSystemPromptForNonMedicare(
   // and behavioral guidance. No MEDICARE_OVERLAY_PROMPT here.
   const sections: string[] = [BASE_CORE_PROMPT];
 
-  // TODO C.6.e: prepend NON_MEDICARE_ACKNOWLEDGMENT_SKILL once it
-  // exists. Until then, the absence of MEDICARE_OVERLAY_PROMPT and
-  // Medicare-flavored skills is the only signal to the model that
-  // this user is not on Medicare.
+  // Non-Medicare acknowledgment — loaded immediately after base-core
+  // and before role-based skills so it sets behavioral framing for
+  // everything that follows.
+  sections.push(NON_MEDICARE_ACKNOWLEDGMENT_SKILL);
 
   // Channel skills — role-based, cohort-agnostic
   if (triggers.isCounselor) {
