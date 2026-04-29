@@ -56,7 +56,9 @@ and add a dated changelog entry per Part 13 of the doc.
 * Data Sources: Blue Button 2.0 API (FHIR R4), ICD-10, CPT, NPI Registry, NCD/LCD, SAD list, PubMed
 * Payer: Original Medicare (Medicare Advantage support in appeal letters)
 * Infrastructure: AWS VPC, ECS Fargate, RDS, Secrets Manager, CloudWatch, EventBridge
-* CMS Status: Production access demo scheduled, 20/20 checklist items verified
+* CMS Status: Production access GRANTED 2026-04-29. See docs/design/staging-prod-divergence.md for what this changes.
+
+**Architecture note (added 2026-04-29):** Prod and staging have diverged temporarily. Prod is the existing Medicare product; staging is the forward-development branch for the 55+ longitudinal platform that will migrate to prod after thorough testing — making prod a unified Medicare + 55+ product. See docs/design/staging-prod-divergence.md before drafting commits that touch cohort, longitudinal, EHR, labs, or voice-intake surfaces.
 
 ---
 

@@ -217,6 +217,20 @@ until ready.
   ahead of main covering migration, profile UI, cadence
   endpoints, non-Medicare orchestration, and C.7 test coverage)
 
+### Cadence Note (added 2026-04-29)
+
+The cadence policy above ("staging only by default; prod promotion per stage") was written for incremental work on a single product. As of 2026-04-29, prod and staging are temporarily divergent, with planned reunification:
+
+- Prod stays on the existing Medicare product.
+- Staging is the forward-development branch for the longitudinal 55+ platform.
+- After thorough testing, the 55+ platform will migrate to prod, where it will join (not replace) the existing Medicare surface, making prod a unified Medicare + 55+ product.
+
+For longitudinal/55+ work, **prod promotion is the planned outcome** but is gated on the platform reaching production-quality. Each commit on `develop` from now through migration is implicitly destined for prod eventually; the migration itself will be a deliberate, scoped event. See `docs/design/staging-prod-divergence.md` for the full rationale and the open questions about migration mechanics. The IAM split enforces "no accidental promotion" and stays in place through migration.
+
+Phase 2 onward in this tracker refers to longitudinal-platform stages. Numbered stages from `denali-design-v1.1.md` Part 9 ("Build Order — Not Scheduled") map onto Phase 2+ work; the BUILD_STATUS.md numbering is BUILD_STATUS.md's own convenience labeling on top of the design doc's blocks.
+
+**Phase 2 prerequisites (added 2026-04-29):** Before Phase 2 feature work begins, the agent/subagent/skill/test infrastructure for the 55+ platform must be designed and documented. The current infrastructure (cohort-test-author, the 4 cohort-agnostic skills, etc.) is scoped to the Medicare surface plus suppression-for-non-Medicare; it does not cover new 55+ feature surfaces. Because the 55+ platform is destined for prod, the infrastructure must be designed to a prod bar, not a staging-experiment bar. See `docs/design/staging-prod-divergence.md` § "Design debt for the 55+ platform".
+
 ---
 
 ## Open Questions Log
