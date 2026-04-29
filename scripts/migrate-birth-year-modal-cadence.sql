@@ -19,7 +19,7 @@
 --   AND NOT birth_year_modal_disabled
 --   AND (
 --     birth_year_modal_dismissed_at IS NULL
---     OR birth_year_modal_dismissed_at < NOW() - INTERVAL '7 days'
+--     OR birth_year_modal_dismissed_at <= NOW() - INTERVAL '7 days'
 --   )
 --
 -- Idempotent: safe to run multiple times.
