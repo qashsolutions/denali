@@ -5,14 +5,15 @@ stage-by-stage progress and current environment state deltas.
 For scope/architecture decisions, see
 docs/design/denali-design-v1.1.md.
 
-**Last updated:** 2026-04-22
+**Last updated:** 2026-04-29
 
 ---
 
 ## Current Phase
 
 **Phase 0** — Pre-build audit + hygiene ✅ COMPLETE
-**Phase 1** — Foundation Stage 1 (Prerequisites schema) — queued, ready to start
+**Phase 1** — Foundation Stage 1 (Prerequisites schema + cohort orchestration + C.7 tests) ✅ COMPLETE
+**Phase 2** — Foundation Stages 2, 3, 4 — queued, ready to start
 
 ---
 
@@ -21,7 +22,7 @@ docs/design/denali-design-v1.1.md.
 | Phase | Content | Status |
 |-------|---------|--------|
 | 0 | Pre-build audit + working-tree hygiene | ✅ Complete (2026-04-22) |
-| 1 | Foundation Stage 1 — Prerequisites schema (birth_year, is_on_medicare, user_conditions) | Queued |
+| 1 | Foundation Stage 1 — Prerequisites schema + cohort orchestration + C.7 tests | ✅ Complete (2026-04-29) |
 | 2 | Foundation Stages 2, 3, 4 — low-risk fixes | Queued |
 | 3 | Foundation Stages 5, 6 — Guardrail Layer 1 + Safety Triggers | Queued |
 | 4 | Foundation Stage 7 — BASE_PROMPT hardening | Queued |
@@ -119,26 +120,81 @@ updates), all no-ops for functional behavior.
 - Q6 (appeal process snapshot): Preserve as dated reference ✓
 - Q7 (Bucket A commit strategy): 4-commit split confirmed ✓
 
-### Phase 1 — Foundation Stage 1 (queued)
+### Phase 1 — Foundation Stage 1 ✅ COMPLETE
 
-**Prerequisites:**
-- Clean working tree ✓
-- develop branch with staging pipeline ✓
-- Design doc v1.3 as source of truth ✓
-- Staging smoke-tested ✓
+**Started:** 2026-04-23 (approx — migration 3039b05)
+**Completed:** 2026-04-29
 
-**Stage 1 scope** (per Claude Code's 10-stage plan and design
-doc Part 9 Prerequisites):
-- Add `users.birth_year INTEGER NULL` (prompt legacy users on
-  next sign-in)
-- Add `users.is_on_medicare BOOLEAN NOT NULL DEFAULT false`
-  (auto-backfill true for users with active BB connections)
-- Create `user_conditions` table
+**Sub-stages shipped:**
 
-**Pre-Stage-1 open questions:** none blocking — earlier Q1/Q2
-answers stand (NOT NULL for new signups with prompt for legacy;
-auto-backfill via BB connection; no new design-doc-compliance
-subagent).
+- **1.A** — Prerequisites schema migration (`users.birth_year`,
+  `users.is_on_medicare`, `user_conditions` table). Migration
+  applied to staging RDS via Fargate task pattern. Idempotent.
+- **1.B** — Profile API + UI extension. `User` type extended,
+  `/api/profile` returns new fields, `ProfileCompletionModal`
+  shipped (237 lines).
+- **1.C.1–C.5** — Birth-year reminder cadence: 3 endpoints
+  (dismiss/disable/enable), `profile-cadence.ts` helper,
+  Settings → Profile section, modal cadence UX with three-button
+  pattern (Save / Not now / Don't show again).
+- **1.C.6** — Non-Medicare orchestration activated:
+  `base.ts` split into `base-core` + `medicare-overlay`,
+  `skills-loader-router.ts` introduced, `skills-loader-non-medicare.ts`
+  added with 19 Medicare-specific skill suppressions and 4
+  cohort-agnostic skills retained, non-Medicare acknowledgment
+  overlay (`non-medicare-acknowledgment.ts`).
+- **1.C.7** — Test coverage for the cohort/cadence surface:
+  6 unit-test files (146 tests), 1 e2e harness self-test
+  (4 tests). Cohort-test-author subagent + `app/e2e/fixtures/cohorts.ts`
+  shipped as supporting infrastructure.
+
+**C.7 test inventory:**
+
+| File | Tests | Commit |
+|------|-------|--------|
+| `birth-year-reminder/dismiss/__tests__/route.test.ts` | 10 | 40ec05b |
+| `birth-year-reminder/disable/__tests__/route.test.ts` | 10 | b64b5a7 |
+| `birth-year-reminder/enable/__tests__/route.test.ts` | 10 | c29cfb6 |
+| `lib/__tests__/profile-cadence.test.ts` | 27 | af294c5 |
+| `lib/__tests__/skills-loader-router.test.ts` | 39 | 889e253 |
+| `lib/__tests__/skills-loader-non-medicare.test.ts` | 46 | 52bb867 |
+| `e2e/__mock-self-test.spec.ts` | 4 | 37c456c |
+
+**E2E feature spec — scoped out, with rationale:** The non-Medicare
+cohort divergence has no browser-observable surface. The 19-skill
+suppression and acknowledgment overlay live entirely in the LLM
+system prompt constructed server-side at `chat/route.ts:456` and
+sent to Bedrock; the browser never sees it. No UI component
+branches on `isOnMedicare === false`. The cohort behavior is fully
+covered by the 85 unit tests in `skills-loader-router.test.ts`
+and `skills-loader-non-medicare.test.ts`. A traditional Playwright
+spec would have to assert against either client-sent state (which
+the server overrides at `chat/route.ts:345`) or non-deterministic
+model output — neither is meaningful. Test pyramid for this
+feature is correctly capped at the unit layer.
+
+**Findings logged for follow-up (not blockers):**
+
+1. `MEDICARE_SUPPRESSED_SKILLS` is not exported as a named constant
+   from `skills-loader-non-medicare.ts`. Test mirrors the list
+   locally with a sync comment. Future change to the production
+   list will not auto-fail the test. One-line export would close
+   the gap.
+2. Two skill-tree roots exist (`app/src/lib/skills/` 5 files,
+   `app/src/skills/` 23 files including `core/base-core.ts` and
+   `core/medicare-overlay.ts`). Grep-by-convention will miss one
+   tree. Consolidation deferred.
+3. Design doc Part 10 cleanup items #16 (rate-limit fail-open)
+   and #17 (appeal credit client-only enforcement) remain open
+   from pre-Phase-1 audit. Pre-existing in prod and staging;
+   independent of cohort work.
+
+**Staging progression during Phase 1:**
+- Task def: :8 (post-Phase-0) → :51 (current)
+- All staging deploys green; zero promotion to main during Phase 1.
+
+**Prod impact during Phase 1:** None. All Phase 1 work shipped
+to develop/staging only. Prod still at the post-Phase-0 state.
 
 ---
 
@@ -156,9 +212,10 @@ deploy should ship the code but keep the feature gated off
 until ready.
 
 **Current branch state:**
-- `origin/main` at `1307f0e` (3 hygiene commits + doc bumps)
-- `origin/develop` at `c46b6db` (6 commits ahead of main:
-  workflow + 4 Bucket A + 1 Bucket B)
+- `origin/main` at `1307f0e` (unchanged since Phase 0)
+- `origin/develop` at `37c456c` (Phase 1 complete; 38+ commits
+  ahead of main covering migration, profile UI, cadence
+  endpoints, non-Medicare orchestration, and C.7 test coverage)
 
 ---
 
