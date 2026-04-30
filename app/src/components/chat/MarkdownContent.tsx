@@ -33,7 +33,7 @@ function parseMarkdown(text: string): string {
   processedText = processedText.replace(tableRegex, (match, headerRow, bodyRows) => {
     const tableHtml = parseTable(headerRow, bodyRows);
     tables.push(tableHtml);
-    return `__TABLE_${tables.length - 1}__`;
+    return `\n\n__TABLE_${tables.length - 1}__\n\n`;
   });
 
   // Split by double newlines to create paragraphs
