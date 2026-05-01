@@ -151,7 +151,7 @@ export function AppealLetterModal({
     : `Level ${data.appealLevel} Appeal Letter`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 pt-[72px] sm:pt-[88px]">
       <div className="bg-white text-black max-w-2xl w-full max-h-[90vh] rounded-lg shadow-2xl flex flex-col">
         {/* Sticky header — buttons + banners always visible */}
         <div className="sticky top-0 z-10 bg-white rounded-t-lg flex-shrink-0">
