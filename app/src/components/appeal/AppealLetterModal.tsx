@@ -83,7 +83,7 @@ export function AppealLetterModal({
   // Informational mode for Levels 4-5 (no letter, just guidance)
   if (data.isInformational) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 pt-[72px] sm:pt-[88px]">
         <div className="bg-white text-black max-w-2xl w-full max-h-[90vh] rounded-lg shadow-2xl flex flex-col">
           {/* Header */}
           <div className="sticky top-0 z-10 bg-white rounded-t-lg flex-shrink-0 border-b p-4 flex items-center justify-between">
@@ -96,7 +96,7 @@ export function AppealLetterModal({
           </div>
 
           {/* Guidance content — scrollable */}
-          <div className="p-6 space-y-4">
+          <div className="p-6 space-y-4 overflow-y-auto">
             {/* AI disclaimer — informational guidance is AI-generated */}
             <AIDisclaimer />
 
