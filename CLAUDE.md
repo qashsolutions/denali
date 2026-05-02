@@ -56,7 +56,7 @@ and add a dated changelog entry per Part 13 of the doc.
 * Data Sources: Blue Button 2.0 API (FHIR R4), ICD-10, CPT, NPI Registry, NCD/LCD, SAD list, PubMed
 * Payer: Original Medicare (Medicare Advantage support in appeal letters)
 * Infrastructure: AWS VPC, ECS Fargate, RDS, Secrets Manager, CloudWatch, EventBridge
-* CMS Status: Production access demo scheduled, 20/20 checklist items verified
+* CMS Status: Production access **GRANTED 2026-04-29**, prod credentials rotated 2026-05-01 (staging stays on sandbox)
 
 ---
 
@@ -534,6 +534,17 @@ Staging repo: `staging-` keep last 10, untagged expire after 1 day.
 
 Blue Button is the **only** external health data source. Connects patients to their Medicare claims via FHIR APIs.
 
+### Environment routing — load-bearing
+
+Prod and staging point at **different CMS environments** and use **different CMS-issued credentials**. There is no automatic promotion path; staging stays on sandbox indefinitely so we can test against synthetic beneficiaries (BBUser00000) without affecting real Medicare data.
+
+| Env | Secrets Manager | `BLUEBUTTON_BASE_URL` | `BLUEBUTTON_CLIENT_ID` | `BLUEBUTTON_CALLBACK_URL` |
+|---|---|---|---|---|
+| Prod | `denali/prod/app` | `https://api.bluebutton.cms.gov` | production-issued | *(empty — host detection)* |
+| Staging | `denali/staging/app` | `https://sandbox.bluebutton.cms.gov` | sandbox-issued | `https://staging.denali.health/api/fhir/callback` |
+
+`FHIR_TOKEN_ENCRYPTION_KEY` is independent of the CMS rotation and unchanged. Rotation date: 2026-05-01 (CMS access granted 2026-04-29; credentials handed off in JSON via 1:1 call).
+
 ### Data availability — load-bearing constraints
 
 - ✅ Medicare claims, denials, what was billed/paid
@@ -548,7 +559,7 @@ Blue Button is the **only** external health data source. Connects patients to th
 2. User authorizes on CMS site → redirected to `GET /api/fhir/callback`
 3. Callback validates state, exchanges code, encrypts tokens (AES-256-GCM via `FHIR_TOKEN_ENCRYPTION_KEY`), upserts `ehr_connections`
 
-**Scopes**: `patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read profile openid`. **Callback URL** auto-detected from request origin (no `BLUEBUTTON_CALLBACK_URL` env var). Tokens auto-refresh via `refreshAccessToken()` in `lib/fhir/tokens.ts`.
+**Scopes**: `patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read profile openid`. **Callback URL**: prod uses host detection from the inbound request (`x-forwarded-host` → `redirect_uri`); staging has `BLUEBUTTON_CALLBACK_URL` set explicitly to `https://staging.denali.health/api/fhir/callback` to bypass detection. Tokens auto-refresh via `refreshAccessToken()` in `lib/fhir/tokens.ts`.
 
 ### Health data → AI (consent-gated)
 
@@ -801,5 +812,7 @@ Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabe
 
 | Date | Milestone |
 |---|---|
+| 2026-04-29 | CMS BB2.0 production access **granted** |
+| 2026-05-01 | BB2.0 production credentials rotated into `denali/prod/app`; staging E2E verified with sandbox test user; prod OAuth verified through Medicare.gov authentication step (full Medicare beneficiary login flow not tested — no real Medicare-enrolled account available) |
 | Q1 2026 | CMS early adopter showcase target |
 | **July 4, 2026** | FHIR API mandate (Criteria 13–16) |
