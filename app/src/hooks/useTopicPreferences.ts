@@ -14,23 +14,42 @@ export function useTopicPreferences(): UseTopicPreferencesReturn {
   const [topics, setTopics] = useState<HealthTopic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchTopics = async () => {
-      try {
-        const res = await fetch("/api/preferences/topics");
-        if (res.ok) {
-          const data = await res.json();
-          setTopics(data.topics ?? []);
-        }
-      } catch (error) {
-        console.warn("Failed to fetch topic preferences:", error);
-      } finally {
-        setIsLoading(false);
+  const loadTopics = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/preferences/topics");
+      if (res.ok) {
+        const data = await res.json();
+        setTopics(data.topics ?? []);
       }
-    };
-
-    fetchTopics();
+    } catch (error) {
+      console.warn("Failed to fetch topic preferences:", error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  const clearTopics = useCallback(() => {
+    setTopics([]);
+    setIsLoading(false);
+  }, []);
+
+  // Load on mount, then re-fetch when auth state changes (sign-in / sign-out)
+  useEffect(() => {
+    loadTopics();
+
+    function handleAuthChange(e: Event) {
+      const user = (e as CustomEvent<{ email: string; userId: string } | null>).detail;
+      if (user) {
+        loadTopics();
+      } else {
+        clearTopics();
+      }
+    }
+
+    window.addEventListener("auth-state-change", handleAuthChange);
+    return () => window.removeEventListener("auth-state-change", handleAuthChange);
+  }, [loadTopics, clearTopics]);
 
   const updateTopics = useCallback(async (newTopics: HealthTopic[]) => {
     const prev = topics;
