@@ -530,6 +530,18 @@ Staging repo: `staging-` keep last 10, untagged expire after 1 day.
 - **`prod-stable`** is the absolute rollback floor — auto-retagged on every successful prod deploy after ECS stability wait. To roll back: register new task def with `<ECR>/denali:prod-stable`, update service. Commands in runbook.
 - **Docker base image digest-pinned** (`node:20-alpine@sha256:fb4cd12c…`). Both staging and prod build against this digest. Updates require deliberate PR.
 - **GitHub Actions SHA-pinned** in both deploy workflows. Action tag immutability is advisory; SHA-pinning prevents supply-chain risk.
+
+### Terraform IaC (staging) — added 2026-05-06
+
+Foundation scaffold lives in `infra/staging/` (`versions.tf`, `providers.tf`, `backend.tf`, `variables.tf`, `locals.tf`, `outputs.tf`, `README.md`, plus tracked `.terraform.lock.hcl`). Terraform `>= 1.6.0`; AWS provider `~> 5.50` (currently resolves to 5.100). Remote state in S3 with S3-native locking (`use_lockfile = true`) — the older `dynamodb_table` approach was retired from this stack on the same day. Backend bucket name and state key are intentionally not echoed here; see `infra/staging/backend.tf` for specifics.
+
+**Status:** Foundation only. `terraform plan` returns "No changes" because no resources are managed yet. Resource imports follow in subsequent sessions per the read-only inventory taken before the scaffold landed: Cognito staging user pool + app client, ECS staging task definition, ALB priority-200 listener rule, staging target group, Route 53 record for `staging.denali.health`. Shared-with-prod resources (the ALB itself, listener, ALB SG, hosted zone, ECS task/execution roles) will be referenced as `data` sources and never imported as managed.
+
+**Open follow-ups:**
+- DynamoDB lock table `denali-terraform-state-lock` is unused by the staging stack but may still be load-bearing for other stacks referencing `dynamodb_table`. Leave it in place until every stack has migrated to `use_lockfile`.
+- Confirm bucket-level versioning is enabled on the state bucket — required for safe S3-native locking and state recovery. Verify when AWS-write scope is in play; the scaffold turn was AWS read-only.
+- Drift between `STAGING-LOCKDOWN.md` (claims Cognito `AllowAdminCreateUserOnly: true` and `MFA: Required`) and live AWS state (both currently `false` / `OFF`) needs to be reconciled before importing the Cognito pool — decide whether to update AWS to match the doc or update the doc to match AWS.
+- ECS task definition `image` field rotates every deploy. Will need `lifecycle { ignore_changes = [container_definitions] }` on the imported `aws_ecs_task_definition`, or a split-ownership model where Terraform owns shape and GHA owns image rotation.
 ---
 
 ## Blue Button 2.0 (summary)

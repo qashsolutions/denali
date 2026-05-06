@@ -80,3 +80,9 @@ denali-monitor.zip
 
 # AWS rollback backups (contain ARNs / account IDs — local-only)
 staging-listener-rules.backup.json
+
+# Terraform (state, plan, locals — but DO commit .terraform.lock.hcl)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
