@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { createOrGetCognitoUser, setCognitoPassword } from "@/lib/auth-server";
+import { createOrGetCognitoUser, isEmailAllowed, setCognitoPassword } from "@/lib/auth-server";
 import { sendEmail } from "@/lib/email";
 import { normalizeEmail } from "@/lib/normalize-email";
 import { withMetrics } from "@/lib/metrics";
@@ -73,6 +73,13 @@ async function _POST(request: NextRequest) {
         { error: VALIDATION.EMAIL_REQUIRED },
         { status: 400 },
       );
+    }
+
+    // Staging email allowlist (no-op when STAGING_EMAIL_ALLOWLIST is unset in prod).
+    // Run before rate-limit increment, Cognito user creation, and SES send so
+    // disallowed addresses cause no side effects.
+    if (!isEmailAllowed(rawEmail)) {
+      return NextResponse.json({ error: "Not allowed" }, { status: 403 });
     }
 
     // Rate limit: prevent email bombing and abuse
