@@ -49,6 +49,7 @@ CARC-RARC-Consolidated List*
 # Superseded planning/research docs (implemented, kept locally for reference)
 bluebutton_extraction_gaps.md
 denali_updates_Feb08.md
+projectstatus_apr28.md
 
 # Root-level skills design specs (implemented in app/src/skills/)
 # Use /skills/ (anchored) to avoid ignoring app/src/lib/skills/ and app/src/skills/
