@@ -21,7 +21,7 @@ The staging URL is publicly reachable on the internet (no IP restriction — acc
 | Component | Change | Where set |
 |---|---|---|
 | Cognito user pool `denali-staging-users` | Self-service sign-up disabled (`AllowAdminCreateUserOnly: true`) | Console → Cognito → User pools → Sign-up tab |
-| Cognito user pool `denali-staging-users` | MFA enforcement = Required, TOTP enabled | Console → same pool → Sign-in tab → MFA |
+| Cognito user pool `denali-staging-users` | MFA enforcement = OFF (cannot be set to Required — see Known gaps) | Console → same pool → Sign-in tab → MFA |
 | ECS task definition `denali-staging` | Env var `STAGING_EMAIL_ALLOWLIST` added (rev 58) | Console → ECS → Task definitions |
 
 These are not currently in source control. Future automation should capture them in Terraform or similar.
@@ -51,7 +51,7 @@ The check is exact-match after `trim` + `lowercase`. Gmail dot-insensitivity and
 
 ## Known gaps
 
-1. **MFA bypass on custom auth flow.** Cognito's MFA Required setting only applies to standard auth flows (USER_SRP, USER_PASSWORD). The app uses `CUSTOM_AUTH` for email-OTP, which bypasses the MFA prompt at login. TOTP is enforced only when the app explicitly invokes the TOTP challenge — currently not wired into `/api/auth/verify-otp`.
+1. **MFA Required is incompatible with the custom email-OTP flow.** The app uses Cognito's `CUSTOM_AUTH` flow. Setting MFA enforcement to Required at the user pool causes Cognito to return a `SOFTWARE_TOKEN_MFA` next-challenge after the custom challenge succeeds. `/api/auth/verify-otp` doesn't handle that response shape — it treats anything other than an `AuthenticationResult` as a 400 failure, which blocks login entirely. This was attempted on 2026-05-06 and rolled back to MFA OFF after both allowlisted users could no longer sign in. To enforce MFA properly, extend the verify-otp route to handle the next-challenge response, prompt the user for TOTP, and complete the auth flow. Until then, MFA stays OFF at the pool level. Per-user TOTP enrollment via Cognito (e.g., admin accounts that have enrolled) does not affect sign-in because `CUSTOM_AUTH` doesn't invoke that challenge.
 2. **CSP `unsafe-inline` allowance.** script-src and style-src both allow inline. Removing requires Next.js nonce or hash-based CSP.
 3. **Shared AWS account.** Staging and prod share one account, one ALB, one ALB security group. Resource naming (`denali-staging-*`) is the only separator. Account split is the durable fix.
 4. **No IaC source of truth.** ALB listener rules, security groups, ECS task definitions, and Cognito pool settings are managed via console.
