@@ -1,6 +1,6 @@
 // Denali Health — Service Worker
 // BUMP ON DEPLOY: change version suffix to bust caches
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const STATIC_CACHE = `denali-static-${CACHE_VERSION}`;
 const API_CACHE = `denali-api-${CACHE_VERSION}`;
 const OFFLINE_URL = "/offline";
@@ -139,10 +139,12 @@ async function networkFirstAPI(request, event) {
     const response = await fetch(request, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (response.ok) {
-      const writePromise = caches
-        .open(API_CACHE)
-        .then((cache) => cache.put(request, response.clone()));
-      event.waitUntil(writePromise);
+      const responseClone = response.clone();
+      event.waitUntil(
+        caches.open(API_CACHE).then((cache) =>
+          cache.put(request, responseClone),
+        ),
+      );
     }
     return response;
   } catch {
@@ -168,10 +170,12 @@ async function navigationHandler(request, event) {
   try {
     const response = await fetch(request);
     if (response.ok) {
-      const writePromise = caches
-        .open(STATIC_CACHE)
-        .then((cache) => cache.put(request, response.clone()));
-      event.waitUntil(writePromise);
+      const responseClone = response.clone();
+      event.waitUntil(
+        caches.open(STATIC_CACHE).then((cache) =>
+          cache.put(request, responseClone),
+        ),
+      );
     }
     return response;
   } catch {
