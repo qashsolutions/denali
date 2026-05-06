@@ -35,35 +35,56 @@ export function useAlertPreferences(): UseAlertPreferencesReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [plan, setPlan] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchPrefs = async () => {
-      try {
-        const res = await fetch("/api/alerts/preferences");
-        if (res.ok) {
-          const data = await res.json();
-          const prefs = { ...DEFAULT_PREFS };
-          const elig = { ...DEFAULT_ELIGIBILITY };
-          for (const type of ALERT_TYPES) {
-            if (data.preferences?.[type] !== undefined) {
-              prefs[type] = data.preferences[type];
-            }
-            if (data.eligibility?.[type] !== undefined) {
-              elig[type] = data.eligibility[type];
-            }
+  const loadPrefs = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/alerts/preferences");
+      if (res.ok) {
+        const data = await res.json();
+        const prefs = { ...DEFAULT_PREFS };
+        const elig = { ...DEFAULT_ELIGIBILITY };
+        for (const type of ALERT_TYPES) {
+          if (data.preferences?.[type] !== undefined) {
+            prefs[type] = data.preferences[type];
           }
-          setPreferences(prefs);
-          setEligibility(elig);
-          setPlan(data.plan ?? null);
+          if (data.eligibility?.[type] !== undefined) {
+            elig[type] = data.eligibility[type];
+          }
         }
-      } catch (error) {
-        console.warn("Failed to fetch alert preferences:", error);
-      } finally {
-        setIsLoading(false);
+        setPreferences(prefs);
+        setEligibility(elig);
+        setPlan(data.plan ?? null);
       }
-    };
-
-    fetchPrefs();
+    } catch (error) {
+      console.warn("Failed to fetch alert preferences:", error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  const clearPrefs = useCallback(() => {
+    setPreferences(DEFAULT_PREFS);
+    setEligibility(DEFAULT_ELIGIBILITY);
+    setPlan(null);
+    setIsLoading(false);
+  }, []);
+
+  // Load on mount, then re-fetch when auth state changes (sign-in / sign-out)
+  useEffect(() => {
+    loadPrefs();
+
+    function handleAuthChange(e: Event) {
+      const user = (e as CustomEvent<{ email: string; userId: string } | null>).detail;
+      if (user) {
+        loadPrefs();
+      } else {
+        clearPrefs();
+      }
+    }
+
+    window.addEventListener("auth-state-change", handleAuthChange);
+    return () => window.removeEventListener("auth-state-change", handleAuthChange);
+  }, [loadPrefs, clearPrefs]);
 
   const updatePreference = useCallback(
     async (type: AlertType, enabled: boolean) => {

@@ -25,27 +25,46 @@ export function useConsent(): UseConsentReturn {
   const [consent, setConsent] = useState<ConsentState>(DEFAULT_CONSENT);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchConsent = async () => {
-      try {
-        const res = await fetch("/api/consent");
-        if (res.ok) {
-          const data = await res.json();
-          setConsent({
-            health_data_ai: data.consent.health_data_ai ?? false,
-            health_data_storage: data.consent.health_data_storage ?? false,
-            analytics: data.consent.analytics ?? false,
-          });
-        }
-      } catch (error) {
-        console.warn("Failed to fetch consent:", error);
-      } finally {
-        setIsLoading(false);
+  const loadConsent = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/consent");
+      if (res.ok) {
+        const data = await res.json();
+        setConsent({
+          health_data_ai: data.consent.health_data_ai ?? false,
+          health_data_storage: data.consent.health_data_storage ?? false,
+          analytics: data.consent.analytics ?? false,
+        });
       }
-    };
-
-    fetchConsent();
+    } catch (error) {
+      console.warn("Failed to fetch consent:", error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  const clearConsent = useCallback(() => {
+    setConsent(DEFAULT_CONSENT);
+    setIsLoading(false);
+  }, []);
+
+  // Load on mount, then re-fetch when auth state changes (sign-in / sign-out)
+  useEffect(() => {
+    loadConsent();
+
+    function handleAuthChange(e: Event) {
+      const user = (e as CustomEvent<{ email: string; userId: string } | null>).detail;
+      if (user) {
+        loadConsent();
+      } else {
+        clearConsent();
+      }
+    }
+
+    window.addEventListener("auth-state-change", handleAuthChange);
+    return () => window.removeEventListener("auth-state-change", handleAuthChange);
+  }, [loadConsent, clearConsent]);
 
   const updateConsent = useCallback(
     async (type: keyof ConsentState, granted: boolean) => {
