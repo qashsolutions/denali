@@ -13,7 +13,7 @@ import { BRAND, PRICING, API_CONFIG } from "@/config";
 export async function GET(request: NextRequest) {
   // Hide this metadata on staging — it's a CMS-directory feature for prod only.
   if (request.headers.get("host")?.toLowerCase() === "staging.denali.health") {
-    return new Response(null, { status: 404 });
+    return Response.json({ error: "Not Found" }, { status: 404 });
   }
 
   return NextResponse.json({
