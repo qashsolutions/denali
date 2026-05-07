@@ -89,6 +89,9 @@ async function _POST(request: NextRequest) {
         plan: body.plan,
         user_id: userId,
         email: email,
+        environment: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
+          ? "live"
+          : "test",
       },
     });
 
