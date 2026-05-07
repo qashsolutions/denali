@@ -51,7 +51,7 @@ and add a dated changelog entry per Part 13 of the doc.
 * Database: PostgreSQL 16.9 on RDS (AES-256 encryption)
 * AI: Claude Sonnet 4.6 (chat) + Opus 4.6 (appeals) via AWS Bedrock
 * Auth: AWS Cognito + SES (OTP, HttpOnly cookies, 30-min HIPAA timeout)
-* Payments: Stripe (test mode until CMS production approval)
+* Payments: Stripe live mode in production (Qash Solutions, Inc. account, CMS approved 2026-05-03). Staging uses the "denali" sandbox in test mode.
 * Email: AWS SES (BAA signed Feb 25, 2026)
 * Data Sources: Blue Button 2.0 API (FHIR R4), ICD-10, CPT, NPI Registry, NCD/LCD, SAD list, PubMed
 * Payer: Original Medicare (Medicare Advantage support in appeal letters)
