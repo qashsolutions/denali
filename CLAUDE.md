@@ -531,6 +531,12 @@ Staging repo: `staging-` keep last 10, untagged expire after 1 day.
 - **Docker base image digest-pinned** (`node:20-alpine@sha256:fb4cd12c…`). Both staging and prod build against this digest. Updates require deliberate PR.
 - **GitHub Actions SHA-pinned** in both deploy workflows. Action tag immutability is advisory; SHA-pinning prevents supply-chain risk.
 
+### CloudWatch log retention — raised 2026-05-07
+
+Application log groups `/ecs/denali` (prod) and `/ecs/denali-staging` (staging) are both retained for **30 days**, raised from 3 days on 2026-05-07. The 3-day floor was insufficient for incident triage — the original Stripe webhook failure logs from 2026-05-03 had already aged out by the time we investigated four days later. 30 days covers a typical post-mortem + retro window without meaningful storage cost.
+
+These are operational/diagnostic logs (stdout/stderr from the Next.js container). The HIPAA-mandated audit trail lives in the RDS `audit_logs` table with 6-year retention — separate concern, separate storage.
+
 ### Terraform IaC (staging) — added 2026-05-06
 
 Foundation scaffold lives in `infra/staging/` (`versions.tf`, `providers.tf`, `backend.tf`, `variables.tf`, `locals.tf`, `outputs.tf`, `README.md`, plus tracked `.terraform.lock.hcl`). Terraform `>= 1.6.0`; AWS provider `~> 5.50` (currently resolves to 5.100). Remote state in S3 with S3-native locking (`use_lockfile = true`) — the older `dynamodb_table` approach was retired from this stack on the same day. Backend bucket name and state key are intentionally not echoed here; see `infra/staging/backend.tf` for specifics.
