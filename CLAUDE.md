@@ -498,6 +498,17 @@ breakdown.
 > verification commands) for rationale and deeper detail.
 > See `docs/runbook.md` for daily-ops procedures (staging
 > lifecycle, RDS secret rotation collision, persistent-5xx triage).
+>
+> A2 — automate recovery from RDS rotation collision: build EventBridge
+> rule on aws.secretsmanager `RotationSucceeded` event for staging
+> RDS-managed secret, target a Lambda that calls
+> `aws ecs update-service --force-new-deployment` on
+> denali-staging-web. Hard deadline: before 2026-05-15 19:00 CT
+> (next scheduled rotation). Investigation in this session confirmed:
+> AWS blocks cancel-rotate-secret on RDS-managed secrets;
+> --no-manage-master-user-password is heavy. EventBridge automation
+> is the agreed path. Cost <$0.01/month, strictly additive to
+> docs/runbook.md recovery procedure.
 
 ### AWS resources
 
