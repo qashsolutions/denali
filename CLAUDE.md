@@ -496,6 +496,8 @@ breakdown.
 > See `docs/incidents/2026-04-23-ecr-eviction.md` (postmortem)
 > and `docs/runbooks/ecr-eviction-recovery.md` (recovery + all
 > verification commands) for rationale and deeper detail.
+> See `docs/runbook.md` for daily-ops procedures (staging
+> lifecycle, RDS secret rotation collision, persistent-5xx triage).
 
 ### AWS resources
 
