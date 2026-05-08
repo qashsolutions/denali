@@ -58,16 +58,6 @@ async function _GET(request: NextRequest) {
       }
     }
 
-    // TEMP DEBUG — remove after verifying trial_converted fix on staging.
-    // Tracking: trial_converted bug 2026-05-07. grep TRIAL_DEBUG_2026_05_07
-    console.log('[TRIAL_DEBUG_2026_05_07]', JSON.stringify({
-      user_id: user.userId,
-      trial_start: sub?.trial_start,
-      trial_converted: sub?.trial_converted,
-      trial_end: sub?.trial_end,
-      computed_status: status,
-    }));
-
     return NextResponse.json({ status, daysRemaining });
   } catch (error) {
     console.error("[Trial] GET error:", error);
