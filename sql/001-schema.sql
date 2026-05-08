@@ -291,9 +291,11 @@ BEGIN
   -- Update user plan
   UPDATE public.users SET plan = p_plan WHERE id = p_user_id;
 
-  -- Upsert subscription
-  INSERT INTO public.subscriptions (user_id, plan, status, stripe_customer_id, stripe_subscription_id, current_period_start, current_period_end)
-  VALUES (p_user_id, p_plan, 'active', p_stripe_customer_id, p_stripe_subscription_id, p_period_start, p_period_end)
+  -- Upsert subscription. Mark trial_converted = true since payment proves the
+  -- user is no longer on trial — /api/trial keys "expired" off this flag once
+  -- the original trial_end has passed.
+  INSERT INTO public.subscriptions (user_id, plan, status, stripe_customer_id, stripe_subscription_id, current_period_start, current_period_end, trial_converted)
+  VALUES (p_user_id, p_plan, 'active', p_stripe_customer_id, p_stripe_subscription_id, p_period_start, p_period_end, true)
   ON CONFLICT (user_id) DO UPDATE SET
     plan = EXCLUDED.plan,
     status = 'active',
@@ -301,6 +303,7 @@ BEGIN
     stripe_subscription_id = COALESCE(EXCLUDED.stripe_subscription_id, subscriptions.stripe_subscription_id),
     current_period_start = COALESCE(EXCLUDED.current_period_start, subscriptions.current_period_start),
     current_period_end = COALESCE(EXCLUDED.current_period_end, subscriptions.current_period_end),
+    trial_converted = true,
     updated_at = now();
 END;
 $$;

@@ -502,7 +502,7 @@ function ChatContent() {
           window.location.replace("/app/chat?payment=success");
         }}
         appealCount={0}
-        trialExpired={true}
+        trialExpired={authState.trialStatus === "expired"}
       />
     </div>
   );
