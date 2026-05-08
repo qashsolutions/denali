@@ -38,25 +38,37 @@ async function _GET(request: NextRequest) {
     );
     const sub = subResult.rows[0] ?? null;
 
+    let status: "none" | "converted" | "active" | "expired";
+    let daysRemaining = 0;
+
     if (!sub?.trial_start) {
-      return NextResponse.json({ status: "none", daysRemaining: 0 });
+      status = "none";
+    } else if (sub.trial_converted) {
+      status = "converted";
+    } else {
+      const now = new Date();
+      const end = new Date(sub.trial_end!);
+      if (end > now) {
+        status = "active";
+        daysRemaining = Math.ceil(
+          (end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+        );
+      } else {
+        status = "expired";
+      }
     }
 
-    const now = new Date();
-    const end = new Date(sub.trial_end!);
+    // TEMP DEBUG — remove after verifying trial_converted fix on staging.
+    // Tracking: trial_converted bug 2026-05-07. grep TRIAL_DEBUG_2026_05_07
+    console.log('[TRIAL_DEBUG_2026_05_07]', JSON.stringify({
+      user_id: user.userId,
+      trial_start: sub?.trial_start,
+      trial_converted: sub?.trial_converted,
+      trial_end: sub?.trial_end,
+      computed_status: status,
+    }));
 
-    if (sub.trial_converted) {
-      return NextResponse.json({ status: "converted", daysRemaining: 0 });
-    }
-
-    if (end > now) {
-      const daysRemaining = Math.ceil(
-        (end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-      );
-      return NextResponse.json({ status: "active", daysRemaining });
-    }
-
-    return NextResponse.json({ status: "expired", daysRemaining: 0 });
+    return NextResponse.json({ status, daysRemaining });
   } catch (error) {
     console.error("[Trial] GET error:", error);
     return NextResponse.json(
