@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PRICING, getBaseUrl } from "@/config";
 import { getAuthUser } from "@/lib/auth-server";
+import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { withMetrics } from "@/lib/metrics";
 import { VALIDATION, AUTH, SYSTEM } from "@/config/messages";
@@ -28,6 +29,17 @@ const STRIPE_PRICES: Record<PlanType, string> = {
   starter: PRICING.STARTER.stripePriceId,
   plus: PRICING.PLUS.stripePriceId,
   unlimited: PRICING.UNLIMITED.stripePriceId,
+};
+
+// Plan rank for upgrade gating. Same-tier or downgrade attempts during an
+// active subscription are rejected — those go through the Customer Portal,
+// not a fresh Checkout (which would create a second Stripe subscription
+// and double-bill).
+const PLAN_RANK: Record<string, number> = {
+  trial: 0,
+  starter: 1,
+  plus: 2,
+  unlimited: 3,
 };
 
 async function _POST(request: NextRequest) {
@@ -68,6 +80,24 @@ async function _POST(request: NextRequest) {
 
     const userId = user.userId;
     const email = user.email || "";
+
+    // Kill switch: prevent same-plan or downgrade resubscription via Checkout.
+    // Active subscribers must use the Customer Portal to change plans.
+    const subResult = await query<{ plan: string; status: string }>(
+      `SELECT plan, status FROM subscriptions WHERE user_id = $1 LIMIT 1`,
+      [userId],
+    );
+    const sub = subResult.rows[0] ?? null;
+    if (sub?.status === "active") {
+      const currentRank = PLAN_RANK[sub.plan] ?? 0;
+      const requestedRank = PLAN_RANK[body.plan] ?? 0;
+      if (requestedRank <= currentRank) {
+        return NextResponse.json(
+          { error: SYSTEM.ACTIVE_SUBSCRIPTION },
+          { status: 409 },
+        );
+      }
+    }
 
     // Get the origin for redirect URLs (uses safe fallback from config)
     const origin = getBaseUrl(request.headers.get("origin"));
