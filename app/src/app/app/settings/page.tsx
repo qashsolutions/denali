@@ -517,6 +517,10 @@ function AppSettingsPageInner() {
                 )}
               </div>
             </div>
+            <p className="mt-3 text-xs text-[var(--text-muted)]">
+              Want to switch plans? Cancel via Manage Subscription anytime
+              &mdash; your new plan can start at the end of the current cycle.
+            </p>
             {portalError && (
               <p className="mt-3 text-sm text-red-600 dark:text-red-400">
                 {portalError}
