@@ -173,6 +173,8 @@ export const SYSTEM = {
   TRIAL_START_FAILED: "We couldn't start your trial. Please try again.",
   TRIAL_ALREADY_USED: "Your trial has already been used.",
   ACTIVE_SUBSCRIPTION: "You already have an active plan.",
+  ACTIVE_SUBSCRIPTION_CHANGE_PLAN:
+    "You have an active subscription. To switch plans, click Manage Subscription to cancel your current plan first. You'll be able to choose a new plan at the end of your current billing cycle.",
   /** PDF */
   PDF_FAILED: "We couldn't generate the PDF. Please try again.",
   /** No health data */

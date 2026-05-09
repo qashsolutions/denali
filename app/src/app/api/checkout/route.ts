@@ -3,8 +3,16 @@
  *
  * POST /api/checkout
  *
- * Creates a Stripe Checkout session for subscription plans.
- * All plans are monthly subscriptions: Starter ($10), Plus ($20), Unlimited ($60).
+ * Creates a Stripe Checkout session for subscription plans (monthly:
+ * Starter $10, Plus $20, Unlimited $60).
+ *
+ * Policy:
+ * - Active subscribers (subscriptions.status='active') cannot start a new
+ *   Checkout session. They must cancel via Customer Portal first; their
+ *   new plan becomes available at the end of the current billing cycle.
+ * - When the user already has a stripe_customer_id, it's reused. This
+ *   keeps Stripe's per-email customer count to one, even across
+ *   subscribe → cancel → resubscribe cycles.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -29,17 +37,6 @@ const STRIPE_PRICES: Record<PlanType, string> = {
   starter: PRICING.STARTER.stripePriceId,
   plus: PRICING.PLUS.stripePriceId,
   unlimited: PRICING.UNLIMITED.stripePriceId,
-};
-
-// Plan rank for upgrade gating. Same-tier or downgrade attempts during an
-// active subscription are rejected — those go through the Customer Portal,
-// not a fresh Checkout (which would create a second Stripe subscription
-// and double-bill).
-const PLAN_RANK: Record<string, number> = {
-  trial: 0,
-  starter: 1,
-  plus: 2,
-  unlimited: 3,
 };
 
 async function _POST(request: NextRequest) {
@@ -81,28 +78,33 @@ async function _POST(request: NextRequest) {
     const userId = user.userId;
     const email = user.email || "";
 
-    // Kill switch: prevent same-plan or downgrade resubscription via Checkout.
-    // Active subscribers must use the Customer Portal to change plans.
-    const subResult = await query<{ plan: string; status: string }>(
-      `SELECT plan, status FROM subscriptions WHERE user_id = $1 LIMIT 1`,
+    // Look up existing subscription state. We use this for two things:
+    //   1. Reject any new Checkout while a subscription is status='active'
+    //      (plan changes go through Customer Portal at cycle boundaries).
+    //   2. Reuse stripe_customer_id when present, so a user who cancels
+    //      and resubscribes doesn't accumulate duplicate Stripe customers.
+    const subResult = await query<{
+      status: string;
+      stripe_customer_id: string | null;
+    }>(
+      `SELECT status, stripe_customer_id FROM subscriptions WHERE user_id = $1 LIMIT 1`,
       [userId],
     );
     const sub = subResult.rows[0] ?? null;
     if (sub?.status === "active") {
-      const currentRank = PLAN_RANK[sub.plan] ?? 0;
-      const requestedRank = PLAN_RANK[body.plan] ?? 0;
-      if (requestedRank <= currentRank) {
-        return NextResponse.json(
-          { error: SYSTEM.ACTIVE_SUBSCRIPTION },
-          { status: 409 },
-        );
-      }
+      return NextResponse.json(
+        { error: SYSTEM.ACTIVE_SUBSCRIPTION_CHANGE_PLAN },
+        { status: 409 },
+      );
     }
+
+    const existingCustomerId = sub?.stripe_customer_id ?? null;
 
     // Get the origin for redirect URLs (uses safe fallback from config)
     const origin = getBaseUrl(request.headers.get("origin"));
 
-    // All plans are subscriptions
+    // All plans are subscriptions. Pass either customer (reuse) or
+    // customer_email (new) — Stripe rejects passing both.
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -114,7 +116,9 @@ async function _POST(request: NextRequest) {
       mode: "subscription",
       success_url: `${origin}/app/chat?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/app/chat?payment=cancelled`,
-      customer_email: email || undefined,
+      ...(existingCustomerId
+        ? { customer: existingCustomerId }
+        : { customer_email: email || undefined }),
       metadata: {
         plan: body.plan,
         user_id: userId,

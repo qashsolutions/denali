@@ -509,6 +509,29 @@ breakdown.
 > --no-manage-master-user-password is heavy. EventBridge automation
 > is the agreed path. Cost <$0.01/month, strictly additive to
 > docs/runbook.md recovery procedure.
+>
+> B.6 closed (2026-05-09): /api/checkout rejects ALL plan changes for
+> active subscribers. Was: only same/lower-tier rejected, allowed
+> upgrades to create duplicate Stripe subscriptions (real billing
+> risk). Now: any `subscriptions.status='active'` row → 409
+> SYSTEM.ACTIVE_SUBSCRIPTION_CHANGE_PLAN. PLAN_RANK constant removed
+> as dead code. Plan changes only at billing cycle boundaries via
+> Customer Portal cancel → resubscribe.
+>
+> B.7 closed (2026-05-09): /api/checkout reuses existing
+> stripe_customer_id when present (passed as `customer:` to
+> stripe.checkout.sessions.create), instead of always passing
+> customer_email. Prevents Stripe from accumulating duplicate
+> Customer records per email across subscribe → cancel → resubscribe
+> cycles.
+>
+> B.8 — prod audit: search prod RDS for users with multiple Stripe
+> customer IDs (history) or duplicate active subscriptions. Real-money
+> billing risk if any exist (could indicate the same user was billed
+> twice under separate customer records before B.7 landed). Plan
+> migration carefully — may need Stripe Dashboard reconciliation +
+> targeted refunds before consolidating. Read-only investigation
+> first; no DB writes without an audit-then-plan turn.
 
 ### AWS resources
 

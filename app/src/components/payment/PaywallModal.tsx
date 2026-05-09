@@ -225,6 +225,12 @@ export function PaywallModal({
             })}
           </div>
 
+          {/* Plan-change policy note */}
+          <p className="text-xs text-[var(--text-muted)] text-center">
+            Plans are billed monthly. To switch plans, cancel your current plan
+            anytime &mdash; you can choose a new plan at the end of the cycle.
+          </p>
+
           {/* Error message */}
           {error && (
             <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
