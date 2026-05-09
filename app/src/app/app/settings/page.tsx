@@ -47,6 +47,8 @@ function AppSettingsPageInner() {
   const [authMessageType, setAuthMessageType] = useState<"success" | "error" | "">("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [auditLogs, setAuditLogs] = useState<Array<{ id: string; description: string; createdAt: string | null; count: number }>>([]);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -644,15 +646,55 @@ function AppSettingsPageInner() {
                     : "No active plan"}
                 </p>
               </div>
-              {authState.plan !== "unlimited" && !authState.isAdmin && (
-                <button
-                  onClick={() => setShowPaywall(true)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
-                >
-                  Upgrade
-                </button>
-              )}
+              <div className="flex gap-2">
+                {authState.plan !== "trial" && !authState.isAdmin && (
+                  <button
+                    onClick={async () => {
+                      setPortalLoading(true);
+                      setPortalError(null);
+                      try {
+                        const res = await fetch("/api/billing-portal", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          credentials: "include",
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok || !data.url) {
+                          throw new Error(
+                            data.error || "Something went wrong. Please try again.",
+                          );
+                        }
+                        window.location.href = data.url;
+                      } catch (err) {
+                        setPortalError(
+                          err instanceof Error
+                            ? err.message
+                            : "Something went wrong. Please try again.",
+                        );
+                        setPortalLoading(false);
+                      }
+                    }}
+                    disabled={portalLoading}
+                    className="px-4 py-2 rounded-lg text-sm font-medium border border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {portalLoading ? "Opening..." : "Manage Subscription"}
+                  </button>
+                )}
+                {authState.plan !== "unlimited" && !authState.isAdmin && (
+                  <button
+                    onClick={() => setShowPaywall(true)}
+                    className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
+                  >
+                    Upgrade
+                  </button>
+                )}
+              </div>
             </div>
+            {portalError && (
+              <p className="mt-3 text-sm text-red-600 dark:text-red-400">
+                {portalError}
+              </p>
+            )}
           </div>
         </section>
       )}
