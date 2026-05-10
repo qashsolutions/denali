@@ -503,6 +503,7 @@ function ChatContent() {
         }}
         appealCount={0}
         trialExpired={authState.trialStatus === "expired"}
+        currentPlan={authState.plan}
       />
     </div>
   );
