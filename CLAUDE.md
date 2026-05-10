@@ -542,6 +542,22 @@ breakdown.
 > clears it. Settings page Manage Subscription button now opens
 > Customer Portal in a new tab via window.open(_blank, noopener,
 > noreferrer) with same-tab fallback on popup block.
+>
+> B.9 closed (2026-05-10): handle_subscription_change SP now reverts
+> users.plan to 'trial' when a subscription flips to status='cancelled'.
+> Was: SP only updated subscriptions.status, leaving users.plan stale
+> at the paid tier — surfaced when ceeveear@yahoo.com still showed as
+> Plus in the app after their Stripe customer was deleted in test mode.
+> Source-of-truth in sql/001-schema.sql synced in lockstep so fresh DB
+> builds get the new behavior. One-time recovery UPDATE bundled in the
+> migration for ramanac@gmail.com and ceeveear@yahoo.com whose plan
+> rows were broken before this SP update (idempotency guard prevents
+> flipping rows already at 'trial'). No code deploy required — the
+> webhook handler invokes the SP by name. Deferred: (a) customer.deleted
+> event handler (Option C) — Stripe didn't send these during test-mode
+> customer deletions, gap is theoretical until observed in production;
+> (b) SP zero-row-update warning when stripe_subscription_id doesn't
+> match any row — low-priority polish.
 
 ### AWS resources
 
