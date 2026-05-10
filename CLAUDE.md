@@ -532,6 +532,16 @@ breakdown.
 > migration carefully — may need Stripe Dashboard reconciliation +
 > targeted refunds before consolidating. Read-only investigation
 > first; no DB writes without an audit-then-plan turn.
+>
+> B.4 closed (2026-05-09): PaywallModal is plan-aware. "Most Popular"
+> badge removed; "Current Plan" badge renders only on the card matching
+> authState.plan when user is on a paid tier. Initial selectedPlan is
+> null (Subscribe disabled until user picks). Clicking the current-plan
+> card surfaces SYSTEM.ACTIVE_SUBSCRIPTION_CHANGE_PLAN inline via the
+> existing red-error block instead of selecting; clicking another card
+> clears it. Settings page Manage Subscription button now opens
+> Customer Portal in a new tab via window.open(_blank, noopener,
+> noreferrer) with same-tab fallback on popup block.
 
 ### AWS resources
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRICING, formatPrice } from "@/config";
 import { SYSTEM } from "@/config/messages";
+import type { AuthState } from "@/hooks/useAuth";
 
 interface PaywallModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface PaywallModalProps {
   onSuccess: () => void;
   appealCount: number;
   trialExpired?: boolean;
+  currentPlan?: AuthState["plan"];
 }
 
 type PlanType = "starter" | "plus" | "unlimited";
@@ -22,8 +24,6 @@ const PLAN_OPTIONS: {
   label: string;
   description: string;
   features: string[];
-  badge?: string;
-  accent?: string;
 }[] = [
   {
     key: "starter",
@@ -43,8 +43,6 @@ const PLAN_OPTIONS: {
     price: PRICING.PLUS.amount,
     label: PRICING.PLUS.label,
     description: "20 msgs/day, every day",
-    badge: "Most Popular",
-    accent: "violet",
     features: [
       "2 appeal credits per month",
       "20 messages per day",
@@ -77,12 +75,14 @@ export function PaywallModal({
   onSuccess,
   appealCount,
   trialExpired,
+  currentPlan,
 }: PaywallModalProps) {
-  const [selectedPlan, setSelectedPlan] = useState<PlanType>("plus");
+  const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handlePurchase = async () => {
+    if (!selectedPlan) return;
     setIsProcessing(true);
     setError(null);
 
@@ -113,7 +113,9 @@ export function PaywallModal({
 
   if (!isOpen) return null;
 
-  const selected = PLAN_OPTIONS.find((p) => p.key === selectedPlan)!;
+  const selected = selectedPlan
+    ? (PLAN_OPTIONS.find((p) => p.key === selectedPlan) ?? null)
+    : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -173,23 +175,28 @@ export function PaywallModal({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {PLAN_OPTIONS.map((plan) => {
               const isSelected = selectedPlan === plan.key;
-              const isPopular = plan.badge;
+              const isCurrentPlan = plan.key === currentPlan;
               return (
                 <button
                   key={plan.key}
-                  onClick={() => setSelectedPlan(plan.key)}
+                  onClick={() => {
+                    if (isCurrentPlan) {
+                      setError(SYSTEM.ACTIVE_SUBSCRIPTION_CHANGE_PLAN);
+                      return;
+                    }
+                    setError(null);
+                    setSelectedPlan(plan.key);
+                  }}
                   className={cn(
                     "p-4 rounded-xl border-2 text-left transition-all relative",
                     isSelected
-                      ? isPopular
-                        ? "border-violet-500 bg-violet-500/10"
-                        : "border-[var(--accent-primary)] bg-[var(--accent-primary)]/10"
+                      ? "border-[var(--accent-primary)] bg-[var(--accent-primary)]/10"
                       : "border-[var(--border)] bg-[var(--bg-secondary)] hover:border-[var(--text-muted)]"
                   )}
                 >
-                  {isPopular && (
-                    <span className="absolute -top-2.5 left-3 px-2 py-0.5 text-xs font-medium bg-violet-500 text-white rounded-full">
-                      {plan.badge}
+                  {isCurrentPlan && (
+                    <span className="absolute -top-2.5 left-3 px-2 py-0.5 text-xs font-medium bg-[var(--accent-primary)] text-white rounded-full">
+                      Current Plan
                     </span>
                   )}
                   <div className="text-2xl font-bold text-[var(--text-primary)]">
@@ -241,7 +248,7 @@ export function PaywallModal({
           {/* CTA Button */}
           <button
             onClick={handlePurchase}
-            disabled={isProcessing}
+            disabled={isProcessing || !selected}
             className={cn(
               "w-full py-4 px-6 rounded-xl font-semibold transition-all",
               "bg-gradient-to-r from-blue-600 to-violet-600",
@@ -274,8 +281,10 @@ export function PaywallModal({
                 </svg>
                 Processing...
               </span>
-            ) : (
+            ) : selected ? (
               <>Subscribe to {selected.name} &mdash; {formatPrice(selected.price)}/mo</>
+            ) : (
+              <>Choose a plan</>
             )}
           </button>
 

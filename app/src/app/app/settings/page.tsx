@@ -664,7 +664,17 @@ function AppSettingsPageInner() {
                             data.error || "Something went wrong. Please try again.",
                           );
                         }
-                        window.location.href = data.url;
+                        const popup = window.open(
+                          data.url,
+                          "_blank",
+                          "noopener,noreferrer",
+                        );
+                        if (!popup) {
+                          console.warn(
+                            "[BillingPortal] Popup blocked, falling back to same-tab redirect",
+                          );
+                          window.location.href = data.url;
+                        }
                       } catch (err) {
                         setPortalError(
                           err instanceof Error
@@ -891,6 +901,7 @@ function AppSettingsPageInner() {
         }}
         appealCount={authState.appealCount}
         trialExpired={authState.trialStatus === "expired"}
+        currentPlan={authState.plan}
       />
 
       {/* TOTP Enroll Modal — DISABLED (2026-03-10), see TOTP comment above */}

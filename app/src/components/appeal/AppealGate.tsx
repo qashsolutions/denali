@@ -250,6 +250,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
         onSuccess={handlePaymentSuccess}
         appealCount={authState.appealCount}
         trialExpired={authState.trialStatus === "expired"}
+        currentPlan={authState.plan}
       />
     </>
   );
