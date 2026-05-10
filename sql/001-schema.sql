@@ -540,6 +540,19 @@ BEGIN
       cancelled_at = CASE WHEN p_status = 'cancelled' THEN now() ELSE cancelled_at END,
       updated_at = now()
   WHERE stripe_subscription_id = p_stripe_subscription_id;
+
+  -- When status flips to 'cancelled', revert the user's plan so the UI matches
+  -- Stripe-side reality. Prior version only touched the subscriptions table,
+  -- leaving users.plan stale at the paid tier.
+  IF p_status = 'cancelled' THEN
+    UPDATE public.users
+    SET plan = 'trial', updated_at = now()
+    WHERE id = (
+      SELECT user_id FROM public.subscriptions
+      WHERE stripe_subscription_id = p_stripe_subscription_id
+      LIMIT 1
+    );
+  END IF;
 END;
 $$;
 
