@@ -6,6 +6,7 @@
 .claude/settings.local.json
 .claude/logs/
 .claude/agent-memory/
+.claude/*.lock
 
 # MCP (Model Context Protocol)
 .mcp.json
