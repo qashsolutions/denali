@@ -240,8 +240,55 @@ Audit 3 hit a separate schema-drift error
 audits 4–5 did not run. The gate question (collision check) was
 answered cleanly by audit 2 before the abort.
 
-**3c. Fill Stripe prod config TBDs** — pending. Manual Stripe Dashboard
-work (see docs/staging-prod-sync-may11.md).
+**3c. Stripe prod config verification** (partial as of 2026-05-11):
+
+Verified directly from Stripe Dashboard (Live mode):
+- **API keys** ✓ `sk_live_` ("Denali Health Prod") + `pk_live_` present
+  (originally added to AWS Secrets Manager on 2026-05-02 during BB 2.0 prod cutover)
+- **Webhook endpoint** ✓ `https://denali.health/api/webhooks/stripe`, Active
+  - API version: `2025-04-30.basil`
+  - Subscribed events (5): `checkout.session.completed`, `customer.subscription.created`,
+    `customer.subscription.deleted`, `customer.subscription.updated`, `invoice.payment_failed`
+  - `customer.subscription.created` was added May 11; the other 4 predate today.
+- **Stripe products** ✓ 3 active in Live mode:
+  - Pay-per-Claim — $10.00 USD, one-time (not recurring)
+  - Monthly Subscription $20 Plan — $20/mo recurring
+  - Unlimited Monthly Access — $60/mo recurring
+  - Note: `users.plan` enum includes `'starter'` but no $10/mo recurring product exists on prod.
+    The `'starter'` enum value is unused as of this audit.
+
+AWS-side audit results (May 11):
+- Stripe credentials live inside the composite secret `denali/prod/app` in AWS
+  Secrets Manager, last rotated 2026-05-02 during BB 2.0 cutover. No separate
+  `denali/prod/stripe-*` secrets exist — Stripe creds share the app-env composite.
+- 6 Stripe-related JSON keys present in `denali/prod/app`:
+  `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+  `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_PAY_PER_CLAIM`, `STRIPE_PRICE_UNLIMITED`.
+- The current prod ECS task definition wires all 6 of those keys as container `secrets[]`
+  references (no mismatches, no orphan envs, no orphan secret keys). Audit grepped both
+  sides programmatically; zero drift.
+
+App-side SDK audit results (May 11):
+- Installed: `stripe@^20.2.0` (Stripe Node SDK v20.x).
+- `apiVersion` is NOT set anywhere in `app/src/` — all 4 production `new Stripe(...)` calls
+  (`checkout/route.ts:57`, `webhooks/stripe/route.ts:30`, `webhooks/stripe/route.ts:65`,
+  `lib/stripe-fulfillment.ts:8`) rely on the SDK default.
+- Compatibility vs the webhook's `2025-04-30.basil` API version: mostly aligned. The one
+  known field-location delta (`subscription.items.data[0].current_period_end` vs the
+  legacy top-level `current_period_end`) is already worked around in code per the existing
+  "Stripe SDK v20" note in the Stripe section of this doc. Not a blocker for the Phase 3
+  BILLING chain. Future hardening option (not required now): pin `apiVersion:
+  "2025-04-30.basil"` explicitly in each `new Stripe()` call so outbound and inbound use
+  the same API version.
+
+Pending verification (still required before 3c is fully closed):
+- **Customer Portal config** — Switch Plans must be OFF (B.3 plan-change webhook handling not built),
+  Return URL points to denali.health, standard manage/cancel/invoices toggles ON.
+- **Signing-secret cross-check** — confirm Stripe Dashboard `whsec_...` value matches the
+  `STRIPE_WEBHOOK_SECRET` (or equivalent) value in AWS Secrets Manager. Manual comparison
+  in AWS Console; do not log values.
+- **Price ID env var cross-check** — confirm price ID secret values in AWS match the
+  `price_...` IDs of the live products in Stripe Dashboard. Manual comparison; do not log values.
 
 **3d. Apply prod-safe SQL to prod RDS** — pending. Blocked on 3b.
 
