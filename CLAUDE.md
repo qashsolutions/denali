@@ -151,6 +151,21 @@ Three toggles in Settings → Privacy & Data. **All default OFF.** Enforcement i
 
 ---
 
+## Archived files (not in use)
+
+The following files exist in the repo but are NOT wired up to any
+code path. They were originally deleted by f855322/da87818
+(pre-demo security hardening) and have been preserved as
+commented-out archival references with NOT-IN-USE banners.
+Do not modify or wire up without team review.
+
+- `app/email-templates/otp-magic-link.html` — OTP email template, archived 2026-05-11
+- `terms_privacy.md` — root terms/privacy markdown source, archived 2026-05-11
+
+To inspect original content: `git show origin/main~1:<path>` (where `origin/main~1` is before the archival commit), or check the file contents directly — the original body is preserved inside the HTML comment block.
+
+---
+
 ## Key Files (summary)
 
 Most-touched files during coding sessions:
