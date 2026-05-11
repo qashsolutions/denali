@@ -166,6 +166,38 @@ To inspect original content: `git show origin/main~1:<path>` (where `origin/main
 
 ---
 
+## Phase 3 prep (in progress)
+
+The Phase 3 BILLING chain cherry-pick (8 commits, develop→main) requires
+careful SQL migration handling because the develop versions contain
+staging-email backfills that would forcibly downgrade prod paying users
+if any happen to share those emails.
+
+**3a. Prod-safe SQL migrations** (complete as of 2026-05-11):
+- scripts/migrate-fulfill-checkout-trial-converted-prod.sql
+- scripts/migrate-handle-subscription-change-revert-plan-prod.sql
+
+Both contain SP body changes only. Staging-specific UPDATE statements
+and pre/post-check SELECTs targeting hardcoded emails
+(ramanac@gmail.com, ceeveear@yahoo.com) and user UUIDs have been
+stripped. SP body bytes are identical to develop. PROD-SAFE header
+block documents the deviation.
+
+**3b. Audit prod paying users' emails** — pending. Read-only SELECT
+on prod RDS via denali-prod-pgdump:1 to confirm none of the 4 paying
+users share the staging emails. Gates whether 3d is safe.
+
+**3c. Fill Stripe prod config TBDs** — pending. Manual Stripe Dashboard
+work (see docs/staging-prod-sync-may11.md).
+
+**3d. Apply prod-safe SQL to prod RDS** — pending. Blocked on 3b.
+
+**3e. Cherry-pick BILLING chain to main** — pending. Blocked on 3b/3c/3d.
+
+**3f. Push + monitor + verify** — pending.
+
+---
+
 ## Key Files (summary)
 
 Most-touched files during coding sessions:
