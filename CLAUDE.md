@@ -151,6 +151,14 @@ Three toggles in Settings → Privacy & Data. **All default OFF.** Enforcement i
 - **CRITICAL: SSR-safe hooks must initialize with server-matching values.** `useOnlineStatus` must use `useState(true)` — NOT `useState(typeof navigator !== "undefined" ? navigator.onLine : true)`. The latter reads `navigator.onLine` on the client during hydration, which may return `false` (flaky connection, SW cached page), causing React hydration mismatch (#418) because the server rendered `null` but the client renders a div.
 - **All AI calls route through Bedrock in production.** ECS has no `ANTHROPIC_API_KEY` → `getClaudeClient()` returns `AnthropicBedrock` (IAM auth). Chat uses Sonnet 4.6 (`global.anthropic.claude-sonnet-4-6`); appeals use Opus 4.6 (`global.anthropic.claude-opus-4-6-v1`). Both `claude.ts` and `diabetes-insights.ts` use `getClaudeClient()`. Bedrock model access is auto-enabled (no manual activation needed); controlled via IAM policies on `denali-ecs-task-role`. MCP servers were fully replaced by local tool executors calling public government APIs directly — no data leaves AWS for AI processing.
 
+### Operational behavior
+
+- cwd persists across Bash tool calls within a session. After
+  cd-ing into a subdirectory (e.g., infra/staging/ for terraform
+  commands), always cd back to /Users/cvr/dev/denali (or use
+  absolute paths) before running git/gh/AWS-CLI commands that
+  assume repo root. Caught during A2 commit prep on 2026-05-10.
+
 ---
 
 ## Key Files (summary)
@@ -568,6 +576,17 @@ breakdown.
 > verification 2026-05-10. Fix: conditional copy for trial users, or
 > hide the note when Manage Subscription is hidden. ~5 minute scope
 > in app/src/app/app/settings/page.tsx. Cosmetic, not blocking.
+>
+> A2 closed (2026-05-10): EventBridge rule + Lambda auto-recovers
+> ECS when RDS-managed secret rotation completes. Recovery time
+> ~140s vs prior ~30min manual procedure. Implementation in
+> infra/staging/rotation-recovery.tf + lambda/rotation_recovery/.
+> Verified end-to-end via synthetic invocation; EventBridge
+> filter-pattern awaits real-world validation on the 2026-05-15
+> rotation (diagnostic logger.info captures full event payload
+> for filter-pattern refinement if needed). docs/runbook.md
+> updated with auto-recovery section; manual procedure retained
+> as fallback.
 
 ### AWS resources
 

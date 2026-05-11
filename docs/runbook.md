@@ -40,6 +40,23 @@ password. Result: every DB-touching request fails with PostgreSQL error
 - Hard refresh appears to "log user out" (actually the UI fails to populate
   `authState` because `/api/profile` is 500)
 
+### Auto-recovery (in place as of 2026-05-10)
+
+An EventBridge rule + Lambda automatically force-redeploys ECS when the
+RDS-managed secret rotation completes. The rotation collision pattern
+that caused the 2026-05-09 incident should no longer require manual
+intervention.
+
+Resources:
+- EventBridge rule: denali-staging-rotation-succeeded
+- Lambda: denali-staging-rotation-recovery
+- Recovery time: ~140s (verified via synthetic invocation 2026-05-10)
+- Source: infra/staging/rotation-recovery.tf
+
+The manual procedure below remains as fallback if EventBridge misses
+an event. Real-world validation of the filter pattern happens on the
+2026-05-15 18:59 CT rotation.
+
 **Recovery** (one command, ~3–5 min):
 
 ```bash
