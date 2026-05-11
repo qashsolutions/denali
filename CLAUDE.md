@@ -166,6 +166,33 @@ To inspect original content: `git show origin/main~1:<path>` (where `origin/main
 
 ---
 
+## Known test accounts on prod
+
+Two email addresses are operator-owned test accounts that exist on prod
+RDS. They are NOT real paying customers — they are personal accounts
+used by the operator for end-to-end verification of paid flows in the
+live environment:
+
+- `ramanac@gmail.com` — operator (Venkata) personal account
+- `ceeveear@yahoo.com` — operator secondary test account
+
+Both currently sit on the Plus tier on prod (confirmed 2026-05-11 via
+Phase 3 3b audit task `4fd33edc02cd4c968717b4b63700e904`). They share
+the `users` and `subscriptions` tables with real paying customers, so:
+
+- Any blanket UPDATE/DELETE that touches these emails affects both
+  these test accounts AND real customers if the WHERE clause is broad
+  enough — always scope migrations carefully.
+- Migration scripts authored on develop sometimes include backfill
+  UPDATEs targeting these emails to repair test-mode state in staging.
+  Those backfills must be stripped before any prod application (see
+  scripts/migrate-*-prod.sql for the pattern).
+- Counts that say "4 paying users on prod" include these 2 test
+  accounts — i.e. there are 2 genuine paying customers on prod as of
+  2026-05-11.
+
+---
+
 ## Phase 3 prep (in progress)
 
 The Phase 3 BILLING chain cherry-pick (8 commits, develop→main) requires
@@ -183,9 +210,17 @@ and pre/post-check SELECTs targeting hardcoded emails
 stripped. SP body bytes are identical to develop. PROD-SAFE header
 block documents the deviation.
 
-**3b. Audit prod paying users' emails** — pending. Read-only SELECT
-on prod RDS via denali-prod-pgdump:1 to confirm none of the 4 paying
-users share the staging emails. Gates whether 3d is safe.
+**3b. Audit prod paying users' emails** — complete as of 2026-05-11
+(task `4fd33edc02cd4c968717b4b63700e904`). Result: 2 collisions found —
+both `ramanac@gmail.com` and `ceeveear@yahoo.com` exist on prod as Plus
+subscribers. Both confirmed to be operator-owned test accounts (see
+"Known test accounts on prod" section above). Develop's staging
+migrations MUST NOT be applied to prod — they would downgrade these
+accounts. The prod-safe variants from 3a are the only safe option.
+Audit 3 hit a separate schema-drift error
+(`subscriptions.cancel_at_period_end` exists on develop but not prod);
+audits 4–5 did not run. The gate question (collision check) was
+answered cleanly by audit 2 before the abort.
 
 **3c. Fill Stripe prod config TBDs** — pending. Manual Stripe Dashboard
 work (see docs/staging-prod-sync-may11.md).
