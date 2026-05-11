@@ -87,3 +87,4 @@ staging-listener-rules.backup.json
 *.tfstate
 *.tfstate.*
 *.tfvars
+*.tfplan
