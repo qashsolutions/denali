@@ -558,6 +558,16 @@ breakdown.
 > customer deletions, gap is theoretical until observed in production;
 > (b) SP zero-row-update warning when stripe_subscription_id doesn't
 > match any row — low-priority polish.
+>
+> B.10 — settings page transparency note copy is conditional-naive.
+> Currently renders "Want to switch plans? Cancel via Manage
+> Subscription anytime — your new plan can start at the end of the
+> current cycle." for ALL users, including trial users who don't have
+> a Manage Subscription button to click (visibility gated on
+> authState.plan !== 'trial'). Surfaced during B.9 browser
+> verification 2026-05-10. Fix: conditional copy for trial users, or
+> hide the note when Manage Subscription is hidden. ~5 minute scope
+> in app/src/app/app/settings/page.tsx. Cosmetic, not blocking.
 
 ### AWS resources
 
