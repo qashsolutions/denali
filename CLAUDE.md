@@ -168,28 +168,46 @@ To inspect original content: `git show origin/main~1:<path>` (where `origin/main
 
 ## Known test accounts on prod
 
-Two email addresses are operator-owned test accounts that exist on prod
-RDS. They are NOT real paying customers — they are personal accounts
-used by the operator for end-to-end verification of paid flows in the
-live environment:
+Four email addresses on prod RDS are operator-owned. They are NOT real
+paying customers — they are personal accounts used by the operator for
+end-to-end verification of paid flows in the live environment:
 
-- `ramanac@gmail.com` — operator (Venkata) personal account
-- `ceeveear@yahoo.com` — operator secondary test account
+- `ramanac@gmail.com` — operator (Venkata) personal account; Plus tier
+- `ceeveear@yahoo.com` — operator secondary test account; Plus tier
+- `admin@myguide.health` — operator account; Plus tier
+- `ramanac+kk@gmail.com` — operator account; Unlimited tier. **Pre-normalization
+  legacy artifact** (see Gmail+ normalization note below)
 
-Both currently sit on the Plus tier on prod (confirmed 2026-05-11 via
-Phase 3 3b audit task `4fd33edc02cd4c968717b4b63700e904`). They share
-the `users` and `subscriptions` tables with real paying customers, so:
+Confirmed 2026-05-11 via Phase 3 3b-v2 audit task
+`24d144270b5d43dd81507fe1679993bb`. They share the `users` and
+`subscriptions` tables with any genuine paying customers, so:
 
 - Any blanket UPDATE/DELETE that touches these emails affects both
   these test accounts AND real customers if the WHERE clause is broad
   enough — always scope migrations carefully.
 - Migration scripts authored on develop sometimes include backfill
-  UPDATEs targeting these emails to repair test-mode state in staging.
-  Those backfills must be stripped before any prod application (see
-  scripts/migrate-*-prod.sql for the pattern).
-- Counts that say "4 paying users on prod" include these 2 test
-  accounts — i.e. there are 2 genuine paying customers on prod as of
-  2026-05-11.
+  UPDATEs targeting `ramanac@gmail.com` / `ceeveear@yahoo.com` to
+  repair test-mode state in staging. Those backfills must be stripped
+  before any prod application (see `scripts/migrate-*-prod.sql` for
+  the pattern).
+- Counts that say "4 paying users on prod" are ALL operator-controlled
+  as of 2026-05-11 — there are zero genuine 3rd-party paying customers
+  on prod yet (CMS marketplace launch was 2026-05-03).
+
+### Gmail+ normalization
+
+The current code (`normalizeEmail()` in `app/src/lib/normalize-email.ts`)
+normalizes Gmail plus-tag addresses to the base inbox at signup:
+`user+anything@gmail.com` → `user@gmail.com`. This prevents one Gmail
+account from creating multiple accounts via `ramanac+kk`, `ramanac+k`,
+`ramanac+a`, etc.
+
+`ramanac+kk@gmail.com` exists as a distinct row on prod because it
+predates the normalization fix. Going forward, no new `ramanac+*`
+accounts can be created — they all route to `ramanac@gmail.com`. The
+legacy row could be consolidated into `ramanac@gmail.com` via a
+manual operator-scoped UPDATE, but it's not urgent and is not part of
+any current cleanup phase.
 
 ---
 
