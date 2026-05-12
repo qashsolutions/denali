@@ -289,7 +289,41 @@ App-side SDK audit results (May 11):
 
 No mismatches found. 3c verification complete; ready to proceed to 3d (apply prod-safe SP migrations to prod RDS).
 
-**3d. Apply prod-safe SQL to prod RDS** — pending. Blocked on 3b.
+**3d. Apply prod-safe SP migrations to prod RDS** (complete as of 2026-05-11):
+
+Both prod-safe migrations from af7a4c8 successfully applied via the
+`denali-prod-pgdump:1` task override pattern (assignPublicIp=ENABLED,
+ON_ERROR_STOP=1). Each ran inside its own ECS task; pre-flight + apply +
+post-flight gates evaluated separately. Function count baseline of 191
+(raw `pg_proc` count in `public` schema, includes pgcrypto + pg_trgm
+extension functions) remained stable across both migrations.
+
+- `fulfill_checkout` (B.1 fix forward): body length 905 → 933 bytes
+  (+28). New: sets `subscriptions.trial_converted = true` on payment
+  fulfillment via UPSERT. Signature unchanged.
+- `handle_subscription_change` (B.9 fix forward): body length 387 → 851
+  bytes (+464). New: when subscription status flips to 'cancelled',
+  `users.plan` is reverted from any paid tier to 'trial', keeping
+  users.plan in sync with Stripe-side cancellation. Signature unchanged.
+
+Verification: CloudWatch logs for all 6 ECS tasks (3 per migration:
+pre-flight, apply, post-flight) showed clean BEGIN / CREATE FUNCTION /
+COMMIT output with no NOTICE/WARN/ERROR. Cross-check at end of migration
+#2 confirmed fulfill_checkout body still at 933 bytes (3d-1's migration
+not reverted by 3d-2).
+
+Behavioral impact starting 2026-05-11:
+- New `checkout.session.completed` webhook events fulfill with
+  `trial_converted=true` (Bug #1 closed forward; existing 4 paying
+  user rows still have `trial_converted=false` — not auto-backfilled,
+  deliberately skipped since all 4 are operator accounts and the flag
+  has no functional impact for them).
+- New `customer.subscription.*` webhook events with status='cancelled'
+  auto-revert `users.plan` to 'trial' (B.9 closed forward; existing
+  ramanac drift not auto-corrected — deliberately skipped since
+  ramanac is admin with `is_admin=true` bypassing all plan-tier gates).
+
+Unblocks 3e (cherry-pick the BILLING chain to main).
 
 **3e. Cherry-pick BILLING chain to main** — pending. Blocked on 3b/3c/3d.
 
