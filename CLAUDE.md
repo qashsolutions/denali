@@ -240,7 +240,7 @@ Audit 3 hit a separate schema-drift error
 audits 4–5 did not run. The gate question (collision check) was
 answered cleanly by audit 2 before the abort.
 
-**3c. Stripe prod config verification** (partial as of 2026-05-11):
+**3c. Stripe prod config verification** (complete as of 2026-05-11):
 
 Verified directly from Stripe Dashboard (Live mode):
 - **API keys** ✓ `sk_live_` ("Denali Health Prod") + `pk_live_` present
@@ -281,14 +281,13 @@ App-side SDK audit results (May 11):
   "2025-04-30.basil"` explicitly in each `new Stripe()` call so outbound and inbound use
   the same API version.
 
-Pending verification (still required before 3c is fully closed):
-- **Customer Portal config** — Switch Plans must be OFF (B.3 plan-change webhook handling not built),
-  Return URL points to denali.health, standard manage/cancel/invoices toggles ON.
-- **Signing-secret cross-check** — confirm Stripe Dashboard `whsec_...` value matches the
-  `STRIPE_WEBHOOK_SECRET` (or equivalent) value in AWS Secrets Manager. Manual comparison
-  in AWS Console; do not log values.
-- **Price ID env var cross-check** — confirm price ID secret values in AWS match the
-  `price_...` IDs of the live products in Stripe Dashboard. Manual comparison; do not log values.
+**Cross-check verification (completed 2026-05-11):**
+- Customer Portal config: "Customers can switch plans" toggle is OFF (B.3 plan-change webhook handling not built; portal restricted to update payment / cancel / view invoices). Redirect link set to https://denali.health/app/settings.
+- Stripe Public Business Details: Terms of service URL set to https://denali.health/terms, Privacy policy URL set to https://denali.health/privacy.
+- Signing-secret cross-check: SHA-256 hash of the AWS-stored STRIPE_WEBHOOK_SECRET matches the SHA-256 hash of the value revealed in Stripe Dashboard. Verified via automated Python script (no values written to disk, no values printed) plus manual shasum -a 256 confirmation on the Dashboard-revealed value.
+- Price ID cross-check: all 3 AWS-stored price IDs (STRIPE_PRICE_MONTHLY, STRIPE_PRICE_UNLIMITED, STRIPE_PRICE_PAY_PER_CLAIM) match the live Stripe price objects when filtered by amount + recurring interval. Verified via Stripe API + automated comparison (no values printed).
+
+No mismatches found. 3c verification complete; ready to proceed to 3d (apply prod-safe SP migrations to prod RDS).
 
 **3d. Apply prod-safe SQL to prod RDS** — pending. Blocked on 3b.
 
