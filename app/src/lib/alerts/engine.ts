@@ -46,12 +46,12 @@ export async function processAlerts(dryRun: boolean = false): Promise<ProcessRes
     plan: string;
     is_admin: boolean;
   }>(
-    `SELECT u.id, u.email, COALESCE(s.plan_type, u.plan) as plan, u.is_admin
+    `SELECT u.id, u.email, COALESCE(s.plan, u.plan) as plan, u.is_admin
      FROM users u
      LEFT JOIN subscriptions s ON s.user_id = u.id AND s.status = 'active'
      WHERE u.email IS NOT NULL
        AND (u.plan IN ('plus', 'unlimited') OR u.is_admin = true
-            OR s.plan_type IN ('plus', 'unlimited'))`
+            OR s.plan IN ('plus', 'unlimited'))`
   );
 
   for (const user of users.rows) {
