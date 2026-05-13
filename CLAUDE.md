@@ -174,46 +174,26 @@ To inspect original content: `git show origin/main~1:<path>` (where `origin/main
 
 ## Known test accounts on prod
 
-Four email addresses on prod RDS are operator-owned. They are NOT real
-paying customers — they are personal accounts used by the operator for
-end-to-end verification of paid flows in the live environment:
+Two operator-owned trial users currently exist on prod RDS. There are zero paying customers and zero non-operator accounts:
 
-- `ramanac@gmail.com` — operator (Venkata) personal account; Plus tier
-- `ceeveear@yahoo.com` — operator secondary test account; Plus tier
-- `admin@myguide.health` — operator account; Plus tier
-- `ramanac+kk@gmail.com` — operator account; Unlimited tier. **Pre-normalization
-  legacy artifact** (see Gmail+ normalization note below)
+- `ramanac@gmail.com` — operator (Venkata) personal account; `users.plan='trial'`, `is_admin=TRUE`
+- `ceeveear@yahoo.com` — operator secondary test account; `users.plan='trial'`, `is_admin=FALSE`
 
-Confirmed 2026-05-11 via Phase 3 3b-v2 audit task
-`24d144270b5d43dd81507fe1679993bb`. They share the `users` and
-`subscriptions` tables with any genuine paying customers, so:
+ramanac has no `subscriptions` row; ceeveear has one auto-created by `verify-otp` from her last sign-in (plan='trial', status='trialing', no `stripe_customer_id`). Both are clean trial state — ready to exercise the Stripe Live upgrade flow.
 
-- Any blanket UPDATE/DELETE that touches these emails affects both
-  these test accounts AND real customers if the WHERE clause is broad
-  enough — always scope migrations carefully.
-- Migration scripts authored on develop sometimes include backfill
-  UPDATEs targeting `ramanac@gmail.com` / `ceeveear@yahoo.com` to
-  repair test-mode state in staging. Those backfills must be stripped
-  before any prod application (see `scripts/migrate-*-prod.sql` for
-  the pattern).
-- Counts that say "4 paying users on prod" are ALL operator-controlled
-  as of 2026-05-11 — there are zero genuine 3rd-party paying customers
-  on prod yet (CMS marketplace launch was 2026-05-03).
+### History (2026-05-12 cleanup)
+
+Six operator/test accounts were deleted from prod RDS on 2026-05-12 to clear stale pre-Live-mode Stripe customer ID references that were blocking real paid-flow verification: `matthew.kail@id.me`, `ramanac+a@gmail.com`, `ramanac+b@gmail.com`, `ramanac+kk@gmail.com`, `ramanac+zz@gmail.com`, `admin@myguide.health`.
+
+Atomic single-transaction DELETE:
+- 15 FK CASCADE child tables auto-cleaned (subscriptions, alert_preferences, consent_preferences, conversations, diabetes_*, ehr_connections, fhir_cache, health_reports, etc.)
+- 4 FK SET NULL tables anonymized rows for HIPAA retention: `audit_logs` (76 rows), `usage` (6), `appeals` (4), `user_feedback` (0)
+
+Pre-cleanup, ramanac and ceeveear were also reset to trial state (subscription rows deleted, `users.plan` reverted to 'trial') to remove their stale test-mode `stripe_customer_id` values, which had been causing the Customer Portal endpoint to 500 with "No such customer" in live Stripe. Migration scripts on develop that include backfill UPDATEs targeting `ramanac@gmail.com` / `ceeveear@yahoo.com` must still be stripped before any prod application (see `scripts/migrate-*-prod.sql` for the pattern).
 
 ### Gmail+ normalization
 
-The current code (`normalizeEmail()` in `app/src/lib/normalize-email.ts`)
-normalizes Gmail plus-tag addresses to the base inbox at signup:
-`user+anything@gmail.com` → `user@gmail.com`. This prevents one Gmail
-account from creating multiple accounts via `ramanac+kk`, `ramanac+k`,
-`ramanac+a`, etc.
-
-`ramanac+kk@gmail.com` exists as a distinct row on prod because it
-predates the normalization fix. Going forward, no new `ramanac+*`
-accounts can be created — they all route to `ramanac@gmail.com`. The
-legacy row could be consolidated into `ramanac@gmail.com` via a
-manual operator-scoped UPDATE, but it's not urgent and is not part of
-any current cleanup phase.
+`normalizeEmail()` in `app/src/lib/normalize-email.ts` has been applied at signup since well before the 2026-05-03 CMS launch. It trims Gmail plus-tag addresses to the base inbox: any `ramanac+anything@gmail.com` is routed to `ramanac@gmail.com`. One Gmail inbox cannot create multiple Denali accounts. The legacy `ramanac+a/+b/+kk/+zz` rows that pre-dated this enforcement were deleted in the 2026-05-12 prod cleanup pass.
 
 ---
 

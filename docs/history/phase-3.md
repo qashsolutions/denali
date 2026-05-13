@@ -118,9 +118,40 @@ Behavioral impact starting 2026-05-11:
 
 Unblocks 3e (cherry-pick the BILLING chain to main).
 
-**3e. Cherry-pick BILLING chain to main** — pending. Blocked on 3b/3c/3d.
+**3e. Cherry-pick BILLING chain to main** (complete as of 2026-05-12):
 
-**3f. Push + monitor + verify** — pending.
+8 commits cherry-picked from develop onto main in this order (e82a36c repositioned after 9007d14 since it removes a TRIAL_DEBUG line that 9007d14 adds): f61dc8d → ecb5ac5 → 9007d14 → e82a36c → 97f5ee3 → 9acd117 → f07daef → 8bdf28d. Three commits (9acd117, f07daef, 8bdf28d) hit CLAUDE.md conflicts; resolved with `--ours` (kept main's Phase 3 prep section intact). All code/SQL files auto-merged cleanly. TSC clean post-cherry-pick. Pushed together with the 6 Phase 3 prep commits in a single batch.
+
+**3f. Push + monitor + verify** (complete as of 2026-05-12):
+
+Deploy via GitHub Actions ran clean. ECS rolled to a new task definition revision, app healthy on both `denali.health` and `www.denali.health`. New `/api/billing-portal` route returns 401 (auth-gated) — confirms route is live and protected.
+
+### Phase 3 final state
+
+Phase 3 closed 2026-05-13. Final Phase 3 commit on main: `294fe7f`. A subsequent commit (`101755a`) lands a pre-existing alerts-engine bug fix discovered during Phase 3e validation — see "alerts/engine.ts `s.plan_type` fix" below.
+
+Browser-verified BILLING flows on prod (signed in as ceeveear on trial state):
+
+- **Manage Subscription button visibility gate** correctly hides the button for trial users and renders it for paid tiers.
+- **Plan-aware PaywallModal**: "Current Plan" badge appears on the user's current tier; "Choose a plan" button is disabled until a tier is selected; on selection the button label transitions to `Subscribe to <Tier> — $X/mo` and is enabled.
+- **Same-plan kill switch** (client-side, B.4): clicking the current-plan card inside the modal surfaces `SYSTEM.ACTIVE_SUBSCRIPTION_CHANGE_PLAN` inline in the red error block; zero network requests fire.
+- **Server-side 409 kill switch** (B.6): clicking Subscribe with a different tier selected hits `POST /api/checkout`, returns 409 with the same error message, no Stripe Checkout redirect occurs.
+- **Stripe Live Checkout** (clean trial → upgrade path): clicking Subscribe returns a Live-mode Stripe Checkout Session URL; the tab redirects same-tab to `checkout.stripe.com`. Cancel via Stripe returns to the configured `cancel_url` on `denali.health/app/chat`. Card-charge step intentionally not tested (real money — will be exercised by first genuine paying customer).
+
+The Manage Subscription happy path (button → Customer Portal opens in new tab) could not be fully exercised — all operator accounts had stale pre-Live-mode `stripe_customer_id` values that live Stripe doesn't recognize. The portal endpoint's catch-block correctly returns 500 with `SYSTEM.GENERIC_ERROR` for that case; the 409 null-guard from B.1 remains untested until a new paying customer with a valid live-mode customer ID signs up. Code path verified by source inspection.
+
+### Subscribe vs Manage Subscription redirect (intentional asymmetry)
+
+`/api/checkout` success → `window.location.href = url` (same-tab redirect). `/api/billing-portal` success → `window.open(url, "_blank", "noopener,noreferrer")` with same-tab fallback on popup block. Intentional UX choice — Checkout is a one-shot terminal flow; Portal is a reference experience the user returns from. NOT a bug.
+
+### alerts/engine.ts `s.plan_type` fix (commit `101755a`)
+
+Two-token SQL column-name typo in `app/src/lib/alerts/engine.ts` (lines 49 + 54): query referenced `s.plan_type`, but the `subscriptions` table has `s.plan`. Caused `processAlerts()` to fail with PostgreSQL error `42703 undefined_column` on every daily EventBridge → Lambda → `POST /api/alerts/process` cron run since 2026-03-06 — ~2 months of silent regression, zero alerts delivered.
+
+- Predates Phase 3; introduced in commit `ff22179e` ("feat: add plan-gated Medicare email alerts (no PHI)").
+- Discovered 2026-05-12 via prod log monitor while validating Phase 3e.
+- Fix verified end-to-end on 2026-05-13 via manual Lambda invocation (function `denali-alert-trigger`): response showed `errors: 0, processed: 0` — consistent with no eligible users on prod (both retained operator accounts are on trial; the engine's WHERE clause filters to plus/unlimited/admin only).
+- Future paying customers will receive alerts as designed once enrolled and opted in per the consent-toggle gate.
 
 ---
 
