@@ -24,6 +24,7 @@ export interface AuthState {
   role: "patient" | "counselor" | "provider";
   appealCount: number;
   appealCredits: number;
+  hasStripeCustomer: boolean; // True if user has an active subscription row with stripe_customer_id
   trialStatus: "none" | "active" | "expired" | "converted";
   trialDaysRemaining: number;
   isAdmin: boolean;
@@ -64,6 +65,7 @@ const DEFAULT_AUTH_STATE: AuthState = {
   role: "patient",
   appealCount: 0,
   appealCredits: 0,
+  hasStripeCustomer: false,
   trialStatus: "none",
   trialDaysRemaining: 0,
   isAdmin: false,
@@ -140,6 +142,7 @@ export function useAuth(): UseAuthReturn {
 
       const appealCount = profileData?.appealCount || 0;
       const appealCredits = profileData?.appealCredits || 0;
+      const hasStripeCustomer = profileData?.hasStripeCustomer === true;
       const isAdmin = profileData?.isAdmin || false;
       const isIdmeVerified = profileData?.idmeVerified || false;
       const firstName = profileData?.firstName || null;
@@ -166,6 +169,7 @@ export function useAuth(): UseAuthReturn {
         role: userRole,
         appealCount,
         appealCredits,
+        hasStripeCustomer,
         trialStatus,
         trialDaysRemaining,
         isAdmin,
@@ -177,6 +181,7 @@ export function useAuth(): UseAuthReturn {
         role: userRole,
         appealCount,
         appealCredits,
+        hasStripeCustomer,
         isAdmin,
         isIdmeVerified,
         firstName,
@@ -193,6 +198,7 @@ export function useAuth(): UseAuthReturn {
         role: string;
         appealCount: number;
         appealCredits: number;
+        hasStripeCustomer?: boolean;
         isAdmin: boolean;
         isIdmeVerified: boolean;
         firstName?: string | null;
@@ -209,6 +215,7 @@ export function useAuth(): UseAuthReturn {
           role: d.role as AuthState["role"],
           appealCount: d.appealCount,
           appealCredits: d.appealCredits || 0,
+          hasStripeCustomer: d.hasStripeCustomer === true,
           isAdmin: d.isAdmin,
           isIdmeVerified: d.isIdmeVerified || false,
           firstName: d.firstName || null,

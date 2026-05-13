@@ -444,10 +444,8 @@ function AppSettingsPageInner() {
           <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border)]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-[var(--text-primary)]">
-                  {authState.isAdmin
-                    ? "Admin"
-                    : authState.plan === "unlimited"
+                <p className="text-sm font-medium text-[var(--text-primary)] flex items-center gap-2">
+                  {authState.plan === "unlimited"
                     ? "Unlimited Plan"
                     : authState.plan === "plus"
                     ? "Plus Plan"
@@ -456,11 +454,14 @@ function AppSettingsPageInner() {
                     : authState.plan === "trial"
                     ? "Free Trial"
                     : "Trial"}
+                  {authState.isAdmin && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30">
+                      Admin
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                  {authState.isAdmin
-                    ? "Unlimited access"
-                    : authState.plan === "unlimited"
+                  {authState.plan === "unlimited"
                     ? `${formatPrice(PRICING.UNLIMITED.amount)}/month \u00b7 Unlimited appeals \u00b7 Unlimited messages`
                     : authState.plan === "plus"
                     ? `${formatPrice(PRICING.PLUS.amount)}/month \u00b7 ${authState.appealCredits} appeal credit${authState.appealCredits !== 1 ? "s" : ""}/month \u00b7 20 msgs/day, every day`
@@ -471,10 +472,11 @@ function AppSettingsPageInner() {
                     : authState.plan === "trial" && authState.trialStatus === "expired"
                     ? "Trial ended \u2014 upgrade to continue"
                     : "No active plan"}
+                  {authState.isAdmin && " \u00b7 Unlimited access"}
                 </p>
               </div>
               <div className="flex gap-2">
-                {authState.plan !== "trial" && !authState.isAdmin && (
+                {authState.hasStripeCustomer && (
                   <button
                     onClick={async () => {
                       setPortalLoading(true);
@@ -517,7 +519,7 @@ function AppSettingsPageInner() {
                     {portalLoading ? "Opening..." : "Manage Subscription"}
                   </button>
                 )}
-                {authState.plan !== "unlimited" && !authState.isAdmin && (
+                {authState.plan !== "unlimited" && (
                   <button
                     onClick={() => setShowPaywall(true)}
                     className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:opacity-90 transition-colors"
@@ -527,10 +529,12 @@ function AppSettingsPageInner() {
                 )}
               </div>
             </div>
-            <p className="mt-3 text-xs text-[var(--text-muted)]">
-              Want to switch plans? Cancel via Manage Subscription anytime
-              &mdash; your new plan can start at the end of the current cycle.
-            </p>
+            {authState.hasStripeCustomer && (
+              <p className="mt-3 text-xs text-[var(--text-muted)]">
+                Want to switch plans? Cancel via Manage Subscription anytime
+                &mdash; your new plan can start at the end of the current cycle.
+              </p>
+            )}
             {portalError && (
               <p className="mt-3 text-sm text-red-600 dark:text-red-400">
                 {portalError}
