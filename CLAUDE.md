@@ -3,23 +3,15 @@
 <!-- CLAUDE.md — Project instructions for Claude Code (the coding assistant).
      This file is auto-loaded into every Claude Code context window.
      Keep it accurate to the ACTUAL codebase, not aspirational.
-     Last updated: 2026-03-24 (Gmail plus address normalization; trial fix inline DB; 143 unit tests across 8 files; 212 E2E tests across 44 files)
      Maintainer: @cvr
 -->
 
-<!-- ✅ AWS MIGRATION COMPLETE (branch: aws-migration) — Last updated: 2026-03-03
-     Phase 1 ✅ All server-side API routes + libs → RDS (query()) + Cognito (getAuthUser())
-     Phase 2 ✅ Client-side auth → /api/auth/* routes + custom 'auth-state-change' event
-     Phase 2b ✅ conversation-service.ts + useDiabetesSnapshots → API routes + query()
-     Phase 3  ⬜ MCP tools → local (ICD-10, CMS Coverage, NPI) — post-deploy
-     DEPLOYED: ECS task def :33 (commit e361fe7) running on denali.health
-     DNS: Route 53 (migrated from GoDaddy 2026-03-03). NS: ns-1637/ns-463/ns-1270/ns-847
-     DOMAIN ROUTING:
-       www.denali.health / denali.health → AWS ALB → ECS Fargate (production)
-       staging.denali.health → AWS ALB → ECS Fargate (same ALB, same ECS for now)
-       stage.denali.health → Vercel staging (DO NOT USE)
-     Auth pattern: getAuthUser() from lib/auth-server.ts (reads Cognito httpOnly cookie)
-     DB pattern: query() from lib/db.ts (pg pool → RDS PostgreSQL)
+<!-- AWS MIGRATION ✅ COMPLETE (2026-03-03). API routes + auth on AWS:
+     Auth: getAuthUser() from lib/auth-server.ts (Cognito httpOnly cookies).
+     DB:   query() from lib/db.ts (pg pool → RDS PostgreSQL).
+     DOMAIN ROUTING: denali.health / www.denali.health → AWS ALB → ECS Fargate.
+                     staging.denali.health → same ALB, separate cluster.
+     Detailed history: see docs/history/sessions-2026-04.md
 -->
 
 <!-- IMPORTANT FOR CLAUDE CODE:
@@ -60,6 +52,20 @@ and add a dated changelog entry per Part 13 of the doc.
 
 ---
 
+
+## Reference docs
+
+Full topical reference under `docs/reference/`. Hub keeps summaries; reference docs have full content.
+
+- [Key Files](docs/reference/key-files.md) · [Architecture](docs/reference/architecture.md) · [Tools & Data Sources](docs/reference/tools.md)
+- [Database Schema](docs/reference/db-schema.md) · [Skills & Prompt System](docs/reference/skills.md) · [Orchestration Flows](docs/reference/orchestration.md)
+- [Business Model, Auth & Payments](docs/reference/business-model.md) · [Infrastructure](docs/reference/infrastructure.md) · [Blue Button 2.0](docs/reference/blue-button.md)
+- [UI/UX Guidelines](docs/reference/ui.md) · [PWA Offline](docs/reference/pwa.md) · [Coding Standards](docs/reference/coding-standards.md)
+- [Testing](docs/reference/testing.md) · [Learning System](docs/reference/learning-system.md) · [CMS Interoperability Framework](docs/reference/cms-framework.md)
+
+History: [Phase 3 (BILLING + SP migrations, 2026-05-11→13)](docs/history/phase-3.md) · [CMS compliance log](docs/history/cms-compliance-log.md) · [Sessions 2026-04](docs/history/sessions-2026-04.md)
+
+---
 ## Critical Rules
 
 These cause bugs or bad UX if violated. Read before every coding session.
@@ -211,174 +217,28 @@ any current cleanup phase.
 
 ---
 
-## Phase 3 prep (in progress)
-
-The Phase 3 BILLING chain cherry-pick (8 commits, develop→main) requires
-careful SQL migration handling because the develop versions contain
-staging-email backfills that would forcibly downgrade prod paying users
-if any happen to share those emails.
-
-**3a. Prod-safe SQL migrations** (complete as of 2026-05-11):
-- scripts/migrate-fulfill-checkout-trial-converted-prod.sql
-- scripts/migrate-handle-subscription-change-revert-plan-prod.sql
-
-Both contain SP body changes only. Staging-specific UPDATE statements
-and pre/post-check SELECTs targeting hardcoded emails
-(ramanac@gmail.com, ceeveear@yahoo.com) and user UUIDs have been
-stripped. SP body bytes are identical to develop. PROD-SAFE header
-block documents the deviation.
-
-**3b. Audit prod paying users' emails** — complete as of 2026-05-11
-(task `4fd33edc02cd4c968717b4b63700e904`). Result: 2 collisions found —
-both `ramanac@gmail.com` and `ceeveear@yahoo.com` exist on prod as Plus
-subscribers. Both confirmed to be operator-owned test accounts (see
-"Known test accounts on prod" section above). Develop's staging
-migrations MUST NOT be applied to prod — they would downgrade these
-accounts. The prod-safe variants from 3a are the only safe option.
-Audit 3 hit a separate schema-drift error
-(`subscriptions.cancel_at_period_end` exists on develop but not prod);
-audits 4–5 did not run. The gate question (collision check) was
-answered cleanly by audit 2 before the abort.
-
-**3c. Stripe prod config verification** (complete as of 2026-05-11):
-
-Verified directly from Stripe Dashboard (Live mode):
-- **API keys** ✓ `sk_live_` ("Denali Health Prod") + `pk_live_` present
-  (originally added to AWS Secrets Manager on 2026-05-02 during BB 2.0 prod cutover)
-- **Webhook endpoint** ✓ `https://denali.health/api/webhooks/stripe`, Active
-  - API version: `2025-04-30.basil`
-  - Subscribed events (5): `checkout.session.completed`, `customer.subscription.created`,
-    `customer.subscription.deleted`, `customer.subscription.updated`, `invoice.payment_failed`
-  - `customer.subscription.created` was added May 11; the other 4 predate today.
-- **Stripe products** ✓ 3 active in Live mode:
-  - Pay-per-Claim — $10.00 USD, one-time (not recurring)
-  - Monthly Subscription $20 Plan — $20/mo recurring
-  - Unlimited Monthly Access — $60/mo recurring
-  - Note: `users.plan` enum includes `'starter'` but no $10/mo recurring product exists on prod.
-    The `'starter'` enum value is unused as of this audit.
-
-AWS-side audit results (May 11):
-- Stripe credentials live inside the composite secret `denali/prod/app` in AWS
-  Secrets Manager, last rotated 2026-05-02 during BB 2.0 cutover. No separate
-  `denali/prod/stripe-*` secrets exist — Stripe creds share the app-env composite.
-- 6 Stripe-related JSON keys present in `denali/prod/app`:
-  `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
-  `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_PAY_PER_CLAIM`, `STRIPE_PRICE_UNLIMITED`.
-- The current prod ECS task definition wires all 6 of those keys as container `secrets[]`
-  references (no mismatches, no orphan envs, no orphan secret keys). Audit grepped both
-  sides programmatically; zero drift.
-
-App-side SDK audit results (May 11):
-- Installed: `stripe@^20.2.0` (Stripe Node SDK v20.x).
-- `apiVersion` is NOT set anywhere in `app/src/` — all 4 production `new Stripe(...)` calls
-  (`checkout/route.ts:57`, `webhooks/stripe/route.ts:30`, `webhooks/stripe/route.ts:65`,
-  `lib/stripe-fulfillment.ts:8`) rely on the SDK default.
-- Compatibility vs the webhook's `2025-04-30.basil` API version: mostly aligned. The one
-  known field-location delta (`subscription.items.data[0].current_period_end` vs the
-  legacy top-level `current_period_end`) is already worked around in code per the existing
-  "Stripe SDK v20" note in the Stripe section of this doc. Not a blocker for the Phase 3
-  BILLING chain. Future hardening option (not required now): pin `apiVersion:
-  "2025-04-30.basil"` explicitly in each `new Stripe()` call so outbound and inbound use
-  the same API version.
-
-**Cross-check verification (completed 2026-05-11):**
-- Customer Portal config: "Customers can switch plans" toggle is OFF (B.3 plan-change webhook handling not built; portal restricted to update payment / cancel / view invoices). Redirect link set to https://denali.health/app/settings.
-- Stripe Public Business Details: Terms of service URL set to https://denali.health/terms, Privacy policy URL set to https://denali.health/privacy.
-- Signing-secret cross-check: SHA-256 hash of the AWS-stored STRIPE_WEBHOOK_SECRET matches the SHA-256 hash of the value revealed in Stripe Dashboard. Verified via automated Python script (no values written to disk, no values printed) plus manual shasum -a 256 confirmation on the Dashboard-revealed value.
-- Price ID cross-check: all 3 AWS-stored price IDs (STRIPE_PRICE_MONTHLY, STRIPE_PRICE_UNLIMITED, STRIPE_PRICE_PAY_PER_CLAIM) match the live Stripe price objects when filtered by amount + recurring interval. Verified via Stripe API + automated comparison (no values printed).
-
-No mismatches found. 3c verification complete; ready to proceed to 3d (apply prod-safe SP migrations to prod RDS).
-
-**3d. Apply prod-safe SP migrations to prod RDS** (complete as of 2026-05-11):
-
-Both prod-safe migrations from af7a4c8 successfully applied via the
-`denali-prod-pgdump:1` task override pattern (assignPublicIp=ENABLED,
-ON_ERROR_STOP=1). Each ran inside its own ECS task; pre-flight + apply +
-post-flight gates evaluated separately. Function count baseline of 191
-(raw `pg_proc` count in `public` schema, includes pgcrypto + pg_trgm
-extension functions) remained stable across both migrations.
-
-- `fulfill_checkout` (B.1 fix forward): body length 905 → 933 bytes
-  (+28). New: sets `subscriptions.trial_converted = true` on payment
-  fulfillment via UPSERT. Signature unchanged.
-- `handle_subscription_change` (B.9 fix forward): body length 387 → 851
-  bytes (+464). New: when subscription status flips to 'cancelled',
-  `users.plan` is reverted from any paid tier to 'trial', keeping
-  users.plan in sync with Stripe-side cancellation. Signature unchanged.
-
-Verification: CloudWatch logs for all 6 ECS tasks (3 per migration:
-pre-flight, apply, post-flight) showed clean BEGIN / CREATE FUNCTION /
-COMMIT output with no NOTICE/WARN/ERROR. Cross-check at end of migration
-#2 confirmed fulfill_checkout body still at 933 bytes (3d-1's migration
-not reverted by 3d-2).
-
-Behavioral impact starting 2026-05-11:
-- New `checkout.session.completed` webhook events fulfill with
-  `trial_converted=true` (Bug #1 closed forward; existing 4 paying
-  user rows still have `trial_converted=false` — not auto-backfilled,
-  deliberately skipped since all 4 are operator accounts and the flag
-  has no functional impact for them).
-- New `customer.subscription.*` webhook events with status='cancelled'
-  auto-revert `users.plan` to 'trial' (B.9 closed forward; existing
-  ramanac drift not auto-corrected — deliberately skipped since
-  ramanac is admin with `is_admin=true` bypassing all plan-tier gates).
-
-Unblocks 3e (cherry-pick the BILLING chain to main).
-
-**3e. Cherry-pick BILLING chain to main** — pending. Blocked on 3b/3c/3d.
-
-**3f. Push + monitor + verify** — pending.
-
----
-
 ## Key Files (summary)
 
 Most-touched files during coding sessions:
 
-**Backend / API:**
-- `src/app/api/chat/route.ts` — main chat endpoint (rate-limit → skills → Claude → persist)
-- `src/app/api/profile/route.ts` — user profile GET/PATCH
-- `src/app/api/auth/*` — Cognito-backed auth endpoints (send-otp, verify-otp, refresh, signout)
-- `src/middleware.ts` — Cognito JWT validation, session lifetime, silent refresh
+**Backend / API:** `src/app/api/chat/route.ts` (rate-limit → skills → Claude → persist), `src/app/api/profile/route.ts`, `src/app/api/auth/*` (Cognito send-otp/verify-otp/refresh/signout), `src/middleware.ts` (JWT validation + silent refresh).
 
-**Claude integration:**
-- `src/lib/claude.ts` — Claude client, tool-use loop, SessionState
-- `src/lib/skills-loader.ts` — conditional system-prompt builder
-- `src/lib/tools/index.ts` — 12 local tool executors
-- `src/lib/skills/*` and `src/skills/*` — per-skill prompt sections
+**Claude integration:** `src/lib/claude.ts` (client + tool-use loop + SessionState), `src/lib/skills-loader.ts`, `src/lib/tools/index.ts` (12 local tool executors), `src/lib/skills/*` and `src/skills/*`.
 
-**Data layer:**
-- `src/lib/db.ts` — RDS pool (`query`, `transaction` helpers)
-- `src/lib/auth-server.ts` — `getAuthUser()` server-side auth helper
-- `src/lib/audit.ts` — audit logging (fire-and-forget, write-side dedup)
-- `scripts/migrate-*.sql` / `scripts/migrate-*.js` — schema migrations (run manually in order)
+**Data layer:** `src/lib/db.ts` (RDS pool, `query`/`transaction` helpers), `src/lib/auth-server.ts` (`getAuthUser()`), `src/lib/audit.ts` (fire-and-forget + write-side dedup), `scripts/migrate-*.sql` (run manually in order).
 
-**FHIR / Blue Button:**
-- `src/lib/fhir/` — Blue Button library (crypto, tokens, transforms, context, sync, eob-clinical, snapshots)
-- `src/lib/health-report.ts` — Claude-powered health summary report generation
+**FHIR / Blue Button:** `src/lib/fhir/` (crypto, tokens, transforms, context, sync, eob-clinical, snapshots), `src/lib/health-report.ts`.
 
-**Stripe & payments:**
-- `src/lib/stripe-fulfillment.ts` — checkout fulfillment + subscription lifecycle
-- `src/components/payment/PaywallModal.tsx` — paywall UI
+**Stripe & payments:** `src/lib/stripe-fulfillment.ts`, `src/components/payment/PaywallModal.tsx`.
 
-**Frontend (most edited):**
-- `src/app/app/page.tsx` — authenticated dashboard home
-- `src/app/app/chat/page.tsx` — chat page (sign-in gate, consent banner, paywall intercept)
-- `src/components/layout/AppHeader.tsx` — universal header (auth-aware)
-- `src/components/landing/LandingFooter.tsx` — shared footer (import directly, NOT from barrel, in `"use client"` components)
-- `src/hooks/useAuth.ts` — auth state via `auth-state-change` custom event
-- `src/hooks/useHealthData.ts` — Blue Button data fetch + IndexedDB cache
-- `src/hooks/useConsent.ts` — consent toggles (3 enforcement points)
+**Frontend (most edited):** `src/app/app/page.tsx` (dashboard), `src/app/app/chat/page.tsx` (sign-in gate + consent banner + paywall intercept), `src/components/layout/AppHeader.tsx` (auth-aware), `src/components/landing/LandingFooter.tsx` (import directly in `"use client"` components, NOT from barrel — barrel pulls `pg` into client bundle), `src/hooks/useAuth.ts` (`auth-state-change` custom event), `src/hooks/useHealthData.ts`, `src/hooks/useConsent.ts`.
 
-**Offline / PWA:**
-- `src/lib/offline-cache.ts` — IndexedDB wrapper (6 stores)
-- `src/lib/offline-sync.ts` — queue replay
-- `public/sw.js` — service worker
+**Offline / PWA:** `src/lib/offline-cache.ts` (IndexedDB wrapper, 6 stores), `src/lib/offline-sync.ts`, `public/sw.js`.
 
-**See `docs/reference/key-files.md`** for the comprehensive
-file map (every route, every hook, every component) and full
-behavioral notes per file.
+**See [docs/reference/key-files.md](docs/reference/key-files.md)** for the comprehensive file map (every route, every hook, every component) and full behavioral notes per file.
+
 ---
+
 
 ## Architecture
 
@@ -390,231 +250,108 @@ User (Chat UI) ──> Claude Agent (Brain) ──> Tools (APIs + RDS)
                     Cognito (Auth/Sessions)
 ```
 
-- **Frontend is dumb** — just renders what Claude returns
-- All intelligence lives in Claude + skills + tools
-- Domain skills are implemented via Claude tool calling in `/api/chat`, NOT separate edge functions
-- Tools are interchangeable (swap APIs without frontend changes)
-- **Auth** = Cognito + httpOnly cookies. **DB** = RDS via `query()`. No browser SDK.
+Frontend is dumb (renders what Claude returns); all intelligence in Claude + skills + tools. Domain skills via tool calling in `/api/chat`, NOT separate edge functions. Tools interchangeable. **Auth** = Cognito + httpOnly cookies. **DB** = RDS via `query()`. No browser SDK.
 
-### Tool System
+**See [docs/reference/architecture.md](docs/reference/architecture.md)** for Tool System internals, SessionState fields, population sources.
 
-All tools are local executors handled by `processToolCalls()` in the chat loop. Claude requests a `tool_use`, our server executes the function, and returns a `tool_result`. Government API tools (ICD-10, CMS Coverage, NPI) call free public endpoints with generic search terms — no patient data sent. Previously used MCP servers at `mcp.deepsense.ai` (migrated to local executors 2026-03-04).
-
-### Session State
-
-Tracked across the conversation in `SessionState` (defined in `claude.ts`):
-
-```
-User-facing (plain English):        Internal (codes, never shown):
-  name, ZIP, symptoms, duration        diagnosisCodes (ICD-10)
-  priorTreatments, provider            procedureCodes (CPT)
-  requirementAnswers                   denialCodes (CARC/RARC)
-  redFlags                             coverageCriteria, policyReferences
-  maPlanName (from Blue Button)        denialDate, priorAuthRequired
-```
-
-**Population sources** — how fields get populated during the chat loop:
-
-| Field               | Populated By                                             | Mechanism                                                                                                                                                  |
-| ------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `diagnosisCodes`    | MCP `search_icd10` / Local `generate_appeal_letter`      | Regex from Claude text / `updateSessionFromToolResults()`                                                                                                  |
-| `procedureCodes`    | Local `search_cpt` / `generate_appeal_letter`            | `updateSessionFromToolResults()`                                                                                                                           |
-| `denialCodes`       | Local `lookup_denial_code` / User message                | `updateSessionFromToolResults()` + `extractUserInfo()` regex (CO-50, PR-1, CARC 167, RARC N56 patterns — gated on appeal context to avoid false positives) |
-| `policyReferences`  | MCP `search_local_coverage` / `search_national_coverage` | Regex from Claude text (LCD L\d{5}, NCD patterns)                                                                                                          |
-| `priorAuthRequired` | Local `check_prior_auth`                                 | `updateSessionFromToolResults()`                                                                                                                           |
-| `denialDate`        | User message                                             | `extractUserInfo()` regex                                                                                                                                  |
-| `isAppeal`          | User message                                             | `extractUserInfo()` keyword detection                                                                                                                      |
-| `maPlanName`        | Blue Button coverage / User message                      | Auto-detected from Part C coverage in `chat/page.tsx` / `extractUserInfo()`                                                                                |
-
----
 
 ## Tools & Data Sources
 
-### Government API Tools (local executors, replaced MCP servers)
+12 local tool executors handled by `processToolCalls()` in chat loop. Government API tools call free public endpoints with generic search terms — no patient data sent. MCP servers replaced by local executors 2026-03-04.
 
-These tools are local executors in `tools/index.ts` that call free public government APIs directly. No patient data is sent — only generic search terms. Previously used MCP servers at `mcp.deepsense.ai` (removed 2026-03-04).
+- **Government APIs**: ICD-10 (NLM), LCD/NCD (CMS), NPI (NPPES)
+- **Local**: CPT mapping, prior auth, preventive, SAD list, PubMed, appeal-letter generator
+- **RDS-backed**: CARC/RARC lookup, denial patterns
 
-| Tool                                                                         | API Endpoint                                                     | Data                                     |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------- |
-| `search_icd10`                                                               | `clinicaltables.nlm.nih.gov/api/icd10cm/v3/search` (NLM, public) | ICD-10 diagnosis codes                   |
-| `search_local_coverage`, `search_national_coverage`, `get_coverage_document` | `api.coverage-finder.medicare.gov/api/v1` (CMS, public)          | LCD/NCD coverage policies                |
-| `npi_search`, `npi_lookup`                                                   | `npiregistry.cms.hhs.gov/api` (NPPES, public)                    | Provider NPI, specialty, Medicare status |
+Inventory: ICD-10 Full, CPT dev-only, NPI Full, NCD/LCD Full, PubMed Full, CARC 90 codes, RARC 195 codes, 1,873 EOB mappings (versioned by `effective_date`).
 
-### Other Local Tools (defined in `src/lib/tools/index.ts`)
-
-| Tool                     | Purpose                                                                                                                                                                                                                     | Data Source                                                             |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `search_cpt`             | Map procedure descriptions to CPT codes                                                                                                                                                                                     | AMA API (dev only)                                                      |
-| `get_related_diagnoses`  | CPT -> related ICD-10 codes                                                                                                                                                                                                 | Local mappings                                                          |
-| `get_related_procedures` | ICD-10 -> related CPT codes                                                                                                                                                                                                 | Local mappings                                                          |
-| `check_prior_auth`       | Check if CPT requires prior auth (CMS PA Model + expanded list)                                                                                                                                                             | Local rules + CMS PA Model categories                                   |
-| `check_preventive`       | Check if service is preventive (no cost-sharing)                                                                                                                                                                            | Local rules                                                             |
-| `search_pubmed`          | Clinical evidence search (rate-limited)                                                                                                                                                                                     | NCBI E-utilities                                                        |
-| `generate_appeal_letter` | Build appeal letter (Level 1 Redetermination for Original Medicare, Request for Reconsideration for MA) with inline codes + policy refs + PubMed citations. Accepts `medicare_type` and `plan_name` params for MA branching | Combines multiple sources + policy_references + pubmed_citations inputs |
-| `check_sad_list`         | Part B (physician) vs Part D (self-administered) drug routing                                                                                                                                                               | CMS SAD list                                                            |
-| `lookup_denial_code`     | CARC/RARC code lookup + appeal strategy                                                                                                                                                                                     | RDS `carc_codes`, `rarc_codes`, `eob_denial_mappings`                   |
-| `get_common_denials`     | Top denial reasons for a procedure + prevention tips                                                                                                                                                                        | RDS (`denial_patterns` + `carc_codes`)                                  |
-
-### Data Inventory
-
-| Dataset                   | Status                                   | Source                               |
-| ------------------------- | ---------------------------------------- | ------------------------------------ |
-| ICD-10                    | Full                                     | MCP server                           |
-| CPT                       | Dev only (AMA license required for prod) | Local AMA API                        |
-| NPI                       | Full                                     | MCP server                           |
-| NCD/LCD                   | Full                                     | MCP server                           |
-| PubMed                    | Full                                     | NCBI API                             |
-| CARC codes                | 90 codes                                 | RDS (from CMS, effective 2025-12-10) |
-| RARC codes                | 195 codes                                | RDS (from CMS, effective 2025-12-10) |
-| EOB-to-CARC/RARC mappings | 1,873 mappings                           | RDS (from CMS, effective 2025-12-10) |
-
----
+**See [docs/reference/tools.md](docs/reference/tools.md)** for the full tool table + data inventory.
 
 ## Database Schema (summary)
 
-PostgreSQL 16.9 on RDS. Note: **RDS has no Row-Level Security** —
-the "RLS:" notes in the reference file are legacy text from the
-pre-AWS Supabase era; current code uses explicit `WHERE user_id = $1`
-clauses. Server routes use `query()` from `@/lib/db`.
+PostgreSQL 16.9 on RDS. **RDS has no Row-Level Security** — legacy "RLS:" notes in the reference file are pre-AWS Supabase-era; current code uses explicit `WHERE user_id = $1` clauses. Server routes use `query()` from `@/lib/db`.
 
 ### Core tables (one-liners)
 
-- `users` — auth + plan (`trial`/`starter`/`plus`/`unlimited`, CHECK constraint), `is_admin` (bypass all limits), theme/accessibility
+- `users` — auth + plan (`trial`/`starter`/`plus`/`unlimited`, CHECK constraint), `is_admin` (bypass all limits)
 - `user_verification` — OTP + ID.me status (ID.me deprecated 2026-04-21, columns retained)
 - `subscriptions` — plan + Stripe customer ID + trial dates
 - `usage` — appeal count + appeal credits per email
 - `conversations`, `messages` — chat history
 - `appeals` — generated appeal letters with `carc_codes TEXT[]`, `rarc_codes TEXT[]`
-- `user_feedback` — thumbs up/down + corrections
-- `audit_logs` — CMS audit trail. **Append-only**: `denali_admin` only has INSERT+SELECT; UPDATE/DELETE/TRUNCATE revoked (2026-04-10). Write-side dedup on `FHIR_DATA_ACCESS` within 2h window
-- `consent_preferences` — three toggles (`health_data_ai`, `health_data_storage`, `analytics`). Versioned, audit-logged on change
+- `audit_logs` — CMS audit trail. **Append-only**: `denali_admin` only has INSERT+SELECT (UPDATE/DELETE/TRUNCATE revoked 2026-04-10). Write-side dedup on `FHIR_DATA_ACCESS` within 2h window
+- `consent_preferences` — three toggles (`health_data_ai`, `health_data_storage`, `analytics`). Versioned, audit-logged
 - `ehr_connections` — Blue Button OAuth tokens (AES-256-GCM encrypted)
 - `fhir_cache` — transformed FHIR data, 24h TTL, deleted on disconnect
 - `diabetes_snapshots` — append-only longitudinal labs, unique on `(user_id, loinc_code, observed_date)`
-- `diabetes_log` — user-entered glucose/activity/meal/note, CHECK on entry_type
-- `diabetes_insights` — Claude-generated analysis, hash-based dedup
-- `chat_daily_usage` — daily rate limiting per identifier
-- `health_reports` — Claude-generated reports, public share via `/report/[token]`, 30-day expiry, cascade-deleted on account deletion
-- `blog_posts` — public blog content, idempotent seeds via `ON CONFLICT (slug) DO NOTHING`
-- `user_topic_preferences` — content topic selections (max 2)
+- `diabetes_log`, `diabetes_insights`, `chat_daily_usage`, `health_reports`, `blog_posts`, `user_topic_preferences`, `user_feedback`
 
 ### Denial code tables (CMS-sourced, versioned)
 
 `carc_codes` (90), `rarc_codes` (195), `eob_denial_mappings` (1,873), `denial_patterns` (12), `appeal_levels` (5).
 
-**Versioning rule (load-bearing):** All five tables have an
-`effective_date` column. Views `carc_codes_latest`,
-`rarc_codes_latest`, `eob_denial_mappings_latest`,
-`denial_patterns_latest`, `appeal_levels_latest` always return
-`WHERE effective_date = MAX(effective_date)`. When CMS publishes
-updates, insert new rows with a newer `effective_date`; old rows
-stay for history. **Never UPDATE or DELETE existing rows.**
+**Versioning rule (load-bearing):** All five tables have an `effective_date` column. Views `*_latest` always return `WHERE effective_date = MAX(effective_date)`. Insert new rows with newer date; old rows stay for history. **Never UPDATE or DELETE existing rows.**
 
 ### Learning tables (no user link, anonymized)
 
-`symptom_mappings`, `procedure_mappings`, `coverage_paths`,
-`conversation_patterns`, `appeal_outcomes`, `policy_cache`,
-`user_events`, `learning_queue`.
+`symptom_mappings`, `procedure_mappings`, `coverage_paths`, `conversation_patterns`, `appeal_outcomes`, `policy_cache`, `user_events`, `learning_queue`.
 
-### Key functions (most-called)
+### Key functions
 
-- `check_and_increment_chat(p_identifier, p_daily_limit)` → `{allowed, count}` — atomic daily rate limit
-- `check_weekly_frequency(p_identifier, p_max_days)` → `{allowed, days_used}` — weekly day cap (0 = unlimited)
-- `decrement_appeal_credit(p_email)` → remaining count (-1 if none); SECURITY DEFINER
-- `add_appeal_credits(p_email, p_credits)` / `reset_monthly_appeal_credits(p_email, p_credits)` — Stripe fulfillment
-- `process_feedback(message_id, rating, correction)` — feedback + mapping updates
-- `record_appeal_outcome(appeal_id, outcome, ...)` — outcome tracking + incentive
-- `get_grouped_audit_logs(p_user_id, p_limit, p_offset)` — daily grouping for Settings UI
-- `delete_user_cascade(user_id)` — GDPR/CCPA cascade (also exists as 11-step inline cascade in `account/delete/route.ts`)
+`check_and_increment_chat`, `check_weekly_frequency`, `decrement_appeal_credit`, `add_appeal_credits`, `reset_monthly_appeal_credits`, `process_feedback`, `record_appeal_outcome`, `get_grouped_audit_logs`, `delete_user_cascade` (also exists as 11-step inline cascade in `account/delete/route.ts`).
 
-**See `docs/reference/db-schema.md`** for full per-column
-commentary, all 18+ function signatures, indexes, CHECK
-constraints, and the seed migration list.
+**See [docs/reference/db-schema.md](docs/reference/db-schema.md)** for full per-column commentary, all 18+ function signatures, indexes, CHECK constraints, seed migration list.
+
 ---
 
 ## Skills & Prompt System (summary)
 
-Skills are conditional prompt sections loaded by `skills-loader.ts` based on `SkillTriggers` detected in `route.ts`. The function `buildSystemPromptWithLearning()` calls the loader and injects learned context.
+Skills are conditional prompt sections loaded by `skills-loader.ts` based on `SkillTriggers` detected in `route.ts`. `buildSystemPromptWithLearning()` calls the loader and injects learned context.
 
 ### Skill loading order (load-bearing — early gates prevent later skills)
 
 | Priority | Trigger | Skill | Notes |
 |---|---|---|---|
-| 1 | Emergency symptoms | RED_FLAG_SKILL | Overrides all (chest pain+SOB, DKA, severe hypoglycemia, etc.) |
-| 2 | Missing name/ZIP | ONBOARDING | + TOOL_RESTRAINT |
-| 3 | Has procedure, missing symptoms/duration | SYMPTOM_GATHERING | + TOOL_RESTRAINT |
-| 4 | Symptoms but no provider confirmed | PROVIDER_VERIFICATION | NPI tools only |
-| 5 | Has procedure / needs clarification | PROCEDURE_SKILL | Disambiguate |
-| 6 | Has procedure/coverage/appeal | CODE_VALIDATION | ICD-10↔CPT + PA + preventive + SAD |
-| 7 | Coverage but not all reqs verified | REQUIREMENT_VERIFICATION | Ask 1 at a time |
-| 8 | Provider confirmed + specialty mismatch | SPECIALTY_VALIDATION | Warn about ordering risk |
-| 9 | Coverage + `verificationComplete === true` | GUIDANCE_DELIVERY | Proactive checklist |
-| 10 | Appeal detected | APPEAL_SKILL | MA-aware (Request for Reconsideration) |
-| 11 | EOB question + has health data | EOB_EXPLAINER_SKILL | Plain-English claim explainer |
+| 1 | Emergency symptoms | RED_FLAG_SKILL | Overrides all |
+| 2 | Missing name/ZIP | ONBOARDING + TOOL_RESTRAINT | No tool calls allowed |
+| 3 | Has procedure, missing symptoms | SYMPTOM_GATHERING + TOOL_RESTRAINT | No tool calls allowed |
+| 4 | Symptoms but no provider | PROVIDER_VERIFICATION | NPI tools only |
+| 5 | Has procedure / clarification | PROCEDURE_SKILL | Disambiguate |
+| 6 | Procedure/coverage/appeal | CODE_VALIDATION | ICD-10↔CPT + PA + preventive + SAD |
+| 7 | Coverage, not all reqs verified | REQUIREMENT_VERIFICATION | Ask 1 at a time |
+| 8 | Specialty mismatch | SPECIALTY_VALIDATION | Warn about ordering risk |
+| 9 | Coverage + `verificationComplete` | GUIDANCE_DELIVERY | Proactive checklist |
+| 10 | Appeal detected | APPEAL_SKILL | MA-aware |
+| 11 | EOB question + health data | EOB_EXPLAINER_SKILL | Plain-English claim explainer |
 
 ### Load-bearing rules
 
-- **TOOL_RESTRAINT** (priorities 2–3): explicitly forbids all tool calls during onboarding and symptom gathering. Prevents Claude from jumping ahead to code lookups before gathering context.
-- **Requirement Verification Pipeline** (priorities 7→9): Claude MUST emit a `[REQUIREMENTS]` block after coverage lookup. Without it, verification cannot proceed. GUIDANCE_DELIVERY (priority 9) only loads when `verificationComplete === true` — **never on empty requirements** (vacuous truth fix). Three safety mechanisms: flow reminder, explicit skip detection ("skip"/"move on"), implicit skip when user requests guidance directly.
+**TOOL_RESTRAINT** (priorities 2–3): forbids all tool calls during onboarding and symptom gathering. **Requirement Verification Pipeline** (7→9): Claude MUST emit `[REQUIREMENTS]` block after coverage lookup; GUIDANCE_DELIVERY only loads when `verificationComplete === true` (never on empty requirements — vacuous truth fix).
 
 ### Contextual skills (data-dependent)
 
-| Skill | File | Trigger |
-|---|---|---|
-| `HEALTH_RECORDS_SKILL` | `src/lib/skills/health-records.ts` | `hasHealthData` or `hasRecentDenials` |
-| `MEDICARE_NOTIFICATIONS_SKILL` | `src/lib/skills/medicare-notifications.ts` | `hasHealthData && hasRecentChanges` |
-| `DIABETES_PREVENTION_SKILL` | `src/lib/skills/diabetes-prevention.ts` | `hasDiabetesContext` (urgent A1C: ≥12% contact doctor, ≥14% DKA warning) |
-| `OBESITY_PREVENTION_SKILL` | `src/lib/skills/obesity-prevention.ts` | `hasObesityContext` (E66, obesity meds, keywords) |
-| `EOB_EXPLAINER_SKILL` | `src/skills/domain/eob-explainer.ts` | `hasEOBQuestion && hasHealthData` |
-| `OUTCOME_PROMPTING_SKILL` | `src/skills/domain/outcome-prompting.ts` | `hasUnreportedOutcome` (returning user with pending appeal) |
-| `COUNSELOR_SKILL` / `PROVIDER_PILOT_SKILL` | `src/skills/channel/*` | role-based |
+`HEALTH_RECORDS_SKILL`, `MEDICARE_NOTIFICATIONS_SKILL`, `DIABETES_PREVENTION_SKILL` (urgent A1C: ≥12% contact doctor, ≥14% DKA warning), `OBESITY_PREVENTION_SKILL`, `EOB_EXPLAINER_SKILL`, `OUTCOME_PROMPTING_SKILL`, `COUNSELOR_SKILL` / `PROVIDER_PILOT_SKILL` (role-based).
 
-### Base prompt (always loaded)
+Base prompt always loaded: identity & mission, conversation rules (one question, brief, explain why), error handling.
 
-Identity & mission (denial prevention, plain English, empathy) + conversation rules (one question, brief responses, explain why) + error handling.
+**See [docs/reference/skills.md](docs/reference/skills.md)** for full priority table with gate-behavior detail.
 
-**See `docs/reference/skills.md`** for the full priority
-table with all gate-behavior detail and the original
-implementation prose.
 ---
+
 
 ## Orchestration Flows
 
-How ICD-10, CMS coverage, CARC/RARC, and NPI data come together in end-to-end tool sequences. Claude should follow these sequences when handling each scenario.
+5 end-to-end flows. Claude follows these sequences depending on user intent.
 
-### Flow 1: Coverage Guidance (Proactive Denial Prevention)
+1. **Coverage Guidance** (proactive denial prevention): intake → NPI verify → ICD-10/CPT + PA/preventive/SAD → LCD/NCD → requirement Q&A → `get_common_denials` → personalized checklist
+2. **Appeal** (reactive): `lookup_denial_code` FIRST → details → ICD-10/CPT → coverage → `generate_appeal_letter` → PAYWALL GATE
+3. **Quick Denial Code Lookup**: single `lookup_denial_code` call
+4. **Coverage→Appeal Bridge**: returning user, reuse `sessionState`
+5. **EOB Explainer**: regex trigger + `hasHealthData`, no tools
 
-**Trigger**: User asks about Medicare coverage for a procedure or treatment.
+Medicare Advantage branching: when `sessionState.medicareType === "advantage"`, appeal uses "Request for Reconsideration" semantics + 42 CFR §422 references.
 
-**Goal**: Walk the user through every check needed so the claim does NOT get denied — verifying provider, codes, policy, requirements, and warning about common denial traps before the service happens.
-
-**Tool chain** (6 phases, gated by skill loading order):
-
-1. **Intake** (TOOL_RESTRAINT — no tools): Gather name, ZIP, symptoms, duration, prior treatments, red flags → stored in `sessionState`. Gate: 2a-2c answered before tools unlock.
-2. **Provider Verification** (NPI only): `npi_search` by name+ZIP → check Medicare enrollment + specialty match. Non-enrolled = automatic denial. Specialty mismatch = warn + suggest referral. Skippable.
-3. **Code Validation** (all tools unlock): `search_icd10` → ICD-10 codes. `search_cpt` → CPT codes. `get_related_diagnoses` → cross-validate. `check_preventive` → no cost-sharing path. `check_prior_auth` → PA required? `check_sad_list` → Part B vs D (drugs only).
-4. **Coverage Policy Lookup**: `search_local_coverage` (CPT+ICD-10+ZIP → LCD). `search_national_coverage` (CPT+ICD-10 → NCD). `get_coverage_document` (full policy text). LCD/NCD requirements shown **AS-IS**.
-5. **Requirement Verification**: Claude walks through each LCD requirement one at a time, checking user's situation. Stored in `.requirementAnswers`.
-6. **Guidance Delivery**: `get_common_denials` (CPT → top CARC reasons + prevention tips). Final output = personalized checklist with policy ref, requirements mapped to user data, denial warnings, provider status.
-
-**Data handoff**: Symptoms → ICD-10+CPT → Provider NPI → PA/preventive/SAD → LCD/NCD policy → Requirements Q&A → Common denials → Personalized checklist.
-
-### Flow 2: Appeal (Reactive Denial Response)
-
-**Trigger**: User mentions a denial, appeal, or denial code.
-
-**Tool chain**: `lookup_denial_code` (FIRST — explains denial in plain English + appeal strategy) → gather denial details (no tools) → `search_icd10` → `search_cpt` → `search_local_coverage` (for letter citations) → `generate_appeal_letter` → PAYWALL GATE (`check_appeal_access`).
-
-**Key rule**: `lookup_denial_code` is the FIRST tool called — it gives Claude enough context to explain the denial before gathering more details.
-
-**MA branching**: When `sessionState.medicareType === "advantage"`, `generate_appeal_letter` is called with `medicare_type: "advantage"` and `plan_name` from `sessionState.maPlanName`. Letter uses "Request for Reconsideration" (not "Level 1 Redetermination"), addresses the plan (not MAC), cites 42 CFR §422.101. MA appeal levels: L1 → plan, L2 → IRE (not QIC, plan auto-forwards per 42 CFR §422.590), L3-5 same as Original Medicare.
-
-### Flows 3–5 (one-liners)
-
-- **Flow 3 — Quick Denial Code Lookup**: single `lookup_denial_code` call → plain-English explanation + offer to appeal.
-- **Flow 4 — Coverage→Appeal Bridge**: returning user; reuse `sessionState` → `lookup_denial_code` → `generate_appeal_letter` with minimal new questions.
-- **Flow 5 — EOB Explainer**: regex trigger (bill/claim/owe/charged) + `hasHealthData`. No tools — uses `recentClaims` already in prompt. `EOB_EXPLAINER_SKILL` structures: identify claim → what happened → charged → Medicare paid → patient owes → next step.
----
+**See [docs/reference/orchestration.md](docs/reference/orchestration.md)** for full per-flow detail.
 
 ## Business Model, Auth & Payments (summary)
 
@@ -629,86 +366,47 @@ How ICD-10, CMS coverage, CARC/RARC, and NPI data come together in end-to-end to
 | Unlimited | $60/mo | unlimited | unlimited | unlimited | Email OTP |
 | **Admin** | — | unlimited | unlimited | unlimited | `users.is_admin = TRUE` |
 
-**Sign-in required for all chat.** No anonymous access. Gmail plus normalization (`user+tag@gmail.com` → `user@gmail.com`) via `normalizeEmail()` prevents duplicate accounts. Every signup auto-creates 14-day trial inline in `verify-otp`. Plan values are exactly `trial | starter | plus | unlimited`. **Starter is one-time pay-per-claim** ($10 → 1 credit, no recurring); **Plus and Unlimited are monthly subscriptions**. Appeal access credit-based via `usage.appeal_credits`; `unlimited` bypasses credit check.
+**Sign-in required for all chat.** Gmail plus normalization (`user+tag@gmail.com` → `user@gmail.com`) via `normalizeEmail()`. Every signup auto-creates 14-day trial inline in `verify-otp`. **Starter is one-time pay-per-claim**; **Plus and Unlimited are monthly subscriptions**. Appeal access credit-based via `usage.appeal_credits`; `unlimited` bypasses credit check.
 
-Chat rate limiting: 2 layers — `check_weekly_frequency` (weekly day cap) + `check_and_increment_chat` (daily). Returns 401 `AUTH_REQUIRED`, 429 `WEEKLY_LIMIT`/`RATE_LIMITED`, 403 `TRIAL_EXPIRED`. Admin bypasses both.
+Chat rate limiting: `check_weekly_frequency` + `check_and_increment_chat`. Returns 401 `AUTH_REQUIRED`, 429 `WEEKLY_LIMIT`/`RATE_LIMITED`, 403 `TRIAL_EXPIRED`. Admin bypasses both.
 
 **AI model**: Sonnet 4.6 for chat, Opus 4.6 for appeal letters only.
 
 ### Appeal gating logic
 
-```
-1. User requests appeal letter
-2. Check email:
-   - Not verified         → Signup wall (email OTP → auto-trial, 0 credits)
-   - Verified + unlimited → Generate letter (no credit tracking)
-   - Verified + credits>0 → Generate letter, decrement credit, increment count
-   - Verified + credits=0 → Show paywall (Starter/Plus/Unlimited)
-3. After payment → Credits added per plan, letter revealed
-```
+User requests appeal letter → check email: not verified = signup wall; verified+unlimited = generate (no credit); verified+credits>0 = generate, decrement, increment count; verified+credits=0 = show paywall.
 
 ### AAL2 (CMS A1 / NIST 800-63B)
 
-**Current path: Blue Button OAuth via Medicare.gov satisfies IAL2/AAL2.** ID.me path is **DEPRECATED 2026-04-21 — NOT REQUIRED per CMS confirmation.** `REQUIRE_IDENTITY_VERIFICATION=false` permanently in all envs. ID.me code retained pending future removal.
+**Blue Button OAuth via Medicare.gov satisfies IAL2/AAL2.** ID.me **DEPRECATED 2026-04-21** — NOT REQUIRED per CMS. `REQUIRE_IDENTITY_VERIFICATION=false` permanently.
 
 ### Stripe (critical rules)
 
-- **`checkout/route.ts` MUST use `getAuthUser()`** — auth required server-side so `fulfillCheckoutSession()` can look up the user.
-- **Never return `{ url: null }` from checkout** — that would grant free access. Return 503 when Stripe not configured.
+- **`checkout/route.ts` MUST use `getAuthUser()`** — auth required so `fulfillCheckoutSession()` can look up the user.
+- **Never return `{ url: null }` from checkout** — would grant free access. Return 503 when Stripe not configured.
 - **Stripe SDK v20**: `current_period_end` lives on `subscription.items.data[0]`, NOT on `subscription`.
-- **`fulfillCheckoutSession()` is idempotent** — safe to call multiple times.
-- **Known gap (2026-04-20)**: checkout route sets `mode: "subscription"` for all plans; Starter is `one_time` and will fail until route branches on plan.
-- Webhook events: `checkout.session.completed` → fulfill + credit reset; `customer.subscription.*` → sync status; `invoice.payment_failed` → marks `past_due`.
+- **`fulfillCheckoutSession()` is idempotent**.
+- Webhook events: `checkout.session.completed` → fulfill; `customer.subscription.*` → sync; `invoice.payment_failed` → marks `past_due`.
 
-**See `docs/reference/business-model.md`** for full pricing
-narrative, complete Stripe architecture diagram, all
-environment variable definitions, ECS deployment gotchas
-(secrets/RDS/audit_logs REVOKE), infra scheduler + monitor
-+ alerting tables, and AWS resource inventory with cost
-breakdown.
+**See [docs/reference/business-model.md](docs/reference/business-model.md)** for full pricing narrative, Stripe architecture, env vars, ECS gotchas, AWS resource inventory.
+
 ---
+
 
 ## Infrastructure Architecture
 
-> Post-2026-04-23 hardening state. All items below are live ✓.
-> See `docs/incidents/2026-04-23-ecr-eviction.md` (postmortem)
-> and `docs/runbooks/ecr-eviction-recovery.md` (recovery + all
-> verification commands) for rationale and deeper detail.
+**Prod**: cluster `denali` / service `denali-web` / RDS `denali-prod` / https://denali.health  
+**Staging**: cluster `denali-staging` / service `denali-staging-web` / RDS `denali-staging` (split from prod 2026-04-23) / https://staging.denali.health
 
-### AWS resources
+- **ECR lifecycle**: prod-stable never expires; SHA tags keep last 10; untagged 1 day. Staging keeps last 10.
+- **IAM (split 2026-04-23)**: `denali-prod-deploy-role` (refs/heads/main only), `denali-staging-deploy-role` (refs/heads/develop only).
+- **Prod alarms** → `denali-prod-alerts` SNS: `ecs-running-below-desired`, `alb-5xx-rate-high` (>5%/5min, volume gate at 20 req), `ecs-task-failed-to-start`.
+- **Protected**: `prod-stable` tag is rollback floor. Docker base + GitHub Actions both SHA-pinned.
+- **CloudWatch retention**: app log groups 30 days. Audit logs separate, 6-year HIPAA retention in RDS.
+- **Terraform IaC (staging)**: foundation in `infra/staging/`. S3 backend, `use_lockfile = true`.
+- **Tool integration**: MCP servers replaced by local executors 2026-03-04 — no third-party intermediary receives patient data.
 
-**Prod**: cluster `denali` / service `denali-web` / ECR `denali` / RDS `denali-prod.ca5m0qc8e5h8.us-east-1.rds.amazonaws.com` / https://denali.health
-
-**Staging**: cluster `denali-staging` / service `denali-staging-web` / ECR `denali-staging` (split from prod 2026-04-23) / RDS `denali-staging.ca5m0qc8e5h8.us-east-1.rds.amazonaws.com` / https://staging.denali.health
-
-### ECR lifecycle (prod, 5 rules)
-
-1. `prod-stable` tag — never expires (countNumber 9999)
-2. Prod SHA tags (hex 0–7 prefix) — keep last 10
-3. Prod SHA tags (hex 8–f prefix) — keep last 10
-4. `staging-` prefix — keep last 5 (transitional)
-5. Untagged — expire after 1 day
-
-Staging repo: `staging-` keep last 10, untagged expire after 1 day.
-
-### IAM (split 2026-04-23)
-
-- `denali-prod-deploy-role` — trusts `refs/heads/main` only, scoped to prod ECR + ECS service
-- `denali-staging-deploy-role` — trusts `refs/heads/develop` only, scoped to staging ECR + ECS service
-- Legacy `denali-github-actions-role` disarmed (zero permissions); shell retained as rollback target. Policy archived at `docs/runbooks/rollback-artifacts/denali-deploy-policy.json`.
-
-### Prod alarms → `denali-prod-alerts` SNS (admin@denali.health, ramanac@gmail.com)
-
-- `denali-prod-ecs-running-below-desired` — running < desired for 2× 1-min periods (ECS/ContainerInsights)
-- `denali-prod-alb-5xx-rate-high` — 5xx > 5% over 5 min, volume gate at 20 req/5min
-- `denali-prod-ecs-task-failed-to-start` — EventBridge rule on TaskFailedToStart stopCode
-
-### Protected tags + base image
-
-- **`prod-stable`** is the absolute rollback floor — auto-retagged on every successful prod deploy after ECS stability wait. To roll back: register new task def with `<ECR>/denali:prod-stable`, update service. Commands in runbook.
-- **Docker base image digest-pinned** (`node:20-alpine@sha256:fb4cd12c…`). Both staging and prod build against this digest. Updates require deliberate PR.
-- **GitHub Actions SHA-pinned** in both deploy workflows. Action tag immutability is advisory; SHA-pinning prevents supply-chain risk.
----
+**See [docs/reference/infrastructure.md](docs/reference/infrastructure.md)** for full AWS inventory + hardening backlog (A2, B.6–B.10).
 
 ## Blue Button 2.0 (summary)
 
@@ -716,53 +414,39 @@ Blue Button is the **only** external health data source. Connects patients to th
 
 ### Environment routing — load-bearing
 
-Prod and staging point at **different CMS environments** and use **different CMS-issued credentials**. There is no automatic promotion path; staging stays on sandbox indefinitely so we can test against synthetic beneficiaries (BBUser00000) without affecting real Medicare data.
+Prod and staging point at **different CMS environments** and use **different CMS-issued credentials**. No automatic promotion path; staging stays on sandbox indefinitely.
 
-| Env | Secrets Manager | `BLUEBUTTON_BASE_URL` | `BLUEBUTTON_CLIENT_ID` | `BLUEBUTTON_CALLBACK_URL` |
-|---|---|---|---|---|
-| Prod | `denali/prod/app` | `https://api.bluebutton.cms.gov` | production-issued | *(empty — host detection)* |
-| Staging | `denali/staging/app` | `https://sandbox.bluebutton.cms.gov` | sandbox-issued | `https://staging.denali.health/api/fhir/callback` |
+| Env | Secrets Manager | `BLUEBUTTON_BASE_URL` | `BLUEBUTTON_CALLBACK_URL` |
+|---|---|---|---|
+| Prod | `denali/prod/app` | `https://api.bluebutton.cms.gov` | *(empty — host detection)* |
+| Staging | `denali/staging/app` | `https://sandbox.bluebutton.cms.gov` | `https://staging.denali.health/api/fhir/callback` |
 
-`FHIR_TOKEN_ENCRYPTION_KEY` is independent of the CMS rotation and unchanged. Rotation date: 2026-05-01 (CMS access granted 2026-04-29; credentials handed off in JSON via 1:1 call).
+`FHIR_TOKEN_ENCRYPTION_KEY` independent of CMS rotation. Prod credentials rotated 2026-05-01 (CMS access granted 2026-04-29).
 
 ### Data availability — load-bearing constraints
 
 - ✅ Medicare claims, denials, what was billed/paid
 - ❌ **Actual lab values (A1C, glucose) are NOT available** — only that the lab was performed (CPT code on claim). `diabetes_snapshots` stores procedure dates, not values.
 - ❌ Vitals (BP, weight, BMI), immunizations, clinical notes
-- ⚠️ Conditions inferred from EOB ICD-10 codes only (not a formal diagnosis list)
+- ⚠️ Conditions inferred from EOB ICD-10 codes only
 - ⚠️ Medications: Part D claims only (no dosing, prescriber)
 
-### OAuth flow (PKCE)
+### OAuth + consent (PKCE)
 
-1. User clicks "Connect Medicare" → `GET /api/fhir/authorize` generates state + code_verifier, sets httpOnly cookies (10 min TTL), redirects to CMS
-2. User authorizes on CMS site → redirected to `GET /api/fhir/callback`
-3. Callback validates state, exchanges code, encrypts tokens (AES-256-GCM via `FHIR_TOKEN_ENCRYPTION_KEY`), upserts `ehr_connections`
+`GET /api/fhir/authorize` generates state + code_verifier, sets httpOnly cookies (10 min TTL), redirects to CMS. Callback validates state, exchanges code, encrypts tokens (AES-256-GCM via `FHIR_TOKEN_ENCRYPTION_KEY`), upserts `ehr_connections`.
 
-**Scopes**: `patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read profile openid`. **Callback URL**: prod uses host detection from the inbound request (`x-forwarded-host` → `redirect_uri`); staging has `BLUEBUTTON_CALLBACK_URL` set explicitly to `https://staging.denali.health/api/fhir/callback` to bypass detection. Tokens auto-refresh via `refreshAccessToken()` in `lib/fhir/tokens.ts`.
+Scopes: `patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read profile openid`. Tokens auto-refresh via `refreshAccessToken()` in `lib/fhir/tokens.ts`.
 
-### Health data → AI (consent-gated)
+**Consent gate**: when `consent.health_data_ai` is OFF, client strips ALL health fields before sending to server. Server-side `buildHealthContextForPrompt()` uses `!== true` allow-list pattern.
 
-- Client-side `useHealthData()` populates `sessionState`. **Consent gate**: when `consent.health_data_ai` is OFF, `chat/page.tsx` `initialSessionState` returns minimal state (no health fields sent to server). `useChat.ts` overlays latest consent before each API call for mid-session toggle support.
-- Server-side `buildHealthContextForPrompt()` in `context.ts` uses `!== true` allow-list pattern (null/undefined never injects health data into Claude).
-- 5 health skills load conditionally via triggers: `HEALTH_RECORDS_SKILL`, `EOB_EXPLAINER_SKILL`, `DIABETES_PREVENTION_SKILL`, `OBESITY_PREVENTION_SKILL`, `MEDICARE_NOTIFICATIONS_SKILL`.
+### EOB extraction + condition severity
 
-### EOB extraction pipeline (8 functions in `eob-clinical.ts`)
+Since Blue Button doesn't provide Observation/Condition/MedicationRequest resources, we mine claims data via 8 functions in `eob-clinical.ts` (`extractConditions`, `extractMedications`, `extractScreenings`, `extractProviders`, `extractHospitalizations`, `extractDME`, `extractPatientWeight`, `detectHospiceStatus` — hospice **SAFETY** gate suppresses risk alerts). `fhir_cache` stores 11 resource types (24h TTL).
 
-Since Blue Button doesn't provide Observation/Condition/MedicationRequest resources, we mine claims data:
+Condition severity (DiagnosisSummaryCard): structured `category` → 21 RED keywords (cancer, stroke, heart failure) → 27 AMBER keywords (hypertension, COPD) → gray.
 
-`extractConditionsFromClaims`, `extractMedicationsFromClaims` (PDE-enriched: daysSupply/gapDays, dual `isDiabetesMed`/`isObesityMed` flags for GLP-1s), `extractScreeningsFromClaims` (20 CPT codes → 9 screening types), `extractProvidersFromClaims` (NPI aggregation), `extractHospitalizationsFromClaims` (LOS + needsFollowUp), `extractDMEFromClaims` (HCPCS-mapped), `extractPatientWeight`, `detectHospiceStatus` (**SAFETY**: triggers hospice gate in AI prompt + suppresses risk alerts).
+**See [docs/reference/blue-button.md](docs/reference/blue-button.md)** for full PKCE sequence, all 8 extractors with input/output detail, transformEOB enrichment, full keyword lists.
 
-`fhir_cache` stores 11 resource types (24h TTL, deleted on disconnect).
-
-### Condition severity (DiagnosisSummaryCard)
-
-Priority chain: structured `category` from `eob-clinical.ts` → 21 RED keywords (cancer, stroke, heart failure, morbid/severe obesity) → 27 AMBER keywords (hypertension, COPD, neuropathy) → gray. `cleanDiagnosisName()` strips U+25CC artifacts.
-
-**See `docs/reference/blue-button.md`** for full PKCE
-sequence, all 8 extractors with input/output/key-logic
-detail, transformEOB enrichment list, and full keyword
-lists.
 ---
 
 ## UI/UX Guidelines (summary)
@@ -829,170 +513,73 @@ all 6 store schemas, queue flow detail, hook integration
 pattern table, and the "what's NOT offline" list.
 ---
 
+
 ## Coding Standards
 
-### Principles
+**Modular** · **props-driven** · **separation of concerns** · **DRY**.
 
-- **Modular**: Small, focused units that do one thing well
-- **Props-driven**: No hardcoded values, configuration via props/parameters
-- **Separation of concerns**: UI, logic, and data access in separate layers
-- **DRY**: Extract shared logic into utilities
+Project structure: `src/app/api/` (routes), `src/app/app/` (shell), `src/components/`, `src/hooks/`, `src/lib/` (core libs + fhir/ + skills/ + tools/), `src/config/`, `src/types/`, `src/styles/`.
 
-### Project Structure
+Domain skills via Claude tool calling in `/api/chat`, NOT separate edge functions. Background/async tasks (email checklists, learning queue) via API routes. Legacy Supabase edge functions removed.
 
-```
-src/
-  app/api/          # API routes (chat, fhir/*, diabetes/*, consent, trial, cms-metadata, account, checkout, webhooks)
-  app/app/          # App shell routes (/app, /app/chat, /app/health, /app/diabetes, /app/settings)
-  components/
-    ui/             # Primitives (Button, Input, Card, Modal, CmsPledge, OfflineBanner)
-    chat/           # Chat-specific (Message, ChatInput, Suggestions)
-    appeal/         # Appeal-specific (AppealLetter, StatusBadge)
-    auth/           # Auth components (EmailOTPModal, TOTPEnrollModal, TOTPChallengeModal)
-    layout/         # Layout (AppHeader, BottomTabs, Container)
-    health/         # Health page (ConnectMedicare, CoverageCards, DiagnosisSummaryCard, ClaimsTimeline, ProviderSummary, AlertsSection, HealthAlertsBanner, AccountSection, FinancialSummary, AIDisclaimer, StatusBanner, ConditionsAlertBanner, PreDiabetesRiskCard)
-    diabetes/       # Diabetes dashboard (A1CTrendChart, ScreeningReminders, RiskAlerts, QuickLog, InsightsCard)
-  hooks/            # Custom hooks (useAuth, useChat, useConsent, useHealthData, useDiabetesSnapshots, useDiabetesLog, useDiabetesInsights, useOnlineStatus, useSettings, etc.)
-  lib/              # Core libraries (claude.ts, db.ts, auth-server.ts, audit.ts, tools/, skills-loader.ts, denial-patterns.ts, diabetes-insights.ts, offline-cache.ts, offline-sync.ts)
-  lib/fhir/         # Blue Button 2.0 (crypto, tokens, client, transforms, context, sync, snapshots)
-  lib/skills/       # AI skills injected via skills-loader (health-records, medicare-notifications, diabetes-prevention)
-  config/           # Config (api.ts, brand.ts, pricing.ts, ui.ts)
-  types/            # TypeScript types (database.ts — RDS schema types)
-  styles/           # Global styles + theme
-```
-
-### Background Tasks
-
-Domain skills are implemented via Claude tool calling in `/api/chat`, NOT separate functions. Background/async tasks (email checklists, learning queue) are handled by API routes (e.g., `/api/email/checklist`). Legacy Supabase edge functions have been removed.
-
----
+**See [docs/reference/coding-standards.md](docs/reference/coding-standards.md)** for full principles + project tree + background-task pattern.
 
 ## Testing (summary)
 
 **Frameworks:** Vitest (unit), Playwright (E2E), tsc (types).
 
-### Commands
-
-```bash
-cd app
-npx vitest run          # 575 unit tests
-npm run test:coverage   # Unit + coverage thresholds
-npx playwright test     # 212 E2E tests (44 spec files)
-npx tsc --noEmit        # Type check
-```
+Commands: `npx vitest run` (575 unit tests), `npm run test:coverage`, `npx playwright test` (212 E2E tests / 44 spec files), `npx tsc --noEmit`.
 
 ### Unit coverage targets (per-file thresholds)
 
-Global floor: 33% stmts / 32% branch / 33% lines / 29% functions. Critical files have higher thresholds enforced by `@vitest/coverage-v8`:
-
+Global floor: 33% stmts / 32% branch / 33% lines / 29% functions. Critical files enforced via `@vitest/coverage-v8`:
 - `claude.ts`, `chat/route.ts` — 65–85% (extraction pipeline, tool loop)
 - `middleware.ts`, `auth/refresh/route.ts`, `health/route.ts` — 100% (every-request guards)
 - `auth-server.ts`, `stripe-fulfillment.ts`, `account/delete/route.ts` — 95–100% (auth, financial, GDPR)
-- `fhir/crypto.ts`, `fhir/context.ts`, `fhir/transforms.ts` — 45–100% (PII boundary, consent gate, encryption)
-- `eob-clinical.ts`, `learning.ts`, `rate-limiter.ts` — 60–95% (clinical extraction, learning, throttle)
-
-**Config**: `app/vitest.config.ts` — `@/` alias, includes `src/**/*.test.ts`, excludes `e2e/**`.
+- `fhir/crypto.ts`, `fhir/context.ts`, `fhir/transforms.ts` — 45–100% (PII, consent, encryption)
+- `eob-clinical.ts`, `learning.ts`, `rate-limiter.ts` — 60–95%
 
 ### Critical patterns
 
-- **Route handler tests**: Mock `getAuthUser` and `query()` via `vi.mock()`. Import the route function and call directly with `new Request()`.
-- **SSE mocks (E2E)**: `text/event-stream` with `event: delta\ndata: {...}\n\n` + `event: done\ndata: {...}\n\n`. Trailing `\n\n` required.
-- **Auth in E2E**: `page.context().addCookies([{name:"access_token", value:"fake", domain:"localhost", path:"/"}])` before navigating to `/app/*`.
-- **Mock the right shape**: `/api/profile` MUST include `userId`. `/api/conversations` returns `{authenticated, conversations: [...]}` not a flat array.
-- **Test isolation**: each E2E spec is independent (no shared state across files). Use `test.use({ serviceWorkers: "block" })` when SW caching contaminates test runs.
+- **Route handler tests**: mock `getAuthUser` and `query()` via `vi.mock()`; import the route and call directly with `new Request()`.
+- **SSE mocks (E2E)**: `text/event-stream` with `event: delta\ndata: {...}\n\n` + `event: done\ndata: {...}\n\n`; trailing `\n\n` required.
+- **Auth in E2E**: `page.context().addCookies([{name:"access_token", value:"fake", domain:"localhost", path:"/"}])` before `/app/*`.
+- **Mock the right shape**: `/api/profile` MUST include `userId`. `/api/conversations` returns `{authenticated, conversations: [...]}` not flat array.
+- **Test isolation**: use `test.use({ serviceWorkers: "block" })` when SW caching contaminates runs.
 
 ### Security tests (load-bearing)
 
-- **XSS**: `parseMarkdown()` and `parseTable()` in `MarkdownContent.tsx` MUST escape `&`, `<`, `>` before any bold/inline processing. Tested in `xss-security.spec.ts`.
-- **Spoofing**: Unauth requests to `/api/conversations`, `/api/profile`, `/api/consent`, `/api/diabetes/log` MUST not leak data — return 401 or `{authenticated: false}` empty shape.
+- **XSS**: `parseMarkdown()` / `parseTable()` in `MarkdownContent.tsx` MUST escape `&`, `<`, `>` before any bold/inline processing.
+- **Spoofing**: unauth requests to `/api/conversations`, `/api/profile`, `/api/consent`, `/api/diabetes/log` MUST return 401 or `{authenticated: false}` empty shape.
 - **Payment**: `/api/checkout` MUST require auth + Stripe key. Webhook MUST verify signature.
-- **Consent**: PUT `/api/consent` MUST require auth. Toggles must revert optimistically on 500.
+- **Consent**: PUT `/api/consent` MUST require auth.
 
-**See `docs/reference/testing.md`** for the full E2E spec
-inventory (44 specs / 212 tests organized in foundation +
-3 batches), per-test descriptions, mocking helpers in
-`e2e/helpers.ts`, coverage assessment by area, and the
-full set of E2E lessons learned.
+**See [docs/reference/testing.md](docs/reference/testing.md)** for full E2E spec inventory, per-test descriptions, mocking helpers, coverage assessment, lessons learned.
+
 ---
 
-## Tool Integration (formerly MCP)
-
-MCP servers at `mcp.deepsense.ai` were fully replaced by local tool executors (2026-03-04). All tools now run server-side via `processToolCalls()` in the chat loop, calling public government APIs directly — no third-party intermediary receives patient data. `src/lib/claude.ts` calls `claude.messages.create({ tools })` with no `mcp_servers` parameter.
-
-**Debug logs** (ECS CloudWatch): `[CLAUDE API] Using AWS Bedrock (IAM auth)` + `[CLAUDE API] >>> LOCAL TOOL CALLED: <name>`.
----
 
 ## Learning System
 
-### Layers
+5 layers persisted across conversations: Language (`symptom_mappings`, `procedure_mappings`), Clinical (`coverage_paths`, `appeal_outcomes`), Conversation (`conversation_patterns`), Policy (`policy_cache`), User Behavior (`user_events`).
 
-| Layer         | Goal                    | Storage                                  |
-| ------------- | ----------------------- | ---------------------------------------- |
-| Language      | Understand user phrases | `symptom_mappings`, `procedure_mappings` |
-| Clinical      | Know what gets approved | `coverage_paths`, `appeal_outcomes`      |
-| Conversation  | Optimal question flow   | `conversation_patterns`                  |
-| Policy        | Track Medicare changes  | `policy_cache`                           |
-| User Behavior | Optimize UX             | `user_events`                            |
+Triggers: every message extracts entities + queues mapping updates; thumbs-up reinforces (+0.1); thumbs-down penalizes (-0.15); appeal generation stores coverage path; outcome reports update success/failure; nightly batch processes queue.
 
-### Triggers
+`persistLearning()` runs non-blocking after every chat response — updates ICD-10/CPT mappings, records coverage paths as pending.
 
-| Trigger             | What Happens                                             |
-| ------------------- | -------------------------------------------------------- |
-| Every message       | Extract entities, queue mapping updates                  |
-| Thumbs up           | Reinforce all mappings in conversation (+0.1)            |
-| Thumbs down         | Penalize mappings (-0.15), learn from correction         |
-| Appeal generated    | Store coverage path as pending                           |
-| Outcome reported    | Update coverage path success/failure                     |
-| Print/copy/download | Track user event                                         |
-| Nightly batch       | Process queue, prune weak mappings, check policy updates |
+**See [docs/reference/learning-system.md](docs/reference/learning-system.md)** for trigger detail + persistence flow.
 
-### Persistence
 
-After every chat response, `persistLearning()` runs non-blocking:
+## CMS Interoperability Framework
 
-- If ICD-10 search used + symptoms extracted -> `updateSymptomMapping(phrase, code, +0.1)`
-- If CPT search used + procedures extracted -> `updateProcedureMapping(phrase, code, +0.1)`
-- If coverage checked + codes found -> `recordCoveragePath(icd10, cpt, policy, "pending")`
+Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabetes & Obesity Prevention**. Must meet 6 app criteria (A1–A6) + category-specific.
 
----
+Current status (compressed):
+- **A1 Identity/Security**: Blue Button OAuth via Medicare.gov satisfies IAL2/AAL2. ID.me deprecated 2026-04-21 (NOT REQUIRED per CMS).
+- **A3–A5 Trial & Discovery**: 14-day trial, `/api/cms-metadata`, `CmsPledge` component.
+- **AWS BAA executed 2026-02-25** (RDS, ECS, Bedrock, Cognito, SES). Audit log append-only REVOKE applied 2026-04-10.
 
-## CMS Interoperability Framework (summary)
+Remaining gaps: HITRUST (P0), CMS security self-assessment (P0), Medicare.gov notification bridge (P1), CMS review submission (P1), CMS app directory (P1), FHIR USCDI v3 (P2 — July 2026 mandate).
 
-> **Full compliance report**: see [`cms_readiness.md`](cms_readiness.md). Historical audit log + 2026-03-04 CMS submission Q&A: see [`docs/history/cms-compliance-log.md`](docs/history/cms-compliance-log.md).
+**See [docs/reference/cms-framework.md](docs/reference/cms-framework.md)** for full criteria table + key dates + gap detail.
 
-**Sources**: [Framework](https://www.cms.gov/health-technology-ecosystem/interoperability-framework) (26 criteria) | [Categories](https://www.cms.gov/health-technology-ecosystem/categories) | [Pledge Form](https://surveys.cms.gov/jfe/form/SV_6SbVcS5IOqXXOnk)
-
-Denali = **Patient-Facing App** in 2 categories: **Conversational AI** + **Diabetes & Obesity Prevention**. Must meet ALL 6 app criteria (A1–A6) + category-specific criteria.
-
-### Current status (compressed)
-
-- **Identity & Security** (A1): Blue Button OAuth via Medicare.gov satisfies IAL2/AAL2. ID.me path was integrated 2026-03-10 but is **NOT REQUIRED per CMS reaffirmation 2026-04-21** — `REQUIRE_IDENTITY_VERIFICATION=false` permanently. Audit logging on all sensitive ops.
-- **Trial & Discovery** (A3/A4/A5): 14-day free trial, `/api/cms-metadata`, `CmsPledge` component (AI + Diabetes pledges).
-- **Conversational AI**: Personalized AI across clinical record (extracted from EOB claims via `eob-clinical.ts`). Blue Button PHR connection. AI disclaimers. "Talk to your doctor" patterns. Note: lab values not available from Blue Button — only lab procedures (CPT codes).
-- **Diabetes & Obesity**: Full EOB extraction pipeline (8 extractors). `ScreeningReminders` from real CPT claim dates. `RiskAlerts` for high A1C, missing meds, refill gaps, no endocrinologist, post-discharge follow-up. SAD list includes 6 obesity drugs (Wegovy, Zepbound, Saxenda, Contrave, Qsymia, Orlistat). Severity classification.
-- **Medicare Notifications** (A2 partial): `MEDICARE_NOTIFICATIONS_SKILL` detects EOB/coverage changes.
-- **Policy Change Notification** (Terms §12, Privacy §15): `POST /api/admin/email/policy-change` — admin-only, dry-run support, audit-logged.
-- **AWS BAA executed 2026-02-25** (covers RDS, ECS, Bedrock, Cognito, SES). Legal pages aligned to AWS-only architecture. Audit log REVOKE applied 2026-04-10 (append-only).
-
-### Remaining Gaps
-
-| Gap | CMS Ref | Priority | Type |
-|---|---|---|---|
-| HIPAA compliance | A6 | P0 | **DONE** — AWS migration complete + BAA executed 2026-02-25 |
-| HITRUST certification | Criterion 26 | P0 | Process — org-level cert |
-| CMS security self-assessment | A3 | P0 | Docs — submit data source inventory + security checklist (Terms+Privacy PDFs ready) |
-| Medicare.gov notification bridge | A2 | P1 | Code + API |
-| CMS credential service integration | A1 | **N/A — DEPRECATED 2026-04-21** | NOT REQUIRED per CMS confirmation. ID.me code retained for historical context |
-| CMS review submission | A3 | P1 | Docs |
-| CMS app directory submission | A5 | P1 | Docs — screenshots + descriptions |
-| AAL2 app auth | A1, Criteria 3, 23 | **DONE via Blue Button OAuth** | Email OTP remains as app-layer factor |
-| FHIR USCDI v3 compliance | Criterion 13 | P2 | Code — verify by July 2026 |
-
-### Key Dates
-
-| Date | Milestone |
-|---|---|
-| 2026-04-29 | CMS BB2.0 production access **granted** |
-| 2026-05-01 | BB2.0 production credentials rotated into `denali/prod/app`; staging E2E verified with sandbox test user; prod OAuth verified through Medicare.gov authentication step (full Medicare beneficiary login flow not tested — no real Medicare-enrolled account available) |
-| Q1 2026 | CMS early adopter showcase target |
-| **July 4, 2026** | FHIR API mandate (Criteria 13–16) |
