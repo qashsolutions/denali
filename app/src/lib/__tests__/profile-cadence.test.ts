@@ -69,6 +69,7 @@ function makeAuthState(overrides: Partial<AuthState> = {}): AuthState {
     role: "patient",
     appealCount: 0,
     appealCredits: 0,
+    hasStripeCustomer: false,
     trialStatus: "none",
     trialDaysRemaining: 0,
     isAdmin: false,

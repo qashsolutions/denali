@@ -21,7 +21,7 @@ async function _GET(request: NextRequest) {
     return NextResponse.json({ authenticated: false });
   }
 
-  const [profileResult, usageResult, verificationResult] = await Promise.all([
+  const [profileResult, usageResult, verificationResult, stripeResult] = await Promise.all([
     query<{
       plan: string;
       role: string;
@@ -48,11 +48,19 @@ async function _GET(request: NextRequest) {
       `SELECT COALESCE(idme_verified, false) as idme_verified, idme_first_name, idme_gender FROM user_verification WHERE user_id = $1 LIMIT 1`,
       [user.userId],
     ),
+    query<{ has_stripe_customer: boolean }>(
+      `SELECT (stripe_customer_id IS NOT NULL) AS has_stripe_customer
+       FROM subscriptions
+       WHERE user_id = $1 AND status IN ('active', 'trialing', 'past_due')
+       LIMIT 1`,
+      [user.userId],
+    ),
   ]);
 
   const profile = profileResult.rows[0];
   const usage = usageResult.rows[0];
   const verification = verificationResult.rows[0];
+  const stripe = stripeResult.rows[0];
 
   return NextResponse.json({
     authenticated: true,
@@ -71,6 +79,7 @@ async function _GET(request: NextRequest) {
     idmeVerified: verification?.idme_verified || false,
     firstName: verification?.idme_first_name || null,
     gender: verification?.idme_gender || null,
+    hasStripeCustomer: stripe?.has_stripe_customer || false,
     // Feature flag: whether app requires ID.me identity verification before Blue Button
     // false = Connected Apps Directory (BB works without ID.me)
     // true = Medicare App Library (ID.me required before BB)
