@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { canShowBirthYearModal } from "@/lib/profile-cadence";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { authState } = useAuth();
+  const { authState, refetchProfile } = useAuth();
   const [completionDismissed, setCompletionDismissed] = useState(false);
 
   // Foundation Stage 1.C: cadence-aware birth-year prompt.
@@ -32,6 +32,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         | null;
       throw new Error(body?.error ?? "Failed to save birth year");
     }
+    await refetchProfile();
   }
 
   async function handleDismiss() {
@@ -40,6 +41,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       credentials: "include",
     });
     if (!res.ok) throw new Error("Failed to dismiss reminder");
+    await refetchProfile();
   }
 
   async function handleDisable() {
@@ -48,6 +50,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       credentials: "include",
     });
     if (!res.ok) throw new Error("Failed to disable reminder");
+    await refetchProfile();
   }
 
   return (
