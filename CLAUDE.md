@@ -179,7 +179,7 @@ Two operator-owned trial users currently exist on prod RDS. There are zero payin
 - `ramanac@gmail.com` — operator (Venkata) personal account; `users.plan='trial'`, `is_admin=TRUE`
 - `ceeveear@yahoo.com` — operator secondary test account; `users.plan='trial'`, `is_admin=FALSE`
 
-ramanac has no `subscriptions` row; ceeveear has one auto-created by `verify-otp` from her last sign-in (plan='trial', status='trialing', no `stripe_customer_id`). Both are clean trial state — ready to exercise the Stripe Live upgrade flow.
+Both ramanac and ceeveear have one `subscriptions` row each, auto-created by `verify-otp` from their last sign-in (plan='trial', status='trialing', no `stripe_customer_id`). Clean trial state — ready to exercise the Stripe Live upgrade flow.
 
 ### History (2026-05-12 cleanup)
 
