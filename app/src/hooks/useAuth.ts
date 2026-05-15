@@ -95,6 +95,18 @@ function dispatchAuthChange(user: { email: string; userId: string } | null) {
   }
 }
 
+// Fields loadProfileData refreshes — broadcast to sibling useAuth() instances
+// so their per-component useState stays in sync after a refetch from any caller.
+type ProfileUpdates = Partial<AuthState>;
+
+function dispatchProfileRefresh(updates: ProfileUpdates) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("profile-refresh", { detail: updates }),
+    );
+  }
+}
+
 export function useAuth(): UseAuthReturn {
   const [authState, setAuthState] = useState<AuthState>(
     _cachedAuthState ?? DEFAULT_AUTH_STATE,
@@ -177,8 +189,7 @@ export function useAuth(): UseAuthReturn {
         trialDaysRemaining = trialData.daysRemaining || 0;
       }
 
-      setAuthState((prev) => ({
-        ...prev,
+      const profileUpdates: ProfileUpdates = {
         isIdmeVerified,
         firstName,
         gender,
@@ -198,9 +209,11 @@ export function useAuth(): UseAuthReturn {
         isOnMedicare,
         birthYearModalDismissedAt,
         birthYearModalDisabled,
-      }));
+      };
 
-      cacheSet(STORES.PROFILE, "profile", {
+      setAuthState((prev) => ({ ...prev, ...profileUpdates }));
+
+      await cacheSet(STORES.PROFILE, "profile", {
         plan: userPlan,
         role: userRole,
         appealCount,
@@ -218,6 +231,8 @@ export function useAuth(): UseAuthReturn {
         birthYearModalDismissedAt,
         birthYearModalDisabled,
       });
+
+      dispatchProfileRefresh(profileUpdates);
     } catch (error) {
       console.error("Error loading profile data:", error);
       // Fallback to offline cache
@@ -321,9 +336,21 @@ export function useAuth(): UseAuthReturn {
       }
     }
 
+    // Listen for profile refreshes dispatched by sibling useAuth() instances
+    // (e.g., after a Settings PATCH or modal save). Apply the updates via
+    // setAuthState directly — do NOT re-call loadProfileData (would loop).
+    function handleProfileRefresh(e: Event) {
+      const updates = (e as CustomEvent<ProfileUpdates>).detail;
+      if (!updates) return;
+      setAuthState((prev) => ({ ...prev, ...updates }));
+    }
+
     window.addEventListener("auth-state-change", handleAuthChange);
-    return () =>
+    window.addEventListener("profile-refresh", handleProfileRefresh);
+    return () => {
       window.removeEventListener("auth-state-change", handleAuthChange);
+      window.removeEventListener("profile-refresh", handleProfileRefresh);
+    };
   }, [loadProfileData]);
 
   // Stage 1.C: re-pull /api/profile + /api/trial + /api/auth/mfa/status
