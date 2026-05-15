@@ -386,7 +386,7 @@ User requests appeal letter → check email: not verified = signup wall; verifie
 - **Terraform IaC (staging)**: foundation in `infra/staging/`. S3 backend, `use_lockfile = true`.
 - **Tool integration**: MCP servers replaced by local executors 2026-03-04 — no third-party intermediary receives patient data.
 
-**See [docs/reference/infrastructure.md](docs/reference/infrastructure.md)** for full AWS inventory + hardening backlog (A2, B.6–B.10).
+**See [docs/reference/infrastructure.md](docs/reference/infrastructure.md)** for full AWS inventory.
 
 ## Blue Button 2.0 (summary)
 
