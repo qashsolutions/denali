@@ -25,6 +25,7 @@ vi.mock("@/lib/audit", () => ({
 
 import { NextRequest } from "next/server";
 import { GET, PUT } from "../route";
+import { AUTH, VALIDATION, SYSTEM } from "@/config/messages";
 
 function makeRequest(method: string, body?: unknown): NextRequest {
   return new NextRequest("http://localhost:3000/api/consent", {
@@ -50,7 +51,7 @@ describe("GET /api/consent", () => {
     const body = await res.json();
 
     expect(res.status).toBe(401);
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe(AUTH.SIGN_IN_REQUIRED);
   });
 
   it("returns all three consent types defaulting to false when no prefs exist", async () => {
@@ -84,7 +85,7 @@ describe("PUT /api/consent", () => {
     const body = await res.json();
 
     expect(res.status).toBe(401);
-    expect(body.error).toBe("Not authenticated");
+    expect(body.error).toBe(AUTH.SIGN_IN_REQUIRED);
   });
 
   it("returns 400 for invalid consent type", async () => {
@@ -95,7 +96,7 @@ describe("PUT /api/consent", () => {
     const body = await res.json();
 
     expect(res.status).toBe(400);
-    expect(body.error).toBe("Invalid consent type");
+    expect(body.error).toBe(VALIDATION.INVALID_PREFERENCE);
   });
 
   it("returns 400 when consentType is missing", async () => {
@@ -104,7 +105,7 @@ describe("PUT /api/consent", () => {
     const req = makeRequest("PUT", { granted: true });
     const res = await PUT(req);
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("Invalid consent type");
+    expect((await res.json()).error).toBe(VALIDATION.INVALID_PREFERENCE);
   });
 
   it("returns 400 when consentType is empty string", async () => {
@@ -113,7 +114,7 @@ describe("PUT /api/consent", () => {
     const req = makeRequest("PUT", { consentType: "", granted: true });
     const res = await PUT(req);
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("Invalid consent type");
+    expect((await res.json()).error).toBe(VALIDATION.INVALID_PREFERENCE);
   });
 
   it("returns 400 when granted is not a boolean", async () => {
@@ -124,7 +125,7 @@ describe("PUT /api/consent", () => {
     const body = await res.json();
 
     expect(res.status).toBe(400);
-    expect(body.error).toBe("granted must be a boolean");
+    expect(body.error).toBe(VALIDATION.INVALID_PREFERENCE);
   });
 
   it("returns 400 when granted is null", async () => {
@@ -133,7 +134,7 @@ describe("PUT /api/consent", () => {
     const req = makeRequest("PUT", { consentType: "analytics", granted: null });
     const res = await PUT(req);
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("granted must be a boolean");
+    expect((await res.json()).error).toBe(VALIDATION.INVALID_PREFERENCE);
   });
 
   it("returns 400 when granted is number 1", async () => {
@@ -142,7 +143,7 @@ describe("PUT /api/consent", () => {
     const req = makeRequest("PUT", { consentType: "analytics", granted: 1 });
     const res = await PUT(req);
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("granted must be a boolean");
+    expect((await res.json()).error).toBe(VALIDATION.INVALID_PREFERENCE);
   });
 
   it("accepts health_data_ai with granted=true and calls query", async () => {
@@ -202,6 +203,6 @@ describe("PUT /api/consent", () => {
     const body = await res.json();
 
     expect(res.status).toBe(500);
-    expect(body.error).toBe("Unable to save your preference. Please try again.");
+    expect(body.error).toBe(SYSTEM.SAVE_PREFERENCE);
   });
 });

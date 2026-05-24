@@ -25,6 +25,7 @@ vi.mock("@/lib/audit", () => ({
 
 import { NextRequest } from "next/server";
 import { GET, POST, DELETE as DELETE_HANDLER } from "../route";
+import { AUTH, VALIDATION } from "@/config/messages";
 
 const MOCK_USER = { userId: "user-123", email: "test@example.com" };
 
@@ -48,7 +49,7 @@ describe("GET /api/diabetes/log", () => {
     mockGetAuthUser.mockResolvedValue(null);
     const res = await GET(makeRequest("GET"));
     expect(res.status).toBe(401);
-    expect((await res.json()).error).toBe("Not authenticated");
+    expect((await res.json()).error).toBe(AUTH.SIGN_IN_REQUIRED);
   });
 
   it("returns empty entries when user has none", async () => {
@@ -78,21 +79,21 @@ describe("POST /api/diabetes/log", () => {
     mockGetAuthUser.mockResolvedValue(MOCK_USER);
     const res = await POST(makeRequest("POST", {}));
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("Invalid entry_type");
+    expect((await res.json()).error).toBe(VALIDATION.INVALID_LOG_TYPE);
   });
 
   it("rejects invalid entry_type", async () => {
     mockGetAuthUser.mockResolvedValue(MOCK_USER);
     const res = await POST(makeRequest("POST", { entry_type: "blood_pressure" }));
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("Invalid entry_type");
+    expect((await res.json()).error).toBe(VALIDATION.INVALID_LOG_TYPE);
   });
 
   it("rejects empty string entry_type", async () => {
     mockGetAuthUser.mockResolvedValue(MOCK_USER);
     const res = await POST(makeRequest("POST", { entry_type: "" }));
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("Invalid entry_type");
+    expect((await res.json()).error).toBe(VALIDATION.INVALID_LOG_TYPE);
   });
 
   it("rejects invalid glucose_context", async () => {
@@ -101,7 +102,7 @@ describe("POST /api/diabetes/log", () => {
       makeRequest("POST", { entry_type: "glucose", glucose_context: "random" })
     );
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("Invalid glucose_context");
+    expect((await res.json()).error).toBe(VALIDATION.INVALID_GLUCOSE_CONTEXT);
   });
 
   it("rejects activity_minutes = 0", async () => {
@@ -110,7 +111,7 @@ describe("POST /api/diabetes/log", () => {
       makeRequest("POST", { entry_type: "activity", activity_minutes: 0 })
     );
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("activity_minutes must be positive");
+    expect((await res.json()).error).toBe(VALIDATION.ACTIVITY_POSITIVE);
   });
 
   it("rejects negative activity_minutes", async () => {
@@ -119,7 +120,7 @@ describe("POST /api/diabetes/log", () => {
       makeRequest("POST", { entry_type: "activity", activity_minutes: -10 })
     );
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("activity_minutes must be positive");
+    expect((await res.json()).error).toBe(VALIDATION.ACTIVITY_POSITIVE);
   });
 
   it("rejects activity_minutes as string", async () => {
@@ -128,7 +129,7 @@ describe("POST /api/diabetes/log", () => {
       makeRequest("POST", { entry_type: "activity", activity_minutes: "thirty" })
     );
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("activity_minutes must be positive");
+    expect((await res.json()).error).toBe(VALIDATION.ACTIVITY_POSITIVE);
   });
 
   it("accepts valid glucose entry", async () => {
@@ -190,7 +191,7 @@ describe("DELETE /api/diabetes/log", () => {
     mockGetAuthUser.mockResolvedValue(MOCK_USER);
     const res = await DELETE_HANDLER(makeRequest("DELETE"));
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("Missing id");
+    expect((await res.json()).error).toBe(VALIDATION.MISSING_ENTRY_ID);
   });
 
   it("scopes delete to authenticated user", async () => {
