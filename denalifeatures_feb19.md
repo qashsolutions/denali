@@ -4,6 +4,8 @@
 **Source**: Full codebase review (all `.ts`, `.tsx`, `.js`, `.json`, `.css` files)
 **Excludes**: `.md` documentation files
 
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. Strikethroughs below preserve the original text as historical record.
+
 ---
 
 ## Table of Contents
@@ -52,7 +54,7 @@ Denali Health is a Next.js Progressive Web App that serves as a Medicare claims 
 
 **Tech Stack**:
 - **Frontend**: Next.js 15 App Router, TypeScript (strict), Tailwind CSS 4, CSS variables for theming
-- **Backend**: Next.js API routes (Vercel serverless), Claude API (Beta with MCP), Supabase (PostgreSQL + auth)
+- **Backend**: Next.js API routes ~~(Vercel serverless)~~ (AWS ECS Fargate), Claude API ~~(Beta with MCP)~~ (AWS Bedrock — Sonnet 4.6 chat, Opus 4.6 appeals), ~~Supabase (PostgreSQL + auth)~~ AWS RDS PostgreSQL 16.9 + AWS Cognito (auth)
 - **AI**: Anthropic Claude (Sonnet 4.5 for chat, Opus 4.6 for appeals), 3 MCP servers, 10 local tools, 22 skills
 - **Payments**: Stripe (checkout sessions, subscriptions, webhooks)
 - **Health Data**: CMS Blue Button 2.0 FHIR API (OAuth PKCE)
@@ -175,8 +177,8 @@ Skills are conditional prompt sections loaded based on `SkillTriggers` (40+ bool
 | `search_pubmed` | Query, condition, intervention | Articles with PMID, title, authors, journal, year, DOI, citation | NCBI E-utilities (rate-limited: 3 req/sec, circuit breaker, exponential backoff) |
 | `generate_appeal_letter` | Denial reason, procedure, diagnosis, history, treatments, names, dates, policy refs, PubMed citations, medicare_type, plan_name | Formatted letter + metadata (deadline, days remaining, codes, requirements, instructions) | Multi-source synthesis. 120-day deadline calculation. MA branching: "Organization Determination Appeal" to plan (42 CFR §422.101) vs "Level 1 Redetermination" to MAC |
 | `check_sad_list` | Drug name, route | Part B vs Part D determination, HCPCS code, brand names, guidance | CMS SAD (Self-Administered Drug) exclusion list |
-| `lookup_denial_code` | CARC/RARC code, description search, EOB code | Code details, plain English explanation, appeal strategy with success rate | Supabase (`carc_codes_latest`, `rarc_codes_latest`, `eob_denial_mappings_latest`) + `getAppealStrategyForCARC()` RPC |
-| `get_common_denials` | Procedure description, CPT code | Denial reasons, CARC codes, prevention tips, appeal success rates | Supabase (`denial_patterns_latest` via `getDenialPatternsForCPT()` RPC) |
+| `lookup_denial_code` | CARC/RARC code, description search, EOB code | Code details, plain English explanation, appeal strategy with success rate | ~~Supabase~~ AWS RDS (`carc_codes_latest`, `rarc_codes_latest`, `eob_denial_mappings_latest`) + `getAppealStrategyForCARC()` RPC |
+| `get_common_denials` | Procedure description, CPT code | Denial reasons, CARC codes, prevention tips, appeal success rates | ~~Supabase~~ AWS RDS (`denial_patterns_latest` via `getDenialPatternsForCPT()` RPC) |
 
 ### MCP Tools (Auto-Handled by API)
 | Server | URL | Tools |
@@ -300,7 +302,7 @@ Maps ZIP codes to states and Medicare Administrative Contractors (MACs) for regi
 
 ### Token Security
 - AES-256-GCM encryption at rest (`FHIR_TOKEN_ENCRYPTION_KEY` — 32-byte hex)
-- Token writes via admin client (bypass RLS); reads via server client (respects RLS)
+- ~~Token writes via admin client (bypass RLS); reads via server client (respects RLS)~~ Token writes via pg pool to RDS (explicit `WHERE user_id = $1`); reads via server route using `getAuthUser()` + `query()` (RDS has no RLS)
 - Auto-refresh when expiring within 5 minutes
 - On refresh failure: connection marked "expired"
 
@@ -313,7 +315,7 @@ transformEOB() + 5 clinical extractors (eob-clinical.ts)
     ↓
 fhir_cache (8 resource types, 24h TTL, upsert with conflict resolution)
     ↓
-getCachedHealthData() (server-side, RLS-protected)
+getCachedHealthData() (server-side, ~~RLS-protected~~ user_id-scoped via explicit WHERE clause)
     ↓
 buildHealthContextForPrompt() (text block injected into Claude system prompt)
 ```
@@ -473,13 +475,13 @@ Each card has: status dot (red/amber/green) + title + one-line summary + chevron
 
 ### Email OTP (Primary Auth)
 - **`EmailOTPModal.tsx`**: Two-step flow. Step 1: email input (Enter to send). Step 2: 6-digit code input with auto-focus between fields, paste support, auto-submit on completion
-- **`sendEmailOTP()`**: Via Supabase `signInWithOtp`
+- **`sendEmailOTP()`**: ~~Via Supabase `signInWithOtp`~~ Via AWS Cognito `InitiateAuth` (CUSTOM_AUTH flow)
 - **`verifyEmailOTP()`**: Verifies code → creates user record → starts 14-day trial → initializes usage with 1 appeal credit
 
 ### TOTP MFA (Opt-In)
 - **`TOTPEnrollModal.tsx`**: QR code display, secret backup, verification
 - **`TOTPChallengeModal.tsx`**: 6-digit code verification for returning MFA users
-- **`enrollTOTP()`**: Returns QR, secret, factorId via Supabase MFA API
+- **`enrollTOTP()`**: Returns QR, secret, factorId via ~~Supabase MFA API~~ AWS Cognito (`AssociateSoftwareToken` + `VerifySoftwareToken`)
 - **`challengeAndVerifyTOTP()`**: Handles both enrollment verification and login challenge
 
 ### AAL2 Compliance
@@ -494,9 +496,9 @@ Each card has: status dot (red/amber/green) + title + one-line summary + chevron
 - **`onAuthStateChange` canonical pattern**: Check `session?.user` existence, NOT event type name
 
 ### Middleware (`middleware.ts`)
-- Supabase SSR middleware refreshes auth tokens on every request
+- ~~Supabase SSR middleware refreshes auth tokens on every request~~ Cognito-aware middleware refreshes access tokens via `POST /api/auth/refresh` when expired (every request)
 - Prevents refresh token race condition between browser and server clients
-- Calls `supabase.auth.getUser()` to trigger refresh, writes updated cookies to response
+- ~~Calls `supabase.auth.getUser()` to trigger refresh, writes updated cookies to response~~ Calls Cognito refresh endpoint with `refresh_token` cookie; writes new `access_token` + `id_token` cookies to response
 - Excludes: `sw.js`, static assets, API webhooks
 
 ---
@@ -530,7 +532,7 @@ Each card has: status dot (red/amber/green) + title + one-line summary + chevron
   - `customer.subscription.deleted` → mark cancelled
   - `invoice.payment_failed` → mark past_due
 - **Fulfillment**: Idempotent. Single: `add_appeal_credits(email, 1)` + plan→`per_appeal`. Monthly: `reset_monthly_appeal_credits(email, 3)` + subscription record
-- **CRITICAL**: Checkout route uses `createServerSupabaseClient()` — browser client has no auth context server-side. Never returns `{ url: null }` (would grant free access — returns 503 instead)
+- **CRITICAL**: Checkout route uses ~~`createServerSupabaseClient()`~~ `getAuthUser()` — ~~browser client has no auth context server-side~~ server-side auth via Cognito JWT validation. Never returns `{ url: null }` (would grant free access — returns 503 instead)
 
 ### Credit System
 - `usage.appeal_credits` column tracks available credits (separate from `appeal_count` lifetime counter)
@@ -643,15 +645,15 @@ fetch failure → cacheGetIfFresh() → setState() from cache (if within TTL)
 **Files**: `src/app/admin/content/`, `src/lib/cms.ts`, `src/types/cms.ts`
 
 ### Admin Content Page (`/admin/content`)
-- **Dynamic import with SSR disabled** (prevents Supabase client creation during build)
+- **Dynamic import with SSR disabled** ~~(prevents Supabase client creation during build)~~ (legacy reason — Supabase removed in AWS migration; pattern retained for build-time isolation)
 - **4-Tab Interface**: Settings, Sections, Pricing, Testimonials
 - **CRUD Operations**: Edit site settings, landing content sections, pricing plans, testimonials
-- **Data Source**: Supabase tables (`site_settings`, `landing_content`, `pricing_plans`, `testimonials`)
+- **Data Source**: ~~Supabase~~ AWS RDS tables (`site_settings`, `landing_content`, `pricing_plans`, `testimonials`)
 
 ### CMS Library (`cms.ts`)
 - **`getLandingPageData()`**: Fetches all landing page data in one call (SSR)
 - **`getBlogPosts()`**: Published blog posts with category, date, slug
-- **Build-time client**: Separate anon Supabase client for `generateStaticParams`
+- **Build-time client**: ~~Separate anon Supabase client for `generateStaticParams`~~ Direct pg pool query at build time for `generateStaticParams`
 
 ### CMS Types
 - `SiteSetting`, `LandingSection`, `PricingPlan`, `Testimonial`, `LandingPageData`
@@ -773,7 +775,7 @@ Each card: accent-colored top bar, illustration, step number, audience tag, titl
 `"denial-codes" | "coverage" | "appeals" | "prior-auth"`
 
 ### Data Source
-Supabase `blog_posts` table. Build-time static generation via `generateStaticParams()`.
+~~Supabase~~ AWS RDS `blog_posts` table. Build-time static generation via `generateStaticParams()`.
 
 ---
 
@@ -839,7 +841,7 @@ All use `BRAND` config constants for company info. Linked from footer on all pag
 `FHIR_CONNECT`, `FHIR_DISCONNECT`, `FHIR_DATA_ACCESS`, `APPEAL_GENERATED`, `APPEAL_OUTCOME`, `CONSENT_UPDATED`, `ACCOUNT_DELETED`, `DIABETES_INSIGHT_GENERATED`, `DIABETES_LOG_ENTRY`, `CHECKOUT_STARTED`, `TRIAL_STARTED`
 
 ### Implementation
-- **Write**: Admin client (bypasses RLS). Non-blocking fire-and-forget
+- **Write**: ~~Admin client (bypasses RLS)~~ pg pool to RDS (RDS has no RLS). Non-blocking fire-and-forget
 - **Dedup**: FHIR_DATA_ACCESS deduped on write (2h window) — high frequency, low value
 - **Fields**: user_id, action, resource_type, resource_id, metadata, ip_address (from request headers), user_agent
 - **Read**: `/api/audit-log` with `get_grouped_audit_logs` RPC. Groups by action+resource_type+day with `entry_count`. IP last 2 octets masked (`.*.`)
@@ -856,7 +858,7 @@ All use `BRAND` config constants for company info. Linked from footer on all pag
 - **Tested**: 7 XSS vectors (script tags, img onerror, onmouseover, javascript: URI, table injection, URL params)
 
 ### API Access Control
-- All data endpoints use `createServerSupabaseClient()` (cookie-authenticated)
+- ~~All data endpoints use `createServerSupabaseClient()` (cookie-authenticated)~~ All data endpoints use `getAuthUser()` (Cognito JWT from httpOnly cookie) + `query()` (pg pool to RDS)
 - Unauthenticated requests to `/api/conversations` and `/api/profile` return `{ authenticated: false }` with no data leakage
 - Unauthenticated requests to `/api/consent`, `/api/diabetes/*`, `/api/trial` return 401
 - Stripe webhooks validated via HMAC signature
@@ -980,9 +982,9 @@ GDPR/CCPA cascade: 13-step ordered deletion (FHIR → diabetes → chat → appe
 | File | Purpose | Key Exports |
 |------|---------|-------------|
 | `lib/utils.ts` | Tailwind class merging + UI helpers | `cn()` (clsx + twMerge), `getGreeting()` (time-based: morning/afternoon/evening/hi), `formatTime()` (12h with AM/PM) |
-| `lib/supabase.ts` | Browser Supabase client | `createClient()` (typed `Database` generic), `getClient()` (singleton — **CRITICAL**: all client-side code must use this, not `createClient()`, to maintain auth session) |
-| `lib/supabase-server.ts` | Server Supabase client (cookie-authenticated) | `createServerSupabaseClient()` — reads/writes cookies for SSR auth. Used in ALL API routes for data fetching |
-| `lib/supabase-admin.ts` | Admin/service-role client (bypasses RLS) | `createAdminClient()` — uses `SUPABASE_SERVICE_KEY`. Disables `autoRefreshToken` and `persistSession`. Used for webhooks, background jobs, audit writes |
+| ~~`lib/supabase.ts`~~ | ~~Browser Supabase client~~ (file removed in AWS migration) | ~~`createClient()` (typed `Database` generic), `getClient()` (singleton — **CRITICAL**: all client-side code must use this, not `createClient()`, to maintain auth session)~~ — No direct client-side DB access; all data flows through `/api/*` routes |
+| ~~`lib/supabase-server.ts`~~ | ~~Server Supabase client (cookie-authenticated)~~ (file removed in AWS migration) | ~~`createServerSupabaseClient()` — reads/writes cookies for SSR auth. Used in ALL API routes for data fetching~~ Replaced by `lib/db.ts` (`query()` via pg pool) + `lib/auth-server.ts` (`getAuthUser()` via Cognito JWT) |
+| ~~`lib/supabase-admin.ts`~~ | ~~Admin/service-role client (bypasses RLS)~~ (file removed in AWS migration) | ~~`createAdminClient()` — uses `SUPABASE_SERVICE_KEY`. Disables `autoRefreshToken` and `persistSession`. Used for webhooks, background jobs, audit writes~~ Replaced by `lib/db.ts` (`query()` via pg pool); RDS has no RLS so no admin-bypass pattern needed |
 | `lib/cache.ts` | In-memory API response cache with TTL | Generic `Cache<T>` class with: `get()`, `set()`, `getOrSet()` (fetch-or-cache pattern), `clearExpired()`, LRU eviction at max capacity. 7 singleton instances: `npiCache`, `pubmedCache`, `ncdCache`, `lcdCache`, `icd10Cache`, `cptCache`, `sadCache`. `cacheManager` aggregates stats/cleanup. Periodic cleanup interval |
 | `lib/health-analytics.ts` | Dashboard metrics computation | Pure computation, no side effects. `computeDashboardMetrics(claims, coverage)` → `HealthDashboardMetrics`: financial totals (current year), denied claims with `daysUntilDeadline`/`isAppealable`, high-cost claims (>$200 owed), monthly grouping, top diagnoses/providers aggregation, tri-color status (red=denied appealable, amber=high cost/partially paid, green=all paid). Uses `MEDICARE_CONSTANTS.APPEAL_DEADLINE_DAYS` (120 days) |
 
@@ -992,7 +994,7 @@ GDPR/CCPA cascade: 13-step ordered deletion (FHIR → diabetes → chat → appe
 |------|---------|-----------|
 | `types/index.ts` | Core domain types | `Message` (id, role, content, timestamp, codes), `Conversation` (id, title, status, isAppeal, messages), `User` (id, phone, email, plan, theme, textSize, highContrast), `ChatResponse` (conversationId, message, suggestions, state), `Appeal` (id, denialDate, appealLetter, codes, policy refs, status, paid) |
 | `types/attachment.ts` | File upload types | `FileAttachment` (fileName, mediaType, base64Data, sizeBytes), `AttachmentMediaType` (PNG/JPEG/PDF), `ALLOWED_MEDIA_TYPES` array, `FILE_INPUT_ACCEPT` string |
-| `types/database.ts` | Supabase auto-generated types | Full `Database` interface with all table row/insert/update types. Regenerate with `npx supabase gen types` |
+| ~~`types/database.ts`~~ | ~~Supabase auto-generated types~~ (file removed/refactored in AWS migration) | ~~Full `Database` interface with all table row/insert/update types. Regenerate with `npx supabase gen types`~~ Types now defined inline per route via `query<T>()` generic on the pg pool |
 
 ### Environment Variables
 11 required: `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ANTHROPIC_APPEAL_MODEL`, `BLUEBUTTON_CLIENT_ID`, `BLUEBUTTON_CLIENT_SECRET`, `BLUEBUTTON_BASE_URL`, `FHIR_TOKEN_ENCRYPTION_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PAY_PER_CLAIM`, `STRIPE_PRICE_UNLIMITED_MONTHLY`
@@ -1003,7 +1005,7 @@ GDPR/CCPA cascade: 13-step ordered deletion (FHIR → diabetes → chat → appe
 
 ### Package Dependencies (Key)
 - `@anthropic-ai/sdk` v0.71.2 (Claude API)
-- `@supabase/ssr` v0.8.0 + `@supabase/supabase-js` v2.93.2
+- ~~`@supabase/ssr` v0.8.0 + `@supabase/supabase-js` v2.93.2~~ (packages removed in AWS migration; replaced by `pg` + `@aws-sdk/client-cognito-identity-provider`)
 - `idb` v8.0.3 (IndexedDB wrapper, ~1KB)
 - `jspdf` v4.1.0 (PDF generation)
 - `stripe` v20.2.0
@@ -1034,7 +1036,7 @@ GDPR/CCPA cascade: 13-step ordered deletion (FHIR → diabetes → chat → appe
 | `/app/health` | Client (Suspense) | `useHealthData` → `/api/fhir/data` | Three states: loading (skeleton), not connected (ConnectMedicare + OAuth error), connected (6 accordion cards with status dots). Handles `?connected=true` callback and `?error=` display |
 | `/app/diabetes` | Client | `useHealthData`, `useConsent`, `useDiabetesSnapshots`, `useDiabetesLog`, `useDiabetesInsights`, `useAuth` | Comprehensive dashboard: risk alerts, AI insights (consent-gated), A1C trend, classification badge, medications, screenings, quick log (4-tab), quick actions, coverage reference, A1C guide, MDPP section (conditional), CDC risk card (when not connected) |
 | `/app/settings` | Client | `useAuth`, `useTheme`, `useSettings`, `useConsent`, fetch `/api/audit-log` | 8 sections: Account (OTP flow or signed-in), Subscription (PaywallModal inline), Appearance, Accessibility, Security (TOTP), Privacy (3 toggles), Activity Log, Danger Zone (2-step delete), Reset |
-| `/app/dashboard` | Client | Direct Supabase: session → role check → `get_counselor_stats` RPC → `counselor_cases` | Role-gated (counselor/provider only, redirects others). Stats + case list + outcome reporting + "New Case" button |
+| `/app/dashboard` | Client | ~~Direct Supabase: session → role check → `get_counselor_stats` RPC → `counselor_cases`~~ Server-side via `/api/counselor/stats` (Cognito auth + pg pool to RDS) | Role-gated (counselor/provider only, redirects others). Stats + case list + outcome reporting + "New Case" button |
 | `/app/claims` | Server | None | Redirect → `/app/chat` (placeholder/legacy route) |
 
 ### Other Pages
@@ -1113,7 +1115,7 @@ GDPR/CCPA cascade: 13-step ordered deletion (FHIR → diabetes → chat → appe
 | Service | Purpose | Auth | Routes |
 |---------|---------|------|--------|
 | **Anthropic Claude API** | Chat, tool calling, MCP, diabetes insights, appeal letters | API key (env var) | `/api/chat`, `/api/diabetes/insights` |
-| **Supabase** | PostgreSQL DB, Auth (OTP, TOTP), RLS, RPCs | Cookie (server), JWT (client), admin (service role) | All routes |
+| ~~**Supabase**~~ **AWS** | ~~PostgreSQL DB, Auth (OTP, TOTP), RLS, RPCs~~ RDS PostgreSQL 16.9 + Cognito (OTP, TOTP) + Bedrock + SES | ~~Cookie (server), JWT (client), admin (service role)~~ Cognito JWT via httpOnly cookie (server) + pg pool (RDS) | All routes |
 | **CMS Blue Button 2.0** | Medicare FHIR data (Patient, Coverage, EOB) | OAuth 2.0 PKCE | `/api/fhir/*` |
 | **Stripe** | Payments, subscriptions, webhooks | API key + webhook HMAC | `/api/checkout`, `/api/webhooks/stripe`, `/api/account/delete` |
 | **NCBI PubMed** | Clinical evidence search | Rate-limited HTTP (3/sec) | Via tools in `/api/chat` |
@@ -1160,7 +1162,7 @@ GDPR/CCPA cascade: 13-step ordered deletion (FHIR → diabetes → chat → appe
 | `useSettings` | 98 | Text scale via localStorage + CSS variable |
 | `useIntersectionObserver` | 56 | Scroll-triggered fade-in animations |
 | `useTheme` | — | Dead code (consumers use ThemeProvider) |
-| `useSupabase` | — | Dead code (consumers use getClient()) |
+| ~~`useSupabase`~~ | — | ~~Dead code (consumers use getClient())~~ (hook removed in AWS migration) |
 
 ---
 

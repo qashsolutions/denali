@@ -1,8 +1,10 @@
 # Denali Feature Review — February 9, 2026
 
-> Comprehensive code review of every feature, file, and Supabase integration.
+> Comprehensive code review of every feature, file, and ~~Supabase integration~~ AWS RDS integration.
 > Generated from full codebase audit across chat/AI, auth/payment, FHIR/health, UI, and database layers.
 > **All issues resolved**: 16 Pass 1 bugs, 11 Pass 2 critical/high/medium issues, and 4 Pass 3 pipeline fixes — all applied, verified, and committed.
+
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. Strikethroughs below mark present-tense state claims; past-tense fix narratives are preserved intact as historical record.
 
 ### Status Summary
 
@@ -28,7 +30,7 @@
 | 3 | Sidebar + history | `Sidebar.tsx`, `useConversationHistory.ts` | Server route fetch, auth-aware, date grouping, bidirectional refresh |
 | 4 | Email OTP auth | `useAuth.ts`, `settings/page.tsx` | Send code, verify, upsert user, module-level cache |
 | 5 | TOTP MFA (opt-in) | `useAuth.ts`, `TOTPEnrollModal`, `TOTPChallengeModal` | Enroll, challenge, verify, AAL2 gating on FHIR |
-| 6 | Supabase SSR middleware | `middleware.ts` | Token refresh, cookie forwarding, race prevention |
+| 6 | ~~Supabase SSR middleware~~ Cognito token refresh middleware | `middleware.ts` | Token refresh, cookie forwarding, race prevention |
 | 7 | Profile server route | `/api/profile/route.ts` | Plan, role, isAdmin, appealCount via cookie-auth |
 | 8 | Admin bypass | `route.ts`, `useAuth.ts`, `settings/page.tsx`, `AppHeader.tsx` | Unlimited chat + appeals, "Admin" label in UI |
 | 9 | Daily chat rate limiting | `route.ts`, `useChat.ts`, `check_and_increment_chat` RPC | 3/anon, 10/free, unlimited/paid, 429 handling |
@@ -56,7 +58,7 @@
 | 31 | Pre-diabetes risk test | `PreDiabetesRiskCard.tsx` | CDC 7-question test, scoring, chat routing |
 | 32 | CMS pledges | `CmsPledge.tsx` | AI Assistant + Diabetes pledge text on relevant pages |
 | 33 | Legal pages | `privacy/`, `hipaa/`, `faq/` | Comprehensive, BRAND config, CSS variables |
-| 34 | Blog (CMS-driven) | `blog/page.tsx`, `blog/[slug]/page.tsx` | Server-rendered from `blog_posts` Supabase table |
+| 34 | Blog (CMS-driven) | `blog/page.tsx`, `blog/[slug]/page.tsx` | Server-rendered from `blog_posts` ~~Supabase~~ AWS RDS table |
 | 35 | Landing page (CMS-driven) | `app/page.tsx` | `site_settings`, `landing_content`, `pricing_plans`, `testimonials` |
 | 36 | Theme support | `useSettings.ts`, CSS variables | Dark/light/system, text scale |
 | 37 | Mobile responsive | `BottomTabs.tsx`, `AppHeader.tsx` | 4-tab bottom nav, hamburger, sidebar |
@@ -192,7 +194,7 @@ These are the critical paths that are fully functional from user action to datab
 | **Subscription lifecycle** | `invoice.payment_failed` → `handleSubscriptionEvent()` → status sync | Yes |
 | **Account deletion** | Settings → 2-step confirm → `/api/account/delete` (server auth + admin cascade) → sign out → redirect | Yes |
 | **Consent enforcement** | Settings toggles → `/api/consent` → `consent_preferences` → gates `buildHealthContextForPrompt()` | Yes |
-| **Audit logging** | All sensitive operations → `logAudit()` → `audit_logs` table (admin client, bypasses RLS) | Yes |
+| **Audit logging** | All sensitive operations → `logAudit()` → `audit_logs` table ~~(admin client, bypasses RLS)~~ (pg pool to RDS; RDS has no RLS) | Yes |
 | **TOTP MFA** | Settings > Security → enroll → QR code → verify → AAL2 challenge on FHIR authorize | Yes |
 | **Learning system** | Chat response → `persistLearning()` → symptom/procedure mappings + coverage paths (admin client) | Yes (admin client fix applied) |
 
