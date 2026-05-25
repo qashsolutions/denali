@@ -8,6 +8,8 @@
 All responses are grounded in the live privacy policy at https://www.denali.health/privacy
 and terms of service at https://www.denali.health/terms.
 
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. Strikethroughs below preserve the original text as historical record.
+
 ---
 
 ## Question: If data is shared with third-parties, is that on a one-time basis or persistently collected?
@@ -20,8 +22,8 @@ Data sharing varies by third party. Each relationship is labeled in our Privacy 
 |-------------|-------|----------|
 | **Anthropic (Claude AI)** | Transactional — per-message | Each request is independent. Anthropic retains API inputs/outputs up to 30 days for safety monitoring, then auto-deletes. |
 | **CMS (Medicare API)** | Persistent | While the user's Medicare connection is active. Ceases immediately on disconnect. |
-| **Supabase (database)** | Persistent | For the lifetime of the user's account. Deleted on account deletion. |
-| **Vercel (hosting)** | Transactional — per-request | Server-side request logs retained up to 30 days. |
+| ~~**Supabase (database)**~~ **AWS RDS PostgreSQL (database)** | Persistent | For the lifetime of the user's account. Deleted on account deletion. |
+| ~~**Vercel (hosting)**~~ **AWS ECS Fargate (hosting)** | Transactional — per-request | Server-side request logs retained up to 30 days in CloudWatch. |
 | **Stripe (payments)** | Transactional — per-payment event | We never see or store credit card numbers. |
 | **Legal/Regulatory** | As required | Only when compelled by law, court order, or government regulation. |
 
@@ -42,7 +44,7 @@ Informed, proactive consent is obtained through layered mechanisms before any da
 3. **Payment data → Stripe:**
    Data sharing with Stripe is initiated only when the user chooses to make a payment. The user enters the checkout flow voluntarily.
 
-4. **Infrastructure providers (Supabase, Vercel):**
+4. ~~**Infrastructure providers (Supabase, Vercel):**~~ **Infrastructure providers (AWS):**
    These providers receive data in the course of operating the service. Their use is disclosed in the Privacy Policy (§5), which users must acknowledge at account creation. Account creation requires an affirmative action (entering an email and verifying a one-time passcode) — we do not assume acceptance through passive use.
 
 5. **All sharing:**
@@ -56,12 +58,12 @@ Informed, proactive consent is obtained through layered mechanisms before any da
 
 All third-party vendors are contractually required to protect user information using safeguards appropriate to the sensitivity of the data they handle, consistent with applicable law (Privacy Policy §5, §9):
 
-- **Supabase** — SOC 2 compliant. BAA being established as our database provider handling PHI.
-- **Vercel** — SOC 2 compliant. BAA being established as our hosting provider.
+- ~~**Supabase** — SOC 2 compliant. BAA being established as our database provider handling PHI.~~ **AWS** — SOC 2 Type II compliant. AWS BAA executed 2026-02-25 (covers RDS, ECS, Bedrock, Cognito, SES); a single BAA covers all HIPAA-eligible services.
+- ~~**Vercel** — SOC 2 compliant. BAA being established as our hosting provider.~~ (Hosting subsumed by the AWS BAA above; Vercel removed.)
 - **Anthropic** — SOC 2 Type II certified. Does not train models on API-submitted data. Retains inputs/outputs maximum 30 days for safety monitoring only.
 - **Stripe** — PCI DSS certified. Handles payment data only; never receives health information.
 
-Business Associate Agreements are required from all service providers who access, process, or store protected health information on our behalf, as required under HIPAA (Privacy Policy §9). BAAs with Supabase and Vercel are currently being finalized and will be executed prior to production launch.
+Business Associate Agreements are required from all service providers who access, process, or store protected health information on our behalf, as required under HIPAA (Privacy Policy §9). ~~BAAs with Supabase and Vercel are currently being finalized and will be executed prior to production launch.~~ AWS BAA executed 2026-02-25 covers all HIPAA-eligible services (RDS, ECS, Bedrock, Cognito, SES); Supabase and Vercel are no longer used.
 
 ---
 
@@ -107,12 +109,12 @@ Technical and administrative safeguards in place (Privacy Policy §8, §9):
 
 - **Encryption at rest:** AES-256-GCM for all OAuth tokens
 - **Encryption in transit:** TLS 1.2+ for all data
-- **Database security:** Row-Level Security (RLS) — each user can only access their own rows
+- **Database security:** ~~Row-Level Security (RLS) — each user can only access their own rows~~ Explicit `WHERE user_id = $1` clauses on all RDS queries (RDS has no Row-Level Security); each user can only access their own rows.
 - **Authentication:** Email OTP (one-time passcode); optional TOTP multi-factor authentication
 - **OAuth security:** PKCE (Proof Key for Code Exchange) prevents authorization code interception
 - **Audit logging:** Every sensitive data access is logged (who, what, when, why) and visible to the user in Settings > Data Access History
 - **Consent enforcement:** All three consent preferences enforced before data is used or shared
-- **HIPAA BAAs:** In place with Supabase and Vercel
+- **HIPAA BAAs:** ~~In place with Supabase and Vercel~~ AWS BAA executed 2026-02-25 (covers RDS, ECS, Bedrock, Cognito, SES); Supabase and Vercel no longer in use.
 - **Incident response:** Documented procedures to detect, investigate, and contain breaches
 - **Minimum retention:** Health data cache refreshes every 24 hours; deleted immediately on disconnect or account deletion
 
@@ -139,10 +141,10 @@ Storage and retention practices (Privacy Policy §4, §6, §8):
 
 **Storage:**
 - OAuth tokens (access + refresh) encrypted at rest using AES-256-GCM before writing to our database
-- Health data cache stored in Supabase with Row-Level Security — only the authenticated user's session can read their own rows
+- Health data cache stored in ~~Supabase with Row-Level Security~~ AWS RDS with explicit `WHERE user_id = $1` clauses — only the authenticated user can read their own rows
 - All data in transit protected by TLS 1.2+
 - No health data written to server-side logs or application error tracking
-- HIPAA Business Associate Agreements in place with Supabase (database) and Vercel (hosting), both SOC 2 compliant
+- ~~HIPAA Business Associate Agreements in place with Supabase (database) and Vercel (hosting), both SOC 2 compliant~~ HIPAA Business Associate Agreement in place with AWS (executed 2026-02-25), covering RDS, ECS Fargate, Bedrock, Cognito, SES; SOC 2 Type II compliant.
 
 **Retention:**
 - Health data cache: refreshed every 24 hours; **immediately and permanently deleted** when the user disconnects Medicare or deletes their account

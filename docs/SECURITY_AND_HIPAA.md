@@ -2,6 +2,8 @@
 
 Denali handles sensitive Medicare health data and must meet CMS interoperability requirements. This document covers authentication, authorization, encryption, auditing, consent management, and HIPAA compliance status.
 
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. Strikethroughs below preserve the original text as historical record.
+
 ---
 
 ## Authentication
@@ -12,7 +14,7 @@ Primary authentication method. User enters email address, receives a one-time pa
 
 | Aspect | Detail |
 |--------|--------|
-| Provider | Supabase Auth |
+| Provider | ~~Supabase Auth~~ AWS Cognito |
 | Method | Email magic link / OTP |
 | Required for | Appeal letters (first 3 free), subscription management, health data |
 | Implementation | `useAuth` hook, Settings account section |
@@ -23,13 +25,13 @@ Time-based One-Time Password via authenticator app. Available in Settings > Secu
 
 | Aspect | Detail |
 |--------|--------|
-| Provider | Supabase Auth (TOTP factor type) |
+| Provider | ~~Supabase Auth (TOTP factor type)~~ AWS Cognito (TOTP factor type) |
 | Enrollment | `TOTPEnrollModal` -- scan QR code, verify with 6-digit code |
 | Challenge | `TOTPChallengeModal` -- prompted when accessing health data (if enrolled) |
 | CMS requirement | None. TOTP is defense-in-depth, not CMS-mandated |
 | UI | Settings > Security section |
 
-Note: WebAuthn/passkeys are NOT supported by Supabase on any plan. TOTP and Phone are the only MFA factor types available.
+~~Note: WebAuthn/passkeys are NOT supported by Supabase on any plan. TOTP and Phone are the only MFA factor types available.~~ (Note no longer applies — Cognito has a different MFA-factor set; TOTP is the factor in use.)
 
 ### Blue Button OAuth (IAL2/AAL2)
 
@@ -46,11 +48,11 @@ Identity proofing for Medicare health data access. Handled entirely by CMS via M
 
 ## Authorization
 
-### Supabase Row-Level Security (RLS)
+### ~~Supabase Row-Level Security (RLS)~~ (historical — RDS uses explicit `WHERE user_id = $1` clauses)
 
-All tables have RLS policies enabled. Users can only access their own data.
+~~All tables have RLS policies enabled. Users can only access their own data.~~ All RDS queries include explicit `WHERE user_id = $1` clauses (RDS has no Row-Level Security); users can only access their own data.
 
-| Table | RLS Policy |
+| Table | ~~RLS Policy~~ Access control (now `WHERE user_id = $1`) |
 |-------|-----------|
 | `conversations` | User reads/writes own conversations |
 | `messages` | User reads/writes own messages |
@@ -60,26 +62,28 @@ All tables have RLS policies enabled. Users can only access their own data.
 | `audit_logs` | Users read own logs; service role writes |
 | `ehr_connections` | User reads own connection; admin writes tokens |
 
-### Admin Client Usage
+> **Historical (post-2026-02-26 migration):** The following Admin Client Usage subsection describes the Supabase admin-client pattern that no longer exists. The operations themselves still happen (token writes, audit log writes, account deletion) — now via direct RDS queries via the pg pool. Preserved as historical record.
 
-Some operations require bypassing RLS via the Supabase admin client (service role):
+### ~~Admin Client Usage~~
 
-| Operation | Why Admin Client |
+~~Some operations require bypassing RLS via the Supabase admin client (service role):~~
+
+| ~~Operation~~ | ~~Why Admin Client~~ |
 |-----------|-----------------|
-| Token writes (`ehr_connections`) | Encrypted tokens written server-side during OAuth callback |
-| Audit log writes | `logAudit()` fires non-blocking; bypasses RLS for reliability |
-| Account deletion | `delete_user_cascade()` needs cross-table access |
+| ~~Token writes (`ehr_connections`)~~ | ~~Encrypted tokens written server-side during OAuth callback~~ |
+| ~~Audit log writes~~ | ~~`logAudit()` fires non-blocking; bypasses RLS for reliability~~ |
+| ~~Account deletion~~ | ~~`delete_user_cascade()` needs cross-table access~~ |
 
-### Key RLS Gotchas
+### ~~Key RLS Gotchas~~ (historical — RDS has no RLS)
 
-These are common pitfalls when working with Supabase RLS:
+~~These are common pitfalls when working with Supabase RLS:~~ (Historical — RDS has no RLS; queries are direct SQL with explicit `WHERE user_id = $1`.)
 
 | Gotcha | Explanation | Solution |
 |--------|-------------|----------|
 | **NULL = NULL is false** | `auth.uid() = user_id` fails when both are NULL | Use: `OR (auth.uid() IS NULL AND user_id IS NULL)` |
 | **INSERT + .select()** | PostgREST RETURNING clause needs SELECT policy to pass too | Ensure both INSERT and SELECT policies exist |
 | **UPDATE checks SELECT** | PostgreSQL combines SELECT + UPDATE -- row must pass SELECT first | Row must match both policies |
-| **Cross-RLS operations** | Functions that touch multiple users' data or system tables | Use `SECURITY DEFINER` functions (e.g., `claim_conversation()`) |
+| ~~**Cross-RLS operations**~~ | ~~Functions that touch multiple users' data or system tables~~ | ~~Use `SECURITY DEFINER` functions (e.g., `claim_conversation()`)~~ |
 | **Server route.ts = anon** | `createBrowserClient` on server has no auth context | Server creates anonymously; client claims via RPC |
 
 ---
@@ -94,11 +98,13 @@ These are common pitfalls when working with Supabase RLS:
 | Key | `FHIR_TOKEN_ENCRYPTION_KEY` environment variable (32-byte hex, 64 hex chars) |
 | Scope | Access tokens and refresh tokens in `ehr_connections` table |
 | Implementation | `src/lib/fhir/crypto.ts` |
-| Key separation | Encryption key stored in Vercel env vars, not in database |
+| Key separation | Encryption key stored in ~~Vercel env vars~~ AWS Secrets Manager (injected via ECS task definition), not in database |
 
-### Supabase Encryption
+> **Historical (post-2026-02-26 migration):** The following "Supabase Encryption" subsection described Supabase-managed infrastructure encryption. Replaced by AWS RDS AES-256 via KMS. Preserved as historical record.
 
-Supabase provides encryption at rest for all database storage. This is infrastructure-level and does not require application configuration.
+### ~~Supabase Encryption~~
+
+~~Supabase provides encryption at rest for all database storage. This is infrastructure-level and does not require application configuration.~~
 
 ### PKCE Artifacts
 
@@ -128,7 +134,7 @@ All security-sensitive operations are logged to the `audit_logs` table.
 
 ### `logAudit()` Utility
 
-Defined in `src/lib/audit.ts`. Non-blocking fire-and-forget writes via admin client (bypasses RLS).
+Defined in `src/lib/audit.ts`. Non-blocking fire-and-forget writes ~~via admin client (bypasses RLS)~~ via pg pool to RDS.
 
 ### Covered Operations
 
@@ -183,9 +189,9 @@ Denali does NOT store the following PII:
 
 | Data | Purpose | Protection |
 |------|---------|------------|
-| Email | Authentication (OTP) | Supabase Auth |
-| Phone | Authentication (OTP for paid plans) | Supabase Auth |
-| Conversation content | Chat history | RLS (user-only access) |
+| Email | Authentication (OTP) | ~~Supabase Auth~~ AWS Cognito |
+| Phone | Authentication (OTP for paid plans) | ~~Supabase Auth~~ AWS Cognito |
+| Conversation content | Chat history | ~~RLS (user-only access)~~ explicit `WHERE user_id = $1` (user-only access) |
 | Anonymized phrases | Learning system | No user link |
 | Medicare ID | Display only | Masked as `***1234` |
 
@@ -200,7 +206,7 @@ Denali does NOT store the following PII:
 5. Delete consent preferences
 6. Delete usage records
 7. Cancel Stripe subscription (if active)
-8. Delete Supabase auth user
+8. ~~Delete Supabase auth user~~ Delete AWS Cognito user via `CognitoIdentityProviderClient.AdminDeleteUser()`
 9. Retain anonymized learning data (no user link)
 
 Triggered via Settings > Danger Zone with 2-step confirmation. Calls `/api/account/delete`.
@@ -213,9 +219,9 @@ Triggered via Settings > Danger Zone with 2-step confirmation. Calls `/api/accou
 
 | Control | Status | Implementation |
 |---------|--------|---------------|
-| Access control (RLS) | Done | Supabase RLS on all tables |
-| Encryption at rest | Done | AES-256-GCM for tokens, Supabase infra encryption |
-| Encryption in transit | Done | HTTPS everywhere (Vercel + Supabase) |
+| Access control ~~(RLS)~~ | Done | ~~Supabase RLS on all tables~~ Explicit `WHERE user_id = $1` clauses on all RDS queries |
+| Encryption at rest | Done | AES-256-GCM for tokens, ~~Supabase infra encryption~~ AWS RDS AES-256 via KMS |
+| Encryption in transit | Done | HTTPS everywhere ~~(Vercel + Supabase)~~ (AWS ALB termination → ECS Fargate; RDS TLS-only) |
 | Audit logging | Done | `audit_logs` table with comprehensive coverage |
 | Consent management | Done | `consent_preferences` with enforcement |
 | Minimum necessary | Done | Scoped FHIR access, minimal PII storage |
@@ -226,8 +232,8 @@ Triggered via Settings > Danger Zone with 2-step confirmation. Calls `/api/accou
 
 | Gap | Priority | Type | Description |
 |-----|----------|------|-------------|
-| **BAA with Supabase** | P0 | Process | Business Associate Agreement required for HIPAA covered entity status |
-| **BAA with Vercel** | P0 | Process | Hosting provider must sign BAA |
+| ~~**BAA with Supabase**~~ Closed | ~~P0~~ | ~~Process~~ Done | ~~Business Associate Agreement required for HIPAA covered entity status~~ Subsumed by AWS BAA (executed 2026-02-25); Supabase removed |
+| ~~**BAA with Vercel**~~ Closed | ~~P0~~ | ~~Process~~ Done | ~~Hosting provider must sign BAA~~ Subsumed by AWS BAA (executed 2026-02-25); Vercel removed |
 | **HITRUST certification** | P0 | Process | CMS Criterion 26 requires HITRUST or equivalent |
 | **Breach notification plan** | P0 | Process | Documented procedures for data breach response |
 | **HIPAA policies document** | P0 | Documentation | Written policies for workforce, access management, incident response |
@@ -246,4 +252,4 @@ Triggered via Settings > Danger Zone with 2-step confirmation. Calls `/api/accou
 | `STRIPE_SECRET_KEY` | Stripe API access | High -- server-side only |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook verification | High -- prevents forged webhooks |
 
-All secrets are stored in Vercel environment variables and never committed to source control.
+~~All secrets are stored in Vercel environment variables and never committed to source control.~~ All secrets are stored in AWS Secrets Manager and injected at ECS task startup via the task definition. Secrets are never committed to source control.
