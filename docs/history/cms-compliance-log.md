@@ -11,6 +11,8 @@ dates, see CLAUDE.md "CMS Interoperability Framework
 
 For the full compliance report, see `cms_readiness.md`.
 
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. Strikethroughs below preserve the original text as historical record.
+
 ---
 
 ## Dated Audit Deltas

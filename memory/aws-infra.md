@@ -3,6 +3,8 @@
 > Last updated: 2026-02-28
 > Account: 236823123138 | Region: us-east-1 | IAM user: denaliadmin
 
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. Strikethroughs below preserve the original text as historical record.
+
 ## Changes Made (2026-02-27 Session)
 
 ### 1. CloudWatch Log Retention
@@ -134,7 +136,7 @@ Estimated uptime: ~480 hrs/mo (vs 730)
 | `www.denali.health` | **AWS ALB** (CNAME → denali-alb-1075324152.us-east-1.elb.amazonaws.com) | Production |
 | `denali.health` | **AWS ALB** (A record alias) | Production |
 | `staging.denali.health` | **AWS ALB** (CNAME) | Same ALB/ECS as production for now |
-| `stage.denali.health` | **Vercel** | Old Vercel staging — DO NOT USE |
+| `stage.denali.health` | ~~**Vercel**~~ (decommissioned) | ~~Old Vercel staging — DO NOT USE~~ Vercel staging fully removed; staging now on AWS ALB |
 
 ### Current ECS Deployment
 

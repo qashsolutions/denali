@@ -5,6 +5,8 @@ Found during CMS production access form prep audit (2026-02-24).
 
 **Status as of 2026-02-24: All 4 deltas resolved.**
 
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. Strikethroughs below preserve the original text as historical record.
+
 ---
 
 ## Delta 1 — `health_data_storage` consent not enforced in caching ✅ FIXED
@@ -74,13 +76,13 @@ Updated privacy policy `src/app/privacy/page.tsx`:
 Previously stated: "Accounts with no sign-in activity for 24 months **will receive** a 30-day email notice before data is archived."
 
 **What the code does:**
-No scheduled job, background worker, Supabase `pg_cron` task, or edge function exists to implement this.
+No scheduled job, background worker, ~~Supabase `pg_cron` task, or edge function~~ AWS EventBridge rule + Lambda exists to implement this.
 
 **Resolution:**
 Softened policy language from "will receive" to "may receive" pending full implementation:
 > "Accounts with no sign-in activity for 24 months **may receive** a 30-day email notice before data is archived."
 
-**Future implementation** (post-launch): Supabase `pg_cron` job querying `users` for `last_sign_in_at < NOW() - INTERVAL '24 months'` → trigger `send-checklist-email` edge function.
+**Future implementation** (post-launch): ~~Supabase `pg_cron` job querying `users` for `last_sign_in_at < NOW() - INTERVAL '24 months'` → trigger `send-checklist-email` edge function.~~ AWS EventBridge scheduled rule → Lambda querying RDS `users` for `last_sign_in_at < NOW() - INTERVAL '24 months'` → SES email send.
 
 **Severity:** Low pre-launch, Medium post-launch.
 

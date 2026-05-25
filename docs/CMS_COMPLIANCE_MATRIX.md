@@ -9,6 +9,8 @@ Key dates:
 - **Q1 2026**: CMS early adopter showcase target
 - **July 4, 2026**: FHIR API mandate (Criteria 13-16)
 
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. Strikethroughs below preserve the original text as historical record.
+
 ---
 
 ## Overall App Criteria (A1-A6)
@@ -22,7 +24,7 @@ All patient-facing apps must meet the full list of criteria to qualify.
 | **A3** | CMS review participation -- disclose data sources, terms/agreements, security checklist | **PARTIAL** | `/api/cms-metadata` endpoint exposes app metadata for CMS directory. | Terms of service document and security self-assessment not yet completed. |
 | **A4** | Trial access for Medicare patients if app charges a fee | **MET** | 30-day free trial via `/api/trial` (GET status, POST start). Trial status tracked in `subscriptions` table (`trial_start`, `trial_end`, `trial_converted`). Settings page shows trial days remaining. | None. |
 | **A5** | CMS discovery experience -- allow app to be listed on Medicare.gov | **PARTIAL** | `/api/cms-metadata` returns app listing metadata (name, description, categories, data sources). | CMS submission with screenshots and descriptions not yet completed. |
-| **A6** | HIPAA compliance when provided by a covered entity or business associate | **IN PROGRESS** | Row-level security on all tables. AES-256-GCM token encryption. Audit logging on all sensitive operations. Consent management with enforcement. | BAA with Supabase and Vercel pending. HITRUST certification needed. Breach notification plan needed. HIPAA compliance documentation incomplete. |
+| **A6** | HIPAA compliance when provided by a covered entity or business associate | ~~**IN PROGRESS**~~ **PARTIAL** | ~~Row-level security on all tables.~~ Explicit `WHERE user_id = $1` clauses on all queries (RDS has no RLS). AES-256-GCM token encryption. Audit logging on all sensitive operations. Consent management with enforcement. | ~~BAA with Supabase and Vercel pending.~~ AWS BAA executed 2026-02-25 (covers RDS, ECS, Bedrock, Cognito, SES); Supabase + Vercel removed. HITRUST certification needed. Breach notification plan needed. HIPAA compliance documentation incomplete. |
 
 ---
 
@@ -45,7 +47,7 @@ All patient-facing apps must meet the full list of criteria to qualify.
 | **2** | Use clinical record for personalized coaching, reminders, risk alerts | **PARTIAL** | `DIABETES_PREVENTION_SKILL` interprets A1C values + coaching prompts. `extractDiabetesLabs()` wired to fetch Observations (A1C LOINC 4548-4, glucose codes). Labs injected into AI context via `buildHealthContextForPrompt()`. | Lab trend charts not built for diabetes page. Personalized risk alert UI not implemented. |
 | **3** | Support both prevention AND active management (meds, lab trends, nutrition/activity) | **PARTIAL** | A1C guide with 3 ranges (normal, pre-diabetic, diabetic). Medicare coverage reference table (6 items). MDPP references in skill prompts. | Nutrition and activity tracking features not built. Lab trend visualization missing. |
 | **4** | Must specifically provide resources for pre-diabetic patients | **PARTIAL** | MDPP references exist in `DIABETES_PREVENTION_SKILL`. A1C guide includes pre-diabetic range (5.7-6.4%). | MDPP eligibility checker not built. MDPP enrollment flow not implemented. MDPP provider finder not built. |
-| **5** | HIPAA compliance | **IN PROGRESS** | Same status as A6 above. RLS, encryption, audit, consent all implemented. | BAA, HITRUST, breach notification plan pending. |
+| **5** | HIPAA compliance | ~~**IN PROGRESS**~~ **PARTIAL** | Same status as A6 above. ~~RLS~~ Explicit `WHERE user_id = $1` clauses, encryption, audit, consent all implemented. | ~~BAA~~ AWS BAA executed 2026-02-25; HITRUST, breach notification plan pending. |
 
 ---
 
@@ -69,7 +71,7 @@ Network-level criteria that affect how Denali interacts with CMS Aligned Network
 |---|-----------|--------|----------|------|
 | **22** | Request Purpose -- all queries include purpose code | **MET** | `X-Request-Purpose` header on FHIR calls. Purpose derived from skill triggers: `patient-request`, `appeal`, `coverage-determination`. | None. |
 | **23** | Digital Credentials -- accept IAL2/AAL2 via CMS-approved service | **MET** | Blue Button OAuth provides IAL2/AAL2 via Medicare.gov. TOTP MFA opt-in for additional security. | CMS credential service integration when available (P1). |
-| **24** | Access Control -- enforce access control + consent policy per context | **MET** | Consent preferences gate health data injection into AI prompts. FHIR authorize checks TOTP enrollment and requires AAL2 challenge if enrolled. RLS on all tables. | None. |
+| **24** | Access Control -- enforce access control + consent policy per context | **MET** | Consent preferences gate health data injection into AI prompts. FHIR authorize checks TOTP enrollment and requires AAL2 challenge if enrolled. ~~RLS on all tables.~~ Explicit `WHERE user_id = $1` clauses on all queries (RDS has no RLS). | None. |
 | **25** | Audit Records -- verifiable logs for all auth requests/responses | **MET** | `audit_logs` table with action, resource, IP, user agent, metadata. Covers all auth-sensitive operations. | None. |
 | **26** | Security Validation -- HITRUST certification or CMS-approved equivalent | **NOT MET** | No certification in place. | HITRUST certification is an org-level process. Required for full compliance. |
 

@@ -2,6 +2,8 @@
 
 Last updated: 2026-02-11
 
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. Strikethroughs below preserve the original text as historical record.
+
 ## Engineering Readiness
 
 | CMS Requirement | Status | Evidence |
@@ -25,8 +27,8 @@ Last updated: 2026-02-11
 |---|---|---|
 | PDF of Privacy Policy | TODO | Print `/privacy` to PDF |
 | PDF of Terms of Service | TODO | Print `/terms` to PDF |
-| BAA with Supabase | TODO | Business Associate Agreement |
-| BAA with Vercel | TODO | Business Associate Agreement |
+| ~~BAA with Supabase~~ Closed | ~~TODO~~ Done | ~~Business Associate Agreement~~ Subsumed by AWS BAA (executed 2026-02-25); Supabase removed |
+| ~~BAA with Vercel~~ Closed | ~~TODO~~ Done | ~~Business Associate Agreement~~ Subsumed by AWS BAA (executed 2026-02-25); Vercel removed |
 | BAA with Anthropic | TODO | Business Associate Agreement |
 | Production access form | TODO | Org name, app name, redirect URI, point of contact |
 | CMS app directory listing | TODO | Screenshots, descriptions for Medicare.gov |

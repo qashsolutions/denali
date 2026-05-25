@@ -1,7 +1,9 @@
 # Denali — AWS Migration Plan
 
-> Status: **Planning** | Started: 2026-02-25 | AWS BAA: Active (2026-02-25)
+> Status: ~~**Planning**~~ **COMPLETED 2026-02-26** | Started: 2026-02-25 | AWS BAA: Active (2026-02-25)
 > Maintainer: @cvr
+
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. This document is the historical plan; body preserved as record of the migration steps taken.
 
 ---
 

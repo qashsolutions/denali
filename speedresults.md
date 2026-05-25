@@ -3,13 +3,15 @@
 > Verified against actual codebase on 2026-02-09.
 > Each finding reviewed by reading the source files directly.
 
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. Strikethroughs below preserve the original text as historical record.
+
 ---
 
 ## Finding 1: Redundant Profile Fetch
 
 **Status:** CONFIRMED
 **File:** `app/src/app/api/chat/route.ts` lines 116-120 and 195-199
-**Savings:** ~50-100ms per request (one Supabase round-trip)
+**Savings:** ~50-100ms per request (one ~~Supabase~~ AWS RDS round-trip)
 
 The route fetches `plan, is_admin` from the `users` table twice:
 1. Lines 116-120: For rate limiting (determines chatLimit)
@@ -66,7 +68,7 @@ Streaming would show tokens as Claude generates them. However, the tool-calling 
 
 `processToolCalls()` uses a `for...of` loop with `await executor()` inside. When Claude requests multiple tools in a single response (e.g., `search_cpt` + `check_prior_auth` + `check_preventive`), they execute one at a time instead of in parallel.
 
-Typical tool counts per iteration: 1-3 tools. Each tool takes 50-200ms (Supabase queries, API calls). With 3 tools at 100ms each: sequential = 300ms, parallel = 100ms.
+Typical tool counts per iteration: 1-3 tools. Each tool takes 50-200ms (~~Supabase queries~~ AWS RDS queries, API calls). With 3 tools at 100ms each: sequential = 300ms, parallel = 100ms.
 
 **Fix:** Use `Promise.allSettled()` to run all tool calls concurrently.
 

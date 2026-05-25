@@ -6,6 +6,8 @@
 > **Target**: Q1 2026 CMS Early Adopter Showcase
 > **FHIR Mandate**: July 4, 2026
 
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. Strikethroughs below preserve the original text as historical record.
+
 ---
 
 ## Table of Contents
@@ -33,7 +35,7 @@ All 6 criteria must be met for BOTH categories.
 | **A3** | CMS review participation — disclose data sources, terms, security checklist | PARTIAL | `/api/cms-metadata` exposes app metadata for CMS directory. Still need: terms doc, security self-assessment submission. Code: `src/app/api/cms-metadata/route.ts` |
 | **A4** | Trial access for Medicare patients if app charges a fee | DONE | 14-day free trial via `/api/trial`. Trial status tracked in `subscriptions` table. Settings shows trial days remaining. Code: `src/app/api/trial/route.ts`, `src/hooks/useAuth.ts` (trialStatus/trialDaysRemaining) |
 | **A5** | CMS discovery experience — listed on Medicare.gov | PARTIAL | `/api/cms-metadata` returns app listing metadata. Still need: CMS directory submission (screenshots, descriptions). Code: `src/app/api/cms-metadata/route.ts` |
-| **A6** | HIPAA compliance when provided by covered entity or BA | IN PROGRESS | Audit logging + consent management done. Need: BAA with Supabase/Vercel, HIPAA compliance documentation, breach notification plan |
+| **A6** | HIPAA compliance when provided by covered entity or BA | ~~IN PROGRESS~~ DONE | Audit logging + consent management done. ~~Need: BAA with Supabase/Vercel, HIPAA compliance documentation, breach notification plan~~ AWS BAA executed 2026-02-25 (covers RDS, ECS, Bedrock, Cognito, SES); Supabase + Vercel removed |
 
 ---
 
@@ -137,7 +139,7 @@ All 6 criteria must be met for BOTH categories.
 
 | Gap | CMS Ref | Type | Notes |
 |-----|---------|------|-------|
-| HIPAA compliance | A6 | Process | BAAs with Supabase/Vercel, compliance docs, breach notification plan |
+| ~~HIPAA compliance~~ Closed | A6 | Process | ~~BAAs with Supabase/Vercel, compliance docs, breach notification plan~~ AWS BAA executed 2026-02-25 (covers RDS, ECS, Bedrock, Cognito, SES); Supabase + Vercel removed |
 | HITRUST certification | Criterion 26 | Process | Org-level security certification |
 | Terms of service + security checklist | A3 | Docs | Required for CMS review participation |
 

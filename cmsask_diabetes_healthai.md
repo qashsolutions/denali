@@ -4,6 +4,8 @@
 > what CMS expects, and how we bridge the gap via EOB-to-clinical extraction.
 > Cross-checked against codebase 2026-02-09.
 
+> **Update — May 24, 2026:** Vercel and Supabase are no longer in use. All infrastructure (staging and production) now runs on AWS exclusively (ECS Fargate, RDS Postgres, Cognito, Bedrock, SES; AWS BAA executed 2026-02-25). Row-Level Security has been replaced by explicit `WHERE user_id = $1` clauses in application code. Strikethroughs below preserve the original text as historical record.
+
 ---
 
 ## Blue Button 2.0 Reality
@@ -132,7 +134,7 @@ Blue Button EOBs
 | Item | File | Status |
 |------|------|--------|
 | `appendDiabetesSnapshots()` | `snapshots.ts` | Orphaned — no caller. Was called by sync.ts before cleanup |
-| `diabetes_snapshots` table | Supabase | Read by 4 consumers, written by nothing |
+| `diabetes_snapshots` table | ~~Supabase~~ AWS RDS | Read by 4 consumers, written by nothing |
 | `FhirObservation` interface | Removed from `transforms.ts` | Was dead |
 | `extractDiabetesLabs()` | Removed from `transforms.ts` | Was dead (operated on FHIR Observations) |
 | `extractDiabetesConditions()` | Removed from `transforms.ts` | Replaced by `eob-clinical.ts` |
