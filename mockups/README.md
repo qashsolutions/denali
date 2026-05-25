@@ -329,7 +329,7 @@ All SVGs are optimized and under 15KB each for fast loading.
 
 For the full application hierarchy mapping screens, database tables, SQL functions, and learning triggers, see:
 
-**[../09-app-tree.md](../09-app-tree.md)** - Complete application tree
+**[../docs/history/legacy-design/09-app-tree.md](../docs/history/legacy-design/09-app-tree.md)** - Complete application tree (archived 2026-05-24)
 
 ---
 

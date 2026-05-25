@@ -1,3 +1,7 @@
+> **Archived — May 24, 2026:** Superseded by `docs/design/denali-design-v1.1.md` and `CLAUDE.md`. Describes pre-AWS-migration architecture (Supabase, Vercel, RLS) that no longer applies. Preserved as historical record.
+
+---
+
 # Denali.health - Complete Application Tree
 
 This document maps the entire PWA structure: screens, user flows, database tables, learning triggers, and agentic logic.
