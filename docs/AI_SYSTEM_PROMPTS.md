@@ -20,7 +20,7 @@ route.ts (chat endpoint)
     |       |       +--> health context (consent-gated)
     |       |       +--> learning context (high-confidence mappings)
     |       |
-    +--> claude.chat()           -- send to Claude Beta API
+    +--> claude.chat()           -- send to Claude via getClaudeClient() (AWS Bedrock in prod via AnthropicBedrock with IAM auth; direct Anthropic API in dev when ANTHROPIC_API_KEY is set)
     +--> persistLearning()       -- store mappings (non-blocking)
 ```
 
@@ -99,17 +99,19 @@ When a user has connected Blue Button and consented to AI data use:
 
 Claude has access to two types of tools, handled differently at the API level:
 
-### MCP Tools (External, Auto-Handled)
+> **Historical (post-2026-03-04 migration):** The "MCP Tools" subsection below describes an architecture that was fully removed. MCP servers (`cms-coverage`, `npi-registry`, `icd10-codes` at `mcp.deepsense.ai`) were replaced by local tool executors calling government APIs directly — no data leaves AWS for AI processing. The 6 former MCP tools (`search_icd10`, `search_local_coverage`, `search_national_coverage`, `get_coverage_document`, `npi_lookup`, `npi_search`) are now in the Local Tools table below. Subsection preserved as historical record.
 
-MCP tools are declared via the `mcp_servers` parameter on the Beta API. Claude calls them directly, and the API handles tool results automatically -- no server-side processing needed.
+### ~~MCP Tools (External, Auto-Handled)~~ (removed 2026-03-04)
 
-| Server | URL | Tools | Data |
+~~MCP tools are declared via the `mcp_servers` parameter on the Beta API. Claude calls them directly, and the API handles tool results automatically -- no server-side processing needed.~~
+
+| ~~Server~~ | ~~URL~~ | ~~Tools~~ | ~~Data~~ |
 |--------|-----|-------|------|
-| `cms-coverage` | `mcp.deepsense.ai/cms_coverage/mcp` | `search_local_coverage`, `search_national_coverage`, `get_coverage_document` | LCD/NCD coverage policies |
-| `npi-registry` | `mcp.deepsense.ai/npi_registry/mcp` | `npi_lookup`, `npi_search` | Provider NPI, specialty, Medicare enrollment |
-| `icd10-codes` | `mcp.deepsense.ai/icd10_codes/mcp` | `search_icd10` | ICD-10 diagnosis codes |
+| ~~`cms-coverage`~~ | ~~`mcp.deepsense.ai/cms_coverage/mcp`~~ | ~~`search_local_coverage`, `search_national_coverage`, `get_coverage_document`~~ | ~~LCD/NCD coverage policies~~ |
+| ~~`npi-registry`~~ | ~~`mcp.deepsense.ai/npi_registry/mcp`~~ | ~~`npi_lookup`, `npi_search`~~ | ~~Provider NPI, specialty, Medicare enrollment~~ |
+| ~~`icd10-codes`~~ | ~~`mcp.deepsense.ai/icd10_codes/mcp`~~ | ~~`search_icd10`~~ | ~~ICD-10 diagnosis codes~~ |
 
-Content blocks: `mcp_tool_use` / `mcp_tool_result`
+~~Content blocks: `mcp_tool_use` / `mcp_tool_result`~~
 
 ### Local Tools (Server-Executed)
 
@@ -125,19 +127,25 @@ Local tools are defined in `src/lib/tools/index.ts`. When Claude requests a loca
 | `search_pubmed` | Clinical evidence search (rate-limited) | NCBI E-utilities |
 | `generate_appeal_letter` | Build Level 1 appeal with codes + policy refs + citations | Multiple sources combined |
 | `check_sad_list` | Part B vs Part D drug routing | CMS SAD list |
-| `lookup_denial_code` | CARC/RARC lookup + appeal strategy | Supabase denial tables |
-| `get_common_denials` | Top denial reasons for a procedure + prevention tips | Supabase denial tables |
+| `lookup_denial_code` | CARC/RARC lookup + appeal strategy | AWS RDS denial code tables (`carc_codes_latest`, `rarc_codes_latest`, `eob_denial_mappings_latest` views) |
+| `get_common_denials` | Top denial reasons for a procedure + prevention tips | AWS RDS denial code tables (`denial_patterns_latest` view) |
+| `search_icd10` | Search ICD-10 diagnosis codes | NLM Clinical Tables API (public, no auth) |
+| `search_local_coverage` | Find local coverage determinations (LCD) by procedure + ZIP | CMS Coverage API (public) |
+| `search_national_coverage` | Find national coverage determinations (NCD) by procedure | CMS Coverage API (public) |
+| `get_coverage_document` | Fetch full LCD/NCD policy document text | CMS Coverage API (public) |
+| `npi_lookup` | Provider NPI lookup by NPI number | NPPES NPI Registry API (public) |
+| `npi_search` | Provider search by name + ZIP | NPPES NPI Registry API (public) |
 
 Content blocks: `tool_use` / `tool_result`
 
 ### Critical Rule
 
-**Never hardcode MCP tool names in system prompts.** Claude discovers MCP tools dynamically. Use action descriptions instead:
+**Never hardcode tool names in system prompts.** Use action descriptions instead so prompts remain robust as the tool set evolves:
 
 - DO: "Look up ICD-10 diagnosis codes for the symptoms"
 - DON'T: "Call search_icd10 to find codes"
 
-MCP tool names are determined by the server and may change. Hardcoding causes Claude to call non-existent local tools.
+Tool names in `src/lib/tools/index.ts` may change as tools are renamed, consolidated, or replaced. Hardcoding causes Claude to call non-existent tools.
 
 ---
 
@@ -182,8 +190,8 @@ The `SessionState` type (defined in `claude.ts`) tracks conversation context acr
 | File | Purpose |
 |------|---------|
 | `src/app/api/chat/route.ts` | Chat endpoint orchestration |
-| `src/lib/claude.ts` | Claude API client, Beta API call, MCP config, SessionState type |
-| `src/lib/tools/index.ts` | All 12 local tool definitions + executors |
+| `src/lib/claude.ts` | Claude API client (`getClaudeClient()`: Bedrock in prod, Anthropic API in dev), tool-use loop, SessionState type |
+| `src/lib/tools/index.ts` | All 16 local tool definitions + executors (formerly 10 + 3 MCP servers; MCP replaced by 6 local executors calling government APIs directly, 2026-03-04) |
 | `src/lib/skills-loader.ts` | Conditional prompt builder based on SkillTriggers |
 | `src/lib/fhir/context.ts` | Health context injection into prompts |
 | `src/lib/denial-patterns.ts` | Denial pattern queries for appeal strategies |
