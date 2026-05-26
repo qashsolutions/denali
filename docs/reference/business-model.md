@@ -109,11 +109,11 @@ All runtime env vars are stored in **AWS Secrets Manager** and injected by ECS a
 ```
 # Injected by ECS from Secrets Manager at runtime:
 # NOTE: Do NOT set ANTHROPIC_API_KEY in ECS — its absence triggers AWS Bedrock IAM auth
-# ANTHROPIC_API_KEY=sk-ant-...          # Only for Vercel/local — omit for ECS/Bedrock
+# ANTHROPIC_API_KEY=sk-ant-...          # Only for local dev — omit for ECS/Bedrock (Bedrock IAM auth fires when this is unset)
 ANTHROPIC_MODEL=arn:aws:bedrock:us-east-1:236823123138:inference-profile/global.anthropic.claude-sonnet-4-6
 ANTHROPIC_APPEAL_MODEL=arn:aws:bedrock:us-east-1:236823123138:inference-profile/global.anthropic.claude-opus-4-6-v1
 # Bedrock: prefix is "global." NOT "us.", no ":0" suffix, full ARN required
-# Vercel/local values: claude-sonnet-4-6-20260301 (chat) / claude-opus-4-6 (appeals)
+# Local dev values (direct Anthropic API): claude-sonnet-4-6-20260301 (chat) / claude-opus-4-6 (appeals)
 DATABASE_URL=postgresql://...             # RDS connection string
 COGNITO_USER_POOL_ID=us-east-1_...
 COGNITO_CLIENT_ID=...

@@ -62,7 +62,7 @@ Note: `diabetes_snapshots` table stores longitudinal lab history but actual lab 
 ### Token Security
 
 - Access & refresh tokens encrypted at rest via `FHIR_TOKEN_ENCRYPTION_KEY` (AES-256-GCM)
-- Token writes use admin client (bypasses RLS); reads via server client (respects RLS)
+- Token writes use pg pool to RDS with explicit `WHERE user_id = $1`; reads use same pool with `getAuthUser()` + `WHERE user_id = $1` (RDS has no RLS)
 - Auto-refresh on expired access tokens via `refreshAccessToken()` in `lib/fhir/tokens.ts`
 
 ### Health Data in AI
