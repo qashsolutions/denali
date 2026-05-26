@@ -61,7 +61,7 @@ Full topical reference under `docs/reference/`. Hub keeps summaries; reference d
 - [Database Schema](docs/reference/db-schema.md) · [Skills & Prompt System](docs/reference/skills.md) · [Orchestration Flows](docs/reference/orchestration.md)
 - [Business Model, Auth & Payments](docs/reference/business-model.md) · [Infrastructure](docs/reference/infrastructure.md) · [Blue Button 2.0](docs/reference/blue-button.md)
 - [UI/UX Guidelines](docs/reference/ui.md) · [PWA Offline](docs/reference/pwa.md) · [Coding Standards](docs/reference/coding-standards.md)
-- [Testing](docs/reference/testing.md) · [Learning System](docs/reference/learning-system.md) · [CMS Interoperability Framework](docs/reference/cms-framework.md)
+- [Testing](docs/reference/testing.md) · [Learning System](docs/reference/learning-system.md) · [CMS Interoperability Framework](docs/reference/cms-framework.md) · [Merge Patterns](docs/reference/merge-patterns.md)
 
 History: [Phase 3 (BILLING + SP migrations, 2026-05-11→13)](docs/history/phase-3.md) · [CMS compliance log](docs/history/cms-compliance-log.md) · [Sessions 2026-04](docs/history/sessions-2026-04.md)
 
@@ -154,6 +154,11 @@ Three toggles in Settings → Privacy & Data. **All default OFF.** Enforcement i
 - **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
 - **CRITICAL: SSR-safe hooks must initialize with server-matching values.** `useOnlineStatus` must use `useState(true)` — NOT `useState(typeof navigator !== "undefined" ? navigator.onLine : true)`. The latter reads `navigator.onLine` on the client during hydration, which may return `false` (flaky connection, SW cached page), causing React hydration mismatch (#418) because the server rendered `null` but the client renders a div.
 - **All AI calls route through Bedrock in production.** ECS has no `ANTHROPIC_API_KEY` → `getClaudeClient()` returns `AnthropicBedrock` (IAM auth). Chat uses Sonnet 4.6 (`global.anthropic.claude-sonnet-4-6`); appeals use Opus 4.6 (`global.anthropic.claude-opus-4-6-v1`). Both `claude.ts` and `diabetes-insights.ts` use `getClaudeClient()`. Bedrock model access is auto-enabled (no manual activation needed); controlled via IAM policies on `denali-ecs-task-role`. MCP servers were fully replaced by local tool executors calling public government APIs directly — no data leaves AWS for AI processing.
+
+### Commit conventions
+
+- **CRITICAL: Never include the literal substring `[skip ci]` anywhere in a commit message — including inside negation phrases like "NO `[skip ci]`".** GitHub Actions matches the substring anywhere in the body and silently skips CI. Use phrasings like "deploy enabled" or "no skip marker" instead. The skip-CI directive belongs only in commit titles, as a deliberate directive.
+  - Lesson: 2026-05-25 develop→main merge skipped CI due to "NO [skip ci]" in the commit body; recovery via `gh workflow run deploy.yml --ref main`. Second occurrence in this work stream (also B.18 on 2026-05-18). See `docs/reference/merge-patterns.md` § 5 for the full pattern.
 
 ---
 
