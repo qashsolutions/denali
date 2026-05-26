@@ -12,6 +12,12 @@
  *   denali-staging-runtime → Denali/Staging).
  *
  * Requires IAM permission: cloudwatch:PutMetricData (namespace-scoped).
+ *
+ * State (buffer/timer/client) is held on globalThis under a Symbol.for key
+ * so that Turbopack's multiple module instantiations (instrumentation's
+ * dynamic import vs route handlers' static imports) share a single buffer.
+ * Without this, the timer flushes an empty buffer while requests push to a
+ * different one — silent metric loss.
  */
 
 import {
@@ -24,17 +30,33 @@ const FLUSH_INTERVAL_MS = 60_000;
 const MAX_BUFFER_SIZE = 500;
 const CW_BATCH_LIMIT = 1000; // AWS PutMetricData max per call
 
-let buffer: MetricDatum[] = [];
-let flushTimer: ReturnType<typeof setInterval> | null = null;
-let cwClient: CloudWatchClient | null = null;
+type MetricsState = {
+  buffer: MetricDatum[];
+  flushTimer: ReturnType<typeof setInterval> | null;
+  cwClient: CloudWatchClient | null;
+};
+
+const GLOBAL_KEY = Symbol.for("denali.metrics.cloudwatch.state");
+type GlobalWithMetrics = typeof globalThis & {
+  [GLOBAL_KEY]?: MetricsState;
+};
+const globalScope = globalThis as GlobalWithMetrics;
+if (!globalScope[GLOBAL_KEY]) {
+  globalScope[GLOBAL_KEY] = {
+    buffer: [],
+    flushTimer: null,
+    cwClient: null,
+  };
+}
+const state: MetricsState = globalScope[GLOBAL_KEY];
 
 function getClient(): CloudWatchClient {
-  if (!cwClient) {
-    cwClient = new CloudWatchClient({
+  if (!state.cwClient) {
+    state.cwClient = new CloudWatchClient({
       region: process.env.AWS_REGION || "us-east-1",
     });
   }
-  return cwClient;
+  return state.cwClient;
 }
 
 function isProduction(): boolean {
@@ -48,10 +70,10 @@ function isProduction(): boolean {
 export function recordMetric(datum: MetricDatum): void {
   if (!isProduction()) return;
 
-  buffer.push(datum);
+  state.buffer.push(datum);
 
   // Auto-flush when buffer is full
-  if (buffer.length >= MAX_BUFFER_SIZE) {
+  if (state.buffer.length >= MAX_BUFFER_SIZE) {
     flush().catch(() => {});
   }
 }
@@ -60,9 +82,9 @@ export function recordMetric(datum: MetricDatum): void {
  * Flush buffered metrics to CloudWatch. Clears the buffer.
  */
 export async function flush(): Promise<void> {
-  if (buffer.length === 0) return;
+  if (state.buffer.length === 0) return;
 
-  const toFlush = buffer.splice(0);
+  const toFlush = state.buffer.splice(0);
 
   // Batch into chunks of 1000 (CW limit)
   for (let i = 0; i < toFlush.length; i += CW_BATCH_LIMIT) {
@@ -85,16 +107,20 @@ export async function flush(): Promise<void> {
  * Start periodic auto-flush timer. Call once at boot.
  */
 export function startAutoFlush(): void {
-  if (flushTimer) return;
+  if (state.flushTimer) return;
   if (!isProduction()) return;
 
-  flushTimer = setInterval(() => {
+  state.flushTimer = setInterval(() => {
     flush().catch(() => {});
   }, FLUSH_INTERVAL_MS);
 
   // Don't keep Node.js alive just for metrics
-  if (flushTimer && typeof flushTimer === "object" && "unref" in flushTimer) {
-    flushTimer.unref();
+  if (
+    state.flushTimer &&
+    typeof state.flushTimer === "object" &&
+    "unref" in state.flushTimer
+  ) {
+    state.flushTimer.unref();
   }
 
   // Flush on graceful shutdown (Node.js only — not available in Edge Runtime)
@@ -110,18 +136,18 @@ export function startAutoFlush(): void {
  * Stop the auto-flush timer.
  */
 export function stopAutoFlush(): void {
-  if (flushTimer) {
-    clearInterval(flushTimer);
-    flushTimer = null;
+  if (state.flushTimer) {
+    clearInterval(state.flushTimer);
+    state.flushTimer = null;
   }
 }
 
 // ── Test helpers ──
 
 export function _getBufferLength(): number {
-  return buffer.length;
+  return state.buffer.length;
 }
 
 export function _resetBuffer(): void {
-  buffer = [];
+  state.buffer = [];
 }
