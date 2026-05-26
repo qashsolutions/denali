@@ -305,7 +305,116 @@ try with 720/720 tests including develop's additions (run 26376561249).
 
 ---
 
+### 8. Verify post-deploy metrics with data, not namespace presence
+
+When verifying CloudWatch metrics after a deploy that touches the metrics
+layer, query for ACTUAL DATA in a current time window — never trust
+`list-metrics` to tell you "publishing works." Metric names linger in the
+namespace for ~2 weeks after the last publish, so `list-metrics` returns
+old metric definitions long after publishing has died.
+
+**Wrong** — false-positive verification:
+```bash
+aws cloudwatch list-metrics --namespace Denali/App --region us-east-1
+# Returns: RequestLatency, ErrorCount, ... (from days ago, still indexed)
+# → conclusion: "metrics are flowing" → WRONG
+```
+
+**Right** — query data with timestamps:
+```bash
+aws cloudwatch get-metric-data --region us-east-1 \
+  --start-time "$(date -u -v-5M +%Y-%m-%dT%H:%M:%S)" \
+  --end-time "$(date -u +%Y-%m-%dT%H:%M:%S)" \
+  --metric-data-queries '[{"Id":"p","Expression":"SELECT SUM(\"RequestLatency\") FROM \"Denali/App\"","Period":60,"ReturnData":true}]'
+# Values: [12, 8, 7, ...] with timestamps in the last 5 min → confirmed.
+# Values: [] → NOT publishing right now, regardless of what list-metrics shows.
+```
+
+`get-metric-data` has lower index lag than `list-metrics` — typically
+1–2 min vs 5–15 min. Use it for fresh-publish verification.
+
+**Also: confirm the timestamps post-date your deploy.** A non-empty result
+could be from a long-lived container that started before your deploy.
+Cross-reference with the ECS deployment "reached steady state" event
+timestamp.
+
+Lesson: 2026-05-26 verified the cloudwatch namespace migration on staging
+and saw `list-metrics` return `RequestLatency` entries — but
+`get-metric-data` returned `Values: []`. The metric names were stale
+from a prior container. ~3 hours of root-causing avoided ONLY because
+we eventually ran `get-metric-data` and noticed the publish path was
+genuinely dead.
+
+---
+
+### 9. Next.js 16 + Turbopack: singletons via globalThis
+
+When a module holds runtime state (buffer, timer, client) that's accessed
+from BOTH a static import chain (route handler → barrel → module) AND a
+dynamic import (`instrumentation.ts`'s `await import()`), Turbopack in
+Next.js 16+ instantiates the module **twice**. Module-scope `let buffer = []`
+becomes two independent arrays. State written through one import path is
+invisible through the other.
+
+**Symptom**: a buffer fills, a timer reads from a buffer, but the timer
+always sees length=0 even though pushes are happening every second. No
+errors, no warnings — silent loss.
+
+**Diagnosis** (via probes added to both writer + reader):
+```typescript
+// In recordMetric: console.log("pushed, len=", buffer.length);
+// In timer tick:    console.log("tick,  len=", buffer.length);
+//
+// Output:
+//   pushed, len= 1, 6, 11, 16...   ← writer's buffer
+//   tick,  len= 0                   ← timer's buffer
+// → two different arrays.
+```
+
+Routing the dynamic import through the same barrel that route handlers use
+does NOT fix this. Turbopack still creates separate instances per dynamic
+vs static load.
+
+**Fix**: hold state on `globalThis` under a `Symbol.for()` key. All module
+instantiations resolve to the same object.
+
+```typescript
+type State = { buffer: T[]; timer: NodeJS.Timeout | null; client: Client | null };
+const KEY = Symbol.for("denali.metrics.cloudwatch.state");
+type WithState = typeof globalThis & { [KEY]?: State };
+const g = globalThis as WithState;
+if (!g[KEY]) {
+  g[KEY] = { buffer: [], timer: null, client: null };
+}
+const state: State = g[KEY];
+// Then: state.buffer, state.timer, state.client everywhere.
+```
+
+This is the standard Next.js singleton pattern (mirrors how `PrismaClient`,
+Redis clients, etc. are usually configured to survive hot-reload and
+chunking).
+
+**When to reach for it**: any module that holds long-lived mutable state
+AND is touched by `instrumentation.ts` register() OR by side-effect
+imports from a server boot context. Pure utility modules (stateless
+functions) don't need it.
+
+**Related Turbopack quirk worth knowing**: `process.env.NEXT_RUNTIME` is
+NOT injected by Turbopack at build time and is NOT set on the Node
+process at runtime. The standard Next.js docs pattern
+`if (process.env.NEXT_RUNTIME === "nodejs")` always evaluates false.
+Use `typeof process !== "undefined" && process.versions?.node` instead —
+set by Node itself, absent in Edge runtime.
+
+Lesson: 2026-05-26 the CloudWatch metrics module had both bugs stacked.
+Pre-fix: prod ran 6+ hours, zero metrics published. Post-fix: data
+flowing within 70s of deploy.
+
+---
+
 That's the full pattern. Run all 5 audits before merging, use ECS exec
 for migrations, bucket conflicts before resolving, keep backups + ECR
-floors paired, watch out for the substring trap in commit bodies, and
-trust the CI gates to catch what local builds miss.
+floors paired, watch out for the substring trap in commit bodies, trust
+the CI gates to catch what local builds miss, and after touching the
+metrics layer verify with `get-metric-data` (not `list-metrics`) — plus
+watch for Turbopack module duplication if state seems to vanish.
