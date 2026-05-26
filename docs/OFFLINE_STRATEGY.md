@@ -35,7 +35,7 @@ This means the app opens instantly even on slow connections, showing the UI fram
 | Static pages (landing, about) | Available | Cached on install |
 | Chat with Claude | Not available | Requires Claude API connection |
 | Health data (Blue Button) | Not available | Requires FHIR API connection |
-| Coverage guidance tools | Not available | Requires MCP servers + Claude API |
+| Coverage guidance tools | Not available | Requires Claude API + outbound calls to government APIs (ICD-10, CMS Coverage, NPI Registry) |
 | Settings page (UI) | Available | Static UI renders; API calls fail gracefully |
 
 ### Manifest Shortcuts
@@ -55,8 +55,8 @@ The manifest defines shortcuts for quick access from the home screen:
 Denali's core value requires live API connections:
 
 - **Claude API**: All chat intelligence, coverage guidance, and appeal generation
-- **MCP Servers**: ICD-10 codes, CMS coverage policies, NPI registry lookups
-- **Supabase**: Authentication, data persistence, denial code lookups
+- **Government APIs** (called from local tool executors): ICD-10 codes (NLM), CMS coverage policies, NPI registry lookups (NPPES)
+- **AWS Cognito**: Authentication. **AWS RDS**: Data persistence, denial code lookups.
 - **CMS Blue Button**: FHIR data for health records
 
 Without an active internet connection, the app can display its shell but cannot provide substantive functionality.

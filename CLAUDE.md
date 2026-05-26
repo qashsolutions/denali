@@ -107,10 +107,10 @@ return <Dashboard data={ctx} />; // ← shows fake data to everyone
 
 ### Prompt Rules
 
-- **CRITICAL: Never hardcode MCP tool names in system prompts.** Claude discovers MCP tools dynamically. Use action descriptions instead.
+- **CRITICAL: Never hardcode tool names in system prompts.** Use action descriptions instead so prompts remain robust as the tool set evolves.
   - DO: "Look up ICD-10 diagnosis codes for the symptoms"
   - DON'T: "Call search_icd10 to find codes"
-  - WHY: MCP tool names are determined by the server. Hardcoding causes Claude to call non-existent local tools.
+  - WHY: Tool names in `src/lib/tools/index.ts` may change. Hardcoding them in prompts causes Claude to call non-existent tools when names drift.
 - LCD/NCD coverage requirements must be shown **AS-IS** (not simplified). Doctors need exact medical language.
 - Include policy numbers (e.g., "LCD L35936") in guidance output.
 
@@ -203,7 +203,7 @@ Most-touched files during coding sessions:
 
 **Backend / API:** `src/app/api/chat/route.ts` (rate-limit → skills → Claude → persist), `src/app/api/profile/route.ts`, `src/app/api/auth/*` (Cognito send-otp/verify-otp/refresh/signout), `src/middleware.ts` (JWT validation + silent refresh).
 
-**Claude integration:** `src/lib/claude.ts` (client + tool-use loop + SessionState), `src/lib/skills-loader.ts`, `src/lib/tools/index.ts` (12 local tool executors), `src/lib/skills/*` and `src/skills/*`.
+**Claude integration:** `src/lib/claude.ts` (client + tool-use loop + SessionState), `src/lib/skills-loader.ts`, `src/lib/tools/index.ts` (16 local tool executors), `src/lib/skills/*` and `src/skills/*`.
 
 **Data layer:** `src/lib/db.ts` (RDS pool, `query`/`transaction` helpers), `src/lib/auth-server.ts` (`getAuthUser()`), `src/lib/audit.ts` (fire-and-forget + write-side dedup), `scripts/migrate-*.sql` (run manually in order).
 
@@ -237,7 +237,7 @@ Frontend is dumb (renders what Claude returns); all intelligence in Claude + ski
 
 ## Tools & Data Sources
 
-12 local tool executors handled by `processToolCalls()` in chat loop. Government API tools call free public endpoints with generic search terms — no patient data sent. MCP servers replaced by local executors 2026-03-04.
+16 local tool executors handled by `processToolCalls()` in chat loop. Government API tools call free public endpoints with generic search terms — no patient data sent. MCP servers replaced by local executors 2026-03-04.
 
 - **Government APIs**: ICD-10 (NLM), LCD/NCD (CMS), NPI (NPPES)
 - **Local**: CPT mapping, prior auth, preventive, SAD list, PubMed, appeal-letter generator
