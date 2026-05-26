@@ -1,3 +1,14 @@
+> **ARCHIVED — 2026-05-26**
+>
+> These mockups date from the Jan 27 2026 initial design phase and were
+> never iterated. The visual palette (dark blue gradient) predates the
+> warm-amber migration; the documented product model (free-appeal, MCP
+> tools, phone OTP) reflects pre-2026-03-04 architecture. Kept here as
+> a historical record of the initial design intent. Not a reference for
+> current product behavior.
+
+---
+
 # Denali.health UI Mockups
 
 Professional SVG mockups for the denali.health Medicare guidance app. All screens are designed mobile-first with PWA compatibility and WCAG AA accessibility standards.
@@ -329,7 +340,7 @@ All SVGs are optimized and under 15KB each for fast loading.
 
 For the full application hierarchy mapping screens, database tables, SQL functions, and learning triggers, see:
 
-**[../docs/history/legacy-design/09-app-tree.md](../docs/history/legacy-design/09-app-tree.md)** - Complete application tree (archived 2026-05-24)
+**[../legacy-design/09-app-tree.md](../legacy-design/09-app-tree.md)** - Complete application tree (archived 2026-05-24)
 
 ---
 
