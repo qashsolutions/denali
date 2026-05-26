@@ -26,7 +26,7 @@ merging, not after.
 | # | Check | Command |
 |---|-------|---------|
 | 1 | Schema migrations only on source | `git diff main..develop --name-only -- 'scripts/migrate-*.sql' '*.sql'` |
-| 2 | Env vars only on source | `git grep -h 'process\.env\.' develop -- 'app/src/**/*.ts' \| grep -oE 'process\.env\.[A-Z_]+' \| sort -u` then diff against main |
+| 2 | Env vars only on source | `diff <(git grep -h 'process\.env\.' main -- 'app/src/**/*.ts' \| grep -oE 'process\.env\.[A-Z_]+' \| sort -u) <(git grep -h 'process\.env\.' develop -- 'app/src/**/*.ts' \| grep -oE 'process\.env\.[A-Z_]+' \| sort -u)` |
 | 3 | New AWS SDK clients (IAM implication) | `git grep -l 'CloudWatchClient\|SecretsManagerClient\|S3Client' develop main -- 'app/src/**/*.ts'` |
 | 4 | Package dependency drift | `git diff main..develop -- app/package.json app/package-lock.json` |
 | 5 | Conflict surface (dry-run) | `git merge-tree --write-tree main develop` |
@@ -72,8 +72,16 @@ Pattern (one-shot, ~30 seconds end-to-end):
 SQL_B64=$(base64 < /tmp/migration.sql | tr -d '\n')
 SCRIPT="const{Client}=require('pg');const sql=Buffer.from('$SQL_B64','base64').toString('utf8');(async()=>{const c=new Client({host:process.env.DB_HOST,user:process.env.DB_USER,password:process.env.DB_PASSWORD,database:process.env.DB_NAME,port:parseInt(process.env.DB_PORT||'5432'),ssl:{rejectUnauthorized:false}});try{await c.connect();await c.query(sql);console.log('MIGRATION_SUCCESS')}catch(e){console.error('FAILED:',e.message);process.exit(1)}finally{await c.end()}})()"
 SCRIPT_B64=$(printf '%s' "$SCRIPT" | base64)
-TASK_ID=$(aws ecs list-tasks --cluster denali --service-name denali-web --region us-east-1 --query 'taskArns[0]' --output text | awk -F'/' '{print $NF}')
 
+# Simpler --service form (works when the service has exactly one task —
+# the common case for denali-web and denali-staging-web):
+aws ecs execute-command --cluster denali --service denali-web --container denali \
+  --command "/bin/sh -c 'echo $SCRIPT_B64 | base64 -d | node'" \
+  --interactive --region us-east-1
+
+# Explicit --task form (use when the service has multiple tasks or you want
+# deterministic targeting):
+TASK_ID=$(aws ecs list-tasks --cluster denali --service-name denali-web --region us-east-1 --query 'taskArns[0]' --output text | awk -F'/' '{print $NF}')
 aws ecs execute-command --cluster denali --task $TASK_ID --container denali \
   --command "/bin/sh -c 'echo $SCRIPT_B64 | base64 -d | node'" \
   --interactive --region us-east-1
@@ -217,6 +225,15 @@ messages only**, not files in the repo tree. The rule applies to
 `git commit -m "..."` text, never to `.md` files. A future commit message
 that references this doc by path is also safe (paths don't contain the
 substring).
+
+**The directive is per-commit, not per-workflow.** A skip directive in a
+commit message suppresses workflows on every branch that ever contains
+that commit, not just the branch where the commit originally landed.
+Fast-forwarding `develop` to a `main` commit that carried the directive
+will also skip `develop`'s staging workflow on push. Implication: think
+twice before using the directive on commits you intend to propagate. If
+only the source-branch workflow needs to be skipped, prefer per-workflow
+path filters in the YAML over the global commit-message directive.
 
 Lesson: 2026-05-25 develop→main merge skipped CI due to "NO [skip ci]" in
 the merge commit body; recovered via `workflow_dispatch` (run
@@ -412,9 +429,10 @@ flowing within 70s of deploy.
 
 ---
 
-That's the full pattern. Run all 5 audits before merging, use ECS exec
-for migrations, bucket conflicts before resolving, keep backups + ECR
-floors paired, watch out for the substring trap in commit bodies, trust
-the CI gates to catch what local builds miss, and after touching the
-metrics layer verify with `get-metric-data` (not `list-metrics`) — plus
-watch for Turbopack module duplication if state seems to vanish.
+That's the full pattern across 9 sections. Run all 5 audits before merging,
+use ECS exec for migrations, bucket conflicts before resolving, keep backups
++ ECR floors paired, watch out for the substring trap in commit bodies
+(and remember the directive propagates across every branch that inherits
+the commit), trust the CI gates to catch what local builds miss, and after
+touching the metrics layer verify with `get-metric-data` (not `list-metrics`)
+— plus watch for Turbopack module duplication if state seems to vanish.
