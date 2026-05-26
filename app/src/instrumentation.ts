@@ -6,8 +6,9 @@
  */
 
 export async function register() {
-  // Only run in Node.js runtime, not Edge Runtime
-  if (process.env.NEXT_RUNTIME === "nodejs") {
+  // Detect Node.js runtime via process.versions.node (set by Node, absent in Edge).
+  // Avoids the NEXT_RUNTIME env-var guard, which Turbopack doesn't inject in Next.js 16.
+  if (typeof process !== "undefined" && process.versions?.node) {
     const { startAutoFlush } = await import("@/lib/metrics/cloudwatch");
     startAutoFlush();
   }
