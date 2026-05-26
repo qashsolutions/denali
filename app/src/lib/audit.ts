@@ -33,7 +33,10 @@ export type AuditAction =
   | "ALERT_SENT"
   | "ALERT_PREFERENCE_UPDATED"
   | "IDME_VERIFY"
-  | "LOGOUT";
+  | "LOGOUT"
+  | "BIRTH_YEAR_REMINDER_DISMISSED"
+  | "BIRTH_YEAR_REMINDER_DISABLED"
+  | "BIRTH_YEAR_REMINDER_ENABLED";
 
 type ResourceType =
   | "ehr_connection"

@@ -5,13 +5,15 @@ stage-by-stage progress and current environment state deltas.
 For scope/architecture decisions, see
 docs/design/denali-design-v1.1.md.
 
-**Last updated:** 2026-04-22
+**Last updated:** 2026-04-29
 
 ---
 
 ## Current Phase
 
-**Phase 0** — Pre-build audit + hygiene (audit complete; hygiene commit pending)
+**Phase 0** — Pre-build audit + hygiene ✅ COMPLETE
+**Phase 1** — Foundation Stage 1 (Prerequisites schema + cohort orchestration + C.7 tests) ✅ COMPLETE
+**Phase 2** — Foundation Stages 2, 3, 4 — queued, ready to start
 
 ---
 
@@ -19,96 +21,224 @@ docs/design/denali-design-v1.1.md.
 
 | Phase | Content | Status |
 |-------|---------|--------|
-| 0 | Pre-build audit + working-tree hygiene | In progress |
-| 1 | Foundation Stage 1 — Prerequisites schema (birth_year, is_on_medicare, user_conditions) | Queued |
-| 2 | Foundation Stages 2, 3, 4 — low-risk fixes (hipaa-security-reviewer perms, chat body-size cap, OTP rate limiter DB) | Queued |
-| 3 | Foundation Stages 5, 6 — Guardrail Layer 1 + Safety Triggers (all 12) | Queued |
-| 4 | Foundation Stage 7 — BASE_PROMPT hardening (Layer 2) | Queued |
-| 5 | Foundation Stage 8 — HealthRecord canonical schema + CMSBlueButtonConnector rewrap | Queued |
+| 0 | Pre-build audit + working-tree hygiene | ✅ Complete (2026-04-22) |
+| 1 | Foundation Stage 1 — Prerequisites schema + cohort orchestration + C.7 tests | ✅ Complete (2026-04-29) |
+| 2 | Foundation Stages 2, 3, 4 — low-risk fixes | Queued |
+| 3 | Foundation Stages 5, 6 — Guardrail Layer 1 + Safety Triggers | Queued |
+| 4 | Foundation Stage 7 — BASE_PROMPT hardening | Queued |
+| 5 | Foundation Stage 8 — HealthRecord canonical schema | Queued |
 | 6 | Foundation Stage 9 — HTN + dyslipidemia activation | Queued |
 | 7 | Foundation Stage 10 — diabetes_snapshots cleanup | Queued |
-| 8+ | Vertical Slices, Input Expansion, Scope Wave 2 (per design doc Part 9) | Not planned yet |
+| 8+ | Vertical Slices, Input Expansion, Scope Wave 2 | Not planned yet |
 
 ---
 
 ## Per-Stage Progress
 
-### Phase 0 — Pre-build audit + hygiene
+### Phase 0 — Pre-build audit + hygiene ✅ COMPLETE
+
 **Started:** 2026-04-22
-**Audit completed:** 2026-04-22
+**Completed:** 2026-04-22 (same session)
 
-#### Step 1 — Working-tree triage
-- 48 tracked files modified, +911/−569; 2 deletions; 30+ untracked paths.
-- Dominant cohort: auth + API route edits dated 2026-04-17 (`middleware.ts`, all `/api/auth/*`, `/api/chat/*`, `/api/fhir/*`, `/api/health-report/*`, `/api/diabetes/*`, `/api/webhooks/stripe/*`) — residue of pre-demo security-hardening session that never committed.
-- 25 new unit tests + 1 new E2E spec (`appeal-levels.spec.ts`) untracked.
-- `vitest.config.ts` modified (+120 lines coverage thresholds) but uncommitted.
-- `scripts/seed-blog-posts.sql` untracked — matches design doc Cleanup #18; do not stage.
-- Build/tooling droppings (`.next/`, `denali-monitor/`, `sessionmanager-bundle/`, `test-runner/`, `app/.claude/`, zip archives) should move to `.gitignore`.
-- Recommendation: one "pre-foundation hygiene" commit covering tracked-edit cohort + 26 untracked tests + vitest config + deletions before Stage 1.
+**Deliverables:**
 
-#### Step 2 — Staging deployment pipeline
-- Only workflow: `.github/workflows/deploy.yml`. Runs on every push to `main`; deploys to **prod** (`denali` / `denali-web`). Image tag = full git SHA.
-- **No staging workflow exists.** Staging deploys are manual (build → ECR push → `update-service --force-new-deployment` against `denali-staging-web`).
-- Task def state right now: prod = `denali:165`, staging = `denali-staging:2`.
-- Recent 5 deploy.yml runs all SUCCESS; latest triggered by the v1.2 design-doc commit itself 4m23s ago (raised prod from `:164` → `:165`).
-- **This blocks the "staging-only default" deployment cadence policy** until resolved.
+1. **Pre-build audit** identified 3 blockers and working-tree
+   triage (101 entries across 4 buckets):
+   - Blocker: no staging CI workflow (every push to main
+     auto-deploys prod)
+   - Blocker: 70 test files existed but none ran in CI
+   - Blocker: working tree had 101 dirty entries
 
-#### Step 3 — Test inventory
-- Vitest (unit, 25 files) + Playwright (E2E, 45 files) = 70 total.
-- CI has **no test step** — deploy.yml is build-only. Recent SUCCESS runs reflect build compilation, not test results.
-- 26 test files untracked in git (25 unit + 1 E2E).
-- Critical-path unit coverage present: `/api/chat` (37), `/api/auth/refresh` (13), `/api/auth/cognito` (25), `/api/health`, `/api/consent`, `/api/account/delete`, `/api/webhooks/stripe`, plus `claude.test.ts` (40 tests, extraction pipeline). No dedicated `skills-loader.test.ts` or `/api/auth/send-otp` unit test.
-- No `__fixtures__` directory pattern yet — to be introduced in Foundation Stage 6 for safety triggers.
+2. **Staging CI/CD pipeline established:**
+   - Created `develop` branch from clean `main` at 1307f0e
+   - IAM trust policy extended to allow refs/heads/develop
+     alongside refs/heads/main
+   - GitHub repo secrets added:
+     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_STAGING,
+     NEXT_PUBLIC_APP_URL_STAGING
+   - `.github/workflows/deploy-staging.yml` created (89 lines,
+     mirrors prod with documented deltas)
+   - First staging pipeline run succeeded end-to-end:
+     commit ad65124 → ECR tag staging-ad65124d →
+     denali-staging:3 → /api/health 200
 
-#### Step 4 — Branch / deploy strategy
-- Local branches: `main` (active, 1 unpushed commit = `4eabe67` BUILD_STATUS.md add), `aws-migration` (stale, migration complete).
-- Remote: `origin/main` at `6f3f929`; `origin/add-claude-github-actions-1776046832127` (stale helper branch, prune candidate).
-- No Foundation branches exist. Path forward depends on staging-deploy decision (see Open Questions).
+3. **Working-tree hygiene completed across 10 commits:**
 
-#### Step 5 — Foundation Stage 1 preconditions
-- Source of truth: `sql/001-schema.sql` (fresh prod pg_dump, 2026-04-21 21:32).
-- `users.birth_year` — **does not exist**.
-- `users.is_on_medicare` — **does not exist**.
-- `user_conditions` table — **does not exist**.
-- `scripts/migrate-prod-drift-recovery.sql` is the staging-bootstrap catch-up; idempotent (`IF NOT EXISTS` everywhere); already schema-applied to staging per Part 14. Not a Stage 1 concern.
-- **Stage 1 is UNBLOCKED.** Migration is purely additive, no backfill required on Day 1, no name conflicts.
+   On main (preamble):
+   - 0a `ff5f72b` — .gitignore extension (5 patterns)
+   - 0b `2cd198e` — Bucket C discards (6 untracked files:
+     duplicate PNGs, regeneratable PDFs)
+   - 0c `1307f0e` — Appeal snapshot preserved at
+     docs/reference/appeal-process-2026-03-28.md; scratch
+     docs discarded (seed-blog-posts.sql, features_*.md,
+     tests_mar7.md)
 
-#### Design doc updates applied (v1.2 → v1.3)
-- Part 10 Cleanup Backlog: added #21 (no staging CI workflow) and #22 (tests not wired into CI).
-- Part 14 Production: prod task def bumped :164 → :165.
-- Part 14 Known Gaps: added CI staging + test-in-CI deficits.
-- Part 14 new subsection "Pre-Foundation Audit — 2026-04-22" with preconditions result.
-- Part 13 Versioning: v1.3 changelog entry.
+   On develop (Bucket A):
+   - 0d `ad65124` — Staging deploy workflow
+   - A1 `3aec9c2` — 17 untracked tests + vitest coverage
+     thresholds (21 files, +6,478 / -37)
+   - A2 `f855322` — 44-file pre-demo hardening cohort from
+     2026-04-17 (+763 / -532)
+   - A3 `83b8bd4` — Infra-as-code: CFN templates, deploy
+     scripts, monitor Lambda (8 files, +938)
+   - A4 `31922d3` — CMS demo evidence PDFs, BAA relocated
+     to docs/compliance/aws-baa-2026-02-25.pdf, legal-PDF
+     generator scripts (11 files)
+
+   On develop (Bucket B):
+   - B `c46b6db` — test-runner split: AGENT.md + README.md +
+     chunks/ preserved to docs/qa/test-runner/; results/,
+     .DS_Store, {chunks,results} shell-mishap dir discarded;
+     obesity-gap-analysis.docx discarded (22 files)
+
+4. **Staging smoke tests passed:**
+   - OTP sign-in flow (send-otp → verify-otp → session)
+   - Chat message to Sonnet 4.6 via /api/chat (Medicare
+     diabetes coverage response correctly generated)
+   - Appeal letter generation via Opus 4.6 (Level 1
+     Redetermination template populated)
+
+**Staging progression during Phase 0:**
+- Pipeline runs: 9 (all succeeded, 100% pass rate)
+- Task def: :2 (pre-Phase-0) → :3 → :4 → :5 → :6 → :7 → :8
+- Working tree: 101 entries → 0 (clean)
+
+**Prod impact during Phase 0:** None. Prod deploys triggered
+only by the main-branch doc commits (v1.2, v1.3 design doc
+updates), all no-ops for functional behavior.
+
+**Open questions resolved:**
+- Q1 (staging strategy): Option A — feature branches with
+  develop→staging auto-deploy, main→prod unchanged ✓
+- Q2 (hygiene scope): Split into 4 Bucket A commits by
+  semantic grouping ✓
+- Q3 (app/.claude/ policy): Added to .gitignore as per-developer
+  local state ✓
+- Q4 (BAA destination): Tracked in docs/compliance/ with dated
+  filename ✓
+- Q5 (test-runner split): Preserve docs, discard results/ ✓
+- Q6 (appeal process snapshot): Preserve as dated reference ✓
+- Q7 (Bucket A commit strategy): 4-commit split confirmed ✓
+
+### Phase 1 — Foundation Stage 1 ✅ COMPLETE
+
+**Started:** 2026-04-23 (approx — migration 3039b05)
+**Completed:** 2026-04-29
+
+**Sub-stages shipped:**
+
+- **1.A** — Prerequisites schema migration (`users.birth_year`,
+  `users.is_on_medicare`, `user_conditions` table). Migration
+  applied to staging RDS via Fargate task pattern. Idempotent.
+- **1.B** — Profile API + UI extension. `User` type extended,
+  `/api/profile` returns new fields, `ProfileCompletionModal`
+  shipped (237 lines).
+- **1.C.1–C.5** — Birth-year reminder cadence: 3 endpoints
+  (dismiss/disable/enable), `profile-cadence.ts` helper,
+  Settings → Profile section, modal cadence UX with three-button
+  pattern (Save / Not now / Don't show again).
+- **1.C.6** — Non-Medicare orchestration activated:
+  `base.ts` split into `base-core` + `medicare-overlay`,
+  `skills-loader-router.ts` introduced, `skills-loader-non-medicare.ts`
+  added with 19 Medicare-specific skill suppressions and 4
+  cohort-agnostic skills retained, non-Medicare acknowledgment
+  overlay (`non-medicare-acknowledgment.ts`).
+- **1.C.7** — Test coverage for the cohort/cadence surface:
+  6 unit-test files (146 tests), 1 e2e harness self-test
+  (4 tests). Cohort-test-author subagent + `app/e2e/fixtures/cohorts.ts`
+  shipped as supporting infrastructure.
+
+**C.7 test inventory:**
+
+| File | Tests | Commit |
+|------|-------|--------|
+| `birth-year-reminder/dismiss/__tests__/route.test.ts` | 10 | 40ec05b |
+| `birth-year-reminder/disable/__tests__/route.test.ts` | 10 | b64b5a7 |
+| `birth-year-reminder/enable/__tests__/route.test.ts` | 10 | c29cfb6 |
+| `lib/__tests__/profile-cadence.test.ts` | 27 | af294c5 |
+| `lib/__tests__/skills-loader-router.test.ts` | 39 | 889e253 |
+| `lib/__tests__/skills-loader-non-medicare.test.ts` | 46 | 52bb867 |
+| `e2e/__mock-self-test.spec.ts` | 4 | 37c456c |
+
+**E2E feature spec — scoped out, with rationale:** The non-Medicare
+cohort divergence has no browser-observable surface. The 19-skill
+suppression and acknowledgment overlay live entirely in the LLM
+system prompt constructed server-side at `chat/route.ts:456` and
+sent to Bedrock; the browser never sees it. No UI component
+branches on `isOnMedicare === false`. The cohort behavior is fully
+covered by the 85 unit tests in `skills-loader-router.test.ts`
+and `skills-loader-non-medicare.test.ts`. A traditional Playwright
+spec would have to assert against either client-sent state (which
+the server overrides at `chat/route.ts:345`) or non-deterministic
+model output — neither is meaningful. Test pyramid for this
+feature is correctly capped at the unit layer.
+
+**Findings logged for follow-up (not blockers):**
+
+1. `MEDICARE_SUPPRESSED_SKILLS` is not exported as a named constant
+   from `skills-loader-non-medicare.ts`. Test mirrors the list
+   locally with a sync comment. Future change to the production
+   list will not auto-fail the test. One-line export would close
+   the gap.
+2. Two skill-tree roots exist (`app/src/lib/skills/` 5 files,
+   `app/src/skills/` 23 files including `core/base-core.ts` and
+   `core/medicare-overlay.ts`). Grep-by-convention will miss one
+   tree. Consolidation deferred.
+3. Design doc Part 10 cleanup items #16 (rate-limit fail-open)
+   and #17 (appeal credit client-only enforcement) remain open
+   from pre-Phase-1 audit. Pre-existing in prod and staging;
+   independent of cohort work.
+
+**Staging progression during Phase 1:**
+- Task def: :8 (post-Phase-0) → :51 (current)
+- All staging deploys green; zero promotion to main during Phase 1.
+
+**Prod impact during Phase 1:** None. All Phase 1 work shipped
+to develop/staging only. Prod still at the post-Phase-0 state.
 
 ---
 
 ## Deployment Cadence
 
-**Default target:** staging only (denali-staging-web, https://staging.denali.health)
+**Default target:** staging only (denali-staging-web,
+https://staging.denali.health)
 
-**Prod promotion policy:** Requires explicit operator approval per stage. Default is staging-only until the operator says otherwise.
+**Prod promotion policy:** Requires explicit operator approval
+per stage. Default is staging-only until the operator says
+otherwise.
 
-**Feature flags:** Used for in-progress work where the staging deploy should ship the code but keep the feature gated off until ready.
+**Feature flags:** Used for in-progress work where the staging
+deploy should ship the code but keep the feature gated off
+until ready.
+
+**Current branch state:**
+- `origin/main` at `1307f0e` (unchanged since Phase 0)
+- `origin/develop` at `37c456c` (Phase 1 complete; 38+ commits
+  ahead of main covering migration, profile UI, cadence
+  endpoints, non-Medicare orchestration, and C.7 test coverage)
+
+### Cadence Note (added 2026-04-29)
+
+The cadence policy above ("staging only by default; prod promotion per stage") was written for incremental work on a single product. As of 2026-04-29, prod and staging are temporarily divergent, with planned reunification:
+
+- Prod stays on the existing Medicare product.
+- Staging is the forward-development branch for the longitudinal 55+ platform.
+- After thorough testing, the 55+ platform will migrate to prod, where it will join (not replace) the existing Medicare surface, making prod a unified Medicare + 55+ product.
+
+For longitudinal/55+ work, **prod promotion is the planned outcome** but is gated on the platform reaching production-quality. Each commit on `develop` from now through migration is implicitly destined for prod eventually; the migration itself will be a deliberate, scoped event. See `docs/design/staging-prod-divergence.md` for the full rationale and the open questions about migration mechanics. The IAM split enforces "no accidental promotion" and stays in place through migration.
+
+Phase 2 onward in this tracker refers to longitudinal-platform stages. Numbered stages from `denali-design-v1.1.md` Part 9 ("Build Order — Not Scheduled") map onto Phase 2+ work; the BUILD_STATUS.md numbering is BUILD_STATUS.md's own convenience labeling on top of the design doc's blocks.
+
+**Phase 2 prerequisites (added 2026-04-29):** Before Phase 2 feature work begins, the agent/subagent/skill/test infrastructure for the 55+ platform must be designed and documented. The current infrastructure (cohort-test-author, the 4 cohort-agnostic skills, etc.) is scoped to the Medicare surface plus suppression-for-non-Medicare; it does not cover new 55+ feature surfaces. Because the 55+ platform is destined for prod, the infrastructure must be designed to a prod bar, not a staging-experiment bar. See `docs/design/staging-prod-divergence.md` § "Design debt for the 55+ platform".
 
 ---
 
 ## Open Questions Log
 
-(Design-doc-scope questions that arise during build. Resolved questions move out of this section into the design doc proper or are answered inline in per-stage notes.)
+_Phase 0 questions all resolved (see Phase 0 per-stage notes
+above). No active open questions blocking Phase 1._
 
-### Blocking Stage 1
-1. **Staging deploy strategy.** Three options, pick one before Stage 1:
-   (a) Add a staging workflow gated on branch pattern `foundation/*` or `workflow_dispatch` with env selector.
-   (b) Work Foundation stages on non-`main` branches; staging deploys done manually (ECS force-new-deployment); promote to prod via merge to `main` only when explicitly approved.
-   (c) Temporarily disable `.github/workflows/deploy.yml` `main` trigger until a staging workflow lands.
-   **Recommendation:** (b) for minimal infra churn — can ship Stage 1 next; add a real staging workflow later as its own stage. But operator decides.
-
-2. **Pre-foundation hygiene commit scope.** Confirm the commit should include cohorts #1–5 + #11 from Step 1 triage (tracked edits + 26 untracked tests + vitest config + 2 deletions), and leave #6–10, #12 for separate handling.
-
-3. **Untracked `app/.claude/` directory.** Likely local Claude Code configuration — should this be gitignored project-wide or committed?
-
-### Non-blocking but worth recording
-4. The "575 unit tests" figure cited in CLAUDE.md depends on the 25 untracked unit test files being committed. Once they land, re-verify the count and update CLAUDE.md Testing section if it drifts.
-5. Foundation Stage 1 H#1 (birth_year NOT NULL strategy) and H#2 (is_on_medicare backfill) from the prior planning pass remain open but do not block the initial additive migration. Decide before the second Stage 1 sub-step that would enforce NOT NULL.
+_New questions will be logged here as they arise during Stage 1
+and beyond._
 
 ---

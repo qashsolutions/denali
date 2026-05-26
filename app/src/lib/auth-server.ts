@@ -20,6 +20,7 @@ import {
   InitiateAuthCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import type { NextRequest } from "next/server";
+import { cookies, headers } from "next/headers";
 import { query } from "@/lib/db";
 
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID!;
@@ -252,4 +253,48 @@ export async function refreshCognitoTokens(refreshToken: string): Promise<{ acce
     accessToken: tokens.AccessToken,
     expiresIn: tokens.ExpiresIn ?? 3600,
   };
+}
+
+/**
+ * Staging-only email allowlist enforcement.
+ *
+ * If STAGING_EMAIL_ALLOWLIST is set (comma-separated), only those emails are
+ * permitted to start the auth flow. Returns true (allowed) when the env var
+ * is empty/unset so prod is unaffected. Run this BEFORE any Cognito or SES
+ * call so disallowed addresses cause no side effects.
+ *
+ * Both list entries and the input are normalized via trim + lowercase.
+ */
+export function isEmailAllowed(email: string): boolean {
+  const raw = process.env.STAGING_EMAIL_ALLOWLIST?.trim();
+  if (!raw) return true;
+
+  const list = raw
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e.length > 0);
+
+  if (list.length === 0) return true;
+
+  return list.includes(email.trim().toLowerCase());
+}
+
+/**
+ * Server-component variant of getAuthUser. Reads the access_token cookie via
+ * next/headers and validates the JWT. Use from server components/pages where
+ * there is no NextRequest in scope.
+ */
+export async function getAuthUserFromServerContext(): Promise<AuthUser | null> {
+  const cookieStore = await cookies();
+  const headerStore = await headers();
+  const adapter = {
+    headers: { get: (name: string) => headerStore.get(name) },
+    cookies: {
+      get: (name: string) => {
+        const c = cookieStore.get(name);
+        return c ? { value: c.value } : undefined;
+      },
+    },
+  } as unknown as NextRequest;
+  return getAuthUser(adapter);
 }

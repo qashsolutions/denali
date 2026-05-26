@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { initiateCognitoAuth } from "@/lib/auth-server";
+import { initiateCognitoAuth, isEmailAllowed } from "@/lib/auth-server";
 import { logAudit } from "@/lib/audit";
 import { PRICING } from "@/config";
 import { normalizeEmail } from "@/lib/normalize-email";
@@ -55,6 +55,13 @@ async function _POST(request: NextRequest) {
         { error: VALIDATION.CODE_FORMAT },
         { status: 400 },
       );
+    }
+
+    // Staging email allowlist (no-op when STAGING_EMAIL_ALLOWLIST is unset in prod).
+    // Run before rate-limit increment and Cognito auth so disallowed addresses
+    // cause no side effects.
+    if (!isEmailAllowed(rawEmail)) {
+      return NextResponse.json({ error: "Not allowed" }, { status: 403 });
     }
 
     // Rate limit: prevent brute-force OTP guessing

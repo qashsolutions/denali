@@ -1,5 +1,6 @@
 // Core skills
-export { BASE_PROMPT } from "./core/base";
+export { BASE_CORE_PROMPT } from "./core/base-core";
+export { MEDICARE_OVERLAY_PROMPT } from "./core/medicare-overlay";
 export { TOOL_RESTRAINT } from "./core/tool-restraint";
 export { ONBOARDING_SKILL } from "./core/onboarding";
 export { MEDICARE_TYPE_SKILL } from "./core/medicare-type";
@@ -26,6 +27,7 @@ export { HEALTH_RECORDS_SKILL } from "@/lib/skills/health-records";
 export { MEDICARE_NOTIFICATIONS_SKILL } from "@/lib/skills/medicare-notifications";
 export { DIABETES_PREVENTION_SKILL } from "@/lib/skills/diabetes-prevention";
 export { OBESITY_PREVENTION_SKILL } from "@/lib/skills/obesity-prevention";
+export { NON_MEDICARE_ACKNOWLEDGMENT_SKILL } from "@/lib/skills/non-medicare-acknowledgment";
 
 // Channel skills
 export { COUNSELOR_SKILL } from "./channel/counselor";

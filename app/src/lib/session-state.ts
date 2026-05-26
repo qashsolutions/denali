@@ -79,6 +79,9 @@ export interface SessionState {
   email?: string | null;                       // For outcome followup checks
   userRole?: "patient" | "counselor" | "provider";  // Role from users table
 
+  // User profile (set by server from DB — never trust client value)
+  isOnMedicare?: boolean;                       // Stage 1.C — gates Medicare-specific skill content
+
   // Health data (populated from fhir_cache, never from live CMS API)
   healthDataAvailable?: boolean;
   activeCoverage?: string[];                   // e.g., ["Medicare Part A", "Medicare Part B"]

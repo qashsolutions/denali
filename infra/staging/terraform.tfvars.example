@@ -1,0 +1,8 @@
+# Copy this file to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored; never commit it.
+
+alb_name                = "<shared-alb-name>"
+route53_zone_name       = "<example.com.>"
+ecs_task_role_name      = "<ecs-task-role-name>"
+ecs_execution_role_name = "<ecs-execution-role-name>"
+rds_secret_name         = "<rds-managed-secret-name>"

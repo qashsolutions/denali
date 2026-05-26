@@ -38,6 +38,8 @@ export async function mockAuthenticatedUser(
     firstName?: string;
     trialStatus?: "active" | "expired";
     trialDaysRemaining?: number;
+    birthYear?: number;
+    isOnMedicare?: boolean;
   } = {}
 ) {
   const {
@@ -48,6 +50,8 @@ export async function mockAuthenticatedUser(
     firstName,
     trialStatus = "active",
     trialDaysRemaining = 10,
+    birthYear,
+    isOnMedicare,
   } = overrides;
 
   await page.route("**/api/profile", (route) =>
@@ -67,6 +71,8 @@ export async function mockAuthenticatedUser(
         appealCount: 0,
         appealCredits: appeal_credits,
         ...(firstName ? { firstName } : {}),
+        ...(birthYear !== undefined ? { birth_year: birthYear } : {}),
+        ...(isOnMedicare !== undefined ? { is_on_medicare: isOnMedicare } : {}),
       }),
     })
   );

@@ -31,6 +31,10 @@ export interface AuthState {
   isLoading: boolean;
   error: string | null;
   requireIdentityVerification: boolean; // Feature flag: true = Medicare App Library (ID.me required), false = Connected Apps Directory
+  birthYear: number | null; // Foundation Stage 1 — null until captured via ProfileCompletionModal
+  isOnMedicare: boolean; // Foundation Stage 1 — gates Medicare-specific features
+  birthYearModalDismissedAt: string | null; // Stage 1.C — ISO timestamp of last "Not now" click
+  birthYearModalDisabled: boolean; // Stage 1.C — true after "Don't show again" or Settings toggle off
 }
 
 export type AppealAccessStatus = "available" | "paywall" | "allowed";
@@ -49,6 +53,7 @@ interface UseAuthReturn {
   checkAppealAccess: () => Promise<AppealAccessStatus>;
   signOut: () => Promise<void>;
   clearError: () => void;
+  refetchProfile: () => Promise<void>;
 }
 
 const DEFAULT_AUTH_STATE: AuthState = {
@@ -72,6 +77,10 @@ const DEFAULT_AUTH_STATE: AuthState = {
   isLoading: true,
   error: null,
   requireIdentityVerification: false,
+  birthYear: null,
+  isOnMedicare: false,
+  birthYearModalDismissedAt: null,
+  birthYearModalDisabled: false,
 };
 
 // Module-level cache: survives SPA navigations
@@ -82,6 +91,18 @@ function dispatchAuthChange(user: { email: string; userId: string } | null) {
   if (typeof window !== "undefined") {
     window.dispatchEvent(
       new CustomEvent("auth-state-change", { detail: user }),
+    );
+  }
+}
+
+// Fields loadProfileData refreshes — broadcast to sibling useAuth() instances
+// so their per-component useState stays in sync after a refetch from any caller.
+type ProfileUpdates = Partial<AuthState>;
+
+function dispatchProfileRefresh(updates: ProfileUpdates) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("profile-refresh", { detail: updates }),
     );
   }
 }
@@ -149,6 +170,17 @@ export function useAuth(): UseAuthReturn {
       const gender = profileData?.gender || null;
       const requireIdentityVerification =
         profileData?.requireIdentityVerification || false;
+      const birthYear =
+        typeof profileData?.birthYear === "number"
+          ? profileData.birthYear
+          : null;
+      const isOnMedicare = profileData?.isOnMedicare === true;
+      const birthYearModalDismissedAt =
+        typeof profileData?.birthYearModalDismissedAt === "string"
+          ? profileData.birthYearModalDismissedAt
+          : null;
+      const birthYearModalDisabled =
+        profileData?.birthYearModalDisabled === true;
 
       let trialStatus: AuthState["trialStatus"] = "none";
       let trialDaysRemaining = 0;
@@ -157,8 +189,7 @@ export function useAuth(): UseAuthReturn {
         trialDaysRemaining = trialData.daysRemaining || 0;
       }
 
-      setAuthState((prev) => ({
-        ...prev,
+      const profileUpdates: ProfileUpdates = {
         isIdmeVerified,
         firstName,
         gender,
@@ -174,9 +205,15 @@ export function useAuth(): UseAuthReturn {
         trialDaysRemaining,
         isAdmin,
         requireIdentityVerification,
-      }));
+        birthYear,
+        isOnMedicare,
+        birthYearModalDismissedAt,
+        birthYearModalDisabled,
+      };
 
-      cacheSet(STORES.PROFILE, "profile", {
+      setAuthState((prev) => ({ ...prev, ...profileUpdates }));
+
+      await cacheSet(STORES.PROFILE, "profile", {
         plan: userPlan,
         role: userRole,
         appealCount,
@@ -189,7 +226,13 @@ export function useAuth(): UseAuthReturn {
         trialStatus,
         trialDaysRemaining,
         requireIdentityVerification,
+        birthYear,
+        isOnMedicare,
+        birthYearModalDismissedAt,
+        birthYearModalDisabled,
       });
+
+      dispatchProfileRefresh(profileUpdates);
     } catch (error) {
       console.error("Error loading profile data:", error);
       // Fallback to offline cache
@@ -206,6 +249,10 @@ export function useAuth(): UseAuthReturn {
         trialStatus: string;
         trialDaysRemaining: number;
         requireIdentityVerification?: boolean;
+        birthYear?: number | null;
+        isOnMedicare?: boolean;
+        birthYearModalDismissedAt?: string | null;
+        birthYearModalDisabled?: boolean;
       }>(STORES.PROFILE, "profile", TTL.PROFILE);
       if (cached) {
         const d = cached.data;
@@ -223,6 +270,13 @@ export function useAuth(): UseAuthReturn {
           trialStatus: d.trialStatus as AuthState["trialStatus"],
           trialDaysRemaining: d.trialDaysRemaining,
           requireIdentityVerification: d.requireIdentityVerification || false,
+          birthYear: typeof d.birthYear === "number" ? d.birthYear : null,
+          isOnMedicare: d.isOnMedicare === true,
+          birthYearModalDismissedAt:
+            typeof d.birthYearModalDismissedAt === "string"
+              ? d.birthYearModalDismissedAt
+              : null,
+          birthYearModalDisabled: d.birthYearModalDisabled === true,
         }));
       }
     }
@@ -282,10 +336,32 @@ export function useAuth(): UseAuthReturn {
       }
     }
 
+    // Listen for profile refreshes dispatched by sibling useAuth() instances
+    // (e.g., after a Settings PATCH or modal save). Apply the updates via
+    // setAuthState directly — do NOT re-call loadProfileData (would loop).
+    function handleProfileRefresh(e: Event) {
+      const updates = (e as CustomEvent<ProfileUpdates>).detail;
+      if (!updates) return;
+      setAuthState((prev) => ({ ...prev, ...updates }));
+    }
+
     window.addEventListener("auth-state-change", handleAuthChange);
-    return () =>
+    window.addEventListener("profile-refresh", handleProfileRefresh);
+    return () => {
       window.removeEventListener("auth-state-change", handleAuthChange);
+      window.removeEventListener("profile-refresh", handleProfileRefresh);
+    };
   }, [loadProfileData]);
+
+  // Stage 1.C: re-pull /api/profile + /api/trial + /api/auth/mfa/status
+  // and update authState. Used after Settings writes (PATCH or
+  // birth-year reminder endpoints) so the refreshed cadence/profile
+  // fields propagate to other consumers (modal gate, etc.) without
+  // a navigation. No-op when unauthenticated.
+  const refetchProfile = useCallback(async () => {
+    if (!authState.userId || !authState.email) return;
+    await loadProfileData(authState.userId, authState.email);
+  }, [authState.userId, authState.email, loadProfileData]);
 
   // Send OTP to email
   const sendEmailOTP = useCallback(async (email: string): Promise<boolean> => {
@@ -608,5 +684,6 @@ export function useAuth(): UseAuthReturn {
     checkAppealAccess,
     signOut,
     clearError,
+    refetchProfile,
   };
 }

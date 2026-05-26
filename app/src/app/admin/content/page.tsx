@@ -1,17 +1,17 @@
-"use client";
+import { notFound } from "next/navigation";
+import { getAuthUserFromServerContext } from "@/lib/auth-server";
+import { query } from "@/lib/db";
+import AdminContent from "./AdminContent";
 
-import dynamic from "next/dynamic";
+export default async function AdminContentPage() {
+  const user = await getAuthUserFromServerContext();
+  if (!user) notFound();
 
-// Dynamically import the admin content with SSR disabled
-const AdminContent = dynamic(() => import("./AdminContent"), {
-  ssr: false,
-  loading: () => (
-    <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
-      <div className="text-[var(--text-secondary)]">Loading...</div>
-    </div>
-  ),
-});
+  const result = await query<{ is_admin: boolean }>(
+    `SELECT is_admin FROM users WHERE id = $1 LIMIT 1`,
+    [user.userId],
+  );
+  if (!result.rows[0]?.is_admin) notFound();
 
-export default function AdminContentPage() {
   return <AdminContent />;
 }
