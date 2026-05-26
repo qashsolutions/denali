@@ -5,8 +5,13 @@
  * periodically (60s) or when buffer reaches 500 entries.
  * No-op in non-production environments.
  *
- * Namespace: Denali/App
- * Requires IAM permission: cloudwatch:PutMetricData
+ * Namespace: process.env.METRIC_NAMESPACE (default "Denali/App").
+ *   Prod task def: unset → falls back to "Denali/App"
+ *   Staging task def: set to "Denali/Staging"
+ *   IAM grants are scoped per-namespace (denali-task-policy → Denali/App,
+ *   denali-staging-runtime → Denali/Staging).
+ *
+ * Requires IAM permission: cloudwatch:PutMetricData (namespace-scoped).
  */
 
 import {
@@ -15,7 +20,6 @@ import {
   type MetricDatum,
 } from "@aws-sdk/client-cloudwatch";
 
-const NAMESPACE = "Denali/App";
 const FLUSH_INTERVAL_MS = 60_000;
 const MAX_BUFFER_SIZE = 500;
 const CW_BATCH_LIMIT = 1000; // AWS PutMetricData max per call
@@ -66,7 +70,7 @@ export async function flush(): Promise<void> {
     try {
       await getClient().send(
         new PutMetricDataCommand({
-          Namespace: NAMESPACE,
+          Namespace: process.env.METRIC_NAMESPACE || "Denali/App",
           MetricData: chunk,
         }),
       );

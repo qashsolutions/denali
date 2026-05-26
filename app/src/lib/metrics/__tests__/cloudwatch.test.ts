@@ -116,6 +116,24 @@ describe("cloudwatch metrics", () => {
     expect(_getBufferLength()).toBe(0);
   });
 
+  it("uses METRIC_NAMESPACE env var when set", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("METRIC_NAMESPACE", "Denali/Test");
+    mockSend.mockResolvedValue({});
+
+    recordMetric({
+      MetricName: "Test",
+      Value: 1,
+      Unit: "Count",
+      Timestamp: new Date(),
+    });
+    await flush();
+
+    expect(mockSend).toHaveBeenCalledOnce();
+    const command = mockSend.mock.calls[0][0];
+    expect(command.input.Namespace).toBe("Denali/Test");
+  });
+
   it("does nothing when buffer is empty", async () => {
     await flush();
     expect(mockSend).not.toHaveBeenCalled();
