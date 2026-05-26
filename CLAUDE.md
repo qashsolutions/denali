@@ -177,6 +177,40 @@ To inspect original content: `git show origin/main~1:<path>` (where `origin/main
 
 ---
 
+## Scheduled cleanup scripts
+
+`scripts/delete-squash-backup-2026-05-26.sh` is a one-shot launchd-fired
+cleanup tied to a specific date (2026-06-25). It deletes the
+`backup/develop-pre-squash-2026-05-26` branch (local + origin), drops
+the corresponding Claude memory entry, self-unloads from launchd, and
+removes its own plist — true one-shot, no recurrence.
+
+Paired plist: `~/Library/LaunchAgents/health.denali.backup-cleanup.plist`
+(intentionally **not** committed — machine-local, recreated by hand if
+needed; the plist body is small and the script comments show its content).
+
+**Re-test the script's logic anytime without destructive side effects:**
+
+```bash
+DRY_RUN=1 bash scripts/delete-squash-backup-2026-05-26.sh
+```
+
+The `DRY_RUN` flag stubs every destructive command (`git branch -D`,
+`git push --delete`, `rm`, `launchctl`) with `DRY-RUN would run:`
+echoes and keeps output on the terminal instead of redirecting to
+`/tmp/denali-backup-cleanup.log`. Use it to verify that the SHA
+defensive check still passes and the deletion logic would fire
+correctly before the scheduled date.
+
+**Policy — future one-shot scheduled scripts should be kept
+*untracked*.** They self-delete on first fire and have no recurring
+use; committing them adds long-term repo noise. This one is committed
+as a documented reference for the pattern (launchd plist +
+`do_or_dry` wrapper + SHA-defensive deletion + memory-entry cleanup).
+After 2026-06-25 fires, `git rm` this file too.
+
+---
+
 ## Known test accounts on prod
 
 Two operator-owned trial users currently exist on prod RDS. There are zero paying customers and zero non-operator accounts:
