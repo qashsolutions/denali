@@ -4,7 +4,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
  * middleware.ts — Unit Tests
  *
  * Tests session lifetime enforcement, silent token refresh,
- * transient failure resilience, and auth redirects.
+ * transient failure resilience, auth redirects, and the
+ * Stage 2 medicare_status cohort gate.
  *
  * Uses real NextRequest/NextResponse from next/server.
  * The internal fetch() for /api/auth/refresh is mocked globally.
@@ -78,6 +79,7 @@ describe("middleware", () => {
         access_token: "tok",
         refresh_token: "ref",
         session_issued_at: String(eightDaysAgo),
+        medicare_status: "yes",
       })
     );
 
@@ -105,10 +107,11 @@ describe("middleware", () => {
       makeRequest("/app/chat", {
         access_token: "tok",
         session_issued_at: String(oneDayAgo),
+        medicare_status: "yes",
       })
     );
 
-    // Should just pass through (has access_token, on /app/chat — no redirect)
+    // Should just pass through (has access_token + medicare_status, on /app/chat — no redirect)
     expect(res.headers.get("x-middleware-next")).toBe("1");
   });
 
@@ -141,7 +144,10 @@ describe("middleware", () => {
     );
 
     const res = await middleware(
-      makeRequest("/app/chat", { refresh_token: "valid-ref" })
+      makeRequest("/app/chat", {
+        refresh_token: "valid-ref",
+        medicare_status: "yes",
+      })
     );
 
     expect(mockFetch).toHaveBeenCalledOnce();
@@ -160,6 +166,7 @@ describe("middleware", () => {
       makeRequest("/app/chat", {
         access_token: "valid",
         refresh_token: "ref",
+        medicare_status: "yes",
       })
     );
 
@@ -233,8 +240,12 @@ describe("middleware", () => {
   });
 
   it("does not redirect signed-in users on /app sub-pages", async () => {
+    // medicare_status present so cohort gate doesn't fire
     const res = await middleware(
-      makeRequest("/app/chat", { access_token: "tok" })
+      makeRequest("/app/chat", {
+        access_token: "tok",
+        medicare_status: "yes",
+      })
     );
 
     expect(res.headers.get("x-middleware-next")).toBe("1");
@@ -257,6 +268,7 @@ describe("middleware", () => {
       makeRequest("/app/chat", {
         access_token: "tok",
         session_issued_at: "invalid",
+        medicare_status: "yes",
       })
     );
 
@@ -303,6 +315,7 @@ describe("middleware", () => {
         access_token: "tok",
         refresh_token: "ref",
         session_issued_at: String(nearExpiry),
+        medicare_status: "yes",
       })
     );
 
@@ -354,7 +367,93 @@ describe("middleware", () => {
       makeRequest("/app/chat", { refresh_token: "ref" })
     );
 
-    // /app/chat + anon → no redirect rule for sub-pages → pass through
+    // /app/chat + anon → no redirect rule for sub-pages without access_token
+    // But now we have the cohort gate: anon (no access_token) → gate requires
+    // hasAccessToken, so gate doesn't fire. Pass through.
     expect(res.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  // ── Stage 2: Medicare cohort gate ──
+
+  it("redirects to /onboarding/medicare when medicare_status absent and user is signed in on /app/chat", async () => {
+    // access_token present, but no medicare_status cookie → must answer onboarding question
+    const res = await middleware(
+      makeRequest("/app/chat", { access_token: "tok" })
+    );
+
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get("location")!).pathname).toBe(
+      "/onboarding/medicare"
+    );
+  });
+
+  it("passes through when medicare_status=yes and user is signed in on /app/chat", async () => {
+    const res = await middleware(
+      makeRequest("/app/chat", {
+        access_token: "tok",
+        medicare_status: "yes",
+      })
+    );
+
+    expect(res.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("passes through when medicare_status=no and user is signed in on /app/chat", async () => {
+    const res = await middleware(
+      makeRequest("/app/chat", {
+        access_token: "tok",
+        medicare_status: "no",
+      })
+    );
+
+    expect(res.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("does NOT redirect to onboarding when already on /onboarding/medicare (loop prevention)", async () => {
+    // User is signed in, no medicare_status cookie, but they're already on the onboarding page
+    const res = await middleware(
+      makeRequest("/onboarding/medicare", { access_token: "tok" })
+    );
+
+    // /onboarding/* does NOT start with /app → gate doesn't fire
+    expect(res.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("does NOT redirect API routes to onboarding (API exemption)", async () => {
+    const res = await middleware(
+      makeRequest("/api/anything", { access_token: "tok" })
+    );
+
+    // API routes have early passthrough before cohort gate
+    expect(res.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("does NOT redirect to onboarding when no access_token (anonymous user on /app/chat)", async () => {
+    // Gate requires hasAccessToken — anonymous users are not subject to the cohort gate
+    const res = await middleware(
+      makeRequest("/app/chat")
+    );
+
+    // No access_token, no redirect to onboarding. Sub-page of /app has no anon-redirect rule.
+    expect(res.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("redirects anonymous users from /app (exact) to / — existing rule wins over onboarding gate", async () => {
+    const res = await middleware(makeRequest("/app"));
+
+    // /app exact + no access_token → existing anon redirect rule fires
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/");
+  });
+
+  it("redirects /app/settings (a different /app sub-page) to onboarding when medicare_status absent", async () => {
+    const res = await middleware(
+      makeRequest("/app/settings", { access_token: "tok" })
+    );
+
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get("location")!).pathname).toBe(
+      "/onboarding/medicare"
+    );
   });
 });

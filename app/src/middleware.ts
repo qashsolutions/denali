@@ -119,6 +119,19 @@ function applyRedirects(pathname: string, hasAccessToken: boolean, request: Next
     return NextResponse.redirect(new URL("/", request.url));
   }
 
+  // Medicare cohort gate — signed-in users without the medicare_status
+  // cookie (i.e., they haven't answered the Medicare question yet) are
+  // bounced to a one-question onboarding page. /onboarding/* paths are
+  // not gated, so no redirect loop. Cookie is set by verify-otp,
+  // /api/profile PATCH, and /api/profile GET (legacy session heal).
+  if (
+    hasAccessToken &&
+    pathname.startsWith("/app") &&
+    !request.cookies.has("medicare_status")
+  ) {
+    return NextResponse.redirect(new URL("/onboarding/medicare", request.url));
+  }
+
   return NextResponse.next();
 }
 

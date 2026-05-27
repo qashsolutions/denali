@@ -154,6 +154,22 @@ async function _POST(request: NextRequest) {
       console.error("[verify-otp] Trial creation failed:", trialErr);
     }
 
+    // Read is_on_medicare so we can set the medicare_status cookie below.
+    // The cookie's presence is the middleware gate's signal that the user
+    // has already answered the Medicare question. NULL = ask via
+    // /onboarding/medicare; true/false = skip onboarding.
+    let isOnMedicare: boolean | null = null;
+    try {
+      const profileResult = await query<{ is_on_medicare: boolean | null }>(
+        `SELECT is_on_medicare FROM users WHERE id = $1 LIMIT 1`,
+        [ver.user_id],
+      );
+      isOnMedicare = profileResult.rows[0]?.is_on_medicare ?? null;
+    } catch (profErr) {
+      console.error("[verify-otp] is_on_medicare lookup failed:", profErr);
+      // Fall through: cookie stays unset → user goes through onboarding.
+    }
+
     logAudit("LOGIN", {
       userId: ver.user_id,
       metadata: { method: "email_otp" },
@@ -192,6 +208,15 @@ async function _POST(request: NextRequest) {
 
     // Clear any stale MFA verified cookie on fresh login
     response.cookies.set("mfa_verified", "", { ...cookieOpts, maxAge: 0 });
+
+    // Medicare cohort cookie — set whenever the user has already answered.
+    // Missing cookie triggers the /onboarding/medicare gate in middleware.
+    if (isOnMedicare !== null) {
+      response.cookies.set("medicare_status", isOnMedicare ? "yes" : "no", {
+        ...cookieOpts,
+        maxAge: 30 * 24 * 60 * 60,
+      });
+    }
 
     return response;
   } catch (error) {

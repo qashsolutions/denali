@@ -62,7 +62,7 @@ async function _GET(request: NextRequest) {
   const verification = verificationResult.rows[0];
   const stripe = stripeResult.rows[0];
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     authenticated: true,
     userId: user.userId,
     email: user.email,
@@ -86,6 +86,23 @@ async function _GET(request: NextRequest) {
     requireIdentityVerification:
       process.env.REQUIRE_IDENTITY_VERIFICATION === "true",
   });
+
+  // Heal medicare_status cookie for sessions created before this gate
+  // landed (the verify-otp cookie set won't have run for them). Only
+  // touches the cookie when DB has a real answer.
+  const hasMedicareCookie = request.cookies.has("medicare_status");
+  const iom = profile?.is_on_medicare;
+  if (!hasMedicareCookie && (iom === true || iom === false)) {
+    response.cookies.set("medicare_status", iom ? "yes" : "no", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60,
+    });
+  }
+
+  return response;
 }
 
 async function _PATCH(request: NextRequest) {
@@ -185,11 +202,30 @@ async function _PATCH(request: NextRequest) {
     }).catch(() => {});
 
     const updated = result.rows[0];
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       birthYear: updated.birth_year,
       isOnMedicare: updated.is_on_medicare,
     });
+
+    // Sync medicare_status cookie when is_on_medicare is part of this PATCH
+    // — without this, the onboarding form's PATCH succeeds but middleware
+    // still sees no cookie and loops the user back to /onboarding/medicare.
+    if (changedFields.includes("is_on_medicare")) {
+      response.cookies.set(
+        "medicare_status",
+        updated.is_on_medicare ? "yes" : "no",
+        {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          path: "/",
+          maxAge: 30 * 24 * 60 * 60,
+        },
+      );
+    }
+
+    return response;
   } catch (error) {
     console.error("[Profile] PATCH error:", error);
     return NextResponse.json(
