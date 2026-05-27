@@ -78,6 +78,22 @@ async function _POST(request: NextRequest) {
     const userId = user.userId;
     const email = user.email || "";
 
+    // Stage 2 cohort gate: Starter is a Medicare-only plan (per-appeal
+    // pricing model). Non-Medicare users can still buy Plus / Unlimited
+    // for chat capacity. DB-backed source of truth, not the cookie.
+    if (body.plan === "starter") {
+      const medicareResult = await query<{ is_on_medicare: boolean | null }>(
+        `SELECT is_on_medicare FROM users WHERE id = $1 LIMIT 1`,
+        [userId],
+      );
+      if (medicareResult.rows[0]?.is_on_medicare !== true) {
+        return NextResponse.json(
+          { error: "starter_requires_medicare" },
+          { status: 403 },
+        );
+      }
+    }
+
     // Look up existing subscription state. We use this for two things:
     //   1. Reject any new Checkout while a subscription is status='active'
     //      (plan changes go through Customer Portal at cycle boundaries).

@@ -13,6 +13,10 @@ interface PaywallModalProps {
   appealCount: number;
   trialExpired?: boolean;
   currentPlan?: AuthState["plan"];
+  // Stage 2 cohort gating. Non-Medicare users see only Plus + Unlimited
+  // (Starter omitted; appeal-related bullets stripped). DB-backed truth
+  // via useAuth → /api/profile; do NOT read the medicare_status cookie.
+  isOnMedicare: boolean;
 }
 
 type PlanType = "starter" | "plus" | "unlimited";
@@ -64,6 +68,26 @@ const PLAN_OPTIONS: {
 ];
 
 /**
+ * Pure helper — extracted for testability.
+ * Filters the plan list for a given cohort:
+ *   - non-Medicare: hide Starter, strip appeal-related feature bullets
+ *   - Medicare: all plans and all bullets intact
+ */
+export function filterPlansForCohort<T extends { key: string; features: string[] }>(
+  plans: readonly T[],
+  isOnMedicare: boolean,
+): T[] {
+  return plans
+    .filter((p) => isOnMedicare || p.key !== "starter")
+    .map((p) => ({
+      ...p,
+      features: isOnMedicare
+        ? p.features
+        : p.features.filter((f) => !/appeal/i.test(f)),
+    }));
+}
+
+/**
  * PaywallModal Component
  *
  * Shows 3 subscription plan options.
@@ -76,8 +100,10 @@ export function PaywallModal({
   appealCount,
   trialExpired,
   currentPlan,
+  isOnMedicare,
 }: PaywallModalProps) {
   const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
+  const visiblePlans = filterPlansForCohort(PLAN_OPTIONS, isOnMedicare);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -173,7 +199,7 @@ export function PaywallModal({
 
           {/* Plan options */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {PLAN_OPTIONS.map((plan) => {
+            {visiblePlans.map((plan) => {
               const isSelected = selectedPlan === plan.key;
               const isCurrentPlan = plan.key === currentPlan;
               return (

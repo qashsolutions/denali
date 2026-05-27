@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { recordAppealOutcome, applyOutcomeIncentive } from "@/lib/learning";
 import { getAuthUser } from "@/lib/auth-server";
+import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { withMetrics } from "@/lib/metrics";
 import { AUTH, VALIDATION, SYSTEM } from "@/config/messages";
@@ -30,6 +31,18 @@ async function _POST(request: NextRequest) {
       return NextResponse.json(
         { error: AUTH.SIGN_IN_REQUIRED },
         { status: 401 },
+      );
+    }
+
+    // Stage 2 gate: appeals are Medicare-only.
+    const medicareResult = await query<{ is_on_medicare: boolean | null }>(
+      `SELECT is_on_medicare FROM users WHERE id = $1 LIMIT 1`,
+      [user.userId],
+    );
+    if (medicareResult.rows[0]?.is_on_medicare !== true) {
+      return NextResponse.json(
+        { error: "appeals_require_medicare" },
+        { status: 403 },
       );
     }
 

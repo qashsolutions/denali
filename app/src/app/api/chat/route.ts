@@ -149,6 +149,7 @@ export async function POST(request: NextRequest) {
       is_admin: boolean | null;
       role: string | null;
       is_on_medicare: boolean | null;
+      created_at: string | null;
     } | null = null;
 
     // Fetch profile once — reused for rate limiting, attachment validation, AND role verification
@@ -160,8 +161,9 @@ export async function POST(request: NextRequest) {
         is_admin: boolean | null;
         role: string | null;
         is_on_medicare: boolean | null;
+        created_at: string | null;
       }>(
-        `SELECT plan, is_admin, role, is_on_medicare FROM users WHERE id = $1 LIMIT 1`,
+        `SELECT plan, is_admin, role, is_on_medicare, created_at FROM users WHERE id = $1 LIMIT 1`,
         [authUser.userId],
       ),
       5000,
@@ -176,6 +178,7 @@ export async function POST(request: NextRequest) {
         is_admin: boolean | null;
         role: string | null;
         is_on_medicare: boolean | null;
+        created_at: string | null;
       }>,
       "profile lookup",
     );
@@ -196,45 +199,73 @@ export async function POST(request: NextRequest) {
         chatLimit = PRICING.CHAT_LIMITS.STARTER;
         weeklyLimit = PRICING.WEEKLY_LIMITS.STARTER;
       } else if (plan === "trial") {
-        // Check trial expiry
-        const subResult = await query<{ trial_end: string | null }>(
-          `SELECT trial_end FROM subscriptions WHERE user_id = $1 LIMIT 1`,
-          [authUser.userId],
-        );
-        const trialEnd = subResult.rows[0]?.trial_end
-          ? new Date(subResult.rows[0].trial_end)
-          : null;
-        if (trialEnd && trialEnd > new Date()) {
-          chatLimit = PRICING.CHAT_LIMITS.TRIAL;
-          weeklyLimit = PRICING.WEEKLY_LIMITS.TRIAL;
-        } else if (!subResult.rows[0]) {
-          // No subscription row — trial POST in verify-otp must have failed. Auto-create.
-          console.warn(
-            "[Chat] No subscription row for trial user",
-            authUser.userId,
-            "— auto-creating trial",
+        const isMedicare = userProfile?.is_on_medicare === true;
+
+        if (!isMedicare) {
+          // Non-Medicare trial: 3 calendar days from users.created_at (UTC),
+          // 3 msgs/day, no weekly cap. Independent of subscriptions.trial_end —
+          // created_at is the source of truth on this path.
+          const createdAtMs = userProfile?.created_at
+            ? new Date(userProfile.created_at).getTime()
+            : null;
+          const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+          const trialExpired =
+            createdAtMs === null || Date.now() - createdAtMs > threeDaysMs;
+
+          if (trialExpired) {
+            return NextResponse.json(
+              {
+                error: RATE_LIMITS.TRIAL_EXPIRED,
+                code: "TRIAL_EXPIRED",
+                upsell: true,
+              },
+              { status: 403 },
+            );
+          }
+
+          chatLimit = 3;
+          weeklyLimit = 0;
+        } else {
+          // Check trial expiry
+          const subResult = await query<{ trial_end: string | null }>(
+            `SELECT trial_end FROM subscriptions WHERE user_id = $1 LIMIT 1`,
+            [authUser.userId],
           );
-          const now = new Date();
-          const end = new Date(now);
-          end.setDate(end.getDate() + PRICING.TRIAL_DURATION_DAYS);
-          await query(
-            `INSERT INTO subscriptions (user_id, plan, status, trial_start, trial_end, trial_converted)
+          const trialEnd = subResult.rows[0]?.trial_end
+            ? new Date(subResult.rows[0].trial_end)
+            : null;
+          if (trialEnd && trialEnd > new Date()) {
+            chatLimit = PRICING.CHAT_LIMITS.TRIAL;
+            weeklyLimit = PRICING.WEEKLY_LIMITS.TRIAL;
+          } else if (!subResult.rows[0]) {
+            // No subscription row — trial POST in verify-otp must have failed. Auto-create.
+            console.warn(
+              "[Chat] No subscription row for trial user",
+              authUser.userId,
+              "— auto-creating trial",
+            );
+            const now = new Date();
+            const end = new Date(now);
+            end.setDate(end.getDate() + PRICING.TRIAL_DURATION_DAYS);
+            await query(
+              `INSERT INTO subscriptions (user_id, plan, status, trial_start, trial_end, trial_converted)
              VALUES ($1, 'trial', 'trialing', $2, $3, false)
              ON CONFLICT (user_id) DO NOTHING`,
-            [authUser.userId, now.toISOString(), end.toISOString()],
-          );
-          chatLimit = PRICING.CHAT_LIMITS.TRIAL;
-          weeklyLimit = PRICING.WEEKLY_LIMITS.TRIAL;
-        } else {
-          // Trial expired — locked out
-          return NextResponse.json(
-            {
-              error: RATE_LIMITS.TRIAL_EXPIRED,
-              code: "TRIAL_EXPIRED",
-              upsell: true,
-            },
-            { status: 403 },
-          );
+              [authUser.userId, now.toISOString(), end.toISOString()],
+            );
+            chatLimit = PRICING.CHAT_LIMITS.TRIAL;
+            weeklyLimit = PRICING.WEEKLY_LIMITS.TRIAL;
+          } else {
+            // Trial expired — locked out
+            return NextResponse.json(
+              {
+                error: RATE_LIMITS.TRIAL_EXPIRED,
+                code: "TRIAL_EXPIRED",
+                upsell: true,
+              },
+              { status: 403 },
+            );
+          }
         }
       } else {
         // Unknown plan — locked out
@@ -285,10 +316,17 @@ export async function POST(request: NextRequest) {
         );
         const usageRow = usageResult.rows[0];
         if (usageRow && !usageRow.allowed) {
+          const isNonMedicareTrial =
+            userProfile?.is_on_medicare !== true &&
+            (userProfile?.plan || "trial") === "trial";
           return NextResponse.json(
             {
-              error: RATE_LIMITS.DAILY_LIMIT(chatLimit),
-              code: "RATE_LIMITED",
+              error: isNonMedicareTrial
+                ? RATE_LIMITS.NON_MEDICARE_DAILY_LIMIT
+                : RATE_LIMITS.DAILY_LIMIT(chatLimit),
+              code: isNonMedicareTrial
+                ? "NON_MEDICARE_DAILY_LIMIT"
+                : "RATE_LIMITED",
               limit: chatLimit,
               count: usageRow.count,
             },
@@ -479,8 +517,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Get tool definitions and create executor map
-    const toolDefinitions = getToolDefinitions();
+    // Get tool definitions and create executor map.
+    // Stage 2 cohort filter: non-Medicare users never see generate_appeal_letter
+    // — Path A (registry-level omission) so the model can't propose appeals.
+    // Executor map stays full; the map entry for the filtered tool is harmless.
+    const toolDefinitions = getToolDefinitions().filter(
+      (t) =>
+        sessionState.isOnMedicare === true ||
+        t.name !== "generate_appeal_letter",
+    );
     const toolExecutors = createToolExecutorMap();
     console.log(
       "[Chat API] Available tools:",

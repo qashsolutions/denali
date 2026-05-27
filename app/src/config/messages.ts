@@ -121,6 +121,8 @@ export const RATE_LIMITS = {
     `You've used your chat day${days !== 1 ? "s" : ""} for this week. You can chat again next week, or upgrade for more access.`,
   DAILY_LIMIT: (limit: number) =>
     `You've reached your daily limit of ${limit} messages. You can continue tomorrow, or upgrade for more access.`,
+  NON_MEDICARE_DAILY_LIMIT:
+    "You've used your 3 messages for today. Come back tomorrow.",
 } as const;
 
 // =============================================================================

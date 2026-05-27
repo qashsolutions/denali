@@ -117,8 +117,25 @@ function makeRequest(body: unknown): NextRequest {
   });
 }
 
-function mockProfile(plan: string | null, isAdmin = false, role = "patient") {
-  return { rows: [{ plan, is_admin: isAdmin, role }], rowCount: 1, command: "SELECT", oid: 0, fields: [] };
+function mockProfile(
+  plan: string | null,
+  isAdmin = false,
+  role = "patient",
+  isOnMedicare: boolean | null = true,
+) {
+  return {
+    rows: [{
+      plan,
+      is_admin: isAdmin,
+      role,
+      is_on_medicare: isOnMedicare,
+      created_at: new Date().toISOString(),
+    }],
+    rowCount: 1,
+    command: "SELECT",
+    oid: 0,
+    fields: [],
+  };
 }
 
 /** Helper to read SSE events from a streaming Response */
@@ -345,10 +362,12 @@ describe("POST /api/chat", () => {
 
   // ── Profile fallback (RDS down) ──
 
-  it("falls back to trial limits when profile query times out", async () => {
-    // withFallback returns empty rows after 5s, so userProfile = null, plan defaults to "trial"
-    // Then trial_end query also needs to work
-    const futureDate = new Date(Date.now() + 7 * 86400000).toISOString();
+  it("returns 403 TRIAL_EXPIRED when profile query times out (Stage 2 behavior)", async () => {
+    // withFallback returns empty rows after 5s → userProfile = null.
+    // Stage 2: null profile → is_on_medicare = null !== true → non-Medicare trial path.
+    // Non-Medicare trial: created_at = null → trialExpired = true → 403 TRIAL_EXPIRED.
+    // (Previous behavior was SSE via the Medicare subscription path, but that path
+    //  now requires is_on_medicare === true from the profile row.)
     let profileCalled = false;
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes("SELECT plan")) {
@@ -356,19 +375,15 @@ describe("POST /api/chat", () => {
         // Simulate timeout by never resolving (withFallback will use fallback after 5s)
         return new Promise(() => {});
       }
-      if (sql.includes("SELECT trial_end")) return Promise.resolve({ rows: [{ trial_end: futureDate }] });
-      if (sql.includes("check_weekly_frequency")) return Promise.resolve({ rows: [{ allowed: true, days_used: 0 }] });
-      if (sql.includes("check_and_increment_chat")) return Promise.resolve({ rows: [{ allowed: true, count: 1 }] });
-      if (sql.includes("INSERT INTO conversations")) return Promise.resolve({ rows: [{ id: "conv-1" }] });
-      if (sql.includes("INSERT INTO messages")) return Promise.resolve({ rows: [] });
       return Promise.resolve({ rows: [] });
     });
 
     const res = await POST(makeRequest({ messages: [{ role: "user", content: "hi" }] }));
     expect(profileCalled).toBe(true);
-    // The response should still be SSE (withFallback returns empty result, falls to trial path)
-    // Trial path needs subscription query — which we mocked with a future date
-    expect(res.headers.get("Content-Type")).toBe("text/event-stream");
+    // Stage 2 behavior: profile timeout → null profile → non-Medicare trial → expired
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe("TRIAL_EXPIRED");
   }, 10000);
 
   // ── Attachment validation ──
@@ -743,5 +758,398 @@ describe("POST /api/chat", () => {
     const res = await POST(makeRequest({ messages: [{ role: "user", content: "hi" }] }));
     expect(res.headers.get("Content-Type")).toBe("text/event-stream");
     expect(trialCreated).toBe(true);
+  });
+});
+
+// =============================================================================
+// T6 — Appeal tool filter
+// =============================================================================
+//
+// Stage 2: non-Medicare users must never get generate_appeal_letter in the
+// tool list. We test the filter predicate directly against real tool
+// definitions without invoking the whole POST handler.
+// @/lib/tools is mocked above for the route handler tests; T6 uses
+// vi.importActual to load the real implementation for the predicate tests.
+
+// T6 uses the REAL getToolDefinitions, not the mocked version used by the
+// route handler tests above. We import it via vi.importActual at describe
+// time and run the tests against real tool definitions.
+describe("chat route — appeal tool filter (T6)", () => {
+  type ToolDef = { name: string };
+  let realGetToolDefinitions: () => ToolDef[];
+
+  beforeEach(async () => {
+    const realTools = await vi.importActual<typeof import("@/lib/tools")>("@/lib/tools");
+    realGetToolDefinitions = realTools.getToolDefinitions as () => ToolDef[];
+  });
+
+  function applyFilter(isOnMedicare: boolean | undefined | null): string[] {
+    return realGetToolDefinitions()
+      .filter((t) => isOnMedicare === true || t.name !== "generate_appeal_letter")
+      .map((t) => t.name);
+  }
+
+  it("includes generate_appeal_letter when isOnMedicare === true", () => {
+    const names = applyFilter(true);
+    expect(names).toContain("generate_appeal_letter");
+  });
+
+  it("excludes generate_appeal_letter when isOnMedicare === false", () => {
+    const names = applyFilter(false);
+    expect(names).not.toContain("generate_appeal_letter");
+  });
+
+  it("excludes generate_appeal_letter when isOnMedicare === undefined (only true passes)", () => {
+    const names = applyFilter(undefined);
+    expect(names).not.toContain("generate_appeal_letter");
+  });
+
+  it("all other tools survive the non-Medicare filter unchanged", () => {
+    const allNames = realGetToolDefinitions().map((t) => t.name);
+    const otherToolNames = allNames.filter((n) => n !== "generate_appeal_letter");
+    const filteredNames = applyFilter(false);
+
+    for (const name of otherToolNames) {
+      expect(filteredNames).toContain(name);
+    }
+  });
+});
+
+// =============================================================================
+// T9 — Non-Medicare trial rate limits
+// =============================================================================
+//
+// Non-Medicare trial path uses users.created_at for expiry (3 calendar days)
+// and a hard cap of 3 messages/day. This is distinct from the Medicare trial
+// path (subscriptions.trial_end + PRICING.CHAT_LIMITS.TRIAL).
+
+describe("POST /api/chat — non-Medicare trial rate limits (T9)", () => {
+  const MSG = [{ role: "user" as const, content: "hi" }];
+
+  // Helper: build a profile mock row
+  function nonMedicareTrialProfile(overrides: {
+    created_at: string | null;
+    plan?: string;
+    is_admin?: boolean;
+    role?: string;
+    is_on_medicare?: boolean | null;
+  }) {
+    return {
+      rows: [
+        {
+          plan: overrides.plan ?? "trial",
+          is_admin: overrides.is_admin ?? false,
+          role: overrides.role ?? "patient",
+          is_on_medicare: overrides.is_on_medicare ?? false,
+          created_at: overrides.created_at,
+        },
+      ],
+      rowCount: 1,
+      command: "SELECT",
+      oid: 0,
+      fields: [],
+    };
+  }
+
+  it("T9-1: non-Medicare trial, count=0 (within 3-day window) → allowed (SSE stream)", async () => {
+    const created_at = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve(nonMedicareTrialProfile({ created_at }));
+      }
+      if (sql.includes("check_and_increment_chat")) {
+        return Promise.resolve({ rows: [{ allowed: true, count: 1 }] });
+      }
+      if (sql.includes("INSERT INTO conversations")) {
+        return Promise.resolve({ rows: [{ id: "conv-1" }] });
+      }
+      if (sql.includes("INSERT INTO messages")) {
+        return Promise.resolve({ rows: [] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.headers.get("Content-Type")).toBe("text/event-stream");
+  });
+
+  it("T9-2: non-Medicare trial, count=3 (limit hit) → 429 NON_MEDICARE_DAILY_LIMIT without upsell", async () => {
+    const created_at = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve(nonMedicareTrialProfile({ created_at }));
+      }
+      if (sql.includes("check_and_increment_chat")) {
+        return Promise.resolve({ rows: [{ allowed: false, count: 3 }] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.code).toBe("NON_MEDICARE_DAILY_LIMIT");
+    expect(body.limit).toBe(3);
+    expect(body.count).toBe(3);
+    // No upsell field on non-Medicare daily limit
+    expect(body.upsell).toBeUndefined();
+  });
+
+  it("T9-3: non-Medicare trial, created_at=4 days ago → 403 TRIAL_EXPIRED with upsell", async () => {
+    const created_at = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve(nonMedicareTrialProfile({ created_at }));
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe("TRIAL_EXPIRED");
+    expect(body.upsell).toBe(true);
+  });
+
+  it("T9-4: non-Medicare trial, created_at=now → trial alive, allowed (SSE stream)", async () => {
+    const created_at = new Date().toISOString();
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve(nonMedicareTrialProfile({ created_at }));
+      }
+      if (sql.includes("check_and_increment_chat")) {
+        return Promise.resolve({ rows: [{ allowed: true, count: 1 }] });
+      }
+      if (sql.includes("INSERT INTO conversations")) {
+        return Promise.resolve({ rows: [{ id: "conv-1" }] });
+      }
+      if (sql.includes("INSERT INTO messages")) {
+        return Promise.resolve({ rows: [] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.headers.get("Content-Type")).toBe("text/event-stream");
+  });
+
+  it("T9-5: non-Medicare trial, created_at=3 days minus 1ms → alive (boundary: < not <=)", async () => {
+    const created_at = new Date(
+      Date.now() - (3 * 24 * 60 * 60 * 1000 - 1)
+    ).toISOString();
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve(nonMedicareTrialProfile({ created_at }));
+      }
+      if (sql.includes("check_and_increment_chat")) {
+        return Promise.resolve({ rows: [{ allowed: true, count: 1 }] });
+      }
+      if (sql.includes("INSERT INTO conversations")) {
+        return Promise.resolve({ rows: [{ id: "conv-1" }] });
+      }
+      if (sql.includes("INSERT INTO messages")) {
+        return Promise.resolve({ rows: [] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.headers.get("Content-Type")).toBe("text/event-stream");
+  });
+
+  it("T9-6: non-Medicare trial, created_at=3 days plus 1ms → expired (strict > boundary)", async () => {
+    const created_at = new Date(
+      Date.now() - (3 * 24 * 60 * 60 * 1000 + 1)
+    ).toISOString();
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve(nonMedicareTrialProfile({ created_at }));
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe("TRIAL_EXPIRED");
+  });
+
+  it("T9-7: non-Medicare trial, created_at=null → 403 TRIAL_EXPIRED (defensive null guard)", async () => {
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve(nonMedicareTrialProfile({ created_at: null }));
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe("TRIAL_EXPIRED");
+  });
+
+  it("T9-8: Medicare trial (is_on_medicare=true), active subscription → uses PRICING.CHAT_LIMITS.TRIAL path (SSE stream)", async () => {
+    const futureDate = new Date(Date.now() + 7 * 86400000).toISOString();
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve({
+          rows: [{
+            plan: "trial",
+            is_admin: false,
+            role: "patient",
+            is_on_medicare: true,
+            created_at: new Date().toISOString(),
+          }],
+          rowCount: 1,
+          command: "SELECT",
+          oid: 0,
+          fields: [],
+        });
+      }
+      if (sql.includes("SELECT trial_end")) {
+        return Promise.resolve({ rows: [{ trial_end: futureDate }] });
+      }
+      if (sql.includes("check_weekly_frequency")) {
+        return Promise.resolve({ rows: [{ allowed: true, days_used: 0 }] });
+      }
+      if (sql.includes("check_and_increment_chat")) {
+        return Promise.resolve({ rows: [{ allowed: true, count: 1 }] });
+      }
+      if (sql.includes("INSERT INTO conversations")) {
+        return Promise.resolve({ rows: [{ id: "conv-1" }] });
+      }
+      if (sql.includes("INSERT INTO messages")) {
+        return Promise.resolve({ rows: [] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.headers.get("Content-Type")).toBe("text/event-stream");
+  });
+
+  it("T9-9: non-Medicare, plan=plus → standard Plus path, not non-Medicare trial branch (SSE stream)", async () => {
+    const checkCalls: Array<[string, number]> = [];
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve({
+          rows: [{
+            plan: "plus",
+            is_admin: false,
+            role: "patient",
+            is_on_medicare: false,
+            created_at: new Date().toISOString(),
+          }],
+          rowCount: 1,
+          command: "SELECT",
+          oid: 0,
+          fields: [],
+        });
+      }
+      if (sql.includes("check_and_increment_chat")) {
+        // Capture the limit argument
+        checkCalls.push(["check_and_increment_chat", 20]);
+        return Promise.resolve({ rows: [{ allowed: true, count: 1 }] });
+      }
+      if (sql.includes("INSERT INTO conversations")) {
+        return Promise.resolve({ rows: [{ id: "conv-1" }] });
+      }
+      if (sql.includes("INSERT INTO messages")) {
+        return Promise.resolve({ rows: [] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.headers.get("Content-Type")).toBe("text/event-stream");
+    // Non-Medicare trial branch should NOT have been taken
+    // (no TRIAL_EXPIRED 403 means it didn't trip)
+  });
+
+  it("T9-10: non-Medicare, plan=unlimited → skips rate checks entirely (SSE stream)", async () => {
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve({
+          rows: [{
+            plan: "unlimited",
+            is_admin: false,
+            role: "patient",
+            is_on_medicare: false,
+            created_at: new Date().toISOString(),
+          }],
+          rowCount: 1,
+          command: "SELECT",
+          oid: 0,
+          fields: [],
+        });
+      }
+      if (sql.includes("check_weekly_frequency")) {
+        throw new Error("should not be called for unlimited plan");
+      }
+      if (sql.includes("check_and_increment_chat")) {
+        throw new Error("should not be called for unlimited plan");
+      }
+      if (sql.includes("INSERT INTO conversations")) {
+        return Promise.resolve({ rows: [{ id: "conv-1" }] });
+      }
+      if (sql.includes("INSERT INTO messages")) {
+        return Promise.resolve({ rows: [] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.headers.get("Content-Type")).toBe("text/event-stream");
+  });
+
+  it("T9-11: is_on_medicare=null, plan=trial, within 3-day window, 3 msgs used → 429 NON_MEDICARE_DAILY_LIMIT (null treated as non-Medicare)", async () => {
+    const created_at = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve(nonMedicareTrialProfile({
+          created_at,
+          is_on_medicare: null,
+        }));
+      }
+      if (sql.includes("check_and_increment_chat")) {
+        return Promise.resolve({ rows: [{ allowed: false, count: 3 }] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.code).toBe("NON_MEDICARE_DAILY_LIMIT");
+  });
+
+  it("T9-12: is_on_medicare=null, plan=trial, past 3-day window → 403 TRIAL_EXPIRED", async () => {
+    const created_at = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve(nonMedicareTrialProfile({
+          created_at,
+          is_on_medicare: null,
+        }));
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe("TRIAL_EXPIRED");
   });
 });

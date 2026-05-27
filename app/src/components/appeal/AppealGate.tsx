@@ -251,6 +251,7 @@ export function AppealGate({ children, onAccessGranted }: AppealGateProps) {
         appealCount={authState.appealCount}
         trialExpired={authState.trialStatus === "expired"}
         currentPlan={authState.plan}
+        isOnMedicare={authState.isOnMedicare}
       />
     </>
   );

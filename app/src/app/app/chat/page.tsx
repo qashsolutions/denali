@@ -385,7 +385,7 @@ function ChatContent() {
         <div className="flex-1 overflow-y-auto flex flex-col">
           {messages.length === 0 && !isLoading ? (
             <Container className="py-4">
-              <EmptyState onSuggestionSelect={handleInitialCardSelect} topic={topic} email={authState.email} verifiedName={authState.firstName} />
+              <EmptyState onSuggestionSelect={handleInitialCardSelect} topic={topic} email={authState.email} verifiedName={authState.firstName} isOnMedicare={authState.isOnMedicare === true} />
             </Container>
           ) : (
             <Container className="py-4 mt-auto">
@@ -504,6 +504,7 @@ function ChatContent() {
         appealCount={0}
         trialExpired={authState.trialStatus === "expired"}
         currentPlan={authState.plan}
+        isOnMedicare={authState.isOnMedicare}
       />
     </div>
   );
@@ -539,6 +540,7 @@ const EMPTY_STATE_CARDS = [
     title: "Appeal a Denial",
     description: "Fight back when Medicare says no",
     message: "Medicare denied my claim and I need help appealing",
+    kind: "appeal" as const,
   },
   {
     icon: DocumentTextIcon,
@@ -574,11 +576,13 @@ function EmptyState({
   onSuggestionSelect,
   email,
   verifiedName,
+  isOnMedicare,
 }: {
   onSuggestionSelect: (suggestion: string) => void;
   topic?: string | null;
   email?: string | null;
   verifiedName?: string | null;
+  isOnMedicare: boolean;
 }) {
   const greeting = getGreeting();
   // Prefer verified name from ID.me, fall back to email-derived name
@@ -597,7 +601,7 @@ function EmptyState({
       </p>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 max-w-xl w-full">
-        {EMPTY_STATE_CARDS.map((card) => (
+        {EMPTY_STATE_CARDS.filter((c) => isOnMedicare || !("kind" in c)).map((card) => (
           <button
             key={card.title}
             onClick={() => onSuggestionSelect(card.message)}

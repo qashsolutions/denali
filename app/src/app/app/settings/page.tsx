@@ -906,6 +906,7 @@ function AppSettingsPageInner() {
         appealCount={authState.appealCount}
         trialExpired={authState.trialStatus === "expired"}
         currentPlan={authState.plan}
+        isOnMedicare={authState.isOnMedicare}
       />
 
       {/* TOTP Enroll Modal — DISABLED (2026-03-10), see TOTP comment above */}

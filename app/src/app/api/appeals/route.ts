@@ -20,6 +20,24 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
 
+    // Stage 2 gate: appeals are Medicare-only. Require auth + is_on_medicare.
+    if (!user) {
+      return NextResponse.json(
+        { error: "appeals_require_medicare" },
+        { status: 403 },
+      );
+    }
+    const medicareResult = await query<{ is_on_medicare: boolean | null }>(
+      `SELECT is_on_medicare FROM users WHERE id = $1 LIMIT 1`,
+      [user.userId],
+    );
+    if (medicareResult.rows[0]?.is_on_medicare !== true) {
+      return NextResponse.json(
+        { error: "appeals_require_medicare" },
+        { status: 403 },
+      );
+    }
+
     // Verify access: must be anon conversation or owned by this user
     const convResult = await query<{ user_id: string | null }>(
       `SELECT user_id FROM conversations WHERE id = $1`,
