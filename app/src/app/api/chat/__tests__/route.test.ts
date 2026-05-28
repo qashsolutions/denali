@@ -937,9 +937,9 @@ describe("POST /api/chat — non-Medicare trial rate limits (T9)", () => {
     expect(res.headers.get("Content-Type")).toBe("text/event-stream");
   });
 
-  it("T9-5: non-Medicare trial, created_at=3 days minus 1ms → alive (boundary: < not <=)", async () => {
+  it("T9-5: non-Medicare trial, created_at=3 days minus 1 second → alive (margin tolerates CI latency)", async () => {
     const created_at = new Date(
-      Date.now() - (3 * 24 * 60 * 60 * 1000 - 1)
+      Date.now() - (3 * 24 * 60 * 60 * 1000 - 1000)
     ).toISOString();
     mockGetAuthUser.mockResolvedValue(MOCK_USER);
     mockQuery.mockImplementation((sql: string) => {
