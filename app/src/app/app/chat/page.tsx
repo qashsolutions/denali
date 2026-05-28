@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { shouldShowMedicareConsentBanner } from "@/lib/banner-visibility";
 import { Container } from "@/components/layout/Container";
 import { Sidebar, SidebarToggle } from "@/components/layout/Sidebar";
 import { Message, LoadingMessage } from "@/components/chat/Message";
@@ -362,8 +363,10 @@ function ChatContent() {
           </div>
         )}
 
-        {/* Consent prompt — shown when Blue Button connected but health_data_ai OFF */}
-        {isConnected && !consent.health_data_ai && (
+        {/* Consent prompt — shown when Blue Button connected but health_data_ai OFF.
+            Stage 2 cohort gate: only renders for confirmed Medicare users; non-Medicare
+            users can't connect Blue Button anyway, and the banner copy is Medicare-specific. */}
+        {shouldShowMedicareConsentBanner(authState.isOnMedicare, isConnected, consent.health_data_ai) && (
           <div className="mx-4 mt-2 px-4 py-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-muted)] text-sm flex items-center gap-3">
             <svg className="w-5 h-5 shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
