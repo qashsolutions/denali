@@ -107,23 +107,11 @@ export async function flush(): Promise<void> {
  * Start periodic auto-flush timer. Call once at boot.
  */
 export function startAutoFlush(): void {
-  // [DIAG] Temporary diagnostics — see P7-METRICS-FIX-PHASE-1.
-  console.log("[cloudwatch] startAutoFlush invoked", {
-    hasExistingTimer: !!state.flushTimer,
-    nodeEnv: process.env.NODE_ENV,
-    isProductionResult: isProduction(),
-  });
   if (state.flushTimer) return;
   if (!isProduction()) return;
-  console.log("[cloudwatch] starting setInterval", {
-    FLUSH_INTERVAL_MS,
-  });
 
   state.flushTimer = setInterval(() => {
-    console.log("[cloudwatch] flush timer tick", {
-      bufferLength: state.buffer.length,
-    });
-    flush().catch((e) => console.warn("[cloudwatch] timer flush rejected:", e));
+    flush().catch(() => {});
   }, FLUSH_INTERVAL_MS);
 
   // Don't keep Node.js alive just for metrics
