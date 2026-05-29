@@ -63,7 +63,7 @@ Full topical reference under `docs/reference/`. Hub keeps summaries; reference d
 - [UI/UX Guidelines](docs/reference/ui.md) · [PWA Offline](docs/reference/pwa.md) · [Coding Standards](docs/reference/coding-standards.md)
 - [Testing](docs/reference/testing.md) · [Learning System](docs/reference/learning-system.md) · [CMS Interoperability Framework](docs/reference/cms-framework.md) · [Merge Patterns](docs/reference/merge-patterns.md)
 
-History: [Phase 3 (BILLING + SP migrations, 2026-05-11→13)](docs/history/phase-3.md) · [CMS compliance log](docs/history/cms-compliance-log.md) · [Sessions 2026-04](docs/history/sessions-2026-04.md)
+History: [Chunk 2 (cohort gate + non-Medicare trial + Haiku routing, 2026-05-27→28)](docs/history/chunk-2-cohort-gate-2026-05-27.md) · [Phase 3 (BILLING + SP migrations, 2026-05-11→13)](docs/history/phase-3.md) · [CMS compliance log](docs/history/cms-compliance-log.md) · [Sessions 2026-04](docs/history/sessions-2026-04.md)
 
 ---
 ## Critical Rules
@@ -95,6 +95,18 @@ return <Dashboard data={healthData} userName={user.email} />;
 const ctx = getMockDashboardContext(); // ← NEVER in production
 return <Dashboard data={ctx} />; // ← shows fake data to everyone
 ```
+
+### Stage 2 — Medicare cohort gate (landed prod 2026-05-28)
+
+The app now branches on `users.is_on_medicare` (NULLABLE since Chunk 2) across middleware, appeals, paywall, chat-tool selection, and trial rate limiting. Full history: `docs/history/chunk-2-cohort-gate-2026-05-27.md`. Rules future sessions must honor:
+
+- **`users.is_on_medicare` is NULLABLE.** `null` = user hasn't answered yet; `true` = Medicare; `false` = explicitly not Medicare. **Strict `=== true` check** gates all Medicare-only features — `null` and `false` BOTH suppress the Medicare surface. Treat unknown as non-Medicare for safety.
+- **Middleware gate uses a cookie, business logic uses the DB.** `medicare_status` cookie (`"yes"`/`"no"`/absent) drives the `/app/*` → `/onboarding/medicare` interstitial redirect for routing performance. **Never read the cookie in business logic** — `/api/appeals`, `/api/appeal-outcome`, `/api/checkout` (Starter), chat tool filter, paywall filter all re-fetch from DB. Cookie is set at three sites: `verify-otp` (post-auth), `/api/profile` PATCH (toggle sync), `/api/profile` GET (legacy session heal). HttpOnly + Secure (prod) + SameSite=Lax + 30d.
+- **Non-Medicare trial = 3 days from `users.created_at`, 3 msgs/day, no weekly cap.** Independent of `subscriptions.trial_end` (Medicare path keeps that for 14-day trial). Past window → 403 `TRIAL_EXPIRED` with paywall. Within window + 3 msgs used → 429 `NON_MEDICARE_DAILY_LIMIT` with copy "You've used your 3 messages for today. Come back tomorrow." — **no upgrade CTA, no `upsell` field**.
+- **Appeals are Medicare-only.** `/api/appeals` GET, `/api/appeal-outcome` POST, and `/api/checkout` POST (only for `plan=starter`) return 403 `appeals_require_medicare` / `starter_requires_medicare` for `is_on_medicare !== true`. Chat route filters `generate_appeal_letter` out of the tool list for non-Medicare users — the model never sees the tool. Empty-state "Appeal a Denial" card hidden client-side.
+- **PaywallModal cohort-filters via `filterPlansForCohort(plans, isOnMedicare)`.** Non-Medicare users see Plus + Unlimited only (Starter omitted entirely); bullets matching `/appeal/i` are stripped from Plus/Unlimited. Pure helper in `lib/banner-visibility.ts` is the sibling pattern for the consent banner.
+- **Model routing is PLAN-based, not cohort-based** (Chunk 2.5a, currently staging-only). Trial users (Medicare or not) → Haiku 4.5; paid users (`plus`/`unlimited`/`starter`) → Sonnet 4.6; appeals → Opus 4.6. Precedence: appeal > trial > paid. Strict `userProfile != null && (userProfile.plan ?? "trial") === "trial"` check — RDS-timeout `userProfile=null` is treated as paid (Sonnet) to protect paying users from silent Haiku downgrade. `ANTHROPIC_TRIAL_MODEL` env var on task def selects the Bedrock profile.
+- **Three test accounts on prod** — see "Known test accounts on prod" section below for the canonical list. The third is an operator-known trial account; identifying details are intentionally omitted from this public doc. It follows the non-Medicare cohort path post-Chunk-2.
 
 ### Guardrails
 
@@ -213,12 +225,13 @@ After 2026-06-25 fires, `git rm` this file too.
 
 ## Known test accounts on prod
 
-Two operator-owned trial users currently exist on prod RDS. There are zero paying customers and zero non-operator accounts:
+Three trial users currently exist on prod RDS — two operator-owned admin/test accounts plus one additional operator-known trial account. There are zero paying customers and zero unknown end-user accounts:
 
-- `ramanac@gmail.com` — operator (Venkata) personal account; `users.plan='trial'`, `is_admin=TRUE`
-- `ceeveear@yahoo.com` — operator secondary test account; `users.plan='trial'`, `is_admin=FALSE`
+- `ramanac@gmail.com` — operator (Venkata) personal account; `users.plan='trial'`, `is_admin=TRUE`, `is_on_medicare=NULL` (post-Chunk-2 — cleared by 2026-05-28 migration so the operator exercises the interstitial path on next sign-in)
+- `ceeveear@yahoo.com` — operator secondary test account; `users.plan='trial'`, `is_admin=FALSE`, `is_on_medicare=true` (post-Chunk-2 — set by 2026-05-28 migration so the operator exercises the Medicare-bypass path)
+- One additional operator-known trial account; identifying details intentionally omitted from this public doc. `users.plan='trial'`, `is_admin=FALSE`, `created_at=2026-05-26`. Pre-existing `is_on_medicare=false` (Stage-1 default) carried through the 2026-05-28 migration untouched. Post-Chunk-2 cohort path: middleware redirects to `/onboarding/medicare`, page sees `is_on_medicare=false` (not null) and bounces to `/app/chat` with the non-Medicare cohort UX. Non-Medicare trial window (3 days from `created_at`) runs ~2026-05-29.
 
-Both ramanac and ceeveear have one `subscriptions` row each, auto-created by `verify-otp` from their last sign-in (plan='trial', status='trialing', no `stripe_customer_id`). Clean trial state — ready to exercise the Stripe Live upgrade flow.
+All three have one `subscriptions` row each, auto-created by `verify-otp` from their last sign-in (plan='trial', status='trialing', no `stripe_customer_id`). Clean trial state — ready to exercise the Stripe Live upgrade flow.
 
 ### History (2026-05-12 cleanup)
 
