@@ -22,6 +22,8 @@ export const API_CONFIG = {
     model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6-20260301",
     /** Appeal model — Opus 4.6 (direct API default) or Bedrock inference profile ID via ANTHROPIC_APPEAL_MODEL env */
     appealModel: process.env.ANTHROPIC_APPEAL_MODEL || "claude-opus-4-6",
+    /** Free-tier trial model — Haiku 4.5 (direct API default) or Bedrock inference profile ID via ANTHROPIC_TRIAL_MODEL env */
+    trialModel: process.env.ANTHROPIC_TRIAL_MODEL || "claude-haiku-4-5-20251001",
     maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS || "4096", 10),
     maxToolIterations: parseInt(process.env.CLAUDE_MAX_TOOL_ITERATIONS || "10", 10),
     /** Per-iteration timeout in ms (prevents single API call from hanging) */

@@ -105,7 +105,8 @@ import { NextRequest } from "next/server";
 import { POST, GET } from "../route";
 import { detectTriggers } from "@/lib/skills-loader";
 import { saveAppeal, getUnreportedOutcome } from "@/lib/conversation-server";
-import { extractUserInfo } from "@/lib/claude";
+import { extractUserInfo, createDefaultSessionState } from "@/lib/claude";
+import { API_CONFIG } from "@/config";
 
 const MOCK_USER = { userId: "user-123", email: "test@example.com" };
 
@@ -1151,5 +1152,150 @@ describe("POST /api/chat — non-Medicare trial rate limits (T9)", () => {
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.code).toBe("TRIAL_EXPIRED");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chunk 2.5a — modelOverride routing precedence
+// Free-tier (any plan="trial") chat uses Haiku; appeals use Opus; paid uses
+// default (undefined → Sonnet at lib/claude.ts). Tests assert the value passed
+// as `modelOverride` to chat() via mockChat spy.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("POST /api/chat — modelOverride routing (Chunk 2.5a)", () => {
+  const MSG = [{ role: "user" as const, content: "hi" }];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockChat.mockResolvedValue({
+      content: "Hello!",
+      suggestions: ["Try this"],
+      sessionState: {
+        diagnosisCodes: [],
+        procedureCodes: [],
+        denialCodes: [],
+        policyReferences: [],
+        isAppeal: false,
+      },
+      toolsUsed: [],
+    });
+  });
+
+  /** Mock the standard happy-path query chain (rate limits allow, conversation/messages insert ok). */
+  function setupHappyPath(profileRows: unknown[], trialEndInFuture = false) {
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    const futureDate = new Date(Date.now() + 7 * 86400000).toISOString();
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT plan")) {
+        return Promise.resolve({ rows: profileRows, rowCount: profileRows.length });
+      }
+      if (sql.includes("SELECT trial_end")) {
+        return Promise.resolve({
+          rows: trialEndInFuture ? [{ trial_end: futureDate }] : [],
+        });
+      }
+      if (sql.includes("check_weekly_frequency")) {
+        return Promise.resolve({ rows: [{ allowed: true, days_used: 0 }] });
+      }
+      if (sql.includes("check_and_increment_chat")) {
+        return Promise.resolve({ rows: [{ allowed: true, count: 1 }] });
+      }
+      if (sql.includes("INSERT INTO conversations")) {
+        return Promise.resolve({ rows: [{ id: "conv-1" }] });
+      }
+      if (sql.includes("INSERT INTO messages")) {
+        return Promise.resolve({ rows: [] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+  }
+
+  function profileRow(opts: {
+    plan: string | null;
+    isOnMedicare: boolean | null;
+  }) {
+    return {
+      plan: opts.plan,
+      is_admin: false,
+      role: "patient",
+      is_on_medicare: opts.isOnMedicare,
+      created_at: new Date().toISOString(),
+    };
+  }
+
+  it("Case 1: trial + non-Medicare + non-appeal → trialModel (Haiku)", async () => {
+    setupHappyPath([profileRow({ plan: "trial", isOnMedicare: false })]);
+    const res = await POST(makeRequest({ messages: MSG }));
+    await readSSEEvents(res);
+    expect(mockChat.mock.calls[0][0].modelOverride).toBe(
+      API_CONFIG.claude.trialModel,
+    );
+  });
+
+  it("Case 2: trial + Medicare + non-appeal → trialModel (Haiku)", async () => {
+    setupHappyPath(
+      [profileRow({ plan: "trial", isOnMedicare: true })],
+      true, // trial_end in future
+    );
+    const res = await POST(makeRequest({ messages: MSG }));
+    await readSSEEvents(res);
+    expect(mockChat.mock.calls[0][0].modelOverride).toBe(
+      API_CONFIG.claude.trialModel,
+    );
+  });
+
+  it("Case 3: trial + Medicare + appeal → appealModel (Opus) — appeal beats trial", async () => {
+    setupHappyPath(
+      [profileRow({ plan: "trial", isOnMedicare: true })],
+      true,
+    );
+    const sessionState = { ...createDefaultSessionState(), isAppeal: true };
+    const res = await POST(makeRequest({ messages: MSG, sessionState }));
+    await readSSEEvents(res);
+    expect(mockChat.mock.calls[0][0].modelOverride).toBe(
+      API_CONFIG.claude.appealModel,
+    );
+  });
+
+  it("Case 4: paid (plan='plus') + non-appeal → undefined (Sonnet default)", async () => {
+    setupHappyPath([profileRow({ plan: "plus", isOnMedicare: true })]);
+    const res = await POST(makeRequest({ messages: MSG }));
+    await readSSEEvents(res);
+    expect(mockChat.mock.calls[0][0].modelOverride).toBeUndefined();
+  });
+
+  it("Case 5: paid + appeal → appealModel (Opus)", async () => {
+    setupHappyPath([profileRow({ plan: "plus", isOnMedicare: true })]);
+    const sessionState = { ...createDefaultSessionState(), isAppeal: true };
+    const res = await POST(makeRequest({ messages: MSG, sessionState }));
+    await readSSEEvents(res);
+    expect(mockChat.mock.calls[0][0].modelOverride).toBe(
+      API_CONFIG.claude.appealModel,
+    );
+  });
+
+  it("Case 6: new user (plan=null, profile loaded) + non-appeal → trialModel (Haiku)", async () => {
+    // plan=null on a loaded profile row → route treats as trial via `userProfile?.plan || "trial"`.
+    // Using non-Medicare path (isOnMedicare=false) avoids the subscriptions.trial_end lookup;
+    // recent created_at keeps the non-Medicare 3-day window alive.
+    setupHappyPath([profileRow({ plan: null, isOnMedicare: false })]);
+    const res = await POST(makeRequest({ messages: MSG }));
+    await readSSEEvents(res);
+    expect(mockChat.mock.calls[0][0].modelOverride).toBe(
+      API_CONFIG.claude.trialModel,
+    );
+  });
+
+  it("Case 7: RDS timeout (userProfile=null) → 403 TRIAL_EXPIRED, chat never invoked (paid-quality protection)", async () => {
+    // Documents the strict `userProfile != null && ...` check in isTrial:
+    // even if the trial-expired fail-close (which fires first here, returning
+    // 403) were bypassed, paid users would NOT be silently downgraded to Haiku
+    // because the modelOverride logic resolves to undefined when userProfile
+    // is null. Defense-in-depth: both layers fail closed.
+    setupHappyPath([]); // SELECT plan returns no rows → userProfile null
+    const res = await POST(makeRequest({ messages: MSG }));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe("TRIAL_EXPIRED");
+    expect(mockChat).not.toHaveBeenCalled();
   });
 });

@@ -585,9 +585,19 @@ export async function POST(request: NextRequest) {
     };
 
     // Start async chat processing (runs after Response is returned)
+    // Model routing precedence: appeal > trial > paid default
+    //   - userProfile != null is intentional — null profile (RDS timeout) is
+    //     treated as paid (Sonnet), NOT trial, so paid users don't silently
+    //     downgrade to Haiku during a transient outage.
+    //   - userProfile.plan ?? "trial" handles loaded-but-unset plan (new
+    //     users with no subscription row yet) → trial → Haiku.
+    const isTrial =
+      userProfile != null && (userProfile.plan ?? "trial") === "trial";
     const modelOverride = sessionState.isAppeal
-      ? API_CONFIG.claude.appealModel
-      : undefined;
+      ? API_CONFIG.claude.appealModel        // Opus — appeals always full quality
+      : isTrial
+        ? API_CONFIG.claude.trialModel       // Haiku — free-tier default
+        : undefined;                         // paid → falls through to Sonnet
     console.log(
       "[Chat API] Starting streaming response...",
       modelOverride ? `(appeal mode: ${modelOverride})` : "",
