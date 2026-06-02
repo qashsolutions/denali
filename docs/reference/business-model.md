@@ -28,7 +28,11 @@ For incident response and runbooks: `docs/incidents/` and
 
 **Sign-in required for all chat.** No anonymous access — users must sign up (email OTP) before chatting. **Gmail plus address normalization**: `user+tag@gmail.com` → `user@gmail.com` at sign-in via `normalizeEmail()` in `src/lib/normalize-email.ts` — prevents duplicate accounts. OTP email sent to original address (Gmail delivers it). Every signup = automatic 14-day trial (inline DB insert in `verify-otp`, not self-referencing HTTP fetch). After trial expires → locked (0 chats, must pay). Plan values are `trial`, `starter`, `plus`, `unlimited` only. **Starter is a one-time pay-per-claim charge ($10 grants 1 appeal credit, no recurring billing); Plus and Unlimited are monthly subscriptions.** Appeal access is credit-based via `usage.appeal_credits` column; `unlimited` plan bypasses credit checks entirely. `AppealAccessStatus` returns `"available"` (has credits), `"paywall"` (no credits), or `"allowed"` (admin/counselor/unlimited). Chat rate limiting enforced via two layers: (1) `check_weekly_frequency` for weekly day limits, (2) `check_and_increment_chat` for daily limits. Returns 429 `WEEKLY_LIMIT` / `RATE_LIMITED`; returns 401 `AUTH_REQUIRED` for unauthenticated users; returns 403 `TRIAL_EXPIRED` when expired trial users try to chat. **Admin users** (`users.is_admin`) bypass all rate limits and appeal paywalls.
 
-**AI Model**: Sonnet 4.6 for all chat messages (cost-efficient). Opus 4.6 for appeal letter generation only (higher quality for formal letters).
+**AI Model** (precedence: appeal > trial > paid default, computed at `chat/route.ts:596`):
+- **Opus 4.6** for appeal letter generation (regardless of plan — conversion driver, full quality).
+- **Haiku 4.5** for free-tier trial chat (`users.plan = 'trial'`, Medicare or non-Medicare). Landed prod 2026-06-02 (Chunk 2.5a).
+- **Sonnet 4.6** for paid-plan chat (`plus`, `unlimited`, `starter`).
+- RDS-timeout fallback (`userProfile == null`) is treated as paid → Sonnet, to protect paying users from silent downgrade.
 
 ### Auth Gating
 
@@ -112,8 +116,9 @@ All runtime env vars are stored in **AWS Secrets Manager** and injected by ECS a
 # ANTHROPIC_API_KEY=sk-ant-...          # Only for local dev — omit for ECS/Bedrock (Bedrock IAM auth fires when this is unset)
 ANTHROPIC_MODEL=arn:aws:bedrock:us-east-1:236823123138:inference-profile/global.anthropic.claude-sonnet-4-6
 ANTHROPIC_APPEAL_MODEL=arn:aws:bedrock:us-east-1:236823123138:inference-profile/global.anthropic.claude-opus-4-6-v1
-# Bedrock: prefix is "global." NOT "us.", no ":0" suffix, full ARN required
-# Local dev values (direct Anthropic API): claude-sonnet-4-6-20260301 (chat) / claude-opus-4-6 (appeals)
+ANTHROPIC_TRIAL_MODEL=arn:aws:bedrock:us-east-1:236823123138:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0
+# Bedrock: prefix is "global." NOT "us.", full ARN required. Sonnet has no version/":0" suffix, Opus uses "-v1", Haiku uses "-20251001-v1:0".
+# Local dev values (direct Anthropic API): claude-sonnet-4-6-20260301 (chat) / claude-opus-4-6 (appeals) / claude-haiku-4-5-20251001 (trial)
 DATABASE_URL=postgresql://...             # RDS connection string
 COGNITO_USER_POOL_ID=us-east-1_...
 COGNITO_CLIENT_ID=...

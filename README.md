@@ -22,7 +22,7 @@ with evidence-based appeal letters.
 | Frontend | Next.js 16, React 19, TypeScript strict |
 | Hosting | AWS ECS Fargate |
 | Database | PostgreSQL 16.9 on AWS RDS (AES-256) |
-| AI | Claude Sonnet 4.6 + Opus 4.6 via AWS Bedrock |
+| AI | Claude Haiku 4.5 (free-tier chat) + Sonnet 4.6 (paid chat) + Opus 4.6 (appeals) via AWS Bedrock |
 | Auth | AWS Cognito + SES (OTP, HIPAA 30-min timeout) |
 | Payments | Stripe (PCI DSS certified) |
 | Email | AWS SES (BAA signed Feb 25, 2026) |

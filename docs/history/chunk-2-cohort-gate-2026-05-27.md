@@ -1,20 +1,20 @@
 # Chunk 2 — Medicare cohort gate + non-Medicare trial + free-tier model routing
 
-Work landed 2026-05-27 / 2026-05-28. Adds the first cohort-aware behavior to the app: Medicare vs non-Medicare branching at middleware, appeals, paywall, chat-tool, and trial-rate-limit layers. Also routes free-tier users to Haiku 4.5 (staging-only as of 2026-05-28).
+Work landed 2026-05-27 / 2026-05-28 / 2026-06-02. Adds the first cohort-aware behavior to the app: Medicare vs non-Medicare branching at middleware, appeals, paywall, chat-tool, and trial-rate-limit layers. Also routes free-tier users to Haiku 4.5 (staging 2026-05-28, prod 2026-06-02 on task def `denali:197`).
 
 ---
 
 ## What shipped (and where)
 
-| Surface | Prod (`origin/main` @ `7c8fc09`) | Staging (`origin/develop` @ `1bca8b6`) |
+| Surface | Prod (`origin/main` @ `2e5cc9c`) | Staging (`origin/develop` @ `2e5cc9c`) |
 |---|---|---|
 | Schema: `users.is_on_medicare` nullable + data fixes | ✓ applied 2026-05-28 | ✓ applied 2026-05-27 |
-| Chunk 2 core (gate + appeals + paywall + trial rate limit) | ✓ on `denali:195` | ✓ on `denali-staging:97` |
-| Chunk 2.7 banner suppression | ✓ on `denali:195` | ✓ |
-| Chunk 2.8 flaky-test fix | ✓ on `denali:195` | ✓ |
-| **Chunk 2.5a Haiku trial routing** | **— not deployed —** | **✓ on `denali-staging:97`** |
+| Chunk 2 core (gate + appeals + paywall + trial rate limit) | ✓ on `denali:195` → carried into `:197` | ✓ |
+| Chunk 2.7 banner suppression | ✓ on `denali:195` → carried into `:197` | ✓ |
+| Chunk 2.8 flaky-test fix | ✓ on `denali:195` → carried into `:197` | ✓ |
+| **Chunk 2.5a Haiku trial routing** | **✓ on `denali:197` (deployed 2026-06-02)** | **✓ on `denali-staging:97`** |
 
-Develop is one commit ahead of main pending Chunk 2.5a's prod env-var setup + V1 verification.
+Main and develop are now in sync at `2e5cc9c`. Prod task def `denali:197` carries `ANTHROPIC_TRIAL_MODEL` set to the Haiku 4.5 global inference profile. End-to-end verified on staging via operator-driven trial chat turn 2026-06-02 09:47 Central (CloudWatch claude metric line showed `claude-haiku-4-5-20251001` in the model field).
 
 ---
 
@@ -159,7 +159,8 @@ Production code:
 
 Infrastructure:
 - `scripts/migrate-medicare-gate-2026-05-27.sql` — schema + admin-account data fixes (idempotent)
-- `ANTHROPIC_TRIAL_MODEL` env var on `denali-staging:96` (manual addition, prod pending)
+- `ANTHROPIC_TRIAL_MODEL` env var on `denali-staging:96` (manual addition pre-deploy, carried into `:97`)
+- `ANTHROPIC_TRIAL_MODEL` env var on `denali:196` (manual addition pre-deploy on 2026-06-02, carried into `:197` by the merge-deploy chain)
 
 Tests: 12 new/extended test files, 98 new tests total. See per-file detail in commit `549acf9` / `568dac1` / `7c8fc09` / `1bca8b6`.
 
@@ -169,7 +170,7 @@ Tests: 12 new/extended test files, 98 new tests total. See per-file detail in co
 
 | Item | Why deferred | Where it'll be picked up |
 |---|---|---|
-| `ANTHROPIC_TRIAL_MODEL` on prod task def + Chunk 2.5a prod deploy | Staging V1 verification (Haiku actually invoked) pending | Chunk 2.5b (prod env var + merge + verify) |
+| ~~`ANTHROPIC_TRIAL_MODEL` on prod task def + Chunk 2.5a prod deploy~~ | ~~Staging V1 pending~~ | **DONE 2026-06-02** — env var on `denali:196`, FF-merge to main triggered deploy, prod now on `denali:197` |
 | Token-based throttling | Different scope than message-count limits | Chunk 2.6 |
 | Gender capture | Independent from Medicare gate | Chunk 3 |
 | Gating of other Medicare-only surfaces (Health hub, Dashboard, Diabetes, Claims, Email Alerts, FHIR routes) | Out of scope for Chunk 2 (chat + paywall + appeals only) | Chunk 4 |
@@ -191,7 +192,7 @@ Tests: 12 new/extended test files, 98 new tests total. See per-file detail in co
 - Prod logs: zero errors in last 2 min post-deploy ✓
 - Staging ECS: `denali-staging:97`, all three Anthropic models in env ✓
 - Manual V1–V4 staging: held for operator (separate confirmation pending)
-- Chunk 2.5a Haiku V1 verification: held for operator-driven trial chat turn
+- Chunk 2.5a Haiku V1 verification: ✓ staging 2026-06-02 09:47 Central — CloudWatch `_m:"claude"` log line showed `model = ".../global.anthropic.claude-haiku-4-5-20251001-v1:0"`, `iterations=1`, `totalMs=1797`. Prod task def `denali:197` carries the same env var; smoke test available on operator demand.
 
 ---
 

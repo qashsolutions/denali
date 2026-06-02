@@ -41,7 +41,7 @@ and add a dated changelog entry per Part 13 of the doc.
 * Focus: Pre-diabetes, Diabetes & Obesity coverage guidance
 * Backend: Next.js 16, React 19, TypeScript strict, AWS ECS Fargate
 * Database: PostgreSQL 16.9 on RDS (AES-256 encryption)
-* AI: Claude Sonnet 4.6 (chat) + Opus 4.6 (appeals) via AWS Bedrock
+* AI: Claude Haiku 4.5 (free-tier trial chat) + Sonnet 4.6 (paid chat) + Opus 4.6 (appeals) via AWS Bedrock
 * Auth: AWS Cognito + SES (OTP, HttpOnly cookies, 30-min HIPAA timeout)
 * Payments: Stripe (test mode until CMS production approval)
 * Email: AWS SES (BAA signed Feb 25, 2026)
@@ -105,7 +105,7 @@ The app now branches on `users.is_on_medicare` (NULLABLE since Chunk 2) across m
 - **Non-Medicare trial = 3 days from `users.created_at`, 3 msgs/day, no weekly cap.** Independent of `subscriptions.trial_end` (Medicare path keeps that for 14-day trial). Past window → 403 `TRIAL_EXPIRED` with paywall. Within window + 3 msgs used → 429 `NON_MEDICARE_DAILY_LIMIT` with copy "You've used your 3 messages for today. Come back tomorrow." — **no upgrade CTA, no `upsell` field**.
 - **Appeals are Medicare-only.** `/api/appeals` GET, `/api/appeal-outcome` POST, and `/api/checkout` POST (only for `plan=starter`) return 403 `appeals_require_medicare` / `starter_requires_medicare` for `is_on_medicare !== true`. Chat route filters `generate_appeal_letter` out of the tool list for non-Medicare users — the model never sees the tool. Empty-state "Appeal a Denial" card hidden client-side.
 - **PaywallModal cohort-filters via `filterPlansForCohort(plans, isOnMedicare)`.** Non-Medicare users see Plus + Unlimited only (Starter omitted entirely); bullets matching `/appeal/i` are stripped from Plus/Unlimited. Pure helper in `lib/banner-visibility.ts` is the sibling pattern for the consent banner.
-- **Model routing is PLAN-based, not cohort-based** (Chunk 2.5a, currently staging-only). Trial users (Medicare or not) → Haiku 4.5; paid users (`plus`/`unlimited`/`starter`) → Sonnet 4.6; appeals → Opus 4.6. Precedence: appeal > trial > paid. Strict `userProfile != null && (userProfile.plan ?? "trial") === "trial"` check — RDS-timeout `userProfile=null` is treated as paid (Sonnet) to protect paying users from silent Haiku downgrade. `ANTHROPIC_TRIAL_MODEL` env var on task def selects the Bedrock profile.
+- **Model routing is PLAN-based, not cohort-based** (Chunk 2.5a, landed prod 2026-06-02 on `denali:197`). Trial users (Medicare or not) → Haiku 4.5; paid users (`plus`/`unlimited`/`starter`) → Sonnet 4.6; appeals → Opus 4.6. Precedence: appeal > trial > paid. Strict `userProfile != null && (userProfile.plan ?? "trial") === "trial"` check — RDS-timeout `userProfile=null` is treated as paid (Sonnet) to protect paying users from silent Haiku downgrade. `ANTHROPIC_TRIAL_MODEL` env var on task def selects the Bedrock profile.
 - **Three test accounts on prod** — see "Known test accounts on prod" section below for the canonical list. The third is an operator-known trial account; identifying details are intentionally omitted from this public doc. It follows the non-Medicare cohort path post-Chunk-2.
 
 ### Guardrails
@@ -165,7 +165,7 @@ Three toggles in Settings → Privacy & Data. **All default OFF.** Enforcement i
 - **CRITICAL: Never call RDS from client-side code.** All data access goes through API routes. Pattern: client calls `fetch("/api/route", { credentials: "include" })` → server route calls `getAuthUser(request)` + `query()` → returns JSON. Examples: `useConversationHistory` → `/api/conversations`, `useHealthData` → `/api/fhir/data`, `useAuth` → `/api/profile`, `loadConversation()` → `/api/conversations/[id]`.
 - **Client-side timeout**: `useChat.ts` wraps `fetch()` with a 330s `AbortController` to prevent infinite hangs on the client.
 - **CRITICAL: SSR-safe hooks must initialize with server-matching values.** `useOnlineStatus` must use `useState(true)` — NOT `useState(typeof navigator !== "undefined" ? navigator.onLine : true)`. The latter reads `navigator.onLine` on the client during hydration, which may return `false` (flaky connection, SW cached page), causing React hydration mismatch (#418) because the server rendered `null` but the client renders a div.
-- **All AI calls route through Bedrock in production.** ECS has no `ANTHROPIC_API_KEY` → `getClaudeClient()` returns `AnthropicBedrock` (IAM auth). Chat uses Sonnet 4.6 (`global.anthropic.claude-sonnet-4-6`); appeals use Opus 4.6 (`global.anthropic.claude-opus-4-6-v1`). Both `claude.ts` and `diabetes-insights.ts` use `getClaudeClient()`. Bedrock model access is auto-enabled (no manual activation needed); controlled via IAM policies on `denali-ecs-task-role`. MCP servers were fully replaced by local tool executors calling public government APIs directly — no data leaves AWS for AI processing.
+- **All AI calls route through Bedrock in production.** ECS has no `ANTHROPIC_API_KEY` → `getClaudeClient()` returns `AnthropicBedrock` (IAM auth). Chat model resolves per the `modelOverride` precedence (`chat/route.ts:596`): appeals → Opus 4.6 (`global.anthropic.claude-opus-4-6-v1`); free-tier trial users → Haiku 4.5 (`global.anthropic.claude-haiku-4-5-20251001-v1:0`); paid users → Sonnet 4.6 (`global.anthropic.claude-sonnet-4-6`). Non-chat-route callers (`health-report.ts`, `diabetes-insights.ts`) use `getClaudeClient()` directly and resolve to whatever `API_CONFIG.claude.model` is (Sonnet by default). Bedrock model access is auto-enabled (no manual activation needed); controlled via IAM policies on `denali-ecs-task-role`. MCP servers were fully replaced by local tool executors calling public government APIs directly — no data leaves AWS for AI processing.
 
 ### Commit conventions
 
@@ -402,7 +402,7 @@ Medicare Advantage branching: when `sessionState.medicareType === "advantage"`, 
 
 Chat rate limiting: `check_weekly_frequency` + `check_and_increment_chat`. Returns 401 `AUTH_REQUIRED`, 429 `WEEKLY_LIMIT`/`RATE_LIMITED`, 403 `TRIAL_EXPIRED`. Admin bypasses both.
 
-**AI model**: Sonnet 4.6 for chat, Opus 4.6 for appeal letters only.
+**AI model**: Haiku 4.5 for free-tier trial chat (Chunk 2.5a, landed prod 2026-06-02); Sonnet 4.6 for paid-plan chat; Opus 4.6 for appeal letters regardless of plan.
 
 ### Appeal gating logic
 
