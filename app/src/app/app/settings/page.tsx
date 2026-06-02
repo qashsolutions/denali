@@ -690,7 +690,7 @@ function AppSettingsPageInner() {
                 </p>
               )}
               <p className="text-xs text-[var(--text-muted)] mt-1">
-                Used to interpret lab results accurately — reference ranges differ by sex at birth.
+                Required. Used to interpret lab results accurately — reference ranges differ by sex at birth.
               </p>
             </div>
 
