@@ -72,10 +72,14 @@ function makeGetRequest(cookies?: Record<string, string>): NextRequest {
 }
 
 // ── Full GET profile mock (4 parallel queries) ──
-function setupGetProfileQueries(isOnMedicare: boolean | null) {
+function setupGetProfileQueries(
+  isOnMedicare: boolean | null,
+  sexAtBirth: string | null = null,
+  genderIdentity: string | null = null,
+) {
   mockQuery.mockImplementation((sql: string) => {
     if (sql.includes("birth_year_modal")) {
-      // Main profile query
+      // Main profile query (Chunk 3 — also returns sex_at_birth, gender_identity)
       return Promise.resolve({
         rows: [
           {
@@ -84,6 +88,8 @@ function setupGetProfileQueries(isOnMedicare: boolean | null) {
             is_admin: false,
             birth_year: null,
             is_on_medicare: isOnMedicare,
+            sex_at_birth: sexAtBirth,
+            gender_identity: genderIdentity,
             birth_year_modal_dismissed_at: null,
             birth_year_modal_disabled: false,
           },
@@ -194,6 +200,183 @@ describe("PATCH /api/profile — medicare_status cookie sync (T11)", () => {
 });
 
 // =============================================================================
+// Chunk 3 Step 5 — PATCH sex_at_birth + gender_identity
+// =============================================================================
+
+describe("PATCH /api/profile — sex_at_birth + gender_identity (Chunk 3)", () => {
+  it("sets sex_at_birth_status cookie to 'male' when PATCH body has sex_at_birth='male'", async () => {
+    mockQuery.mockResolvedValue({
+      rows: [
+        {
+          birth_year: null,
+          is_on_medicare: false,
+          sex_at_birth: "male",
+          gender_identity: null,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const res = await PATCH(makePatchRequest({ sex_at_birth: "male" }));
+    expect(res.status).toBe(200);
+
+    const cookies = res.headers.getSetCookie();
+    const sabCookie = cookies.find((c) => c.startsWith("sex_at_birth_status="));
+    expect(sabCookie).toBeDefined();
+    expect(sabCookie).toContain("sex_at_birth_status=male");
+    expect(sabCookie).toContain("HttpOnly");
+    expect(sabCookie!.toLowerCase()).toContain("samesite=lax");
+    expect(sabCookie).toContain("Path=/");
+    expect(sabCookie).toContain("Max-Age=2592000");
+  });
+
+  it("sets sex_at_birth_status cookie to 'unknown' when PATCH body has sex_at_birth='unknown' (Prefer-not-to-say UI mapping)", async () => {
+    mockQuery.mockResolvedValue({
+      rows: [
+        {
+          birth_year: null,
+          is_on_medicare: false,
+          sex_at_birth: "unknown",
+          gender_identity: null,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const res = await PATCH(makePatchRequest({ sex_at_birth: "unknown" }));
+    expect(res.status).toBe(200);
+
+    const cookies = res.headers.getSetCookie();
+    const sabCookie = cookies.find((c) => c.startsWith("sex_at_birth_status="));
+    expect(sabCookie).toBeDefined();
+    expect(sabCookie).toContain("sex_at_birth_status=unknown");
+  });
+
+  it("clears sex_at_birth_status cookie (Max-Age=0) when PATCH body has sex_at_birth=null", async () => {
+    mockQuery.mockResolvedValue({
+      rows: [
+        {
+          birth_year: null,
+          is_on_medicare: false,
+          sex_at_birth: null,
+          gender_identity: null,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const res = await PATCH(makePatchRequest({ sex_at_birth: null }));
+    expect(res.status).toBe(200);
+
+    const cookies = res.headers.getSetCookie();
+    const sabCookie = cookies.find((c) => c.startsWith("sex_at_birth_status="));
+    expect(sabCookie).toBeDefined();
+    // Cleared via Max-Age=0 — matches the signout/route.ts pattern
+    expect(sabCookie).toContain("Max-Age=0");
+  });
+
+  it("returns 400 when sex_at_birth is an invalid enum value (DB not touched, cookie not changed)", async () => {
+    // mockQuery should not be called past validation; provide a guard
+    mockQuery.mockImplementation(() => {
+      throw new Error("DB should not be reached on validation failure");
+    });
+
+    const res = await PATCH(
+      makePatchRequest({ sex_at_birth: "not_a_real_value" }),
+    );
+    expect(res.status).toBe(400);
+
+    const body = await res.json();
+    expect(body.field).toBe("sex_at_birth");
+
+    // No sex_at_birth_status cookie should be set or cleared
+    const cookies = res.headers.getSetCookie();
+    const sabCookie = cookies.find((c) => c.startsWith("sex_at_birth_status="));
+    expect(sabCookie).toBeUndefined();
+  });
+
+  it("persists gender_identity to DB but does NOT set/change sex_at_birth_status cookie", async () => {
+    mockQuery.mockResolvedValue({
+      rows: [
+        {
+          birth_year: null,
+          is_on_medicare: false,
+          sex_at_birth: null,
+          gender_identity: "non-binary",
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const res = await PATCH(
+      makePatchRequest({ gender_identity: "non-binary" }),
+    );
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.genderIdentity).toBe("non-binary");
+
+    // gender_identity does NOT drive any cookie
+    const cookies = res.headers.getSetCookie();
+    const sabCookie = cookies.find((c) => c.startsWith("sex_at_birth_status="));
+    expect(sabCookie).toBeUndefined();
+    const giCookie = cookies.find((c) => c.startsWith("gender_identity"));
+    expect(giCookie).toBeUndefined();
+  });
+
+  it("returns 400 when gender_identity is an invalid enum value", async () => {
+    mockQuery.mockImplementation(() => {
+      throw new Error("DB should not be reached on validation failure");
+    });
+
+    const res = await PATCH(makePatchRequest({ gender_identity: "bogus" }));
+    expect(res.status).toBe(400);
+
+    const body = await res.json();
+    expect(body.field).toBe("gender_identity");
+  });
+
+  it("accepts a full three-field PATCH (is_on_medicare + sex_at_birth + gender_identity) — onboarding form happy path", async () => {
+    mockQuery.mockResolvedValue({
+      rows: [
+        {
+          birth_year: null,
+          is_on_medicare: true,
+          sex_at_birth: "female",
+          gender_identity: "female",
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const res = await PATCH(
+      makePatchRequest({
+        is_on_medicare: true,
+        sex_at_birth: "female",
+        gender_identity: "female",
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.isOnMedicare).toBe(true);
+    expect(body.sexAtBirth).toBe("female");
+    expect(body.genderIdentity).toBe("female");
+
+    const cookies = res.headers.getSetCookie();
+    const medicareCookie = cookies.find((c) =>
+      c.startsWith("medicare_status="),
+    );
+    expect(medicareCookie).toContain("medicare_status=yes");
+    const sabCookie = cookies.find((c) => c.startsWith("sex_at_birth_status="));
+    expect(sabCookie).toContain("sex_at_birth_status=female");
+    // gender_identity still produces no cookie
+    const giCookie = cookies.find((c) => c.startsWith("gender_identity"));
+    expect(giCookie).toBeUndefined();
+  });
+});
+
+// =============================================================================
 // T12 — GET /api/profile cookie heal
 // =============================================================================
 
@@ -260,5 +443,67 @@ describe("GET /api/profile — medicare_status cookie heal (T12)", () => {
     const cookies = res.headers.getSetCookie();
     const medicareCookie = cookies.find((c) => c.startsWith("medicare_status="));
     expect(medicareCookie).toBeUndefined();
+  });
+});
+
+// =============================================================================
+// Chunk 3 Step 6.5 — GET response includes sex_at_birth + gender_identity
+// =============================================================================
+
+describe("GET /api/profile — sex_at_birth + gender_identity in response (Chunk 3)", () => {
+  it("returns sexAtBirth when DB has a recognised value", async () => {
+    setupGetProfileQueries(true, "male", null);
+
+    const res = await GET(makeGetRequest() as import("next/server").NextRequest);
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.sexAtBirth).toBe("male");
+    expect(body.genderIdentity).toBeNull();
+  });
+
+  it("returns genderIdentity when DB has a recognised value", async () => {
+    setupGetProfileQueries(true, "female", "non-binary");
+
+    const res = await GET(makeGetRequest() as import("next/server").NextRequest);
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.sexAtBirth).toBe("female");
+    expect(body.genderIdentity).toBe("non-binary");
+  });
+
+  it("returns nulls for both when DB has nulls (user hasn't answered yet)", async () => {
+    setupGetProfileQueries(null, null, null);
+
+    const res = await GET(makeGetRequest() as import("next/server").NextRequest);
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.sexAtBirth).toBeNull();
+    expect(body.genderIdentity).toBeNull();
+  });
+
+  it("coerces an invalid sex_at_birth DB value to null (value-set drift defense)", async () => {
+    // Legacy/manual-edit value that's no longer in our enum.
+    setupGetProfileQueries(true, "hermaphrodite", null);
+
+    const res = await GET(makeGetRequest() as import("next/server").NextRequest);
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.sexAtBirth).toBeNull();
+  });
+
+  it("coerces an invalid gender_identity DB value to null (value-set drift defense)", async () => {
+    setupGetProfileQueries(true, "male", "genderqueer");
+
+    const res = await GET(makeGetRequest() as import("next/server").NextRequest);
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.genderIdentity).toBeNull();
+    // sex_at_birth narrowing should be independent — male still passes through
+    expect(body.sexAtBirth).toBe("male");
   });
 });

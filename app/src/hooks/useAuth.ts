@@ -9,6 +9,12 @@ import {
   TTL,
 } from "@/lib/offline-cache";
 import { AUTH } from "@/config/messages";
+import {
+  isValidSexAtBirth,
+  isValidGenderIdentity,
+  type SexAtBirth,
+  type GenderIdentity,
+} from "@/types/user-demographics";
 
 export interface AuthState {
   userId: string | null;
@@ -33,6 +39,8 @@ export interface AuthState {
   requireIdentityVerification: boolean; // Feature flag: true = Medicare App Library (ID.me required), false = Connected Apps Directory
   birthYear: number | null; // Foundation Stage 1 — null until captured via ProfileCompletionModal
   isOnMedicare: boolean; // Foundation Stage 1 — gates Medicare-specific features
+  sexAtBirth: SexAtBirth | null; // Chunk 3 — null = pre-interstitial; gated capture
+  genderIdentity: GenderIdentity | null; // Chunk 3 — optional, no gate
   birthYearModalDismissedAt: string | null; // Stage 1.C — ISO timestamp of last "Not now" click
   birthYearModalDisabled: boolean; // Stage 1.C — true after "Don't show again" or Settings toggle off
 }
@@ -79,6 +87,8 @@ const DEFAULT_AUTH_STATE: AuthState = {
   requireIdentityVerification: false,
   birthYear: null,
   isOnMedicare: false,
+  sexAtBirth: null,
+  genderIdentity: null,
   birthYearModalDismissedAt: null,
   birthYearModalDisabled: false,
 };
@@ -175,6 +185,19 @@ export function useAuth(): UseAuthReturn {
           ? profileData.birthYear
           : null;
       const isOnMedicare = profileData?.isOnMedicare === true;
+      // Chunk 3 — narrow API string|null → typed enum|null. Defense against
+      // value-set drift / a tampered response: unrecognised values → null
+      // (treated as "not yet answered" on the client).
+      const sexAtBirth: SexAtBirth | null = isValidSexAtBirth(
+        profileData?.sexAtBirth,
+      )
+        ? profileData.sexAtBirth
+        : null;
+      const genderIdentity: GenderIdentity | null = isValidGenderIdentity(
+        profileData?.genderIdentity,
+      )
+        ? profileData.genderIdentity
+        : null;
       const birthYearModalDismissedAt =
         typeof profileData?.birthYearModalDismissedAt === "string"
           ? profileData.birthYearModalDismissedAt
@@ -207,6 +230,8 @@ export function useAuth(): UseAuthReturn {
         requireIdentityVerification,
         birthYear,
         isOnMedicare,
+        sexAtBirth,
+        genderIdentity,
         birthYearModalDismissedAt,
         birthYearModalDisabled,
       };
@@ -228,6 +253,8 @@ export function useAuth(): UseAuthReturn {
         requireIdentityVerification,
         birthYear,
         isOnMedicare,
+        sexAtBirth,
+        genderIdentity,
         birthYearModalDismissedAt,
         birthYearModalDisabled,
       });
@@ -251,6 +278,8 @@ export function useAuth(): UseAuthReturn {
         requireIdentityVerification?: boolean;
         birthYear?: number | null;
         isOnMedicare?: boolean;
+        sexAtBirth?: SexAtBirth | null;
+        genderIdentity?: GenderIdentity | null;
         birthYearModalDismissedAt?: string | null;
         birthYearModalDisabled?: boolean;
       }>(STORES.PROFILE, "profile", TTL.PROFILE);
@@ -272,6 +301,10 @@ export function useAuth(): UseAuthReturn {
           requireIdentityVerification: d.requireIdentityVerification || false,
           birthYear: typeof d.birthYear === "number" ? d.birthYear : null,
           isOnMedicare: d.isOnMedicare === true,
+          sexAtBirth: isValidSexAtBirth(d.sexAtBirth) ? d.sexAtBirth : null,
+          genderIdentity: isValidGenderIdentity(d.genderIdentity)
+            ? d.genderIdentity
+            : null,
           birthYearModalDismissedAt:
             typeof d.birthYearModalDismissedAt === "string"
               ? d.birthYearModalDismissedAt

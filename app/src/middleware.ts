@@ -119,15 +119,21 @@ function applyRedirects(pathname: string, hasAccessToken: boolean, request: Next
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // Medicare cohort gate — signed-in users without the medicare_status
-  // cookie (i.e., they haven't answered the Medicare question yet) are
-  // bounced to a one-question onboarding page. /onboarding/* paths are
-  // not gated, so no redirect loop. Cookie is set by verify-otp,
-  // /api/profile PATCH, and /api/profile GET (legacy session heal).
+  // Cohort + demographics onboarding gate — signed-in users without BOTH
+  // medicare_status (Chunk 2) and sex_at_birth_status (Chunk 3) cookies are
+  // bounced to the onboarding page. Either cookie being missing/absent
+  // triggers the redirect; both must be present to pass through.
+  // /onboarding/* paths are not gated, so no redirect loop.
+  // Cookie sets (when fully wired): medicare_status set by verify-otp,
+  //   /api/profile PATCH, and /api/profile GET heal. sex_at_birth_status
+  //   will be set by the same sites (Chunks 3 Steps 4/6).
+  // Presence semantics: cookie present = user answered. Cookie absent =
+  // user hasn't answered yet (NULL in DB). No "unanswered" sentinel value.
   if (
     hasAccessToken &&
     pathname.startsWith("/app") &&
-    !request.cookies.has("medicare_status")
+    (!request.cookies.has("medicare_status") ||
+      !request.cookies.has("sex_at_birth_status"))
   ) {
     return NextResponse.redirect(new URL("/onboarding/medicare", request.url));
   }

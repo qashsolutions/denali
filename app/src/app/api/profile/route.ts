@@ -2,7 +2,8 @@
  * Profile API Route
  *
  * GET   /api/profile — returns the authenticated user's profile
- * PATCH /api/profile — updates user prerequisites (birth_year, is_on_medicare)
+ * PATCH /api/profile — updates user prerequisites (birth_year, is_on_medicare,
+ *                     sex_at_birth, gender_identity)
  *
  * Auth via Cognito JWT; data from RDS PostgreSQL.
  */
@@ -13,6 +14,12 @@ import { query } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { withMetrics } from "@/lib/metrics";
 import { AUTH, VALIDATION, SYSTEM } from "@/config/messages";
+import {
+  isValidSexAtBirth,
+  isValidGenderIdentity,
+  type SexAtBirth,
+  type GenderIdentity,
+} from "@/types/user-demographics";
 
 async function _GET(request: NextRequest) {
   const user = await getAuthUser(request);
@@ -28,10 +35,13 @@ async function _GET(request: NextRequest) {
       is_admin: boolean;
       birth_year: number | null;
       is_on_medicare: boolean;
+      sex_at_birth: string | null;
+      gender_identity: string | null;
       birth_year_modal_dismissed_at: Date | null;
       birth_year_modal_disabled: boolean;
     }>(
       `SELECT plan, role, is_admin, birth_year, is_on_medicare,
+              sex_at_birth, gender_identity,
               birth_year_modal_dismissed_at, birth_year_modal_disabled
        FROM users WHERE id = $1 LIMIT 1`,
       [user.userId],
@@ -62,6 +72,18 @@ async function _GET(request: NextRequest) {
   const verification = verificationResult.rows[0];
   const stripe = stripeResult.rows[0];
 
+  // Narrow DB string|null → typed enum|null via the value-set validators.
+  // Defense against value-set drift / legacy data — unrecognised values
+  // return null so the client treats the field as "not yet answered".
+  const sabRaw = profile?.sex_at_birth ?? null;
+  const sexAtBirth: SexAtBirth | null = isValidSexAtBirth(sabRaw)
+    ? sabRaw
+    : null;
+  const giRaw = profile?.gender_identity ?? null;
+  const genderIdentity: GenderIdentity | null = isValidGenderIdentity(giRaw)
+    ? giRaw
+    : null;
+
   const response = NextResponse.json({
     authenticated: true,
     userId: user.userId,
@@ -71,6 +93,8 @@ async function _GET(request: NextRequest) {
     isAdmin: profile?.is_admin || false,
     birthYear: profile?.birth_year ?? null,
     isOnMedicare: profile?.is_on_medicare ?? false,
+    sexAtBirth, // Chunk 3 — null = not yet answered (or invalid DB value coerced to null)
+    genderIdentity, // Chunk 3 — optional; null = not set
     birthYearModalDismissedAt:
       profile?.birth_year_modal_dismissed_at?.toISOString() ?? null,
     birthYearModalDisabled: profile?.birth_year_modal_disabled ?? false,
@@ -124,7 +148,12 @@ async function _PATCH(request: NextRequest) {
     }
 
     const bodyRecord = body as Record<string, unknown>;
-    const allowedKeys = ["birth_year", "is_on_medicare"] as const;
+    const allowedKeys = [
+      "birth_year",
+      "is_on_medicare",
+      "sex_at_birth",
+      "gender_identity",
+    ] as const;
     const unknownKeys = Object.keys(bodyRecord).filter(
       (k) => !(allowedKeys as readonly string[]).includes(k),
     );
@@ -136,7 +165,7 @@ async function _PATCH(request: NextRequest) {
     }
 
     const setClauses: string[] = [];
-    const params: Array<number | boolean | null> = [];
+    const params: Array<number | boolean | string | null> = [];
     const changedFields: string[] = [];
 
     if ("birth_year" in bodyRecord) {
@@ -172,6 +201,36 @@ async function _PATCH(request: NextRequest) {
       changedFields.push("is_on_medicare");
     }
 
+    // sex_at_birth — accepts null or a valid SexAtBirth enum string.
+    // Invalid string → 400. Mirrors is_on_medicare's per-field branch.
+    if ("sex_at_birth" in bodyRecord) {
+      const sab = bodyRecord.sex_at_birth;
+      if (sab !== null && !isValidSexAtBirth(sab)) {
+        return NextResponse.json(
+          { error: VALIDATION.INVALID_INPUT, field: "sex_at_birth" },
+          { status: 400 },
+        );
+      }
+      setClauses.push(`sex_at_birth = $${params.length + 2}`);
+      params.push(sab as SexAtBirth | null);
+      changedFields.push("sex_at_birth");
+    }
+
+    // gender_identity — accepts null or a valid GenderIdentity enum string.
+    // Persists to DB but does NOT drive a cookie (not gated by middleware).
+    if ("gender_identity" in bodyRecord) {
+      const gi = bodyRecord.gender_identity;
+      if (gi !== null && !isValidGenderIdentity(gi)) {
+        return NextResponse.json(
+          { error: VALIDATION.INVALID_INPUT, field: "gender_identity" },
+          { status: 400 },
+        );
+      }
+      setClauses.push(`gender_identity = $${params.length + 2}`);
+      params.push(gi as GenderIdentity | null);
+      changedFields.push("gender_identity");
+    }
+
     if (setClauses.length === 0) {
       return NextResponse.json(
         { error: VALIDATION.INVALID_INPUT },
@@ -181,10 +240,12 @@ async function _PATCH(request: NextRequest) {
 
     setClauses.push("updated_at = now()");
 
-    const updateSql = `UPDATE users SET ${setClauses.join(", ")} WHERE id = $1 RETURNING birth_year, is_on_medicare`;
+    const updateSql = `UPDATE users SET ${setClauses.join(", ")} WHERE id = $1 RETURNING birth_year, is_on_medicare, sex_at_birth, gender_identity`;
     const result = await query<{
       birth_year: number | null;
       is_on_medicare: boolean;
+      sex_at_birth: string | null;
+      gender_identity: string | null;
     }>(updateSql, [user.userId, ...params]);
 
     if (result.rows.length === 0) {
@@ -206,6 +267,8 @@ async function _PATCH(request: NextRequest) {
       success: true,
       birthYear: updated.birth_year,
       isOnMedicare: updated.is_on_medicare,
+      sexAtBirth: updated.sex_at_birth,
+      genderIdentity: updated.gender_identity,
     });
 
     // Sync medicare_status cookie when is_on_medicare is part of this PATCH
@@ -223,6 +286,32 @@ async function _PATCH(request: NextRequest) {
           maxAge: 30 * 24 * 60 * 60,
         },
       );
+    }
+
+    // Sync sex_at_birth_status cookie when sex_at_birth is part of this PATCH.
+    // Mirror logic: set when non-null (carries the enum value), clear when
+    // null (Max-Age=0 — Next.js cookie clear convention, same as signout).
+    // gender_identity does NOT drive a cookie — it isn't gated by middleware.
+    if (changedFields.includes("sex_at_birth")) {
+      const sabCookieOpts = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax" as const,
+        path: "/",
+      };
+      if (updated.sex_at_birth !== null) {
+        response.cookies.set("sex_at_birth_status", updated.sex_at_birth, {
+          ...sabCookieOpts,
+          maxAge: 30 * 24 * 60 * 60,
+        });
+      } else {
+        // Clearing — user's answer reset to NULL. Drop the cookie so
+        // middleware re-routes to the interstitial on next /app navigation.
+        response.cookies.set("sex_at_birth_status", "", {
+          ...sabCookieOpts,
+          maxAge: 0,
+        });
+      }
     }
 
     return response;

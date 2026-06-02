@@ -1,3 +1,14 @@
+import type { SexAtBirth, GenderIdentity } from "./user-demographics";
+
+// Re-export for convenience — types/index.ts is the central types barrel
+export type { SexAtBirth, GenderIdentity } from "./user-demographics";
+export {
+  SEX_AT_BIRTH_VALUES,
+  GENDER_IDENTITY_VALUES,
+  isValidSexAtBirth,
+  isValidGenderIdentity,
+} from "./user-demographics";
+
 // Message types
 export interface Message {
   id: string;
@@ -32,6 +43,8 @@ export interface User {
   highContrast: boolean;
   birthYear?: number | null;
   isOnMedicare: boolean;
+  sexAtBirth: SexAtBirth | null;        // Chunk 3 — null = pre-interstitial; gated capture
+  genderIdentity: GenderIdentity | null; // Chunk 3 — optional, no gate
   birthYearModalDismissedAt?: string | null; // ISO timestamp or null
   birthYearModalDisabled: boolean;
 }

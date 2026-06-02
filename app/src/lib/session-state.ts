@@ -6,6 +6,8 @@
  * Claude/Bedrock SDK into the browser bundle.
  */
 
+import type { SexAtBirth, GenderIdentity } from "@/types/user-demographics";
+
 export interface SessionState {
   // Onboarding (NEW - warm personal flow)
   userName: string | null;           // "John" - use in responses!
@@ -81,6 +83,8 @@ export interface SessionState {
 
   // User profile (set by server from DB — never trust client value)
   isOnMedicare?: boolean;                       // Stage 1.C — gates Medicare-specific skill content
+  sexAtBirth?: SexAtBirth | null;               // Chunk 3 — clinical context for coverage guidance
+  genderIdentity?: GenderIdentity | null;       // Chunk 3 — optional context
 
   // Health data (populated from fhir_cache, never from live CMS API)
   healthDataAvailable?: boolean;

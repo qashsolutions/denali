@@ -15,6 +15,13 @@ import { ALERT_TYPES, ALERT_LABELS } from "@/config/alerts";
 // import { TOTPEnrollModal } from "@/components/auth";
 import { PaywallModal } from "@/components/payment/PaywallModal";
 import { PRICING, formatPrice } from "@/config/pricing";
+import {
+  GENDER_IDENTITY_VALUES,
+  GENDER_IDENTITY_LABELS,
+  SEX_AT_BIRTH_UI_OPTIONS,
+  type SexAtBirth,
+  type GenderIdentity,
+} from "@/types/user-demographics";
 
 export default function AppSettingsPage() {
   return (
@@ -64,6 +71,13 @@ function AppSettingsPageInner() {
   const [yearSaving, setYearSaving] = useState(false);
   const [reminderSaving, setReminderSaving] = useState(false);
   const [medicareSaving, setMedicareSaving] = useState(false);
+  // Chunk 3 — Sex-at-birth + Gender-identity Settings controls (direct-action
+  // PATCH on change, mirroring the Medicare toggle). Each has its own
+  // saving/error state so failures on one don't lock the other.
+  const [sabSaving, setSabSaving] = useState(false);
+  const [sabError, setSabError] = useState<string | null>(null);
+  const [giSaving, setGiSaving] = useState(false);
+  const [giError, setGiError] = useState<string | null>(null);
 
   // Sync year input when authState.birthYear updates from a refetch
   // (e.g., after Save success, or after navigating in mid-session)
@@ -145,6 +159,52 @@ function AppSettingsPageInner() {
       console.error("Medicare toggle failed:", err);
     } finally {
       setMedicareSaving(false);
+    }
+  }
+
+  // Chunk 3 — Sex-at-birth direct-action save. PATCH on change to a
+  // SexAtBirth value; no UI path to set null (sex_at_birth is gated and a
+  // confirmed user shouldn't be able to un-answer it from here).
+  async function handleSexAtBirthChange(value: SexAtBirth) {
+    setSabSaving(true);
+    setSabError(null);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sex_at_birth: value }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed");
+      await refetchProfile();
+    } catch (err) {
+      console.error("Sex-at-birth save failed:", err);
+      setSabError("Couldn't save. Please try again.");
+    } finally {
+      setSabSaving(false);
+    }
+  }
+
+  // Chunk 3 — Gender-identity direct-action save. Clearable (PATCH null)
+  // since the field is optional. Server clears the (cookieless) read path
+  // by writing NULL in DB.
+  async function handleGenderIdentityChange(value: GenderIdentity | null) {
+    setGiSaving(true);
+    setGiError(null);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gender_identity: value }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed");
+      await refetchProfile();
+    } catch (err) {
+      console.error("Gender-identity save failed:", err);
+      setGiError("Couldn't save. Please try again.");
+    } finally {
+      setGiSaving(false);
     }
   }
 
@@ -592,6 +652,84 @@ function AppSettingsPageInner() {
                 disabled={authState.birthYear !== null && authState.birthYear !== undefined}
                 onChange={handleReminderToggle}
               />
+            </div>
+
+            {/* Sex at birth (Chunk 3) */}
+            <div className="pt-3 border-t border-[var(--border)]">
+              <label
+                htmlFor="sex-at-birth"
+                className="block text-sm font-medium text-[var(--text-primary)] mb-2"
+              >
+                Sex at birth
+              </label>
+              <select
+                id="sex-at-birth"
+                value={authState.sexAtBirth ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value as SexAtBirth;
+                  if (v) handleSexAtBirthChange(v);
+                }}
+                disabled={sabSaving}
+                className="w-full px-4 py-3 rounded-xl bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {/* Empty option only renders when authState.sexAtBirth doesn't
+                    match any visible option (e.g., "intersex" set via API).
+                    Browser shows blank in that case — documented v1 edge. */}
+                {!SEX_AT_BIRTH_UI_OPTIONS.some(
+                  (o) => o.value === authState.sexAtBirth,
+                ) && <option value="" disabled hidden></option>}
+                {SEX_AT_BIRTH_UI_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              {sabError && (
+                <p role="alert" className="text-xs text-red-600 dark:text-red-400 mt-1">
+                  {sabError}
+                </p>
+              )}
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Used to interpret lab results accurately — reference ranges differ by sex at birth.
+              </p>
+            </div>
+
+            {/* Gender identity (Chunk 3, optional) */}
+            <div className="pt-3 border-t border-[var(--border)]">
+              <label
+                htmlFor="gender-identity"
+                className="block text-sm font-medium text-[var(--text-primary)] mb-2"
+              >
+                Gender identity
+              </label>
+              <select
+                id="gender-identity"
+                value={authState.genderIdentity ?? ""}
+                onChange={(e) =>
+                  handleGenderIdentityChange(
+                    e.target.value === ""
+                      ? null
+                      : (e.target.value as GenderIdentity),
+                  )
+                }
+                disabled={giSaving}
+                className="w-full px-4 py-3 rounded-xl bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <option value="">Not set</option>
+                {GENDER_IDENTITY_VALUES.map((v) => (
+                  <option key={v} value={v}>
+                    {GENDER_IDENTITY_LABELS[v]}
+                  </option>
+                ))}
+              </select>
+              {giError && (
+                <p role="alert" className="text-xs text-red-600 dark:text-red-400 mt-1">
+                  {giError}
+                </p>
+              )}
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Optional. Helps us address you correctly.
+              </p>
             </div>
 
             {/* Medicare toggle */}

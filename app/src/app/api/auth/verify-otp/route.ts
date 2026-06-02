@@ -16,6 +16,10 @@ import { PRICING } from "@/config";
 import { normalizeEmail } from "@/lib/normalize-email";
 import { withMetrics } from "@/lib/metrics";
 import { AUTH, VALIDATION } from "@/config/messages";
+import {
+  isValidSexAtBirth,
+  type SexAtBirth,
+} from "@/types/user-demographics";
 
 /** In-memory rate limiter for OTP verification: max 5 attempts per email per 10 min */
 const otpVerifyLimits = new Map<string, { count: number; resetAt: number }>();
@@ -154,20 +158,34 @@ async function _POST(request: NextRequest) {
       console.error("[verify-otp] Trial creation failed:", trialErr);
     }
 
-    // Read is_on_medicare so we can set the medicare_status cookie below.
-    // The cookie's presence is the middleware gate's signal that the user
-    // has already answered the Medicare question. NULL = ask via
-    // /onboarding/medicare; true/false = skip onboarding.
+    // Read cohort + demographics fields so we can set the corresponding
+    // *_status cookies below. Cookie presence is the middleware gate's signal
+    // that the user has answered each question. NULL = ask via /onboarding;
+    // non-null = skip onboarding for that field.
+    //
+    // gender_identity is selected for completeness (no cookie, not gated),
+    // so future response-shape additions don't need another DB round-trip.
     let isOnMedicare: boolean | null = null;
+    let sexAtBirth: SexAtBirth | null = null;
     try {
-      const profileResult = await query<{ is_on_medicare: boolean | null }>(
-        `SELECT is_on_medicare FROM users WHERE id = $1 LIMIT 1`,
+      const profileResult = await query<{
+        is_on_medicare: boolean | null;
+        sex_at_birth: string | null;
+        gender_identity: string | null;
+      }>(
+        `SELECT is_on_medicare, sex_at_birth, gender_identity FROM users WHERE id = $1 LIMIT 1`,
         [ver.user_id],
       );
-      isOnMedicare = profileResult.rows[0]?.is_on_medicare ?? null;
+      const row = profileResult.rows[0];
+      isOnMedicare = row?.is_on_medicare ?? null;
+      // Narrow DB string → typed SexAtBirth via the value-set validator. If
+      // the DB value isn't a recognised enum (legacy data, manual edit, drift),
+      // treat as null so the user re-answers via the interstitial.
+      const sab = row?.sex_at_birth;
+      sexAtBirth = sab != null && isValidSexAtBirth(sab) ? sab : null;
     } catch (profErr) {
-      console.error("[verify-otp] is_on_medicare lookup failed:", profErr);
-      // Fall through: cookie stays unset → user goes through onboarding.
+      console.error("[verify-otp] profile lookup failed:", profErr);
+      // Fall through: cookies stay unset → user goes through onboarding.
     }
 
     logAudit("LOGIN", {
@@ -213,6 +231,17 @@ async function _POST(request: NextRequest) {
     // Missing cookie triggers the /onboarding/medicare gate in middleware.
     if (isOnMedicare !== null) {
       response.cookies.set("medicare_status", isOnMedicare ? "yes" : "no", {
+        ...cookieOpts,
+        maxAge: 30 * 24 * 60 * 60,
+      });
+    }
+
+    // Sex-at-birth demographics cookie — set whenever the user has already
+    // answered. Same presence-as-answered semantics as medicare_status;
+    // value carries the actual enum string ("male"/"female"/"intersex"/
+    // "unknown") for informational use. Middleware does a .has() check only.
+    if (sexAtBirth !== null) {
+      response.cookies.set("sex_at_birth_status", sexAtBirth, {
         ...cookieOpts,
         maxAge: 30 * 24 * 60 * 60,
       });

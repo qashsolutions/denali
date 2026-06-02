@@ -76,6 +76,8 @@ function makeAuthState(overrides: Partial<AuthState> = {}): AuthState {
     error: null,
     requireIdentityVerification: false,
     isOnMedicare: false,
+    sexAtBirth: null,
+    genderIdentity: null,
   };
   return { ...base, ...overrides };
 }

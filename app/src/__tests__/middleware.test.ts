@@ -80,6 +80,7 @@ describe("middleware", () => {
         refresh_token: "ref",
         session_issued_at: String(eightDaysAgo),
         medicare_status: "yes",
+        sex_at_birth_status: "male",
       })
     );
 
@@ -108,6 +109,7 @@ describe("middleware", () => {
         access_token: "tok",
         session_issued_at: String(oneDayAgo),
         medicare_status: "yes",
+        sex_at_birth_status: "male",
       })
     );
 
@@ -147,6 +149,7 @@ describe("middleware", () => {
       makeRequest("/app/chat", {
         refresh_token: "valid-ref",
         medicare_status: "yes",
+        sex_at_birth_status: "male",
       })
     );
 
@@ -167,6 +170,7 @@ describe("middleware", () => {
         access_token: "valid",
         refresh_token: "ref",
         medicare_status: "yes",
+        sex_at_birth_status: "male",
       })
     );
 
@@ -245,6 +249,7 @@ describe("middleware", () => {
       makeRequest("/app/chat", {
         access_token: "tok",
         medicare_status: "yes",
+        sex_at_birth_status: "male",
       })
     );
 
@@ -269,6 +274,7 @@ describe("middleware", () => {
         access_token: "tok",
         session_issued_at: "invalid",
         medicare_status: "yes",
+        sex_at_birth_status: "male",
       })
     );
 
@@ -316,6 +322,7 @@ describe("middleware", () => {
         refresh_token: "ref",
         session_issued_at: String(nearExpiry),
         medicare_status: "yes",
+        sex_at_birth_status: "male",
       })
     );
 
@@ -392,6 +399,7 @@ describe("middleware", () => {
       makeRequest("/app/chat", {
         access_token: "tok",
         medicare_status: "yes",
+        sex_at_birth_status: "male",
       })
     );
 
@@ -403,10 +411,28 @@ describe("middleware", () => {
       makeRequest("/app/chat", {
         access_token: "tok",
         medicare_status: "no",
+        sex_at_birth_status: "female",
       })
     );
 
     expect(res.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("redirects to /onboarding/medicare when medicare_status is set but sex_at_birth_status is missing", async () => {
+    // Chunk 3 — the demographics gate. Both cookies must be present to pass
+    // through. Medicare answered but sex_at_birth still unanswered → redirect.
+    const res = await middleware(
+      makeRequest("/app/chat", {
+        access_token: "tok",
+        medicare_status: "yes",
+        // sex_at_birth_status intentionally absent
+      })
+    );
+
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get("location")!).pathname).toBe(
+      "/onboarding/medicare"
+    );
   });
 
   it("does NOT redirect to onboarding when already on /onboarding/medicare (loop prevention)", async () => {

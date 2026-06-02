@@ -5,9 +5,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  *
  * The page is a thin async server component:
  *   - Unauthenticated → redirect("/")  [throws via mockRedirect]
- *   - is_on_medicare = true  → returns JSX with alreadyAnswered={true}
- *   - is_on_medicare = false → returns JSX with alreadyAnswered={true}
- *   - is_on_medicare = null  → returns JSX with alreadyAnswered={false}
+ *   - Chunk 3 (Step 6): alreadyAnswered requires BOTH is_on_medicare AND
+ *     sex_at_birth to be non-null. Either still null → render the form.
  *
  * In the node test environment React.createElement produces element objects
  * without invoking the component function. We inspect the returned element's
@@ -66,24 +65,28 @@ function getProps(element: unknown): Record<string, unknown> {
 }
 
 describe("MedicareOnboardingPage — server-side routing", () => {
-  it("renders with alreadyAnswered=true when is_on_medicare=true", async () => {
+  it("renders with alreadyAnswered=true when BOTH is_on_medicare AND sex_at_birth are set", async () => {
     mockGetAuthUserFromServerContext.mockResolvedValue(MOCK_USER);
-    mockQuery.mockResolvedValue({ rows: [{ is_on_medicare: true }], rowCount: 1 });
+    mockQuery.mockResolvedValue({
+      rows: [{ is_on_medicare: true, sex_at_birth: "male" }],
+      rowCount: 1,
+    });
 
     const result = await MedicareOnboardingPage();
 
     // No server-side redirect — form handles /app/chat redirect via useEffect
     expect(mockRedirect).not.toHaveBeenCalled();
-    // The page resolves to something (not null/undefined)
     expect(result).toBeTruthy();
-    // Props inspection: alreadyAnswered should be true (is_on_medicare !== null)
     const props = getProps(result);
     expect(props.alreadyAnswered).toBe(true);
   });
 
-  it("renders with alreadyAnswered=true when is_on_medicare=false", async () => {
+  it("renders with alreadyAnswered=true when is_on_medicare=false and sex_at_birth='female'", async () => {
     mockGetAuthUserFromServerContext.mockResolvedValue(MOCK_USER);
-    mockQuery.mockResolvedValue({ rows: [{ is_on_medicare: false }], rowCount: 1 });
+    mockQuery.mockResolvedValue({
+      rows: [{ is_on_medicare: false, sex_at_birth: "female" }],
+      rowCount: 1,
+    });
 
     const result = await MedicareOnboardingPage();
 
@@ -93,9 +96,42 @@ describe("MedicareOnboardingPage — server-side routing", () => {
     expect(props.alreadyAnswered).toBe(true);
   });
 
-  it("renders with alreadyAnswered=false when is_on_medicare=null (show the question)", async () => {
+  it("renders with alreadyAnswered=false when is_on_medicare set but sex_at_birth=null (Chunk 3 gate)", async () => {
     mockGetAuthUserFromServerContext.mockResolvedValue(MOCK_USER);
-    mockQuery.mockResolvedValue({ rows: [{ is_on_medicare: null }], rowCount: 1 });
+    mockQuery.mockResolvedValue({
+      rows: [{ is_on_medicare: true, sex_at_birth: null }],
+      rowCount: 1,
+    });
+
+    const result = await MedicareOnboardingPage();
+
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(result).toBeTruthy();
+    const props = getProps(result);
+    expect(props.alreadyAnswered).toBe(false);
+  });
+
+  it("renders with alreadyAnswered=false when sex_at_birth set but is_on_medicare=null", async () => {
+    mockGetAuthUserFromServerContext.mockResolvedValue(MOCK_USER);
+    mockQuery.mockResolvedValue({
+      rows: [{ is_on_medicare: null, sex_at_birth: "male" }],
+      rowCount: 1,
+    });
+
+    const result = await MedicareOnboardingPage();
+
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(result).toBeTruthy();
+    const props = getProps(result);
+    expect(props.alreadyAnswered).toBe(false);
+  });
+
+  it("renders with alreadyAnswered=false when both is_on_medicare AND sex_at_birth are null (show the form)", async () => {
+    mockGetAuthUserFromServerContext.mockResolvedValue(MOCK_USER);
+    mockQuery.mockResolvedValue({
+      rows: [{ is_on_medicare: null, sex_at_birth: null }],
+      rowCount: 1,
+    });
 
     const result = await MedicareOnboardingPage();
 
