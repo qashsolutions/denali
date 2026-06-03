@@ -660,7 +660,7 @@ function AppSettingsPageInner() {
                 htmlFor="sex-at-birth"
                 className="block text-sm font-medium text-[var(--text-primary)] mb-2"
               >
-                Sex at birth
+                Sex at birth <span className="text-red-600 dark:text-red-400" aria-hidden="true">*</span>
               </label>
               <select
                 id="sex-at-birth"
@@ -669,6 +669,7 @@ function AppSettingsPageInner() {
                   const v = e.target.value as SexAtBirth;
                   if (v) handleSexAtBirthChange(v);
                 }}
+                aria-required="true"
                 disabled={sabSaving}
                 className="w-full px-4 py-3 rounded-xl bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] disabled:opacity-60 disabled:cursor-not-allowed"
               >
@@ -690,7 +691,7 @@ function AppSettingsPageInner() {
                 </p>
               )}
               <p className="text-xs text-[var(--text-muted)] mt-1">
-                Required. Used to interpret lab results accurately — reference ranges differ by sex at birth.
+                <span className="font-bold text-red-600 dark:text-red-400">Required.</span> Used to interpret lab results accurately — reference ranges differ by sex at birth.
               </p>
             </div>
 
