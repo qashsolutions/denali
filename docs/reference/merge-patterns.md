@@ -106,6 +106,15 @@ Total elapsed: ~2 min including pre/post verification. ECS task continued
 serving traffic throughout — the exec session uses a separate pg client
 that doesn't touch the request-handling pool.
 
+**Operator-verification refinement (Chunk 3 prod migration, 2026-06-02):**
+for higher-stakes migrations, `console.log` the decoded SQL text before
+running `pool.query(sql)` so the operator can eyeball the literal SQL that's
+about to execute against prod. The base64 layers are invisible to the
+operator otherwise — explicit echo is cheap insurance. Pattern landed cleanly
+on the Chunk 3 `migrate-stage-3-gender-2026-06-02.sql` apply against both
+staging and prod RDS (two new nullable TEXT columns on `users` — see
+`docs/history/chunk-3-demographics-2026-06-02.md` for full context).
+
 ---
 
 ### 3. Conflict bucketing (Easy / Medium / Hard)

@@ -63,7 +63,7 @@ Full topical reference under `docs/reference/`. Hub keeps summaries; reference d
 - [UI/UX Guidelines](docs/reference/ui.md) · [PWA Offline](docs/reference/pwa.md) · [Coding Standards](docs/reference/coding-standards.md)
 - [Testing](docs/reference/testing.md) · [Learning System](docs/reference/learning-system.md) · [CMS Interoperability Framework](docs/reference/cms-framework.md) · [Merge Patterns](docs/reference/merge-patterns.md)
 
-History: [Chunk 2 (cohort gate + non-Medicare trial + Haiku routing, 2026-05-27→28)](docs/history/chunk-2-cohort-gate-2026-05-27.md) · [Phase 3 (BILLING + SP migrations, 2026-05-11→13)](docs/history/phase-3.md) · [CMS compliance log](docs/history/cms-compliance-log.md) · [Sessions 2026-04](docs/history/sessions-2026-04.md)
+History: [Chunk 3 (demographics capture, 2026-06-02)](docs/history/chunk-3-demographics-2026-06-02.md) · [Chunk 2 (cohort gate + non-Medicare trial + Haiku routing, 2026-05-27→28)](docs/history/chunk-2-cohort-gate-2026-05-27.md) · [Phase 3 (BILLING + SP migrations, 2026-05-11→13)](docs/history/phase-3.md) · [CMS compliance log](docs/history/cms-compliance-log.md) · [Sessions 2026-04](docs/history/sessions-2026-04.md)
 
 ---
 ## Critical Rules
@@ -107,6 +107,17 @@ The app now branches on `users.is_on_medicare` (NULLABLE since Chunk 2) across m
 - **PaywallModal cohort-filters via `filterPlansForCohort(plans, isOnMedicare)`.** Non-Medicare users see Plus + Unlimited only (Starter omitted entirely); bullets matching `/appeal/i` are stripped from Plus/Unlimited. Pure helper in `lib/banner-visibility.ts` is the sibling pattern for the consent banner.
 - **Model routing is PLAN-based, not cohort-based** (Chunk 2.5a, landed prod 2026-06-02 on `denali:197`). Trial users (Medicare or not) → Haiku 4.5; paid users (`plus`/`unlimited`/`starter`) → Sonnet 4.6; appeals → Opus 4.6. Precedence: appeal > trial > paid. Strict `userProfile != null && (userProfile.plan ?? "trial") === "trial"` check — RDS-timeout `userProfile=null` is treated as paid (Sonnet) to protect paying users from silent Haiku downgrade. `ANTHROPIC_TRIAL_MODEL` env var on task def selects the Bedrock profile.
 - **Three test accounts on prod** — see "Known test accounts on prod" section below for the canonical list. The third is an operator-known trial account; identifying details are intentionally omitted from this public doc. It follows the non-Medicare cohort path post-Chunk-2.
+
+### Stage 3 — Demographics capture (landed prod 2026-06-02)
+
+Two USCDI-aligned demographic fields added to `users` and a new cookie-gated onboarding flow. The 1-question Medicare interstitial from Chunk 2 became a 3-question interstitial. Full history: `docs/history/chunk-3-demographics-2026-06-02.md`. Rules future sessions must honor:
+
+- **`users.sex_at_birth` and `users.gender_identity` are nullable TEXT columns** with no DB CHECK constraints. Validation lives in `app/src/types/user-demographics.ts` as TypeScript string-literal unions (`SexAtBirth`, `GenderIdentity`) plus `isValidSexAtBirth` / `isValidGenderIdentity` type guards. Rationale: USCDI value sets occasionally evolve; app-layer validation is more flexible than `ALTER CONSTRAINT`, and the type guards double as defense against schema drift. Narrowing fires at every read/write boundary (PATCH/GET `/api/profile`, `verify-otp`, `useAuth.ts` cached-profile and API-response paths).
+- **Middleware now requires BOTH `medicare_status` AND `sex_at_birth_status` cookies on `/app/*`.** Missing either one → redirect to `/onboarding/medicare`. Cookie is presence-checked only, never read for business logic. Same write-site discipline as Chunk 2: `verify-otp` (post-auth, set when DB value is non-null), `/api/profile` PATCH (set when non-null, **clear with `Max-Age=0` when set to null** — asymmetric vs. medicare_status because sex_at_birth at the API layer accepts null), `/api/profile` GET (legacy session heal). HttpOnly + Secure (prod) + SameSite=Lax + 30d.
+- **`PATCH /api/profile` honors additive semantics — omitted keys = "don't touch column".** The onboarding form's `buildOnboardingPayload` exploits this: required fields (`is_on_medicare`, `sex_at_birth`) always included; optional `gender_identity` included only when the user picked a value. Skipping the optional dropdown sends a partial payload, no unintended UPDATE.
+- **The `SexAtBirth` enum has 4 values but v1 UI exposes only 3.** `SEX_AT_BIRTH_UI_OPTIONS` (shared by onboarding form + Settings) = `["male", "female", "unknown"]` with label "Prefer not to say" for `unknown`. The `"intersex"` value is API-settable but absent from the v1 picker. Documented edge in Settings: when `authState.sexAtBirth === "intersex"`, dropdown shows blank (conditional empty `<option>` prevents wrong-option auto-select).
+- **"Required" affordance differs by surface, deliberately.** Onboarding interstitial signals required via disabled-Continue button (`canSubmitOnboarding` gate). Settings signals required via red asterisk on the label + bold-red "Required." prefix in helper text + `aria-required="true"` on the `<select>` (asterisk is `aria-hidden="true"` so screen readers announce required via ARIA, not the literal character). Color uses Tailwind `text-red-600 dark:text-red-400` matching 9 existing sibling error-text usages, not the `--color-error` CSS variable.
+- **Pure-helper extraction pattern for onboarding form testability.** `MedicareOnboardingForm.tsx` exports `canSubmitOnboarding`, `buildOnboardingPayload`, `submitOnboarding`, `healMedicareCookie` for vitest (node env). Render + interaction tests are deferred to Playwright. Same convention as Chunk 2's onboarding helpers.
 
 ### Guardrails
 
@@ -232,6 +243,8 @@ Three trial users currently exist on prod RDS — two operator-owned admin/test 
 - One additional operator-known trial account; identifying details intentionally omitted from this public doc. `users.plan='trial'`, `is_admin=FALSE`, `created_at=2026-05-26`. Pre-existing `is_on_medicare=false` (Stage-1 default) carried through the 2026-05-28 migration untouched. Post-Chunk-2 cohort path: middleware redirects to `/onboarding/medicare`, page sees `is_on_medicare=false` (not null) and bounces to `/app/chat` with the non-Medicare cohort UX. Non-Medicare trial window (3 days from `created_at`) runs ~2026-05-29.
 
 All three have one `subscriptions` row each, auto-created by `verify-otp` from their last sign-in (plan='trial', status='trialing', no `stripe_customer_id`). Clean trial state — ready to exercise the Stripe Live upgrade flow.
+
+**Post-Chunk-3 cohort path (2026-06-02 onward):** All three accounts have `sex_at_birth = null` and `gender_identity = null` (newly-added columns, no backfill). All three lack the `sex_at_birth_status` cookie, so they will hit the 3-question onboarding interstitial on their next `/app/*` navigation. Intentional — they pick up the new gate as they return, same pattern as Chunk 2's interstitial rollout. Staging-side V1 verification on 2026-06-02 confirmed ramanac's row updated to `sex_at_birth='male', gender_identity=null` after completing the interstitial.
 
 ### History (2026-05-12 cleanup)
 
