@@ -67,6 +67,12 @@ export interface ApiClient {
   refresh(): Promise<void>;
   signOut(): Promise<void>;
   isAuthenticated(): boolean;
+  /**
+   * Returns the current authenticated user (Cognito sub + email) or null
+   * if not signed in. Consumers use this to bootstrap profile state and to
+   * supply `user_id` when calling `LocalDataDAL` write methods.
+   */
+  getCurrentUser(): { userId: string; email: string } | null;
   /** Subscribe to "tokens cleared, must re-sign-in" events. Returns unsubscribe. */
   onSignInRequired(handler: () => void): () => void;
 

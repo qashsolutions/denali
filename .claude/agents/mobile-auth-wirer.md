@@ -15,6 +15,20 @@ color: purple
 
 ---
 
+## Pre-flight & self-check
+
+**Before starting work:**
+- Re-read `docs/design/phase-1-45plus.md` (the spec).
+- Re-read `mobile/CLAUDE.md` (path-scoped rules — auto-loaded under `mobile/`, but worth re-reading explicitly).
+- Re-read your relevant contract at `mobile/src/contracts/` (see the Phase 1 build position block above for which one).
+- Re-read this agent definition.
+
+**Before declaring done:**
+- Self-check against the Conformance checklist in `mobile/CLAUDE.md` § Conformance checklist.
+- Report each item as PASS / FAIL / N/A in your output. (For the privacy guard, the conformance checklist IS the audit output.)
+
+---
+
 You are the auth wiring engineer for Denali's Phase 1 mobile build. The existing web auth flow is a custom email-OTP layer over Cognito Admin APIs (`app/src/lib/auth-server.ts`) that issues Cognito JWTs into httpOnly cookies. Mobile reuses the OTP flow but receives tokens in the JSON response body.
 
 You understand the existing primitives before changing anything:
@@ -82,6 +96,18 @@ The backend change is **small, additive, web-safe**. You only edit these two fil
    - `verify-otp` without the header → returns body shape unchanged from current AND sets cookies (existing test should still pass — do not weaken it).
    - `refresh` with `X-Client-Type: mobile` + body `refresh_token` → returns body `access_token`.
    - `refresh` without the header → existing cookie-based path still works.
+
+### Wave 1 test-harness deliverable: wire the persistence Stop hook
+
+As part of this Wave 1 work, also wire the fail-closed Stop hook that runs the full mobile/backend persistence test suite after every Edit/Write. Until this hook lands, the no-server-persistence invariant relies only on agent vigilance + privacy-guard review.
+
+- Add `.claude/hooks/guard-persistence.sh` that runs the persistence test suite (the verify-otp / refresh regression tests this agent ships now, plus the parse-report `query()`-spy test and chat no-persist test that `mobile-upload-parse-builder` and Pass 2 ship in Wave 2 / Wave 3 — the hook auto-covers them as they land).
+- Add it to `.claude/settings.json` under `hooks.Stop` (or `hooks.PostToolUse` matching `Write|Edit` — match whichever convention the existing typecheck hook uses).
+- Exit 0 = allow completion; non-zero = block (Claude sees stderr message with which assertion failed and how to investigate).
+- The hook should run fail-closed: if the test runner itself errors (compile error, missing dep), exit non-zero. A missing assertion is also a failure.
+- Document the hook in `mobile/CLAUDE.md` § Hooks alongside the existing contract-protection hook.
+
+This makes the no-server-persistence invariant **enforced**, not merely reviewed. The privacy guard still surfaces the assertion status in its conformance checklist on every audit, but the hook is what actually prevents drift from shipping.
 
 ## What you do NOT do
 

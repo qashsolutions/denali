@@ -5,7 +5,8 @@
         "matcher": "Write|Edit",
         "hooks": [
           { "type": "command", "command": ".claude/hooks/secrets-scanner.sh" },
-          { "type": "command", "command": ".claude/hooks/phi-scanner.sh" }
+          { "type": "command", "command": ".claude/hooks/phi-scanner.sh" },
+          { "type": "command", "command": ".claude/hooks/guard-contracts.sh" }
         ]
       }
     ],

@@ -153,6 +153,9 @@ export interface ObservationsFilter {
   category?: ObservationCategory;
   code_system?: CodeSystem;
   code?: string;
+  /** Filter to observations linked to a specific report (e.g., the upload
+   *  review screen lists observations attached to a single source report). */
+  report_id?: string;
   /** ISO8601 inclusive lower bound on effective_at. */
   since?: string;
   /** ISO8601 exclusive upper bound on effective_at. */

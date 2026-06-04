@@ -65,6 +65,8 @@ Full topical reference under `docs/reference/`. Hub keeps summaries; reference d
 
 History: [Chunk 3 (demographics capture, 2026-06-02)](docs/history/chunk-3-demographics-2026-06-02.md) · [Chunk 2 (cohort gate + non-Medicare trial + Haiku routing, 2026-05-27→28)](docs/history/chunk-2-cohort-gate-2026-05-27.md) · [Phase 3 (BILLING + SP migrations, 2026-05-11→13)](docs/history/phase-3.md) · [CMS compliance log](docs/history/cms-compliance-log.md) · [Sessions 2026-04](docs/history/sessions-2026-04.md)
 
+Phase 1 mobile (in progress): spec at [docs/design/phase-1-45plus.md](docs/design/phase-1-45plus.md); path-scoped rules in [mobile/CLAUDE.md](mobile/CLAUDE.md) (auto-loaded under `mobile/`); agent topology in `.claude/agents/mobile-*.md`; decisions in [docs/history/phase-1-mobile-decisions.md](docs/history/phase-1-mobile-decisions.md).
+
 ---
 ## Critical Rules
 
