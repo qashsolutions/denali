@@ -66,11 +66,14 @@ const COGNITO_TOKENS = {
 // is not reset between tests because it lives in the imported module's
 // closure — using distinct emails sidesteps it cleanly.
 let _emailCounter = 0;
-function makeRequest(otp = "123456"): Request {
+function makeRequest(otp = "123456", extraHeaders?: Record<string, string>): Request {
   const email = `test${++_emailCounter}@example.com`;
   return new Request("http://localhost/api/auth/verify-otp", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(extraHeaders ?? {}),
+    },
     body: JSON.stringify({ email, otp }),
   });
 }
@@ -271,5 +274,175 @@ describe("POST /api/auth/verify-otp — medicare_status cookie (T10)", () => {
     const medicareCookie = cookies.find((c) => c.startsWith("medicare_status="));
     expect(medicareCookie).toBeDefined();
     expect(medicareCookie).toContain("medicare_status=yes");
+  });
+});
+
+/**
+ * Phase 1 mobile — X-Client-Type: mobile branch.
+ *
+ * Added by mobile-auth-wirer (Wave 1) per docs/design/phase-1-45plus.md §76.
+ *
+ * Tests prove:
+ *   1. Mobile branch returns body tokens and NO Set-Cookie at all.
+ *   2. Web path (no header) is byte-identical to its pre-mobile behavior —
+ *      this is the LOAD-BEARING regression test. If anyone refactors the
+ *      mobile branch and accidentally drops a cookie on the web path,
+ *      these tests fire.
+ *
+ * Both tests use `setupHappyPath` so they exercise the same DB stub trail.
+ */
+describe("POST /api/auth/verify-otp — X-Client-Type: mobile (Phase 1 mobile)", () => {
+  it("returns body tokens and NO Set-Cookie when header is 'mobile'", async () => {
+    setupHappyPath(true, "male", "non_binary");
+
+    const res = await POST(
+      makeRequest("123456", { "X-Client-Type": "mobile" }) as
+        import("next/server").NextRequest,
+    );
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    // Exact mobile response shape per the agent definition + spec §76.
+    expect(body).toEqual({
+      success: true,
+      mfaRequired: false,
+      user: { email: expect.any(String), userId: "user-abc" },
+      access_token: "access-tok",
+      refresh_token: "refresh-tok",
+      expires_in: 3600,
+    });
+
+    // CRITICAL: zero Set-Cookie headers on the mobile branch.
+    const cookies = res.headers.getSetCookie();
+    expect(cookies).toEqual([]);
+  });
+
+  it("byte-identical web regression: NO header → existing response shape unchanged + all expected cookies present", async () => {
+    setupHappyPath(true, "male", "non_binary");
+
+    // Snapshot the pre-mobile-branch behavior: web path MUST still set every
+    // cookie the route used to set. Any drift here means the mobile branch
+    // accidentally tampered with the web path.
+    const res = await POST(makeRequest() as import("next/server").NextRequest);
+    expect(res.status).toBe(200);
+
+    // Response body shape — web has NEVER returned tokens in the body, and
+    // adding `access_token`/`refresh_token` to the web body would be a security
+    // regression. Assert they remain absent.
+    const body = await res.json();
+    expect(body).toEqual({
+      success: true,
+      mfaRequired: false,
+      user: { email: expect.any(String), userId: "user-abc" },
+    });
+    expect(body).not.toHaveProperty("access_token");
+    expect(body).not.toHaveProperty("refresh_token");
+    expect(body).not.toHaveProperty("expires_in");
+
+    // Every Set-Cookie the route emitted before the mobile branch existed
+    // must still be present:
+    //   - access_token (Cognito JWT, HttpOnly)
+    //   - refresh_token (Cognito refresh, HttpOnly, 30 days)
+    //   - session_issued_at (NIST 800-63B 7-day cap timestamp)
+    //   - mfa_verified (cleared / Max-Age=0 on fresh login)
+    //   - medicare_status (yes, because is_on_medicare=true)
+    //   - sex_at_birth_status (male, because sex_at_birth="male")
+    const cookies = res.headers.getSetCookie();
+
+    const access = cookies.find((c) => c.startsWith("access_token="));
+    expect(access).toBeDefined();
+    expect(access).toContain("access_token=access-tok");
+    expect(access).toContain("HttpOnly");
+    expect(access!.toLowerCase()).toContain("samesite=lax");
+    expect(access).toContain("Path=/");
+    expect(access).toContain("Max-Age=3600");
+
+    const refresh = cookies.find((c) => c.startsWith("refresh_token="));
+    expect(refresh).toBeDefined();
+    expect(refresh).toContain("refresh_token=refresh-tok");
+    expect(refresh).toContain("HttpOnly");
+    expect(refresh!.toLowerCase()).toContain("samesite=lax");
+    expect(refresh).toContain("Path=/");
+    // 30 days in seconds — must match the existing route line ("30 * 24 * 60 * 60").
+    expect(refresh).toContain("Max-Age=2592000");
+
+    const sessionIssuedAt = cookies.find((c) =>
+      c.startsWith("session_issued_at="),
+    );
+    expect(sessionIssuedAt).toBeDefined();
+    expect(sessionIssuedAt).toContain("HttpOnly");
+    expect(sessionIssuedAt!.toLowerCase()).toContain("samesite=lax");
+    expect(sessionIssuedAt).toContain("Path=/");
+    expect(sessionIssuedAt).toContain("Max-Age=2592000");
+
+    const mfaCleared = cookies.find((c) => c.startsWith("mfa_verified="));
+    expect(mfaCleared).toBeDefined();
+    expect(mfaCleared).toContain("Max-Age=0");
+
+    const medicare = cookies.find((c) => c.startsWith("medicare_status="));
+    expect(medicare).toBeDefined();
+    expect(medicare).toContain("medicare_status=yes");
+    expect(medicare).toContain("Max-Age=2592000");
+
+    const sab = cookies.find((c) => c.startsWith("sex_at_birth_status="));
+    expect(sab).toBeDefined();
+    expect(sab).toContain("sex_at_birth_status=male");
+    expect(sab).toContain("Max-Age=2592000");
+  });
+
+  it("byte-identical web regression: any non-mobile header value preserves cookies", async () => {
+    // Defensive — only the exact string "mobile" triggers the branch.
+    // Anything else (other clients, typos) must use the web path.
+    setupHappyPath(true, "female");
+
+    const res = await POST(
+      makeRequest("123456", { "X-Client-Type": "web" }) as
+        import("next/server").NextRequest,
+    );
+    expect(res.status).toBe(200);
+
+    const cookies = res.headers.getSetCookie();
+    // Sample two cookies that prove we took the web path.
+    expect(cookies.some((c) => c.includes("access_token=access-tok"))).toBe(true);
+    expect(cookies.some((c) => c.startsWith("refresh_token="))).toBe(true);
+    expect(cookies.some((c) => c.startsWith("session_issued_at="))).toBe(true);
+
+    // And the body shape stays "web" (no tokens).
+    const body = await res.json();
+    expect(body).not.toHaveProperty("access_token");
+  });
+
+  it("mobile branch sets mfaRequired:true when totp_enrolled_at is set", async () => {
+    // Mirror the web's mfaRequired calculation — present on both branches.
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("FROM user_verification")) {
+        return Promise.resolve({
+          rows: [{ ...BASE_VERIFY_ROW, totp_enrolled_at: "2026-01-01T00:00:00Z" }],
+          rowCount: 1,
+        });
+      }
+      if (sql.includes("UPDATE user_verification")) return Promise.resolve({ rows: [], rowCount: 1 });
+      if (sql.includes("INSERT INTO usage")) return Promise.resolve({ rows: [], rowCount: 1 });
+      if (sql.includes("FROM subscriptions"))
+        return Promise.resolve({ rows: [{ trial_start: null }], rowCount: 1 });
+      if (sql.includes("INSERT INTO subscriptions"))
+        return Promise.resolve({ rows: [], rowCount: 1 });
+      if (sql.includes("is_on_medicare"))
+        return Promise.resolve({ rows: [], rowCount: 0 });
+      return Promise.resolve({ rows: [], rowCount: 0 });
+    });
+
+    const res = await POST(
+      makeRequest("123456", { "X-Client-Type": "mobile" }) as
+        import("next/server").NextRequest,
+    );
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.mfaRequired).toBe(true);
+    expect(body.access_token).toBe("access-tok");
+
+    // Still zero cookies on mobile.
+    expect(res.headers.getSetCookie()).toEqual([]);
   });
 });

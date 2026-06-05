@@ -11,13 +11,16 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 
+import { ApiClientProvider } from "@/auth";
 import { RootNavigator } from "@/navigation/RootNavigator";
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <StatusBar style="auto" />
-      <RootNavigator />
-    </NavigationContainer>
+    <ApiClientProvider>
+      <NavigationContainer>
+        <StatusBar style="auto" />
+        <RootNavigator />
+      </NavigationContainer>
+    </ApiClientProvider>
   );
 }

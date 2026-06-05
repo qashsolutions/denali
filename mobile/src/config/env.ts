@@ -13,6 +13,7 @@ import Constants from "expo-constants";
 
 type ExtraConfig = {
   apiBaseUrl?: string;
+  refreshTokenLifetimeDays?: number;
 };
 
 const extra: ExtraConfig =
@@ -21,3 +22,23 @@ const extra: ExtraConfig =
 /** Base URL for all backend calls. Defaults to staging until overridden. */
 export const API_BASE_URL: string =
   extra.apiBaseUrl ?? "https://staging.denali.health";
+
+/**
+ * Cognito refresh-token lifetime in days. Sourced from `app.config.ts`
+ * `extra.refreshTokenLifetimeDays` (per-env value baked into the build).
+ *
+ * Currently 30 days on both prod (`us-east-1_bA3bcPcy2`) and staging
+ * (`us-east-1_elz0mvqwh`) — verified 2026-06-04. NEVER hardcode this
+ * value in mobile/src/auth/**; always read it from here so the per-env
+ * Cognito setting is the single source of truth.
+ *
+ * Note: this is the absolute refresh-token lifetime, NOT the 7-day NIST
+ * 800-63B session cap. The session cap is enforced separately by
+ * `sessionPolicy.ts` and is unrelated to Cognito's refresh-token TTL.
+ */
+export const REFRESH_TOKEN_LIFETIME_DAYS: number =
+  typeof extra.refreshTokenLifetimeDays === "number" &&
+  Number.isFinite(extra.refreshTokenLifetimeDays) &&
+  extra.refreshTokenLifetimeDays > 0
+    ? extra.refreshTokenLifetimeDays
+    : 30;

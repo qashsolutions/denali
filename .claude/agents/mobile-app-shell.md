@@ -61,11 +61,22 @@ You are NOT an orchestrator. You do not decide the wave order. You do not invoke
 
 Pass 1 deliverables: a `mobile/` directory that compiles, runs `expo start`, and renders placeholder screens behind a navigation graph. Builders can now fan out.
 
+## Pass 2 blocking prerequisites — DO NOT SKIP
+
+Before any Pass 2 work that wires `ApiClient.chat()` into a real UI surface (i.e., step 11 below), the following MUST be true:
+
+- **`/api/chat` no-persist backend branch exists and is GREEN.** `app/src/app/api/chat/route.ts` must recognize `X-Client-Type: mobile` + `noPersist: true` and skip all writes to `conversations` and `messages`. Verify with `grep -n "X-Client-Type\|noPersist" app/src/app/api/chat/route.ts` — both must appear.
+- **`query()`-spy regression test exists and is GREEN.** A test under `app/src/app/api/chat/__tests__/` must spy on the `pg` `query()` and assert ZERO inserts to `conversations` or `messages` when `X-Client-Type: mobile` is present. `.claude/hooks/guard-persistence.sh` already references this test path as a planned `TEST_TARGETS` entry — once the test exists, the persistence hook auto-covers it on every Edit/Write.
+
+If either condition is unmet, **STOP** before step 11. Surface to the main thread; do not wire the chat surface; do not call `api.chat()` from the smoke test. This gate is non-negotiable — it protects Invariant 1 (no health data persisted server-side). See `docs/history/phase-1-mobile-decisions.md` § D9 for the full rationale.
+
+The `mobile-privacy-invariant-guard` audit at Wave 3 review time treats the absence of these two items as a **Critical** finding.
+
 ## What you do in Pass 2 (Wave 3)
 
 10. **Build the timeline view.** `mobile/src/screens/TimelineScreen.tsx` — chronological list of `observations` (LOINC-coded labs, vitals, anthropometrics, questionnaire scores, etc.) grouped by date. Read via `LocalDataDAL.listObservations({ latest_only: true, limit: <pagination> })`. Show category, code display, value + unit, source. Tap to see history (the supersede chain for that code via `LocalDataDAL.getObservation(supersedes_id)` walked recursively).
 11. **Wire the navigation graph.** Connect every screen — SignIn → CohortOnboarding → Intake → Instruments → main tabs (Timeline, Chat, Upload, Settings). Use `LocalDataDAL.getProfile()` to gate post-auth routing (no profile → onboarding; profile present → timeline).
-12. **Chat screen.** `mobile/src/screens/ChatScreen.tsx` — uses `ApiClient.chat({ noPersist: true, ... })` to stream tokens. Local-only history via `LocalDataDAL.insertChatMessage` / `listChatMessages`. No server-side rows in `conversations` / `messages`.
+12. **Chat screen.** `mobile/src/screens/ChatScreen.tsx` — uses `ApiClient.chat({ noPersist: true, ... })` to stream tokens. Local-only history via `LocalDataDAL.insertChatMessage` / `listChatMessages`. No server-side rows in `conversations` / `messages`. **Blocked by the prerequisites at the top of this Pass 2 section** — confirm both items are green before this step.
 13. **Settings screen.** Surface the three `consent_preferences` toggles (`health_data_ai`, `health_data_storage`, `analytics`) — read/write via `apiPatch("/api/consent", ...)`. Show plan + sign-out.
 14. **End-to-end smoke test.** Detox or Playwright-for-mobile (per team preference). Required scenarios:
     - Boot → sign-in screen.

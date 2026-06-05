@@ -90,6 +90,53 @@ Spec: `docs/design/phase-1-45plus.md`. Path-scoped rules: `mobile/CLAUDE.md`. Ag
 
 ---
 
+## D8 — Theme contract Wave-1 amendment (controlled thaw, 2026-06-04)
+
+**Decision:** the `Theme` contract was extended during a controlled thaw (per `mobile/CLAUDE.md` § Hooks) to fully mirror `app/src/app/globals.css`. No further theme thaws should be needed in Phase 1.
+
+**Why:** the original Wave 0 freeze covered backgrounds + text + accents + borders + 3 semantic colors. The privacy audit's open question surfaced 5 categories of CSS tokens present in `globals.css` but absent from the contract — chat-bubble colors, condition-domain accents (auth/check/appeal/health/diabetes), brand purple, the tertiary background, and the 12px / 20px spacing intermediates. Wave 2 surfaces will need these (onboarding uses the condition accents; chat uses the bubble colors). Adding them all in one thaw is cheaper and lower-risk than five separate amendments.
+
+**Alternatives considered:**
+- Skip the amendment; Wave 2 consumers extend the contract themselves as needed — rejected; defeats the seam-contract purpose and risks drift.
+- Restructure the spacing scale to numeric (`space1..space12`) — rejected; would force `theme-bridge` to rewrite all consumers' spacing references for no functional gain. Kept the named scale (`xs`/`sm`/`md`/`lg`/`xl`/`2xl`/`3xl`) and added `space3` + `space5` as intermediates.
+
+**What was added:**
+- `ThemeColors.bgTertiary` — globals.css `--bg-tertiary`.
+- New `ThemeChatColors` (user-bubble-from/to + assistant-bubble) — per-mode.
+- New `ThemeAccentFamily` + `ThemeConditionAccents` (auth-blue / check-teal / appeal-coral / health-red / diabetes-violet, each `{base, light, bg}`) — per-mode.
+- New `ThemeBrand.purple` — mode-agnostic.
+- `ThemeSpacing.space3` + `ThemeSpacing.space5` — the 12px and 20px intermediates from web's `--space-3` and `--space-5`.
+
+**Trade-off accepted:** the `colors` shape on `Theme` is now structurally larger (adds `chat`, `conditions`, `brand` nested objects alongside `light` and `dark`). The amendment is purely additive — existing consumers using `colors.light` or `colors.dark` see no change. The drift test was extended from 22 to 43 `it()` blocks (+41 expects) so every new token is now drift-asserted against `globals.css`.
+
+**Thaw protocol followed:**
+1. `rm mobile/.wave-0-complete` (unfreeze).
+2. Edit `mobile/src/contracts/Theme.ts` (additions only — no breaking changes).
+3. `mobile-theme-bridge` implemented the new values in `tokens.ts` and extended the drift test.
+4. `touch mobile/.wave-0-complete` (refreeze).
+5. This decision record.
+
+---
+
+## D9 — Wave-3 hard gate: `/api/chat` no-persist backend branch before mobile chat surface (2026-06-04)
+
+**Decision:** Wave 3 (`mobile-app-shell` Pass 2) MUST land the `X-Client-Type: mobile` + `noPersist: true` branch in `app/src/app/api/chat/route.ts`, plus a `query()`-spy regression test asserting **zero** RDS inserts to `conversations` / `messages` on the mobile path, **before** the mobile chat surface is wired into navigation or any test client invokes `ApiClient.chat()`.
+
+**Why:** the privacy guard surfaced this in its Wave 1 audit (finding M2). `ApiClient.chat()` (`mobile/src/auth/chatStream.ts`) is already coded to send `{ noPersist: true }` in the body + `X-Client-Type: mobile` in the header. The backend route `app/src/app/api/chat/route.ts` does NOT recognize either signal yet — confirmed by `grep -n "X-Client-Type\|noPersist" app/src/app/api/chat/route.ts` returning zero matches. As soon as Pass 2 wires the mobile chat UI, every turn would write to `conversations` + `messages` for the mobile user — direct Invariant 1 violation.
+
+**Alternatives considered:**
+- Fix the backend branch as a Wave 1 add-on now — rejected; mixes auth-wirer scope with chat scope, and the `query()`-spy regression test belongs with the surface that consumes chat (Pass 2 / Wave 3).
+- Add a runtime guard in `chatStream.ts` that throws unless an `ENABLED` env flag is set — rejected; adds a kill-switch that could be silently disabled in dev and shipped accidentally; the structural gate via Pass 2's blocking dependency is cleaner.
+
+**Trade-off accepted:** the contract-shaped behavior of `ApiClient.chat()` is structurally present in Wave 1 but is a "tripwire" — it will work as soon as the backend honors the signals, but until then it's a forward-looking risk. `chatStream.ts` is unreachable from any Wave 1 surface (`SignInScreen` does not invoke chat, placeholder `ChatScreen.tsx` shows no UI). `guard-persistence.sh` already lists the chat no-persist test path as a planned `TEST_TARGETS` entry — when the test lands, the hook auto-covers it.
+
+**Enforcement:**
+- This decision record (D9).
+- The `mobile-app-shell` agent's Pass 2 deliverables explicitly list the `/api/chat` no-persist backend branch + the `query()`-spy regression test as **blocking prerequisites** for wiring the mobile chat surface.
+- The privacy guard's conformance checklist includes "chat path writes nothing to `conversations`/`messages` under `X-Client-Type: mobile`" — at Wave 3 review time, this becomes a CRITICAL-severity item if not satisfied.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

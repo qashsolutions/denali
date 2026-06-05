@@ -19,6 +19,8 @@
     "@react-navigation/native-stack": "^7.16.0",
     "expo": "^56.0.8",
     "expo-constants": "~56.0.16",
+    "expo-secure-store": "~56.0.4",
+    "expo-sqlite": "~56.0.4",
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
     "react-native": "0.85.3",
@@ -27,9 +29,11 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.1",
     "@types/react": "~19.2.0",
     "babel-preset-expo": "~56.0.14",
+    "better-sqlite3": "^12.10.0",
     "eslint": "^9.0.0",
     "typescript": "~6.0.3",
     "vitest": "^2.1.0"

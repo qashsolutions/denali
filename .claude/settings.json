@@ -14,7 +14,8 @@
       {
         "matcher": "Write|Edit",
         "hooks": [
-          { "type": "command", "command": ".claude/hooks/typecheck.sh" }
+          { "type": "command", "command": ".claude/hooks/typecheck.sh" },
+          { "type": "command", "command": ".claude/hooks/guard-persistence.sh" }
         ]
       }
     ]

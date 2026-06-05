@@ -195,6 +195,26 @@ async function _POST(request: NextRequest) {
 
     // 8. Build response with httpOnly cookies
     const isMfaRequired = !!ver.totp_enrolled_at;
+
+    // ── Mobile branch ──
+    // When the request carries `X-Client-Type: mobile`, return Cognito
+    // tokens in the JSON body and SKIP Set-Cookie entirely. The web path
+    // (header absent or any other value) is unchanged byte-for-byte —
+    // see the byte-identical regression test at `__tests__/route.test.ts`.
+    //
+    // Reasoning lives in docs/design/phase-1-45plus.md §76 + §144.
+    const clientType = request.headers.get("X-Client-Type");
+    if (clientType === "mobile") {
+      return NextResponse.json({
+        success: true,
+        mfaRequired: isMfaRequired,
+        user: { email, userId: ver.user_id },
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        expires_in: tokens.expiresIn,
+      });
+    }
+
     const response = NextResponse.json({
       success: true,
       mfaRequired: isMfaRequired,

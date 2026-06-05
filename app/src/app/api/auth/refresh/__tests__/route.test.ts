@@ -25,6 +25,23 @@ function makeRequest(cookies?: Record<string, string>): NextRequest {
   });
 }
 
+/**
+ * Mobile request helper: X-Client-Type: mobile header + JSON body carrying
+ * the refresh token. No cookies — mobile NEVER sends or receives cookies.
+ */
+function makeMobileRequest(refreshToken?: string): NextRequest {
+  return new NextRequest("http://localhost:3000/api/auth/refresh", {
+    method: "POST",
+    headers: {
+      "X-Client-Type": "mobile",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(
+      refreshToken !== undefined ? { refresh_token: refreshToken } : {},
+    ),
+  });
+}
+
 describe("POST /api/auth/refresh", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -159,5 +176,129 @@ describe("POST /api/auth/refresh", () => {
 
     const res = await POST(makeRequest({ refresh_token: "tok" }));
     expect(res.status).toBe(503);
+  });
+});
+
+/**
+ * Phase 1 mobile — X-Client-Type: mobile branch.
+ *
+ * Added by mobile-auth-wirer (Wave 1) per docs/design/phase-1-45plus.md §76.
+ */
+describe("POST /api/auth/refresh — X-Client-Type: mobile (Phase 1 mobile)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns body tokens and NO Set-Cookie when header is 'mobile' (happy path)", async () => {
+    mockRefresh.mockResolvedValue({
+      accessToken: "new-access-tok",
+      expiresIn: 3600,
+    });
+
+    const res = await POST(makeMobileRequest("valid-refresh"));
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body).toEqual({
+      success: true,
+      access_token: "new-access-tok",
+      expires_in: 3600,
+    });
+
+    // CRITICAL: zero Set-Cookie headers on the mobile branch.
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
+
+  it("returns 401 (no clearing cookies) when refresh_token missing from body", async () => {
+    // Mobile path: no cookie, empty body → no refresh token at all → 401.
+    const res = await POST(makeMobileRequest(undefined));
+    expect(res.status).toBe(401);
+    // No Set-Cookie either way (mobile NEVER receives cookies).
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
+
+  it("returns 401 with NO Set-Cookie on NotAuthorizedException (mobile clears tokens locally)", async () => {
+    mockRefresh.mockRejectedValue(
+      new Error("NotAuthorizedException: Token has been revoked"),
+    );
+
+    const res = await POST(makeMobileRequest("revoked"));
+    expect(res.status).toBe(401);
+    // Mobile clears its own tokens via tokenStore — server emits no Set-Cookie.
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
+
+  it("returns 503 with NO Set-Cookie on transient failure", async () => {
+    mockRefresh.mockRejectedValue(new Error("connect ETIMEDOUT"));
+
+    const res = await POST(makeMobileRequest("valid-but-infra-down"));
+    expect(res.status).toBe(503);
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
+
+  it("byte-identical web regression: NO header → cookie-based path unchanged on success", async () => {
+    mockRefresh.mockResolvedValue({
+      accessToken: "new-access-tok",
+      expiresIn: 3600,
+    });
+
+    // Use the cookie-bearing request helper (no X-Client-Type header) and
+    // verify the pre-mobile-branch behavior: success body is `{success:true}`,
+    // and the response sets the `access_token` cookie with the expected attributes.
+    const res = await POST(makeRequest({ refresh_token: "valid-refresh" }));
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body).toEqual({ success: true });
+    expect(body).not.toHaveProperty("access_token");
+    expect(body).not.toHaveProperty("expires_in");
+
+    const cookies = res.headers.getSetCookie();
+    const access = cookies.find((c) => c.startsWith("access_token="));
+    expect(access).toBeDefined();
+    expect(access).toContain("access_token=new-access-tok");
+    expect(access).toContain("HttpOnly");
+    expect(access!.toLowerCase()).toContain("samesite=lax");
+    expect(access).toContain("Path=/");
+    expect(access).toContain("Max-Age=3600");
+  });
+
+  it("byte-identical web regression: NO header → invalid token still clears cookies", async () => {
+    mockRefresh.mockRejectedValue(new Error("invalid_grant"));
+
+    const res = await POST(makeRequest({ refresh_token: "bad" }));
+    expect(res.status).toBe(401);
+
+    const cookies = res.headers.getSetCookie();
+    const accessClear = cookies.find((c) => c.startsWith("access_token="));
+    const refreshClear = cookies.find((c) => c.startsWith("refresh_token="));
+    expect(accessClear).toContain("Max-Age=0");
+    expect(refreshClear).toContain("Max-Age=0");
+  });
+
+  it("byte-identical web regression: any non-mobile header preserves cookie behavior", async () => {
+    mockRefresh.mockResolvedValue({
+      accessToken: "new-access-tok",
+      expiresIn: 3600,
+    });
+
+    // Defensive — only the exact "mobile" string triggers the branch.
+    const req = new NextRequest("http://localhost:3000/api/auth/refresh", {
+      method: "POST",
+      headers: {
+        cookie: "refresh_token=valid",
+        "X-Client-Type": "web",
+      },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body).toEqual({ success: true });
+
+    const cookies = res.headers.getSetCookie();
+    expect(cookies.some((c) => c.includes("access_token=new-access-tok"))).toBe(
+      true,
+    );
   });
 });

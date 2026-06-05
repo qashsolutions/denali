@@ -24,9 +24,34 @@ const config: ExpoConfig = {
   android: {
     package: "health.denali.mobile",
   },
+  // Plugins:
+  //   expo-sqlite with useSQLCipher: true compiles the native module against
+  //   SQLCipher (AES-256). The DB passphrase is supplied at open time via
+  //   `PRAGMA key = '<hex>'`; the key itself is generated and stored on-device
+  //   by src/db/keystore.ts (CSPRNG → expo-secure-store). Invariant 3: the key
+  //   is never derived from any Cognito/server-issued value.
+  //   expo-secure-store backs Keychain (iOS) / Keystore (Android) and holds
+  //   the SQLCipher key. Phase 1 mobile/CLAUDE.md, invariants 2 & 3.
+  plugins: [
+    [
+      "expo-sqlite",
+      {
+        useSQLCipher: true,
+      },
+    ],
+    "expo-secure-store",
+  ],
   extra: {
     // Default to staging until the build pipeline injects per-channel overrides.
     apiBaseUrl: process.env.DENALI_API_BASE_URL ?? "https://staging.denali.health",
+    // Cognito refresh-token lifetime in days. Sourced from per-env Cognito
+    // user pool configuration (currently 30 days for both prod and staging,
+    // verified 2026-06-04 against `us-east-1_bA3bcPcy2` /
+    // `us-east-1_elz0mvqwh`). Surfaced via `extra` so the value can change
+    // without code rework — auth-wirer never hardcodes 30 days.
+    refreshTokenLifetimeDays: process.env.DENALI_REFRESH_TOKEN_LIFETIME_DAYS
+      ? Number(process.env.DENALI_REFRESH_TOKEN_LIFETIME_DAYS)
+      : 30,
   },
 };
 

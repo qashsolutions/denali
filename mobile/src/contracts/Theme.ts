@@ -13,12 +13,23 @@
  * upload review UI, app-shell timeline). They type-check against `Theme`
  * via a `useTheme(): Theme` hook (or a NativeWind-seeded token config
  * if that authoring approach is chosen).
+ *
+ * Contract history:
+ *   - Wave 0 (2026-06-04): initial freeze.
+ *   - Wave 1 amendment (post-audit): added `bgTertiary` to ThemeColors,
+ *     ThemeChatColors, ThemeAccentFamily, ThemeConditionAccents,
+ *     ThemeBrand, plus `space3` + `space5` on ThemeSpacing. Theme now
+ *     fully mirrors globals.css. See
+ *     docs/history/phase-1-mobile-decisions.md § "Theme contract Wave-1
+ *     amendment" for the why.
  */
 
 export interface ThemeColors {
   // Backgrounds
   bgPrimary: string;
   bgSecondary: string;
+  /** Tertiary background — matches --bg-tertiary in globals.css. */
+  bgTertiary: string;
 
   // Text
   textPrimary: string;
@@ -36,6 +47,48 @@ export interface ThemeColors {
   success: string;
   warning: string;
   error: string;
+}
+
+/**
+ * Chat-surface colors — matches --user-bubble-from, --user-bubble-to,
+ * --assistant-bubble in globals.css. Varies by mode (light/dark).
+ */
+export interface ThemeChatColors {
+  userBubbleFrom: string;
+  userBubbleTo: string;
+  assistantBubble: string;
+}
+
+/**
+ * A semantic accent family — base, light variant, and contextual background.
+ * Mirrors the `--<family>`, `--<family>-light`, `--<family>-bg` triplet from
+ * globals.css.
+ */
+export interface ThemeAccentFamily {
+  base: string;
+  light: string;
+  bg: string;
+}
+
+/**
+ * Domain-condition accents — matches the auth-blue / check-teal /
+ * appeal-coral / health-red / diabetes-violet triplet families in
+ * globals.css. Varies by mode (light/dark).
+ */
+export interface ThemeConditionAccents {
+  authBlue: ThemeAccentFamily;
+  checkTeal: ThemeAccentFamily;
+  appealCoral: ThemeAccentFamily;
+  healthRed: ThemeAccentFamily;
+  diabetesViolet: ThemeAccentFamily;
+}
+
+/**
+ * Brand-level colors that do NOT vary by mode. Matches --brand-purple
+ * in globals.css (the "Health" word in the logo treatment).
+ */
+export interface ThemeBrand {
+  purple: string;
 }
 
 export interface ThemeTypography {
@@ -69,10 +122,18 @@ export interface ThemeTypography {
   };
 }
 
+/**
+ * Spacing scale — the named tokens (xs/sm/md/lg/xl/2xl/3xl) follow the
+ * standard mobile cadence; `space3` and `space5` are intermediate web-aligned
+ * gaps (12px and 20px) that don't fit the named scale cleanly. Matches the
+ * --space-3 and --space-5 CSS variables in globals.css.
+ */
 export interface ThemeSpacing {
   xs: number;
   sm: number;
+  space3: number;
   md: number;
+  space5: number;
   lg: number;
   xl: number;
   "2xl": number;
@@ -90,11 +151,20 @@ export interface ThemeRadii {
 /**
  * Frozen Phase 1 contract. Implemented by mobile-theme-bridge in
  * src/theme/tokens.ts as a `const tokens: Theme = { ... } satisfies Theme`.
+ *
+ * Color structure:
+ *   - `colors.light` / `colors.dark`: the standard per-mode `ThemeColors`.
+ *   - `colors.chat.{light,dark}`: chat-surface bubble colors.
+ *   - `colors.conditions.{light,dark}`: domain-condition accents.
+ *   - `colors.brand`: mode-agnostic brand colors.
  */
 export interface Theme {
   colors: {
     light: ThemeColors;
     dark: ThemeColors;
+    chat: { light: ThemeChatColors; dark: ThemeChatColors };
+    conditions: { light: ThemeConditionAccents; dark: ThemeConditionAccents };
+    brand: ThemeBrand;
   };
   typography: ThemeTypography;
   spacing: ThemeSpacing;
