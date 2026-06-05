@@ -13,6 +13,7 @@
 
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
+import { PrivacyNoticeScreen } from "@/onboarding/PrivacyNoticeScreen";
 import { CohortOnboardingScreen } from "@/screens/CohortOnboardingScreen";
 import { InstrumentsScreen } from "@/screens/InstrumentsScreen";
 import { IntakeOnboardingScreen } from "@/screens/IntakeOnboardingScreen";
@@ -28,6 +29,11 @@ export function RootNavigator() {
   return (
     <Stack.Navigator initialRouteName="SignIn">
       <Stack.Screen name="SignIn" component={SignInScreen} />
+      <Stack.Screen
+        name="PrivacyNotice"
+        component={PrivacyNoticeScreen}
+        options={{ headerBackVisible: false }}
+      />
       <Stack.Screen name="CohortOnboarding" component={CohortOnboardingScreen} />
       <Stack.Screen name="Intake" component={IntakeOnboardingScreen} />
       <Stack.Screen name="Instruments" component={InstrumentsScreen} />

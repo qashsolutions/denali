@@ -36,7 +36,8 @@ export type AuditAction =
   | "LOGOUT"
   | "BIRTH_YEAR_REMINDER_DISMISSED"
   | "BIRTH_YEAR_REMINDER_DISABLED"
-  | "BIRTH_YEAR_REMINDER_ENABLED";
+  | "BIRTH_YEAR_REMINDER_ENABLED"
+  | "PARSE_REPORT_INVOKED";
 
 type ResourceType =
   | "ehr_connection"

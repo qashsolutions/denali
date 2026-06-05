@@ -137,6 +137,23 @@ Spec: `docs/design/phase-1-45plus.md`. Path-scoped rules: `mobile/CLAUDE.md`. Ag
 
 ---
 
+## D10 — `health_data_storage` consent gates Phase 2 cloud backup (not on-device SQLCipher)
+
+**Decision:** the existing `consent_preferences.health_data_storage` toggle (one of the three consent toggles the web app surfaces — see `CLAUDE.md` § Consent Toggle Enforcement) has an ambiguous meaning in a local-first build. Phase 1 mobile adopts the following reading: **`health_data_storage` gates Phase 2 cloud backup. It does NOT gate Phase 1 on-device SQLCipher storage.**
+
+**Why:** on-device encrypted SQLCipher storage is **intrinsic** to Phase 1 — toggling it off would mean "wipe my device" or "refuse to install", which is destructive and incompatible with the device-is-system-of-record invariant. The toggle therefore has no meaningful Phase 1 enforcement target. The natural Phase 2 mapping (when zero-knowledge cloud backup arrives as an explicit opt-in) is that this toggle controls whether the backup runs. Until Phase 2 ships, the toggle is recorded but inert.
+
+**Alternatives considered:**
+- Interpret as "gate all SQLCipher writes" — rejected; destructive, breaks the local-first invariant, prevents the app from functioning if turned off.
+- Re-purpose for something else (e.g., gate analytics) — rejected; `analytics` is its own consent toggle.
+- Remove the toggle from the mobile UI entirely — rejected; the toggle exists in the shared `consent_preferences` table and is honored by the web app; removing it on mobile would create cross-platform inconsistency.
+
+**Trade-off accepted:** the toggle has no functional effect in Phase 1 mobile. Settings UI (Wave 3) will surface it with explanatory copy: *"Cloud backup is not available in this version. This setting will apply when a backup option is added in a future release."* The `health_data_ai` and `analytics` toggles ARE enforced in Phase 1 (see `mobile/src/onboarding/consent.ts` — `canCallAi` and `canEmitAnalytics` helpers; client-side `UploadScreen.tsx:87-96, 218-226` and server-side `app/src/app/api/parse-report/route.ts:319-333` for the `health_data_ai` enforcement).
+
+**Encoded in code:** the interpretation is documented at `mobile/src/onboarding/consent.ts:9-29` so future agents read it as part of their pre-flight.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

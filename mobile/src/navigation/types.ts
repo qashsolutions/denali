@@ -14,6 +14,12 @@
 
 export type RootStackParamList = {
   SignIn: undefined;
+  /**
+   * PrivacyNotice — plain-language data-locality notice surfaced before any
+   * data is collected (Wave 2, mobile-onboarding-builder). The user must
+   * acknowledge before reaching CohortOnboarding.
+   */
+  PrivacyNotice: undefined;
   CohortOnboarding: undefined;
   Intake: undefined;
   Instruments: undefined;

@@ -157,11 +157,14 @@ export function SignInScreen(): React.ReactElement {
     setSubmitting(true);
     try {
       await api.verifyOtp(trimmedEmail, otp);
-      // Wave 1: always route to CohortOnboarding. Wave 2 will refine to
-      // "MainTabs when local profile exists" via LocalDataDAL.
+      // Wave 2: route through PrivacyNotice first (mobile-onboarding-builder
+      // added the data-locality notice as the pre-cohort acknowledgement
+      // screen — see PrivacyNoticeScreen.tsx). Wave 3 will further refine to
+      // skip the whole interstitial chain when a local profile is already
+      // present via LocalDataDAL.getProfile().
       navigation.reset({
         index: 0,
-        routes: [{ name: "CohortOnboarding" }],
+        routes: [{ name: "PrivacyNotice" }],
       });
     } catch {
       setErrorMsg("That code didn't work. Please try again.");

@@ -12,15 +12,18 @@ import { NavigationContainer } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 
 import { ApiClientProvider } from "@/auth";
+import { DalProvider } from "@/db/DalProvider";
 import { RootNavigator } from "@/navigation/RootNavigator";
 
 export default function App() {
   return (
     <ApiClientProvider>
-      <NavigationContainer>
-        <StatusBar style="auto" />
-        <RootNavigator />
-      </NavigationContainer>
+      <DalProvider>
+        <NavigationContainer>
+          <StatusBar style="auto" />
+          <RootNavigator />
+        </NavigationContainer>
+      </DalProvider>
     </ApiClientProvider>
   );
 }
