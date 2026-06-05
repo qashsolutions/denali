@@ -154,6 +154,25 @@ Spec: `docs/design/phase-1-45plus.md`. Path-scoped rules: `mobile/CLAUDE.md`. Ag
 
 ---
 
+## D11 — Phase 1 mobile chat is EPHEMERAL (session-scoped, no persistence)
+
+**Decision:** Phase 1 mobile chat lives entirely in component state. Conversation context is held in `useState<ChatTurn[]>` inside `mobile/src/screens/ChatScreen.tsx` and **persisted nowhere** — not server-side, not on-device. On sign-out (or app close), the chat history is gone.
+
+**Why:** the device-as-system-of-record invariant is about HEALTH DATA — observations, conditions, reports, instrument scores. Conversational ephemera does not need the same persistence guarantees, and adding persistent chat introduces UI questions (search, archive, delete, multi-session history) that don't fit Phase 1's tight scope. The 45+ audience's trust hinges on understanding what the app keeps; "your conversation isn't saved" is a clearer story than "your conversation is saved on-device but not on our servers."
+
+**Alternatives considered:**
+- Persist on-device only in the existing `chat_messages` SQLCipher table (the table exists in the schema — see `mobile/src/db/migrations/001-init.sql`). Rejected for Phase 1; opens the search/archive/delete UI scope. The table stays in the schema for future use.
+- Persist server-side with the 65+ web's existing `conversations`/`messages` rows. **Rejected** as a direct invariant violation — see D9 (which forbids server-side persistence on the mobile chat path) and Invariant 1.
+
+**Enforcement:**
+- **Server-side**: D9 gate at `app/src/app/api/chat/route.ts:144-153` — when `X-Client-Type: mobile`, route writes nothing to `conversations`/`messages`. Spy-verified by `app/src/app/api/chat/__tests__/no-persist.test.ts` (zero RDS inserts to the explicit forbidden-tables list).
+- **On-device**: Pass 2 `ChatScreen.tsx` writes nothing to `LocalDataDAL.insertChatMessage`. The `chat_messages` table exists but is unpopulated in Phase 1.
+- **Sign-out**: `apiClient.onSignInRequired` → `clearHistory()` in `ChatScreen` (pinned by `chatHistory.test.ts:74-78`).
+
+**Trade-off accepted:** users can't return to a prior conversation. Acceptable for Phase 1's "private personal record" trust story; a Phase 2 release that adds persistent chat is a documented later-phase scope.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

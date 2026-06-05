@@ -36,12 +36,12 @@ import {
 
 import { useApiClient } from "@/auth";
 import type { LocalDataDAL, ReportType } from "@/contracts";
+import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
 import { useTheme } from "@/theme/useTheme";
 
 import { storeBlob } from "../upload/blobStore";
 import { fetchHealthDataAiConsent } from "../upload/consentClient";
-import { getLocalDataDAL } from "../upload/dalSingleton";
 import { extractText } from "../upload/extract";
 import { pickImage, pickPdf, type PickedFile } from "../upload/picker";
 import { parseReport } from "../upload/parseClient";
@@ -74,6 +74,7 @@ interface ErrorState {
 
 export function UploadScreen(): React.ReactElement {
   const api = useApiClient();
+  const dal = useDal();
   const navigation = useNavigation<Nav>();
   const { active, theme } = useTheme();
 
@@ -247,7 +248,14 @@ export function UploadScreen(): React.ReactElement {
         return;
       }
 
-      const dal = await getLocalDataDAL();
+      if (!dal) {
+        setError({
+          message: "Storage is still opening on this device. Try again in a moment.",
+        });
+        setPhase("error");
+        return;
+      }
+
       const reportId = Crypto.randomUUID();
       const fileName =
         reportName.trim().length > 0
@@ -331,7 +339,7 @@ export function UploadScreen(): React.ReactElement {
       setPhase("done");
       navigation.navigate("UploadReview", { reportId });
     },
-    [api, navigation, reportName, reportType],
+    [api, dal, navigation, reportName, reportType],
   );
 
   const renderConsentBanner = () => {

@@ -70,10 +70,8 @@ TEST_TARGETS=(
   "src/app/api/auth/verify-otp/__tests__/route.test.ts"
   "src/app/api/auth/refresh/__tests__/route.test.ts"
   "src/app/api/parse-report/__tests__/route.test.ts"
+  "src/app/api/chat/__tests__/no-persist.test.ts"
 )
-
-# Future Wave 3 deliverable appended below as it lands:
-#   "src/app/api/chat/__tests__/no-persist.test.ts"      (Wave 3 — no-persist mode)
 
 # Build the file list, filtering to those that exist so the hook stays green
 # during Wave 2/3 development before those tests are authored.

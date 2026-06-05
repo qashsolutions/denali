@@ -33,10 +33,9 @@ import {
 } from "react-native";
 
 import type { LocalDataDAL } from "@/contracts";
+import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
 import { useTheme } from "@/theme/useTheme";
-
-import { getLocalDataDAL } from "../upload/dalSingleton";
 import {
   buildInsertsForReport,
   computeParseStatus,
@@ -57,6 +56,7 @@ type RouteProps = NativeStackScreenProps<
 export function UploadReviewScreen(): React.ReactElement {
   const route = useRoute<RouteProps>();
   const navigation = useNavigation<Nav>();
+  const dal = useDal();
   const { active, theme } = useTheme();
 
   const reportId = route.params.reportId;
@@ -263,7 +263,10 @@ export function UploadReviewScreen(): React.ReactElement {
     setErrorMsg(null);
     setCommitting(true);
     try {
-      const dal = await getLocalDataDAL();
+      if (!dal) {
+        setErrorMsg("Storage is still opening. Try again in a moment.");
+        return;
+      }
       // We need a stable user id for the inserts. Pull it from the
       // (already-persisted) report row to avoid a stale auth dependency.
       const report = await dal.getReport(reportId);
@@ -298,12 +301,15 @@ export function UploadReviewScreen(): React.ReactElement {
     } finally {
       setCommitting(false);
     }
-  }, [navigation, payload, reportId, rows]);
+  }, [dal, navigation, payload, reportId, rows]);
 
   const onSkip = React.useCallback(async () => {
     setCommitting(true);
     try {
-      const dal = await getLocalDataDAL();
+      if (!dal) {
+        setErrorMsg("Storage is still opening. Try again in a moment.");
+        return;
+      }
       await dal.updateReportParseStatus(
         reportId,
         "rejected",
@@ -316,7 +322,7 @@ export function UploadReviewScreen(): React.ReactElement {
     } finally {
       setCommitting(false);
     }
-  }, [navigation, reportId]);
+  }, [dal, navigation, reportId]);
 
   const renderRow = (row: ReviewRowState, idx: number) => {
     const obs = row.edited;
