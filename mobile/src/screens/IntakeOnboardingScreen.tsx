@@ -1,154 +1,171 @@
 /**
- * IntakeOnboardingScreen — Wave 2 (mobile-onboarding-builder).
+ * IntakeOnboardingScreen — Wave 2 redesign (one item per screen, optional per section).
  *
- * Four intake sections, each writing to LocalDataDAL.insertObservation
- * (or insertCondition when the user's free-text condition maps cleanly
- * to the canonical ConditionCategory enum).
+ * Burden model:
+ *   - Each of the four sections is OPTIONAL per the Wave-2 brief. The
+ *     user enters a section by tapping it on the section-picker
+ *     screen, walks through its items one at a time, and either
+ *     completes the section or skips back out to the picker.
+ *   - The "Continue" / "Finish intake" button at the picker advances
+ *     to Instruments without requiring any section to be completed.
  *
- *   1. Chief complaint — symptom name + onset date + severity (0-10).
- *      Stored as an observation: category="symptom", code_system="internal",
- *      effective_at=onset date, value_num=severity, value_text=symptom name.
+ * Sections:
+ *   1. What brings you in?  (chief complaint via coded symptom autocomplete + severity slider)
+ *   2. Medical history       (coded conditions via autocomplete, repeatable)
+ *   3. Family history        (structured: relation + condition + onset age, repeatable)
+ *   4. Lifestyle             (smoking / alcohol / activity / diet / sleep — Likert each)
  *
- *   2. Medical history — list of conditions. Each row either:
- *      a) maps via `mapToConditionCategory` → conditions row with
- *         source="self_reported", started_at=now, ended_at=null;
- *      b) otherwise stored as observation category="condition",
- *         code_system="internal", value_text=user text.
+ * Coded data over free text:
+ *   - Chief complaint uses the SYMPTOMS vocabulary (internal codes).
+ *   - Medical history uses CONDITIONS_45_PLUS (ICD-10).
+ *   - Family history uses CONDITIONS_45_PLUS via StructuredFamilyHistoryInput.
+ *   - Lifestyle uses fixed Likert options (no autocomplete needed).
  *
- *   3. Family history — per-relative entries with condition + age of onset.
- *      Stored as observations category="family_history", metadata_json
- *      carrying { relative, ageOfOnset, conditionName }.
+ * Persistence at finish:
+ *   - Chief complaint → observation category="symptom"
+ *   - Medical history entries that map → conditions row; others →
+ *     observation category="condition" with the ICD-10 code attached.
+ *   - Family history → observation category="family_history", code =
+ *     selected condition code, metadata_json carries the structured
+ *     relation + onset_age + condition_display.
+ *   - Lifestyle → observation category="lifestyle" per answered prompt.
  *
- *   4. Lifestyle — smoking / alcohol / activity / diet / sleep prompts.
- *      Stored as observations category="lifestyle", code_system="internal",
- *      value_text=user's chosen option.
- *
- * Local-first: writes happen on tap; no network calls in this screen.
- * Append-only invariant honored via the DAL (no UPDATEs in this screen).
+ * Local-first: writes happen at section-finish via the local DAL.
+ * No network calls in this screen.
  */
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React from "react";
 import {
   ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 
 import { useApiClient } from "@/auth";
-import type { ConditionInsertInput, ObservationInsertInput } from "@/contracts";
+import type {
+  ConditionInsertInput,
+  ObservationInsertInput,
+} from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
+import {
+  AutocompleteInput,
+  type AutocompleteSelection,
+  buildFamilyHistoryRecord,
+  type FamilyHistoryDraft,
+  familyHistoryMetadataJson,
+  LikertInput,
+  SliderInput,
+  StructuredFamilyHistoryInput,
+} from "@/onboarding/inputs";
+import { OneItemScreen } from "@/onboarding/OneItemScreen";
 import { mapToConditionCategory } from "@/onboarding/conditionMapping";
 import { fw } from "@/onboarding/fontWeight";
+import { CONDITIONS_45_PLUS, SYMPTOMS } from "@/onboarding/vocab";
 import { useTheme } from "@/theme/useTheme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Intake">;
 
+// ─── Lifestyle definitions ────────────────────────────────────────────────
+
 const SMOKING_OPTIONS = [
-  "Never smoked",
-  "Former smoker",
-  "Current smoker — less than daily",
-  "Current smoker — daily",
+  { value: 0, label: "Never smoked" },
+  { value: 1, label: "Former smoker" },
+  { value: 2, label: "Current smoker — less than daily" },
+  { value: 3, label: "Current smoker — daily" },
 ] as const;
-
 const ALCOHOL_OPTIONS = [
-  "Never",
-  "Monthly or less",
-  "2-4 times a month",
-  "2-3 times a week",
-  "4+ times a week",
+  { value: 0, label: "Never" },
+  { value: 1, label: "Monthly or less" },
+  { value: 2, label: "2-4 times a month" },
+  { value: 3, label: "2-3 times a week" },
+  { value: 4, label: "4+ times a week" },
 ] as const;
-
 const ACTIVITY_OPTIONS = [
-  "Sedentary (little to no exercise)",
-  "Light (1-2 days/week)",
-  "Moderate (3-4 days/week)",
-  "Active (5+ days/week)",
+  { value: 0, label: "Little to no exercise" },
+  { value: 1, label: "Light (1-2 days/week)" },
+  { value: 2, label: "Moderate (3-4 days/week)" },
+  { value: 3, label: "Active (5+ days/week)" },
 ] as const;
-
 const DIET_OPTIONS = [
-  "Standard American",
-  "Mediterranean / mostly plants",
-  "Low-carb / keto",
-  "Vegetarian",
-  "Vegan",
-  "Other",
+  { value: 0, label: "Standard American" },
+  { value: 1, label: "Mediterranean / mostly plants" },
+  { value: 2, label: "Low-carb / keto" },
+  { value: 3, label: "Vegetarian" },
+  { value: 4, label: "Vegan" },
+  { value: 5, label: "Other / mixed" },
 ] as const;
-
 const SLEEP_OPTIONS = [
-  "Less than 5 hours / night",
-  "5-6 hours / night",
-  "7-8 hours / night",
-  "9+ hours / night",
+  { value: 0, label: "Less than 5 hours" },
+  { value: 1, label: "5–6 hours" },
+  { value: 2, label: "7–8 hours" },
+  { value: 3, label: "9+ hours" },
 ] as const;
 
-const LIFESTYLE_SECTIONS: ReadonlyArray<{
-  key: string;
+interface LifestylePrompt {
+  key: keyof LifestyleAnswers;
   code: string;
   question: string;
-  options: ReadonlyArray<string>;
-}> = [
+  options: ReadonlyArray<{ value: number; label: string }>;
+}
+
+interface LifestyleAnswers {
+  smoking: number | null;
+  alcohol: number | null;
+  activity: number | null;
+  diet: number | null;
+  sleep: number | null;
+}
+
+const LIFESTYLE_PROMPTS: ReadonlyArray<LifestylePrompt> = [
   {
     key: "smoking",
     code: "denali.lifestyle.smoking",
-    question: "Smoking status",
-    options: SMOKING_OPTIONS,
+    question: "How would you describe your smoking?",
+    options: [...SMOKING_OPTIONS],
   },
   {
     key: "alcohol",
     code: "denali.lifestyle.alcohol",
     question: "How often do you drink alcohol?",
-    options: ALCOHOL_OPTIONS,
+    options: [...ALCOHOL_OPTIONS],
   },
   {
     key: "activity",
     code: "denali.lifestyle.activity",
-    question: "Physical activity level",
-    options: ACTIVITY_OPTIONS,
+    question: "How active are you on a typical week?",
+    options: [...ACTIVITY_OPTIONS],
   },
   {
     key: "diet",
     code: "denali.lifestyle.diet",
-    question: "Diet pattern",
-    options: DIET_OPTIONS,
+    question: "Which best describes your usual eating pattern?",
+    options: [...DIET_OPTIONS],
   },
   {
     key: "sleep",
     code: "denali.lifestyle.sleep",
-    question: "Average sleep duration",
-    options: SLEEP_OPTIONS,
+    question: "How much do you usually sleep at night?",
+    options: [...SLEEP_OPTIONS],
   },
 ];
 
-interface SymptomDraft {
-  name: string;
-  onsetDate: string; // ISO yyyy-mm-dd
-  severity: number; // 0..10
+// ─── Section identification ───────────────────────────────────────────────
+
+type SectionId = "menu" | "complaint" | "history" | "family" | "lifestyle";
+
+interface SectionStatus {
+  complaint: "todo" | "skipped" | "saved";
+  history: "todo" | "skipped" | "saved";
+  family: "todo" | "skipped" | "saved";
+  lifestyle: "todo" | "skipped" | "saved";
 }
 
-interface HistoryDraft {
-  name: string;
-}
-
-interface FamilyDraft {
-  relative: string;
-  conditionName: string;
-  ageOfOnset: string; // numeric string
-}
-
-const RELATIVES = ["Mother", "Father", "Sibling", "Grandparent", "Other"];
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+// ─── Component ────────────────────────────────────────────────────────────
 
 export function IntakeOnboardingScreen(): React.ReactElement {
   const api = useApiClient();
@@ -156,185 +173,210 @@ export function IntakeOnboardingScreen(): React.ReactElement {
   const navigation = useNavigation<Nav>();
   const { active, theme } = useTheme();
 
-  // ─── Symptom ───
-  const [symptom, setSymptom] = React.useState<SymptomDraft>({
-    name: "",
-    onsetDate: todayIso(),
-    severity: 0,
+  const [section, setSection] = React.useState<SectionId>("menu");
+  const [status, setStatus] = React.useState<SectionStatus>({
+    complaint: "todo",
+    history: "todo",
+    family: "todo",
+    lifestyle: "todo",
   });
-  const [symptomDone, setSymptomDone] = React.useState(false);
-
-  // ─── History ───
-  const [history, setHistory] = React.useState<HistoryDraft[]>([]);
-  const [historyDraft, setHistoryDraft] = React.useState("");
-
-  // ─── Family ───
-  const [family, setFamily] = React.useState<FamilyDraft[]>([]);
-  const [familyDraft, setFamilyDraft] = React.useState<FamilyDraft>({
-    relative: "Mother",
-    conditionName: "",
-    ageOfOnset: "",
-  });
-
-  // ─── Lifestyle ───
-  const [lifestyle, setLifestyle] = React.useState<Record<string, string>>({});
 
   const [submitting, setSubmitting] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
+  // Section state — chief complaint
+  const [complaintSelection, setComplaintSelection] =
+    React.useState<AutocompleteSelection | null>(null);
+  const [complaintSeverity, setComplaintSeverity] = React.useState(0);
+  const [complaintStep, setComplaintStep] = React.useState<1 | 2>(1);
+
+  // Section state — history (repeatable)
+  const [historyEntries, setHistoryEntries] = React.useState<
+    AutocompleteSelection[]
+  >([]);
+  const [historyDraft, setHistoryDraft] =
+    React.useState<AutocompleteSelection | null>(null);
+
+  // Section state — family history (repeatable)
+  const [familyEntries, setFamilyEntries] = React.useState<FamilyHistoryDraft[]>(
+    [],
+  );
+  const [familyDraft, setFamilyDraft] = React.useState<FamilyHistoryDraft>({
+    relation: null,
+    selection: null,
+    onsetAge: null,
+  });
+
+  // Section state — lifestyle
+  const [lifestyle, setLifestyle] = React.useState<LifestyleAnswers>({
+    smoking: null,
+    alcohol: null,
+    activity: null,
+    diet: null,
+    sleep: null,
+  });
+  const [lifestyleStep, setLifestyleStep] = React.useState(0);
+
   const userId = api.getCurrentUser()?.userId ?? null;
 
-  const handleSubmit = React.useCallback(async () => {
-    if (submitting) return;
+  // ─── Persistence helpers ────────────────────────────────────────────────
+
+  const persistComplaint = React.useCallback(async () => {
     if (dal == null || userId == null) {
-      setErrorMsg("Local database not ready. Please try again in a moment.");
-      return;
+      throw new Error("Local database not ready");
     }
-    setSubmitting(true);
-    setErrorMsg(null);
+    if (complaintSelection == null) return;
+    const obs: ObservationInsertInput = {
+      user_id: userId,
+      category: "symptom",
+      code_system: complaintSelection.code_system,
+      code: complaintSelection.code,
+      display: complaintSelection.display,
+      value_num: complaintSeverity,
+      value_text: complaintSelection.display,
+      unit: "0-10 severity",
+      source: "self_reported",
+      effective_at: new Date().toISOString(),
+      report_id: null,
+      supersedes_id: null,
+      metadata_json:
+        complaintSelection.isUncoded === true
+          ? JSON.stringify({ uncoded: true })
+          : null,
+    };
+    await dal.insertObservation(obs);
+  }, [complaintSelection, complaintSeverity, dal, userId]);
 
-    try {
-      // Symptom (only if user typed something)
-      if (symptom.name.trim().length > 0) {
-        const obs: ObservationInsertInput = {
+  const persistHistory = React.useCallback(async () => {
+    if (dal == null || userId == null) {
+      throw new Error("Local database not ready");
+    }
+    for (const entry of historyEntries) {
+      const category = mapToConditionCategory(entry.display);
+      if (category != null) {
+        const condition: ConditionInsertInput = {
           user_id: userId,
-          category: "symptom",
-          code_system: "internal",
-          code: `denali.symptom.${symptom.name.trim().toLowerCase().replace(/\s+/g, "_").slice(0, 60)}`,
-          display: symptom.name.trim(),
-          value_num: symptom.severity,
-          value_text: symptom.name.trim(),
-          unit: "0-10 severity",
+          condition_code: entry.code,
+          condition_category: category,
           source: "self_reported",
-          effective_at: new Date(symptom.onsetDate).toISOString(),
-          report_id: null,
-          supersedes_id: null,
-          metadata_json: null,
+          started_at: new Date().toISOString(),
+          ended_at: null,
+          confidence: null,
         };
-        await dal.insertObservation(obs);
-      }
-
-      // History — try to map; fall back to observation
-      for (const h of history) {
-        const text = h.name.trim();
-        if (text.length === 0) continue;
-        const category = mapToConditionCategory(text);
-        if (category != null) {
-          const condition: ConditionInsertInput = {
-            user_id: userId,
-            condition_code: text,
-            condition_category: category,
-            source: "self_reported",
-            started_at: new Date().toISOString(),
-            ended_at: null,
-            confidence: null,
-          };
-          await dal.insertCondition(condition);
-        } else {
-          // Unmappable — store as observation with category=condition
-          const obs: ObservationInsertInput = {
-            user_id: userId,
-            category: "condition",
-            code_system: "internal",
-            code: `denali.history.${text.toLowerCase().replace(/\s+/g, "_").slice(0, 60)}`,
-            display: text,
-            value_num: null,
-            value_text: text,
-            unit: null,
-            source: "self_reported",
-            effective_at: new Date().toISOString(),
-            report_id: null,
-            supersedes_id: null,
-            metadata_json: JSON.stringify({ note: "unmapped self-reported condition" }),
-          };
-          await dal.insertObservation(obs);
-        }
-      }
-
-      // Family — each entry one observation
-      for (const f of family) {
-        const cond = f.conditionName.trim();
-        const age = parseInt(f.ageOfOnset, 10);
-        if (cond.length === 0) continue;
+        await dal.insertCondition(condition);
+      } else {
+        // Code is ICD-10 but not in the curated 9-cat enum (e.g. asthma).
+        // Store as observation category="condition" with the ICD-10 code
+        // so the data is still coded and analyzable longitudinally.
         const obs: ObservationInsertInput = {
           user_id: userId,
-          category: "family_history",
-          code_system: "internal",
-          code: `denali.family.${f.relative.toLowerCase()}.${cond.toLowerCase().replace(/\s+/g, "_").slice(0, 60)}`,
-          display: `${f.relative}: ${cond}`,
-          value_num: Number.isFinite(age) ? age : null,
-          value_text: cond,
-          unit: Number.isFinite(age) ? "age at onset" : null,
-          source: "self_reported",
-          effective_at: new Date().toISOString(),
-          report_id: null,
-          supersedes_id: null,
-          metadata_json: JSON.stringify({
-            relative: f.relative,
-            ageOfOnset: Number.isFinite(age) ? age : null,
-            conditionName: cond,
-          }),
-        };
-        await dal.insertObservation(obs);
-      }
-
-      // Lifestyle — one observation per answered prompt
-      for (const section of LIFESTYLE_SECTIONS) {
-        const answer = lifestyle[section.key];
-        if (!answer) continue;
-        const obs: ObservationInsertInput = {
-          user_id: userId,
-          category: "lifestyle",
-          code_system: "internal",
-          code: section.code,
-          display: section.question,
+          category: "condition",
+          code_system: entry.code_system,
+          code: entry.code,
+          display: entry.display,
           value_num: null,
-          value_text: answer,
+          value_text: entry.display,
           unit: null,
           source: "self_reported",
           effective_at: new Date().toISOString(),
           report_id: null,
           supersedes_id: null,
-          metadata_json: null,
+          metadata_json:
+            entry.isUncoded === true
+              ? JSON.stringify({ uncoded: true })
+              : null,
         };
         await dal.insertObservation(obs);
       }
-
-      navigation.navigate("Instruments");
-    } catch (e) {
-      setErrorMsg(
-        e instanceof Error
-          ? `Could not save intake: ${e.message}`
-          : "Could not save intake. Please try again.",
-      );
-    } finally {
-      setSubmitting(false);
     }
-  }, [
-    dal,
-    family,
-    history,
-    lifestyle,
-    navigation,
-    submitting,
-    symptom,
-    userId,
-  ]);
+  }, [dal, historyEntries, userId]);
 
-  const skipAll = React.useCallback(() => {
-    Alert.alert(
-      "Skip intake?",
-      "You can come back to this later from Settings.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Skip",
-          style: "destructive",
-          onPress: () => navigation.navigate("Instruments"),
-        },
-      ],
-    );
+  const persistFamily = React.useCallback(async () => {
+    if (dal == null || userId == null) {
+      throw new Error("Local database not ready");
+    }
+    for (const draft of familyEntries) {
+      const record = buildFamilyHistoryRecord(draft);
+      if (record == null) continue;
+      const obs: ObservationInsertInput = {
+        user_id: userId,
+        category: "family_history",
+        code_system: record.conditionCodeSystem,
+        code: record.conditionCode,
+        display: record.conditionDisplay,
+        value_num: record.onsetAge,
+        value_text: record.conditionDisplay,
+        unit: record.onsetAge != null ? "age at onset" : null,
+        source: "self_reported",
+        effective_at: new Date().toISOString(),
+        report_id: null,
+        supersedes_id: null,
+        metadata_json: familyHistoryMetadataJson(record),
+      };
+      await dal.insertObservation(obs);
+    }
+  }, [dal, familyEntries, userId]);
+
+  const persistLifestyle = React.useCallback(async () => {
+    if (dal == null || userId == null) {
+      throw new Error("Local database not ready");
+    }
+    for (const prompt of LIFESTYLE_PROMPTS) {
+      const value = lifestyle[prompt.key];
+      if (value == null) continue;
+      const label =
+        prompt.options.find((o) => o.value === value)?.label ?? String(value);
+      const obs: ObservationInsertInput = {
+        user_id: userId,
+        category: "lifestyle",
+        code_system: "internal",
+        code: prompt.code,
+        display: prompt.question,
+        value_num: value,
+        value_text: label,
+        unit: null,
+        source: "self_reported",
+        effective_at: new Date().toISOString(),
+        report_id: null,
+        supersedes_id: null,
+        metadata_json: null,
+      };
+      await dal.insertObservation(obs);
+    }
+  }, [dal, lifestyle, userId]);
+
+  const finishSection = React.useCallback(
+    async (id: Exclude<SectionId, "menu">, persist: () => Promise<void>) => {
+      setSubmitting(true);
+      setErrorMsg(null);
+      try {
+        await persist();
+        setStatus((s) => ({ ...s, [id]: "saved" }));
+        setSection("menu");
+      } catch (e) {
+        setErrorMsg(
+          e instanceof Error
+            ? `Could not save: ${e.message}`
+            : "Could not save. Please try again.",
+        );
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [],
+  );
+
+  const skipSection = React.useCallback((id: Exclude<SectionId, "menu">) => {
+    setStatus((s) => ({ ...s, [id]: "skipped" }));
+    setSection("menu");
+    setErrorMsg(null);
+  }, []);
+
+  const goToInstruments = React.useCallback(() => {
+    navigation.navigate("Instruments");
   }, [navigation]);
+
+  // ─── Styles ─────────────────────────────────────────────────────────────
 
   const styles = React.useMemo(
     () =>
@@ -350,324 +392,398 @@ export function IntakeOnboardingScreen(): React.ReactElement {
         subtitle: {
           fontSize: theme.typography.sizes.base,
           color: active.textSecondary,
+          lineHeight:
+            theme.typography.sizes.base *
+            theme.typography.lineHeights.relaxed,
         },
-        sectionTitle: {
-          fontSize: theme.typography.sizes.xl,
-          color: active.textPrimary,
-          fontWeight: fw(theme.typography.weights.semibold),
-          marginTop: theme.spacing.md,
-        },
-        helpText: {
-          fontSize: theme.typography.sizes.sm,
-          color: active.textSecondary,
-        },
-        input: {
+        sectionCard: {
           borderColor: active.border,
           borderWidth: 1,
           borderRadius: theme.radii.md,
           padding: theme.spacing.md,
-          fontSize: theme.typography.sizes.base,
-          color: active.textPrimary,
           backgroundColor: active.bgSecondary,
-          minHeight: 48,
+          gap: theme.spacing.xs,
         },
-        row: { flexDirection: "row", gap: theme.spacing.sm },
-        chip: {
-          paddingVertical: theme.spacing.sm,
-          paddingHorizontal: theme.spacing.md,
-          borderRadius: theme.radii.md,
-          borderColor: active.border,
-          borderWidth: 1,
-          backgroundColor: active.bgSecondary,
-        },
-        chipSelected: {
-          borderColor: active.accentPrimary,
-          backgroundColor: active.bgTertiary,
-        },
-        chipLabel: {
+        sectionTitle: {
+          fontSize: theme.typography.sizes.lg,
           color: active.textPrimary,
+          fontWeight: fw(theme.typography.weights.semibold),
+        },
+        sectionMeta: {
           fontSize: theme.typography.sizes.sm,
+          color: active.textSecondary,
         },
-        smallButton: {
-          paddingVertical: theme.spacing.sm,
-          paddingHorizontal: theme.spacing.md,
-          borderRadius: theme.radii.md,
-          backgroundColor: active.bgTertiary,
-          alignSelf: "flex-start",
+        sectionStatus: {
+          fontSize: theme.typography.sizes.xs,
+          textTransform: "uppercase",
+          letterSpacing: 1,
+          marginTop: theme.spacing.xs,
         },
-        smallButtonLabel: {
-          color: active.textPrimary,
-          fontSize: theme.typography.sizes.sm,
-          fontWeight: fw(theme.typography.weights.medium),
+        statusSaved: {
+          color: theme.colors.conditions.light.checkTeal.base,
+          fontWeight: fw(theme.typography.weights.semibold),
         },
-        listItem: {
-          padding: theme.spacing.sm,
-          borderRadius: theme.radii.sm,
-          backgroundColor: active.bgSecondary,
+        statusSkipped: {
+          color: active.textMuted,
         },
-        listItemText: {
-          color: active.textPrimary,
-          fontSize: theme.typography.sizes.sm,
+        statusTodo: {
+          color: active.accentPrimary,
+          fontWeight: fw(theme.typography.weights.semibold),
         },
-        actions: {
-          flexDirection: "row",
-          gap: theme.spacing.sm,
-          marginTop: theme.spacing.lg,
-        },
-        primary: {
-          flex: 1,
+        primaryAction: {
           backgroundColor: active.accentPrimary,
           paddingVertical: theme.spacing.md,
+          paddingHorizontal: theme.spacing.lg,
           borderRadius: theme.radii.md,
           alignItems: "center",
           justifyContent: "center",
           minHeight: 48,
-        },
-        secondary: {
-          paddingVertical: theme.spacing.md,
-          paddingHorizontal: theme.spacing.md,
-          borderRadius: theme.radii.md,
-          backgroundColor: active.bgSecondary,
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: 48,
+          marginTop: theme.spacing.md,
         },
         primaryLabel: {
           color: active.bgPrimary,
           fontSize: theme.typography.sizes.base,
           fontWeight: fw(theme.typography.weights.semibold),
         },
-        secondaryLabel: {
-          color: active.textPrimary,
-          fontSize: theme.typography.sizes.base,
+        addBtn: {
+          backgroundColor: active.bgTertiary,
+          paddingVertical: theme.spacing.sm,
+          paddingHorizontal: theme.spacing.md,
+          borderRadius: theme.radii.md,
+          alignSelf: "flex-start",
+          minHeight: 44,
+          justifyContent: "center",
         },
-        error: {
-          color: theme.colors.conditions.light.healthRed.base,
+        addLabel: {
+          color: active.textPrimary,
           fontSize: theme.typography.sizes.sm,
+          fontWeight: fw(theme.typography.weights.medium),
+        },
+        entryRow: {
+          padding: theme.spacing.sm,
+          borderRadius: theme.radii.sm,
+          backgroundColor: active.bgTertiary,
+        },
+        entryText: {
+          color: active.textPrimary,
+          fontSize: theme.typography.sizes.sm,
+        },
+        list: { gap: theme.spacing.xs },
+        submittingWrap: {
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: active.bgPrimary,
         },
       }),
     [active, theme],
   );
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={styles.screen}
-    >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View>
+  // ─── Loading overlay ────────────────────────────────────────────────────
+
+  if (submitting) {
+    return (
+      <View style={styles.submittingWrap}>
+        <ActivityIndicator color={active.accentPrimary} />
+        <Text style={[styles.subtitle, { marginTop: theme.spacing.sm }]}>
+          Saving…
+        </Text>
+      </View>
+    );
+  }
+
+  // ─── Section: menu (default) ────────────────────────────────────────────
+
+  if (section === "menu") {
+    const sectionMeta: ReadonlyArray<{
+      id: Exclude<SectionId, "menu">;
+      title: string;
+      meta: string;
+    }> = [
+      {
+        id: "complaint",
+        title: "What brings you in?",
+        meta: "A symptom or concern that's on your mind.",
+      },
+      {
+        id: "history",
+        title: "Your medical history",
+        meta: "Conditions you've been diagnosed with.",
+      },
+      {
+        id: "family",
+        title: "Family history",
+        meta: "What runs in the family, and at what age.",
+      },
+      {
+        id: "lifestyle",
+        title: "Daily habits",
+        meta: "Smoking, alcohol, activity, food, sleep.",
+      },
+    ];
+    return (
+      <View style={styles.screen}>
+        <ScrollView contentContainerStyle={styles.scroll}>
           <Text style={styles.title}>Tell us a bit more</Text>
           <Text style={styles.subtitle}>
-            Everything you enter here stays on this device. Skip any section
-            that doesn&apos;t apply.
+            Each section is optional. Skip anything that doesn&apos;t apply.
+            Everything you enter stays on this device.
           </Text>
-        </View>
 
-        {/* Chief complaint */}
-        <Text style={styles.sectionTitle}>What brings you in?</Text>
-        <Text style={styles.helpText}>
-          What&apos;s on your mind — a symptom, concern, or question?
-        </Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Joint pain, fatigue, headaches"
-          placeholderTextColor={active.textMuted}
-          value={symptom.name}
-          onChangeText={(name) => setSymptom((s) => ({ ...s, name }))}
-          editable={!submitting}
-          accessibilityLabel="Symptom or concern"
-        />
-        <Text style={styles.helpText}>When did it start? (YYYY-MM-DD)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={active.textMuted}
-          value={symptom.onsetDate}
-          onChangeText={(onsetDate) =>
-            setSymptom((s) => ({ ...s, onsetDate }))
-          }
-          editable={!submitting}
-          keyboardType="numbers-and-punctuation"
-          accessibilityLabel="Onset date"
-        />
-        <Text style={styles.helpText}>
-          How severe? 0 (no impact) to 10 (worst possible).
-        </Text>
-        <View style={styles.row}>
-          {[0, 2, 4, 6, 8, 10].map((n) => (
-            <Pressable
-              key={n}
-              style={[
-                styles.chip,
-                symptom.severity === n && styles.chipSelected,
-              ]}
-              onPress={() => setSymptom((s) => ({ ...s, severity: n }))}
-              disabled={submitting}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: symptom.severity === n }}
-            >
-              <Text style={styles.chipLabel}>{n}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {/* Medical history */}
-        <Text style={styles.sectionTitle}>Medical history</Text>
-        <Text style={styles.helpText}>
-          Conditions you&apos;ve been diagnosed with. Tap Add to include each one.
-        </Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. High blood pressure"
-          placeholderTextColor={active.textMuted}
-          value={historyDraft}
-          onChangeText={setHistoryDraft}
-          editable={!submitting}
-          accessibilityLabel="Condition name"
-        />
-        <Pressable
-          style={styles.smallButton}
-          onPress={() => {
-            const name = historyDraft.trim();
-            if (name.length === 0) return;
-            setHistory((arr) => [...arr, { name }]);
-            setHistoryDraft("");
-          }}
-          disabled={submitting}
-          accessibilityRole="button"
-        >
-          <Text style={styles.smallButtonLabel}>Add condition</Text>
-        </Pressable>
-        {history.map((h, idx) => (
-          <View key={`${h.name}-${idx}`} style={styles.listItem}>
-            <Text style={styles.listItemText}>{h.name}</Text>
-          </View>
-        ))}
-
-        {/* Family history */}
-        <Text style={styles.sectionTitle}>Family history</Text>
-        <Text style={styles.helpText}>
-          Who in your family had what, and at what age. Tap Add for each entry.
-        </Text>
-        <View style={styles.row}>
-          {RELATIVES.map((r) => (
-            <Pressable
-              key={r}
-              style={[
-                styles.chip,
-                familyDraft.relative === r && styles.chipSelected,
-              ]}
-              onPress={() =>
-                setFamilyDraft((f) => ({ ...f, relative: r }))
-              }
-              disabled={submitting}
-            >
-              <Text style={styles.chipLabel}>{r}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <TextInput
-          style={styles.input}
-          placeholder="Condition (e.g. Heart attack)"
-          placeholderTextColor={active.textMuted}
-          value={familyDraft.conditionName}
-          onChangeText={(conditionName) =>
-            setFamilyDraft((f) => ({ ...f, conditionName }))
-          }
-          editable={!submitting}
-          accessibilityLabel="Family condition"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Age at onset (e.g. 62)"
-          placeholderTextColor={active.textMuted}
-          value={familyDraft.ageOfOnset}
-          onChangeText={(ageOfOnset) =>
-            setFamilyDraft((f) => ({
-              ...f,
-              ageOfOnset: ageOfOnset.replace(/[^0-9]/g, "").slice(0, 3),
-            }))
-          }
-          keyboardType="number-pad"
-          editable={!submitting}
-          accessibilityLabel="Age at onset"
-          maxLength={3}
-        />
-        <Pressable
-          style={styles.smallButton}
-          onPress={() => {
-            if (familyDraft.conditionName.trim().length === 0) return;
-            setFamily((arr) => [...arr, familyDraft]);
-            setFamilyDraft({
-              relative: "Mother",
-              conditionName: "",
-              ageOfOnset: "",
-            });
-          }}
-          disabled={submitting}
-          accessibilityRole="button"
-        >
-          <Text style={styles.smallButtonLabel}>Add family entry</Text>
-        </Pressable>
-        {family.map((f, idx) => (
-          <View key={`fam-${idx}`} style={styles.listItem}>
-            <Text style={styles.listItemText}>
-              {f.relative}: {f.conditionName}
-              {f.ageOfOnset ? ` (age ${f.ageOfOnset})` : ""}
-            </Text>
-          </View>
-        ))}
-
-        {/* Lifestyle */}
-        <Text style={styles.sectionTitle}>Lifestyle</Text>
-        {LIFESTYLE_SECTIONS.map((section) => (
-          <View key={section.key} style={{ gap: theme.spacing.sm }}>
-            <Text style={styles.helpText}>{section.question}</Text>
-            {section.options.map((opt) => {
-              const selected = lifestyle[section.key] === opt;
-              return (
-                <Pressable
-                  key={opt}
-                  style={[styles.chip, selected && styles.chipSelected]}
-                  onPress={() =>
-                    setLifestyle((m) => ({ ...m, [section.key]: opt }))
-                  }
-                  disabled={submitting}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
+          {sectionMeta.map(({ id, title, meta }) => {
+            const s = status[id];
+            return (
+              <Pressable
+                key={id}
+                style={styles.sectionCard}
+                onPress={() => setSection(id)}
+                accessibilityRole="button"
+                accessibilityLabel={title}
+              >
+                <Text style={styles.sectionTitle}>{title}</Text>
+                <Text style={styles.sectionMeta}>{meta}</Text>
+                <Text
+                  style={[
+                    styles.sectionStatus,
+                    s === "saved"
+                      ? styles.statusSaved
+                      : s === "skipped"
+                        ? styles.statusSkipped
+                        : styles.statusTodo,
+                  ]}
                 >
-                  <Text style={styles.chipLabel}>{opt}</Text>
-                </Pressable>
+                  {s === "saved"
+                    ? "Saved"
+                    : s === "skipped"
+                      ? "Skipped"
+                      : "Tap to add"}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          {errorMsg ? (
+            <Text style={{ color: theme.colors.conditions.light.healthRed.base }}>
+              {errorMsg}
+            </Text>
+          ) : null}
+
+          <Pressable
+            style={styles.primaryAction}
+            onPress={goToInstruments}
+            accessibilityRole="button"
+            accessibilityLabel="Finish intake and continue"
+          >
+            <Text style={styles.primaryLabel}>Finish intake</Text>
+          </Pressable>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ─── Section: chief complaint ───────────────────────────────────────────
+
+  if (section === "complaint") {
+    if (complaintStep === 1) {
+      return (
+        <OneItemScreen
+          stepIndex={1}
+          totalSteps={2}
+          sectionLabel="What brings you in?"
+          question="What's most on your mind today?"
+          helperText="Pick the closest match. Tap 'Use my own wording' if nothing fits."
+          canContinue={complaintSelection != null}
+          onContinue={() => setComplaintStep(2)}
+          onBack={() => setSection("menu")}
+          onSkipSection={() => skipSection("complaint")}
+          errorMessage={errorMsg}
+        >
+          <AutocompleteInput
+            vocabulary={SYMPTOMS}
+            value={complaintSelection}
+            onChange={setComplaintSelection}
+            allowOther
+            placeholder="e.g. fatigue, joint pain"
+            accessibilityLabel="Symptom or concern"
+          />
+        </OneItemScreen>
+      );
+    }
+    return (
+      <OneItemScreen
+        stepIndex={2}
+        totalSteps={2}
+        sectionLabel="What brings you in?"
+        question="How much is this affecting you?"
+        helperText="0 means no impact. 10 means the worst possible."
+        canContinue
+        onContinue={() => finishSection("complaint", persistComplaint)}
+        onBack={() => setComplaintStep(1)}
+        onSkipSection={() => skipSection("complaint")}
+        errorMessage={errorMsg}
+      >
+        <SliderInput
+          min={0}
+          max={10}
+          step={1}
+          value={complaintSeverity}
+          onChange={setComplaintSeverity}
+          minLabel="No impact"
+          maxLabel="Worst possible"
+          accessibilityLabel="Severity"
+        />
+      </OneItemScreen>
+    );
+  }
+
+  // ─── Section: medical history ───────────────────────────────────────────
+
+  if (section === "history") {
+    return (
+      <OneItemScreen
+        stepIndex={1}
+        totalSteps={1}
+        sectionLabel="Your medical history"
+        question="What conditions have you been diagnosed with?"
+        helperText="Add as many as apply. Tap Save when you're done — or Skip if none apply."
+        canContinue={historyEntries.length > 0}
+        onContinue={() => finishSection("history", persistHistory)}
+        onBack={() => setSection("menu")}
+        onSkipSection={() => skipSection("history")}
+        errorMessage={errorMsg}
+      >
+        <View style={{ gap: theme.spacing.md }}>
+          <AutocompleteInput
+            vocabulary={CONDITIONS_45_PLUS}
+            value={historyDraft}
+            onChange={setHistoryDraft}
+            allowOther
+            placeholder="e.g. high blood pressure"
+            accessibilityLabel="Condition"
+          />
+          <Pressable
+            style={styles.addBtn}
+            onPress={() => {
+              if (historyDraft == null) return;
+              setHistoryEntries((arr) => [...arr, historyDraft]);
+              setHistoryDraft(null);
+            }}
+            disabled={historyDraft == null}
+            accessibilityRole="button"
+            accessibilityLabel="Add condition"
+          >
+            <Text style={styles.addLabel}>Add this condition</Text>
+          </Pressable>
+          <View style={styles.list}>
+            {historyEntries.map((e, idx) => (
+              <View key={`${e.code}-${idx}`} style={styles.entryRow}>
+                <Text style={styles.entryText}>
+                  {e.display}
+                  {e.isUncoded ? " (your own wording)" : ""}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </OneItemScreen>
+    );
+  }
+
+  // ─── Section: family history ────────────────────────────────────────────
+
+  if (section === "family") {
+    const draftComplete =
+      familyDraft.relation != null && familyDraft.selection != null;
+    return (
+      <OneItemScreen
+        stepIndex={1}
+        totalSteps={1}
+        sectionLabel="Family history"
+        question="Who in your family had what?"
+        helperText="Add one entry per relative + condition. Onset age is optional."
+        canContinue={familyEntries.length > 0}
+        onContinue={() => finishSection("family", persistFamily)}
+        onBack={() => setSection("menu")}
+        onSkipSection={() => skipSection("family")}
+        errorMessage={errorMsg}
+      >
+        <View style={{ gap: theme.spacing.md }}>
+          <StructuredFamilyHistoryInput
+            value={familyDraft}
+            onChange={setFamilyDraft}
+          />
+          <Pressable
+            style={styles.addBtn}
+            onPress={() => {
+              if (!draftComplete) return;
+              setFamilyEntries((arr) => [...arr, familyDraft]);
+              setFamilyDraft({
+                relation: null,
+                selection: null,
+                onsetAge: null,
+              });
+            }}
+            disabled={!draftComplete}
+            accessibilityRole="button"
+            accessibilityLabel="Add this family entry"
+          >
+            <Text style={styles.addLabel}>Add this family entry</Text>
+          </Pressable>
+          <View style={styles.list}>
+            {familyEntries.map((e, idx) => {
+              const r = buildFamilyHistoryRecord(e);
+              if (r == null) return null;
+              return (
+                <View key={`fam-${idx}`} style={styles.entryRow}>
+                  <Text style={styles.entryText}>
+                    {r.relation.replace(/_/g, " ")} — {r.conditionDisplay}
+                    {r.onsetAge != null ? ` (age ${r.onsetAge})` : ""}
+                  </Text>
+                </View>
               );
             })}
           </View>
-        ))}
-
-        {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
-
-        <View style={styles.actions}>
-          <Pressable
-            style={styles.secondary}
-            onPress={skipAll}
-            disabled={submitting}
-            accessibilityRole="button"
-          >
-            <Text style={styles.secondaryLabel}>Skip</Text>
-          </Pressable>
-          <Pressable
-            style={styles.primary}
-            onPress={handleSubmit}
-            disabled={submitting}
-            accessibilityRole="button"
-          >
-            {submitting ? (
-              <ActivityIndicator color={active.bgPrimary} />
-            ) : (
-              <Text style={styles.primaryLabel}>Save and continue</Text>
-            )}
-          </Pressable>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </OneItemScreen>
+    );
+  }
+
+  // ─── Section: lifestyle ─────────────────────────────────────────────────
+
+  const prompt = LIFESTYLE_PROMPTS[lifestyleStep];
+  const lifestyleTotal = LIFESTYLE_PROMPTS.length;
+  return (
+    <OneItemScreen
+      stepIndex={lifestyleStep + 1}
+      totalSteps={lifestyleTotal}
+      sectionLabel="Daily habits"
+      question={prompt.question}
+      autoAdvance
+      onBack={
+        lifestyleStep > 0
+          ? () => setLifestyleStep((s) => Math.max(0, s - 1))
+          : () => setSection("menu")
+      }
+      onSkipSection={() => skipSection("lifestyle")}
+      errorMessage={errorMsg}
+    >
+      <LikertInput
+        options={prompt.options}
+        value={lifestyle[prompt.key]}
+        onChange={(v) => {
+          setLifestyle((m) => ({ ...m, [prompt.key]: v }));
+          // Auto-advance: if last prompt, persist; else next item.
+          if (lifestyleStep + 1 >= lifestyleTotal) {
+            // Defer so React processes the setState first.
+            Promise.resolve().then(() => {
+              void finishSection("lifestyle", persistLifestyle);
+            });
+          } else {
+            setLifestyleStep((s) => s + 1);
+          }
+        }}
+        accessibilityLabel={prompt.question}
+      />
+    </OneItemScreen>
   );
 }

@@ -1,72 +1,69 @@
 /**
- * CohortOnboardingScreen — Wave 2 (mobile-onboarding-builder).
+ * CohortOnboardingScreen — Wave 2 redesign (one item per screen).
  *
- * 4-question post-auth interstitial:
- *   Q1: Birth year (1900..currentYear) — required. INTEGER text input.
- *   Q2: Sex at birth (Male / Female / Prefer not to say [= "unknown"]) — required.
- *   Q3: Are you enrolled in Medicare? (Yes / No) — required.
- *   Q4: Gender identity — optional dropdown.
+ * Internal step state walks the user through the demographics
+ * questions one at a time, using `OneItemScreen` for the shell. The
+ * route is still a single screen so we don't explode the navigation
+ * graph; the OneItemScreen presents one question at a time.
  *
- * Submit:
- *   - PATCH /api/profile with additive payload (omit gender_identity when null)
- *   - LocalDataDAL.upsertProfile (Local is system of record)
- *   - Navigate to Intake on success.
+ * Step order (all REQUIRED per the Wave-2 burden model, except
+ * gender identity which stays optional per D7):
+ *   1. Birth year   (numeric text input — Continue button)
+ *   2. Sex at birth (Likert single-select — auto-advance)
+ *   3. Medicare?    (Likert single-select — auto-advance)
+ *   4. Gender identity (Likert single-select with "Prefer to skip" — auto-advance,
+ *                       OPTIONAL — user can pick "Prefer to skip" to finish)
  *
- * Local-first: writes to local DAL before/independent of network. If the
- * server PATCH fails, the local profile row is still good; the user can
- * proceed. We surface the network error but do not block the journey.
+ * Submit happens after step 4:
+ *   - LocalDataDAL.upsertProfile (local is source of truth)
+ *   - ApiClient.apiPatch("/api/profile") with additive payload (omits
+ *     gender_identity when null).
  *
- * Contracts consumed: ApiClient, LocalDataDAL, Theme, SexAtBirth,
- * GenderIdentity (all from src/contracts).
+ * If the local DAL write fails, we surface the error and stay on the
+ * final step. Network PATCH failure is best-effort and logged but does
+ * NOT block journey advancement.
  */
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useApiClient } from "@/auth";
 import type { GenderIdentity, SexAtBirth } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
-import {
-  buildCohortPayload,
-  canSubmitCohort,
-} from "@/onboarding/cohortPayload";
 import { fw } from "@/onboarding/fontWeight";
+import { LikertInput } from "@/onboarding/inputs";
+import { OneItemScreen } from "@/onboarding/OneItemScreen";
+import { buildCohortPayload, canSubmitCohort } from "@/onboarding/cohortPayload";
 import { useTheme } from "@/theme/useTheme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "CohortOnboarding">;
 
-// Mirror the web's v1 UI options. Intersex is API-settable but not shown.
-const SEX_OPTIONS: ReadonlyArray<{ value: SexAtBirth; label: string }> = [
-  { value: "male", label: "Male" },
-  { value: "female", label: "Female" },
-  { value: "unknown", label: "Prefer not to say" },
+const SEX_OPTIONS = [
+  { value: 0, label: "Male" },
+  { value: 1, label: "Female" },
+  { value: 2, label: "Prefer not to say" },
+] as const;
+const SEX_TO_API: ReadonlyArray<SexAtBirth> = ["male", "female", "unknown"];
+
+const MEDICARE_OPTIONS = [
+  { value: 1, label: "Yes, I have Medicare" },
+  { value: 0, label: "No, I don't have Medicare" },
+] as const;
+
+const GENDER_OPTIONS: ReadonlyArray<{ value: number; label: string; gid: GenderIdentity | null }> = [
+  { value: 0, label: "Prefer to skip", gid: null },
+  { value: 1, label: "Male", gid: "male" },
+  { value: 2, label: "Female", gid: "female" },
+  { value: 3, label: "Non-binary", gid: "non-binary" },
+  { value: 4, label: "Transgender male", gid: "transgender-male" },
+  { value: 5, label: "Transgender female", gid: "transgender-female" },
+  { value: 6, label: "Other", gid: "other" },
+  { value: 7, label: "Prefer not to say", gid: "prefer-not-to-say" },
 ];
 
-const GENDER_OPTIONS: ReadonlyArray<{
-  value: GenderIdentity | null;
-  label: string;
-}> = [
-  { value: null, label: "Prefer to skip" },
-  { value: "male", label: "Male" },
-  { value: "female", label: "Female" },
-  { value: "non-binary", label: "Non-binary" },
-  { value: "transgender-male", label: "Transgender male" },
-  { value: "transgender-female", label: "Transgender female" },
-  { value: "other", label: "Other" },
-  { value: "prefer-not-to-say", label: "Prefer not to say" },
-];
+const TOTAL_STEPS = 4;
 
 export function CohortOnboardingScreen(): React.ReactElement {
   const api = useApiClient();
@@ -75,12 +72,14 @@ export function CohortOnboardingScreen(): React.ReactElement {
   const { active, theme } = useTheme();
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
 
+  const [stepIndex, setStepIndex] = React.useState(1); // 1-based
+
+  // Field state
   const [birthYearStr, setBirthYearStr] = React.useState("");
-  const [sexAtBirth, setSexAtBirth] = React.useState<SexAtBirth | null>(null);
-  const [isOnMedicare, setIsOnMedicare] = React.useState<boolean | null>(null);
-  const [genderIdentity, setGenderIdentity] =
-    React.useState<GenderIdentity | null>(null);
-  const [showGenderPicker, setShowGenderPicker] = React.useState(false);
+  const [sexLikert, setSexLikert] = React.useState<number | null>(null);
+  const [medicareLikert, setMedicareLikert] = React.useState<number | null>(null);
+  const [genderLikert, setGenderLikert] = React.useState<number | null>(null);
+
   const [submitting, setSubmitting] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
@@ -89,188 +88,185 @@ export function CohortOnboardingScreen(): React.ReactElement {
     return Number.isFinite(n) ? n : null;
   }, [birthYearStr]);
 
-  const canSubmit = canSubmitCohort({
-    birthYear,
-    sexAtBirth,
-    isOnMedicare,
-    currentYear,
-  });
-  const submitDisabled = submitting || !canSubmit;
+  const sexAtBirth: SexAtBirth | null =
+    sexLikert != null ? SEX_TO_API[sexLikert] ?? null : null;
+  const isOnMedicare: boolean | null =
+    medicareLikert == null ? null : medicareLikert === 1;
 
-  const handleSubmit = React.useCallback(async () => {
-    if (submitDisabled || birthYear == null || sexAtBirth == null || isOnMedicare == null) return;
+  // Auto-advance handlers — fire on selection.
+  const handleSexChange = React.useCallback((v: number) => {
+    setSexLikert(v);
+    setStepIndex((i) => Math.min(i + 1, TOTAL_STEPS));
+  }, []);
+  const handleMedicareChange = React.useCallback((v: number) => {
+    setMedicareLikert(v);
+    setStepIndex((i) => Math.min(i + 1, TOTAL_STEPS));
+  }, []);
+  const handleGenderChange = React.useCallback(
+    (v: number) => {
+      setGenderLikert(v);
+      // Gender is the last step — submit on selection.
+      // Defer the actual submit to a useEffect that watches all state
+      // so the local variable read is up-to-date.
+      // We use a microtask to avoid running submit inside setState.
+      Promise.resolve().then(() => {
+        // We have to call submit with the latest values. Read state at
+        // call time via the closure: by the time the microtask runs,
+        // genderLikert is the new value (React batches setState but
+        // the local `v` is the source of truth here).
+        // Build the payload directly to avoid stale-closure on
+        // genderIdentity.
+        const newGid =
+          GENDER_OPTIONS.find((g) => g.value === v)?.gid ?? null;
+        submitWithGender(newGid);
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
-    setSubmitting(true);
-    setErrorMsg(null);
-
-    const payload = buildCohortPayload({
-      birthYear,
-      sexAtBirth,
-      isOnMedicare,
-      genderIdentity,
-    });
-
-    // Local-first: write the profile row to SQLCipher BEFORE the network
-    // PATCH so a network failure doesn't strand the user's cohort answers.
-    // Mobile is the system of record for the local profile.
-    const currentUser = api.getCurrentUser();
-    if (dal != null && currentUser != null) {
-      try {
-        await dal.upsertProfile({
-          id: currentUser.userId,
-          email: currentUser.email,
-          birth_year: birthYear,
-          is_on_medicare: isOnMedicare,
-          sex_at_birth: sexAtBirth,
-          gender_identity: genderIdentity ?? null,
-        });
-      } catch (e) {
-        // Local DB write failed — surface to user; do not advance.
-        setSubmitting(false);
-        setErrorMsg(
-          e instanceof Error
-            ? `Could not save locally: ${e.message}`
-            : "Could not save locally. Please try again.",
-        );
+  // Variant of submit that takes an explicit gender (used by auto-advance)
+  const submitWithGender = React.useCallback(
+    async (gid: GenderIdentity | null) => {
+      if (submitting) return;
+      if (
+        !canSubmitCohort({
+          birthYear,
+          sexAtBirth,
+          isOnMedicare,
+          currentYear,
+        })
+      ) {
+        setErrorMsg("Please complete all required answers.");
         return;
       }
-    }
+      setSubmitting(true);
+      setErrorMsg(null);
 
-    // Server-side PATCH — best-effort. Network failure is surfaced but does
-    // not block the journey because the local DB is the source of truth.
-    try {
-      await api.apiPatch("/api/profile", payload);
-    } catch (e) {
-      // Log but do not block — local is authoritative.
-      // The web app would set medicare_status cookie here; mobile uses
-      // local profile state for all routing decisions instead.
-      // eslint-disable-next-line no-console
-      console.warn("[cohort] PATCH /api/profile failed:", e);
-    }
+      const payload = buildCohortPayload({
+        birthYear: birthYear as number,
+        sexAtBirth: sexAtBirth as SexAtBirth,
+        isOnMedicare: isOnMedicare as boolean,
+        genderIdentity: gid,
+      });
 
-    setSubmitting(false);
-    navigation.navigate("Intake");
-  }, [
-    api,
-    birthYear,
-    dal,
-    genderIdentity,
-    isOnMedicare,
-    navigation,
-    sexAtBirth,
-    submitDisabled,
-  ]);
+      const currentUser = api.getCurrentUser();
+      if (dal != null && currentUser != null) {
+        try {
+          await dal.upsertProfile({
+            id: currentUser.userId,
+            email: currentUser.email,
+            birth_year: birthYear,
+            is_on_medicare: isOnMedicare,
+            sex_at_birth: sexAtBirth,
+            gender_identity: gid ?? null,
+          });
+        } catch (e) {
+          setSubmitting(false);
+          setErrorMsg(
+            e instanceof Error
+              ? `Could not save locally: ${e.message}`
+              : "Could not save locally. Please try again.",
+          );
+          return;
+        }
+      }
+
+      try {
+        await api.apiPatch("/api/profile", payload);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("[cohort] PATCH /api/profile failed:", e);
+      }
+
+      setSubmitting(false);
+      navigation.navigate("Intake");
+    },
+    [
+      api,
+      birthYear,
+      currentYear,
+      dal,
+      isOnMedicare,
+      navigation,
+      sexAtBirth,
+      submitting,
+    ],
+  );
+
+  const goBack = React.useCallback(() => {
+    setErrorMsg(null);
+    setStepIndex((i) => Math.max(1, i - 1));
+  }, []);
+
+  const continueBirthYear = React.useCallback(() => {
+    if (birthYear == null) return;
+    if (birthYear < 1900 || birthYear > currentYear) {
+      setErrorMsg(`Please enter a year between 1900 and ${currentYear}.`);
+      return;
+    }
+    setErrorMsg(null);
+    setStepIndex((i) => Math.min(i + 1, TOTAL_STEPS));
+  }, [birthYear, currentYear]);
 
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
-        screen: { flex: 1, backgroundColor: active.bgPrimary },
-        scroll: { padding: theme.spacing.lg, gap: theme.spacing.lg },
-        title: {
-          fontSize: theme.typography.sizes["3xl"],
-          fontFamily: theme.typography.fonts.serif,
-          color: active.textPrimary,
-          fontWeight: fw(theme.typography.weights.bold),
-        },
-        subtitle: {
-          fontSize: theme.typography.sizes.base,
-          color: active.textSecondary,
-          marginBottom: theme.spacing.sm,
-        },
-        section: { gap: theme.spacing.sm },
-        legend: {
-          fontSize: theme.typography.sizes.lg,
-          fontWeight: fw(theme.typography.weights.semibold),
-          color: active.textPrimary,
-        },
-        legendRequired: {
-          fontSize: theme.typography.sizes.xs,
-          color: theme.colors.conditions.light.healthRed.base,
-        },
-        legendOptional: {
-          fontSize: theme.typography.sizes.xs,
-          color: active.textSecondary,
-        },
-        helpText: {
-          fontSize: theme.typography.sizes.sm,
-          color: active.textSecondary,
-          lineHeight:
-            theme.typography.sizes.sm * theme.typography.lineHeights.relaxed,
-        },
         input: {
           borderColor: active.border,
           borderWidth: 1,
           borderRadius: theme.radii.md,
           padding: theme.spacing.md,
-          fontSize: theme.typography.sizes.base,
+          fontSize: theme.typography.sizes["2xl"],
+          fontFamily: theme.typography.fonts.mono,
           color: active.textPrimary,
           backgroundColor: active.bgSecondary,
-          minHeight: 48,
+          minHeight: 56,
+          textAlign: "center",
         },
-        option: {
-          borderColor: active.border,
-          borderWidth: 1,
-          borderRadius: theme.radii.md,
-          padding: theme.spacing.md,
-          minHeight: 48,
-          justifyContent: "center",
-        },
-        optionSelected: {
-          borderColor: active.accentPrimary,
-          backgroundColor: active.bgSecondary,
-        },
-        optionLabel: {
-          fontSize: theme.typography.sizes.base,
-          color: active.textPrimary,
-        },
-        submit: {
-          backgroundColor: active.accentPrimary,
-          paddingVertical: theme.spacing.md,
-          borderRadius: theme.radii.md,
+        submittingRow: {
+          flexDirection: "row",
           alignItems: "center",
-          justifyContent: "center",
-          minHeight: 48,
-          marginTop: theme.spacing.md,
+          gap: theme.spacing.sm,
         },
-        submitDisabled: {
-          backgroundColor: active.textMuted,
-        },
-        submitLabel: {
-          color: active.bgPrimary,
-          fontSize: theme.typography.sizes.base,
-          fontWeight: fw(theme.typography.weights.semibold),
-        },
-        error: {
-          color: theme.colors.conditions.light.healthRed.base,
+        submittingLabel: {
           fontSize: theme.typography.sizes.sm,
+          color: active.textSecondary,
+          fontWeight: fw(theme.typography.weights.medium),
         },
       }),
     [active, theme],
   );
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={styles.screen}
-    >
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View>
-          <Text style={styles.title}>Let&apos;s get you set up</Text>
-          <Text style={styles.subtitle}>
-            These help us personalize Denali for you.
-          </Text>
-        </View>
+  if (submitting) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: active.bgPrimary }}>
+        <ActivityIndicator color={active.accentPrimary} />
+        <Text style={[styles.submittingLabel, { marginTop: theme.spacing.sm }]}>
+          Saving your answers…
+        </Text>
+      </View>
+    );
+  }
 
-        {/* Q1 — Birth year */}
-        <View style={styles.section}>
-          <Text style={styles.legend}>
-            Birth year{" "}
-            <Text style={styles.legendRequired}>Required</Text>
-          </Text>
-          <Text style={styles.helpText}>
-            Denali is designed for adults 45 and older. Many reference ranges
-            and risk-stratification cutoffs depend on age.
-          </Text>
+  switch (stepIndex) {
+    case 1:
+      return (
+        <OneItemScreen
+          stepIndex={1}
+          totalSteps={TOTAL_STEPS}
+          sectionLabel="About you"
+          question="What year were you born?"
+          helperText="Many reference ranges and risk-stratification cutoffs depend on age."
+          canContinue={
+            birthYear != null &&
+            birthYear >= 1900 &&
+            birthYear <= currentYear
+          }
+          onContinue={continueBirthYear}
+          hideBack
+          errorMessage={errorMsg}
+        >
           <TextInput
             style={styles.input}
             keyboardType="number-pad"
@@ -280,140 +276,74 @@ export function CohortOnboardingScreen(): React.ReactElement {
             onChangeText={(text) =>
               setBirthYearStr(text.replace(/[^0-9]/g, "").slice(0, 4))
             }
-            editable={!submitting}
             accessibilityLabel="Birth year"
             maxLength={4}
           />
-        </View>
+        </OneItemScreen>
+      );
 
-        {/* Q2 — Sex at birth */}
-        <View style={styles.section}>
-          <Text style={styles.legend}>
-            Sex at birth{" "}
-            <Text style={styles.legendRequired}>Required</Text>
-          </Text>
-          <Text style={styles.helpText}>
-            Used to interpret lab results accurately — reference ranges for
-            things like hemoglobin, creatinine, and cardiac markers differ by
-            sex at birth.
-          </Text>
-          {SEX_OPTIONS.map((opt) => {
-            const selected = sexAtBirth === opt.value;
-            return (
-              <Pressable
-                key={opt.value}
-                style={[styles.option, selected && styles.optionSelected]}
-                onPress={() => setSexAtBirth(opt.value)}
-                disabled={submitting}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-              >
-                <Text style={styles.optionLabel}>{opt.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* Q3 — Medicare */}
-        <View style={styles.section}>
-          <Text style={styles.legend}>
-            Are you enrolled in Medicare?{" "}
-            <Text style={styles.legendRequired}>Required</Text>
-          </Text>
-          <Text style={styles.helpText}>
-            This helps us give you the right information. You can change this
-            anytime in Settings.
-          </Text>
-          <Pressable
-            style={[
-              styles.option,
-              isOnMedicare === true && styles.optionSelected,
-            ]}
-            onPress={() => setIsOnMedicare(true)}
-            disabled={submitting}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: isOnMedicare === true }}
-          >
-            <Text style={styles.optionLabel}>Yes, I have Medicare</Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.option,
-              isOnMedicare === false && styles.optionSelected,
-            ]}
-            onPress={() => setIsOnMedicare(false)}
-            disabled={submitting}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: isOnMedicare === false }}
-          >
-            <Text style={styles.optionLabel}>No, I don&apos;t have Medicare</Text>
-          </Pressable>
-        </View>
-
-        {/* Q4 — Gender identity (optional) */}
-        <View style={styles.section}>
-          <Text style={styles.legend}>
-            Gender identity{" "}
-            <Text style={styles.legendOptional}>Optional</Text>
-          </Text>
-          <Text style={styles.helpText}>
-            Optional — helps us address you correctly. You can update this
-            anytime in Settings.
-          </Text>
-          <Pressable
-            style={styles.option}
-            onPress={() => setShowGenderPicker((v) => !v)}
-            disabled={submitting}
-            accessibilityRole="button"
-          >
-            <Text style={styles.optionLabel}>
-              {genderIdentity
-                ? GENDER_OPTIONS.find((g) => g.value === genderIdentity)
-                    ?.label ?? genderIdentity
-                : "Select an option"}
-            </Text>
-          </Pressable>
-          {showGenderPicker
-            ? GENDER_OPTIONS.map((opt) => {
-                const selected = genderIdentity === opt.value;
-                return (
-                  <Pressable
-                    key={opt.value ?? "__skip__"}
-                    style={[
-                      styles.option,
-                      selected && styles.optionSelected,
-                    ]}
-                    onPress={() => {
-                      setGenderIdentity(opt.value);
-                      setShowGenderPicker(false);
-                    }}
-                    disabled={submitting}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected }}
-                  >
-                    <Text style={styles.optionLabel}>{opt.label}</Text>
-                  </Pressable>
-                );
-              })
-            : null}
-        </View>
-
-        {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
-
-        <Pressable
-          style={[styles.submit, submitDisabled && styles.submitDisabled]}
-          onPress={handleSubmit}
-          disabled={submitDisabled}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: submitDisabled }}
+    case 2:
+      return (
+        <OneItemScreen
+          stepIndex={2}
+          totalSteps={TOTAL_STEPS}
+          sectionLabel="About you"
+          question="What was your sex at birth?"
+          helperText="Used to interpret lab results accurately — reference ranges for things like hemoglobin and cardiac markers differ by sex at birth."
+          autoAdvance
+          onBack={goBack}
+          errorMessage={errorMsg}
         >
-          {submitting ? (
-            <ActivityIndicator color={active.bgPrimary} />
-          ) : (
-            <Text style={styles.submitLabel}>Continue</Text>
-          )}
-        </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
+          <LikertInput
+            options={SEX_OPTIONS}
+            value={sexLikert}
+            onChange={handleSexChange}
+            accessibilityLabel="Sex at birth"
+          />
+        </OneItemScreen>
+      );
+
+    case 3:
+      return (
+        <OneItemScreen
+          stepIndex={3}
+          totalSteps={TOTAL_STEPS}
+          sectionLabel="About you"
+          question="Are you enrolled in Medicare?"
+          helperText="This helps us tailor what we show you. You can change this anytime in Settings."
+          autoAdvance
+          onBack={goBack}
+          errorMessage={errorMsg}
+        >
+          <LikertInput
+            options={MEDICARE_OPTIONS}
+            value={medicareLikert}
+            onChange={handleMedicareChange}
+            accessibilityLabel="Medicare enrollment"
+          />
+        </OneItemScreen>
+      );
+
+    case 4:
+    default:
+      return (
+        <OneItemScreen
+          stepIndex={4}
+          totalSteps={TOTAL_STEPS}
+          sectionLabel="About you"
+          question="How do you identify?"
+          helperText="Optional. Helps us address you correctly. You can update this anytime in Settings."
+          autoAdvance
+          onBack={goBack}
+          errorMessage={errorMsg}
+        >
+          <LikertInput
+            options={GENDER_OPTIONS}
+            value={genderLikert}
+            onChange={handleGenderChange}
+            accessibilityLabel="Gender identity"
+          />
+        </OneItemScreen>
+      );
+  }
 }
