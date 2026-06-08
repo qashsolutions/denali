@@ -104,7 +104,7 @@ export const ADAM: InstrumentDefinition = {
 
 /**
  * Morley 2000 positive-screen rule:
- *   positive ↔ item1 == yes OR item7 == yes OR (count of yes among items 2,3,4,5,6,8,9,10 ≥ 3)
+ *   positive iff item1 == yes OR item7 == yes OR (count of yes among items 2,3,4,5,6,8,9,10 >= 3)
  *
  * Returns null when the responses are incomplete.
  */
