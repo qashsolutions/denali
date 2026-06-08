@@ -77,13 +77,20 @@ async function runMigrations(db: SqliteAdapter): Promise<void> {
 
   for (const m of MIGRATIONS) {
     if (appliedVersions.has(m.version)) continue;
-    await db.withTransactionAsync(async () => {
-      await db.execAsync(m.sql);
-      await db.runAsync(
-        "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
-        [m.version, m.name, new Date().toISOString()],
-      );
-    });
+    // NB: expo-sqlite's `execAsync` cannot run inside an explicit
+    // transaction — wrapping this block in `withTransactionAsync` triggers
+    // SQLite's "cannot start a transaction within a transaction" on iOS
+    // (validated on iPhone 16 Pro simulator, 2026-06-05). All Phase 1
+    // migrations use `CREATE TABLE IF NOT EXISTS` so re-running on partial
+    // state is safe (idempotent). If a future migration needs atomicity
+    // across multiple write statements, split them into individual
+    // `runAsync` calls wrapped in `withTransactionAsync` — never
+    // `execAsync` inside a transaction.
+    await db.execAsync(m.sql);
+    await db.runAsync(
+      "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
+      [m.version, m.name, new Date().toISOString()],
+    );
   }
 }
 
@@ -106,39 +113,64 @@ function quoteHexKey(hex: string): string {
   return `x'${hex}'`;
 }
 
-let cachedDb: SqliteAdapter | null = null;
+/**
+ * Cache the in-flight PROMISE, not the resolved adapter. If two callers race
+ * to open the DB before the first resolution lands (DalProvider mount +
+ * useEffect probe, two screens hydrating, etc.), the second caller must
+ * `await` the same promise — otherwise both would call
+ * `SQLite.openDatabaseAsync`, both would run the migration runner, and the
+ * second migration's `INSERT INTO schema_migrations` would collide with the
+ * first via the version PK UNIQUE constraint. Validated on Android emulator
+ * 2026-06-08; iOS happened to win the race differently but had the same
+ * exposure. Vitest missed it because the test adapter bypasses this module.
+ */
+let cachedDbPromise: Promise<SqliteAdapter> | null = null;
 
 /**
  * Open the SQLCipher database (process-singleton). Subsequent calls return
  * the cached adapter without re-opening, re-keying, or re-migrating.
+ *
+ * Concurrent callers all `await` the same in-flight promise. If that promise
+ * REJECTS (keystore unavailable, PRAGMA failure, etc.) we null the cache so
+ * the next caller can retry rather than be poisoned forever by a stale
+ * rejected promise.
  */
 export async function openLocalDb(): Promise<SqliteAdapter> {
-  if (cachedDb) return cachedDb;
+  if (cachedDbPromise) return cachedDbPromise;
 
-  const key = await getOrCreateDbKey();
-  const raw = await SQLite.openDatabaseAsync(DB_FILENAME);
+  cachedDbPromise = (async () => {
+    const key = await getOrCreateDbKey();
+    const raw = await SQLite.openDatabaseAsync(DB_FILENAME);
 
-  // CRITICAL: this PRAGMA must be the first statement on the connection,
-  // before any read/write. Once issued, SQLCipher derives the page key
-  // and the rest of the session is transparent.
-  await raw.execAsync(`PRAGMA key = "${quoteHexKey(key)}"`);
+    // CRITICAL: this PRAGMA must be the first statement on the connection,
+    // before any read/write. Once issued, SQLCipher derives the page key
+    // and the rest of the session is transparent.
+    await raw.execAsync(`PRAGMA key = "${quoteHexKey(key)}"`);
 
-  // Recommended defaults — WAL for concurrency, foreign_keys for safety.
-  // (Foreign keys aren't declared in 001-init, but enabling the pragma is
-  //  cheap and forward-compatible if a future migration adds them.)
-  await raw.execAsync("PRAGMA journal_mode = WAL");
-  await raw.execAsync("PRAGMA foreign_keys = ON");
+    // Recommended defaults — WAL for concurrency, foreign_keys for safety.
+    // (Foreign keys aren't declared in 001-init, but enabling the pragma is
+    //  cheap and forward-compatible if a future migration adds them.)
+    await raw.execAsync("PRAGMA journal_mode = WAL");
+    await raw.execAsync("PRAGMA foreign_keys = ON");
 
-  const adapter = adaptExpoDatabase(raw);
-  await runMigrations(adapter);
+    const adapter = adaptExpoDatabase(raw);
+    await runMigrations(adapter);
+    return adapter;
+  })();
 
-  cachedDb = adapter;
-  return adapter;
+  // Never cache a rejected open — clear the slot so the next caller retries.
+  // Attached as `.catch(noop)` rather than awaited, so this is a side-effect
+  // observer on the same promise; we still return the original promise above.
+  cachedDbPromise.catch(() => {
+    cachedDbPromise = null;
+  });
+
+  return cachedDbPromise;
 }
 
 /** Test-only — clear the cached singleton so a test can re-open. */
 export function __resetDbCacheForTests(): void {
-  cachedDb = null;
+  cachedDbPromise = null;
 }
 
 /** Exposed for tests so they can drive the migration runner directly. */

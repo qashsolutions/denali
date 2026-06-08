@@ -46,6 +46,22 @@ vi.mock("expo-secure-store", () => ({
   AFTER_FIRST_UNLOCK: "AFTER_FIRST_UNLOCK",
 }));
 
+// expo-crypto CSPRNG mock — keystore now delegates to Crypto.getRandomBytes
+// (a thin wrapper around the platform CSPRNG on iOS/Android/Web). The Node
+// test env doesn't have the native module, so we provide a deterministic
+// pseudo-random source. The bytes are NOT cryptographically secure — they
+// only need to be predictable enough to assert the keystore's round-trip
+// shape (length, hex-only, persistence). The negative-path test below
+// overrides this to simulate "no CSPRNG available".
+const cryptoSpies = {
+  getRandomBytes: vi.fn((n: number): Uint8Array => {
+    const buf = new Uint8Array(n);
+    for (let i = 0; i < n; i++) buf[i] = (i * 7 + 3) & 0xff;
+    return buf;
+  }),
+};
+vi.mock("expo-crypto", () => cryptoSpies);
+
 describe("keystore", () => {
   beforeEach(() => {
     for (const k of Object.keys(secureStoreMem)) delete secureStoreMem[k];
@@ -93,27 +109,19 @@ describe("keystore", () => {
     expect(secureStoreSpies.setItemAsync).not.toHaveBeenCalled();
   });
 
-  it("uses platform CSPRNG only — no fallback when crypto is missing", async () => {
-    // Node 24+ exposes `globalThis.crypto` as a non-configurable getter, so
-    // we shim `getRandomValues` to a thrower instead of nulling the whole
-    // object. Same code path: keystore checks for a usable
-    // `crypto.getRandomValues` and refuses to proceed without one.
-    const cryptoObj = (globalThis as { crypto?: Crypto }).crypto as Crypto;
-    const original = cryptoObj.getRandomValues;
-    Object.defineProperty(cryptoObj, "getRandomValues", {
-      value: undefined,
-      configurable: true,
-      writable: true,
-    });
+  it("uses platform CSPRNG only — no fallback when expo-crypto is missing", async () => {
+    // Simulate "no CSPRNG available" by replacing the mock's getRandomBytes
+    // with a non-function. The keystore's guard checks
+    // `typeof Crypto.getRandomBytes === "function"` and refuses without one.
+    const original = cryptoSpies.getRandomBytes;
+    (cryptoSpies as unknown as { getRandomBytes: unknown }).getRandomBytes =
+      undefined;
     try {
       const { getOrCreateDbKey } = await import("../keystore");
       await expect(getOrCreateDbKey()).rejects.toThrow(/CSPRNG/);
+      expect(secureStoreSpies.setItemAsync).not.toHaveBeenCalled();
     } finally {
-      Object.defineProperty(cryptoObj, "getRandomValues", {
-        value: original,
-        configurable: true,
-        writable: true,
-      });
+      cryptoSpies.getRandomBytes = original;
     }
   });
 
@@ -139,6 +147,7 @@ describe("keystore", () => {
 
     // Allowed imports.
     expect(src).toMatch(/from "expo-secure-store"/);
+    expect(src).toMatch(/from "expo-crypto"/);
 
     // Forbidden imports / surfaces.
     expect(src).not.toMatch(/from "@\/auth/);

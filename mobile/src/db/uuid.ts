@@ -1,27 +1,30 @@
 /**
  * UUID v4 helper — owned by mobile-local-data-modeler.
  *
- * We delegate to the platform CSPRNG (`crypto.getRandomValues`) only. RN
- * 0.85 ships a global `crypto` shim that satisfies the Web Crypto subset
- * we use; Node 20+ does the same. No fallback to `Math.random` — if
- * randomness is unavailable, we'd rather crash loudly than emit a
- * predictable id into the local DB.
+ * We delegate to the platform CSPRNG via expo-crypto only — never
+ * Math.random. If randomness is unavailable we crash loudly rather than
+ * emit a predictable id into the local DB.
+ *
+ * We do NOT use `globalThis.crypto.getRandomValues` directly: RN 0.85 +
+ * Hermes does NOT polyfill it globally (validated on iPhone 16 Pro
+ * simulator, 2026-06-05). expo-crypto's synchronous `getRandomBytes` wraps
+ * SecRandomCopyBytes on iOS and SecureRandom on Android. The same fix was
+ * applied to src/db/keystore.ts in the same pass.
  *
  * Why hand-rolled instead of `uuid` package: keeps the mobile bundle lean
  * and avoids pulling a Node-targeting package into Metro. The output is
  * RFC 4122 §4.4 compliant (version 4, variant 10).
  */
 
+import * as Crypto from "expo-crypto";
+
 function getRandomBytes(length: number): Uint8Array {
-  const cryptoObj = (globalThis as { crypto?: Crypto }).crypto;
-  if (!cryptoObj || typeof cryptoObj.getRandomValues !== "function") {
+  if (typeof Crypto.getRandomBytes !== "function") {
     throw new Error(
       "[uuid] No CSPRNG available — refusing to emit a non-random id.",
     );
   }
-  const buf = new Uint8Array(length);
-  cryptoObj.getRandomValues(buf);
-  return buf;
+  return Crypto.getRandomBytes(length);
 }
 
 export function uuidv4(): string {

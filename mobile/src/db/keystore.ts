@@ -23,6 +23,7 @@
  * plaintext store. The caller (db/open.ts) surfaces the error to the user.
  */
 
+import * as Crypto from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
 
 /**
@@ -41,21 +42,27 @@ const KEY_BYTES = 32;
 
 /**
  * Random byte source. We delegate to the platform CSPRNG only — never
- * Math.random, never a time-based seed. On React Native, `globalThis.crypto`
- * is provided by RN core (0.85+); on test/Node, the Node webcrypto polyfill
- * fills the same shape.
+ * Math.random, never a time-based seed.
+ *
+ * We use `expo-crypto`'s synchronous `getRandomBytes()` which is a thin
+ * wrapper around the platform CSPRNG on every supported target:
+ *   - iOS: SecRandomCopyBytes (Security framework)
+ *   - Android: java.security.SecureRandom
+ *   - Web / Node test env: crypto.getRandomValues (Web Crypto)
+ *
+ * We do NOT use `globalThis.crypto.getRandomValues` directly: RN 0.85 +
+ * Hermes does NOT polyfill it globally, so that path threw on iOS on
+ * first launch (validated on iPhone 16 Pro simulator, 2026-06-05).
+ * expo-crypto is the contract-stable platform CSPRNG path.
  */
 function getRandomBytes(length: number): Uint8Array {
-  const cryptoObj = (globalThis as { crypto?: Crypto }).crypto;
-  if (!cryptoObj || typeof cryptoObj.getRandomValues !== "function") {
+  if (typeof Crypto.getRandomBytes !== "function") {
     throw new Error(
       "[keystore] No CSPRNG available on this platform — refusing to " +
         "generate an SQLCipher key without a secure source of randomness.",
     );
   }
-  const buf = new Uint8Array(length);
-  cryptoObj.getRandomValues(buf);
-  return buf;
+  return Crypto.getRandomBytes(length);
 }
 
 function bytesToHex(bytes: Uint8Array): string {

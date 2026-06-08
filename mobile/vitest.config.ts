@@ -10,6 +10,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
+      // expo-crypto's entry transitively imports react-native, which Vite's
+      // Node SSR transform can't parse (Flow + JSX). Alias to a Node-CSPRNG
+      // stub for tests; production keeps the real module.
+      "expo-crypto": path.resolve(__dirname, "test/stubs/expo-crypto.ts"),
     },
   },
   test: {
