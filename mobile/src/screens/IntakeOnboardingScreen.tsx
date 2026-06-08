@@ -53,6 +53,7 @@ import type {
 import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
 import {
+  assembleNextKeyedAnswers,
   AutocompleteInput,
   type AutocompleteSelection,
   buildFamilyHistoryRecord,
@@ -317,33 +318,42 @@ export function IntakeOnboardingScreen(): React.ReactElement {
     }
   }, [dal, familyEntries, userId]);
 
-  const persistLifestyle = React.useCallback(async () => {
-    if (dal == null || userId == null) {
-      throw new Error("Local database not ready");
-    }
-    for (const prompt of LIFESTYLE_PROMPTS) {
-      const value = lifestyle[prompt.key];
-      if (value == null) continue;
-      const label =
-        prompt.options.find((o) => o.value === value)?.label ?? String(value);
-      const obs: ObservationInsertInput = {
-        user_id: userId,
-        category: "lifestyle",
-        code_system: "internal",
-        code: prompt.code,
-        display: prompt.question,
-        value_num: value,
-        value_text: label,
-        unit: null,
-        source: "self_reported",
-        effective_at: new Date().toISOString(),
-        report_id: null,
-        supersedes_id: null,
-        metadata_json: null,
-      };
-      await dal.insertObservation(obs);
-    }
-  }, [dal, lifestyle, userId]);
+  // Persists a snapshot of the lifestyle map. Takes the snapshot as an
+  // EXPLICIT arg (not from closure) so the auto-advance path on the last
+  // prompt can pass the just-computed map. Closure-captured `lifestyle`
+  // would lag behind the just-set value on the final tap — same stale-
+  // closure class as the Cohort gender-step dead-end. The deps array no
+  // longer includes `lifestyle` for the same reason.
+  const persistLifestyle = React.useCallback(
+    async (lifestyleSnapshot: typeof lifestyle) => {
+      if (dal == null || userId == null) {
+        throw new Error("Local database not ready");
+      }
+      for (const prompt of LIFESTYLE_PROMPTS) {
+        const value = lifestyleSnapshot[prompt.key];
+        if (value == null) continue;
+        const label =
+          prompt.options.find((o) => o.value === value)?.label ?? String(value);
+        const obs: ObservationInsertInput = {
+          user_id: userId,
+          category: "lifestyle",
+          code_system: "internal",
+          code: prompt.code,
+          display: prompt.question,
+          value_num: value,
+          value_text: label,
+          unit: null,
+          source: "self_reported",
+          effective_at: new Date().toISOString(),
+          report_id: null,
+          supersedes_id: null,
+          metadata_json: null,
+        };
+        await dal.insertObservation(obs);
+      }
+    },
+    [dal, userId],
+  );
 
   const finishSection = React.useCallback(
     async (id: Exclude<SectionId, "menu">, persist: () => Promise<void>) => {
@@ -771,13 +781,23 @@ export function IntakeOnboardingScreen(): React.ReactElement {
         options={prompt.options}
         value={lifestyle[prompt.key]}
         onChange={(v) => {
-          setLifestyle((m) => ({ ...m, [prompt.key]: v }));
-          // Auto-advance: if last prompt, persist; else next item.
+          // Compute the next-lifestyle snapshot LOCALLY so the last-tap
+          // persist gets the just-set value. Passing this explicit map to
+          // persistLifestyle eliminates the stale-closure class (closure-
+          // captured `lifestyle` would still be the pre-tap map at this
+          // tick). No microtask defer needed — explicit args make
+          // React's batching irrelevant to correctness. The pure helper
+          // is what the regression tests exercise.
+          const nextLifestyle = assembleNextKeyedAnswers(
+            lifestyle,
+            prompt.key,
+            v,
+          );
+          setLifestyle(nextLifestyle);
           if (lifestyleStep + 1 >= lifestyleTotal) {
-            // Defer so React processes the setState first.
-            Promise.resolve().then(() => {
-              void finishSection("lifestyle", persistLifestyle);
-            });
+            void finishSection("lifestyle", () =>
+              persistLifestyle(nextLifestyle),
+            );
           } else {
             setLifestyleStep((s) => s + 1);
           }

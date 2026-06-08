@@ -43,7 +43,7 @@ import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
 import { Crisis988Modal } from "@/onboarding/Crisis988Modal";
 import { fw } from "@/onboarding/fontWeight";
-import { LikertInput } from "@/onboarding/inputs";
+import { assembleNextResponses, LikertInput } from "@/onboarding/inputs";
 import {
   ADAM,
   AUDIT_C,
@@ -200,7 +200,7 @@ export function InstrumentsScreen(): React.ReactElement {
   const persistInstrument = React.useCallback(
     async (
       inst: InstrumentDefinition,
-      values: Array<number | null>,
+      values: ReadonlyArray<number | null>,
       itemSlice: number, // how many leading items are "real" (PHQ-2 = 2, PHQ-9 = 9)
     ): Promise<void> => {
       const userId = api.getCurrentUser()?.userId ?? null;
@@ -289,9 +289,13 @@ export function InstrumentsScreen(): React.ReactElement {
     [phqExpanded],
   );
 
-  // Auto-advance the mood path when the user picks a response.
+  // Auto-advance the mood path when the user picks a response. Takes the
+  // current responses snapshot as an EXPLICIT arg (not from closure) so
+  // the last-item persist sees the just-set value. Closure-captured
+  // phqResponses would lag — same stale-closure class as Cohort/Intake.
+  // `phqResponses` is no longer in this callback's deps for that reason.
   const advanceMoodAfterResponse = React.useCallback(
-    (idx: number) => {
+    (idx: number, responses: ReadonlyArray<number | null>) => {
       const totalItems = phqExpanded ? 9 : 2;
       if (idx + 1 < totalItems) {
         setPhqStep((s) => s + 1);
@@ -300,7 +304,7 @@ export function InstrumentsScreen(): React.ReactElement {
       // Just answered the last item.
       if (!phqExpanded) {
         // PHQ-2 complete. Score and decide expansion.
-        const phq2Score = PHQ2.score(phqResponses.slice(0, 2));
+        const phq2Score = PHQ2.score(responses.slice(0, 2));
         if (phq2Score != null && phq2Score >= PHQ2_POSITIVE_THRESHOLD) {
           setPhqExpanded(true);
           setPhqStep(2); // jump into item 3 (index 2)
@@ -309,7 +313,7 @@ export function InstrumentsScreen(): React.ReactElement {
         // Negative PHQ-2 — persist + flag mood done.
         setSubmitting(true);
         setErrorMsg(null);
-        persistInstrument(PHQ2, phqResponses, 2)
+        persistInstrument(PHQ2, responses, 2)
           .then(() => {
             setSubmitting(false);
             setMoodDone(true);
@@ -327,7 +331,7 @@ export function InstrumentsScreen(): React.ReactElement {
       // PHQ-9 expanded path complete — persist as PHQ-9.
       setSubmitting(true);
       setErrorMsg(null);
-      persistInstrument(PHQ9, phqResponses, 9)
+      persistInstrument(PHQ9, responses, 9)
         .then(() => {
           setSubmitting(false);
           setMoodDone(true);
@@ -341,7 +345,7 @@ export function InstrumentsScreen(): React.ReactElement {
           );
         });
     },
-    [phqExpanded, phqResponses, persistInstrument],
+    [phqExpanded, persistInstrument],
   );
 
   // Wrap the response handler so item 9 only advances after the user
@@ -351,34 +355,71 @@ export function InstrumentsScreen(): React.ReactElement {
       const idx = phqStep;
       const isItem9 = phqExpanded && idx === PHQ9_ITEM_9_INDEX;
       if (isItem9 && value > 0) {
-        // Modal will open via handlePhqItemChange's defer.
+        // Modal will open via handlePhqItemChange's defer. The modal-
+        // acknowledged path advances via the effect below using the
+        // already-committed phqResponses (item-9 lands after the user
+        // taps the 988 modal's acknowledge button).
         handlePhqItemChange(idx, value);
         return;
       }
+      // Synchronous path: compute the next-responses snapshot LOCALLY so
+      // advanceMoodAfterResponse sees the just-set value on the last
+      // item. Closure-captured phqResponses would lag — same stale-
+      // closure class as Cohort gender + Intake lifestyle. The pure
+      // helper is what the regression tests exercise.
+      const nextResponses = assembleNextResponses(
+        phqResponses,
+        idx,
+        value,
+        phqResponses.length,
+      );
       handlePhqItemChange(idx, value);
-      advanceMoodAfterResponse(idx);
+      advanceMoodAfterResponse(idx, nextResponses);
     },
     [
       advanceMoodAfterResponse,
       handlePhqItemChange,
       phqExpanded,
+      phqResponses,
       phqStep,
     ],
   );
 
   // After acknowledgment of the 988 modal (which lands the item-9
-  // response value), advance to the next step.
+  // response value), advance to the next step. We pass the latest
+  // phqResponses explicitly — the effect re-fires when phqResponses
+  // changes (it's a dep) so the value passed here IS the just-committed
+  // item-9 response, not a stale snapshot.
+  //
+  // ALL closure-captured values are in deps now — `moodDone`, `phqStep`,
+  // and `advanceMoodAfterResponse` were previously omitted behind an
+  // eslint-disable. They're safe to include: the gate inside (`!moodDone
+  // && phqResponses[8] != null && phqStep === 8`) prevents double-
+  // execution when the effect re-fires on those deps changing. Concretely:
+  //   - moodDone flips true after persist completes → next fire bails on
+  //     `!moodDone`.
+  //   - phqStep changes when advance moves us past item 9 → next fire
+  //     bails on `phqStep === 8`.
+  //   - advanceMoodAfterResponse re-memoizes when phqExpanded flips false
+  //     → true (PHQ-2 to PHQ-9 expansion); at that moment
+  //     phqResponses[8] is still null, so the gate bails.
   React.useEffect(() => {
     if (pendingItem9 != null) return;
     if (!phqExpanded) return;
     if (!moodDone && phqResponses[PHQ9_ITEM_9_INDEX] != null) {
       // Are we currently sitting on item 9? Then advance.
       if (phqStep === PHQ9_ITEM_9_INDEX) {
-        advanceMoodAfterResponse(PHQ9_ITEM_9_INDEX);
+        advanceMoodAfterResponse(PHQ9_ITEM_9_INDEX, phqResponses);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingItem9, phqResponses, phqExpanded]);
+  }, [
+    advanceMoodAfterResponse,
+    moodDone,
+    pendingItem9,
+    phqExpanded,
+    phqResponses,
+    phqStep,
+  ]);
 
   // ─── Check-in section logic ───────────────────────────────────────────
 
@@ -404,13 +445,22 @@ export function InstrumentsScreen(): React.ReactElement {
     setErrorMsg(null);
   }, []);
 
+  // Persist a menu instrument with an EXPLICIT responses array. Same
+  // closure-safety pattern as Cohort's submitCohort and Intake's
+  // persistLifestyle: the auto-advance path on the last item must not
+  // depend on closure-captured menuResponses (which would lag behind
+  // the just-set value), so the caller computes the final array
+  // locally and passes it in.
   const finishMenuItem = React.useCallback(
-    async (key: MenuKey, inst: InstrumentDefinition) => {
+    async (
+      key: MenuKey,
+      inst: InstrumentDefinition,
+      responses: ReadonlyArray<number | null>,
+    ) => {
       setSubmitting(true);
       setErrorMsg(null);
       try {
-        const values = menuResponses[key] ?? [];
-        await persistInstrument(inst, values, inst.items.length);
+        await persistInstrument(inst, responses, inst.items.length);
         setDoneKeys((s) => {
           const next = new Set(s);
           next.add(key);
@@ -428,7 +478,7 @@ export function InstrumentsScreen(): React.ReactElement {
         setSubmitting(false);
       }
     },
-    [menuResponses, persistInstrument],
+    [persistInstrument],
   );
 
   const skipMenuItem = React.useCallback(() => {
@@ -439,22 +489,27 @@ export function InstrumentsScreen(): React.ReactElement {
   const onMenuSelectResponse = React.useCallback(
     (key: MenuKey, inst: InstrumentDefinition, value: number) => {
       const idx = menuStepIdx;
-      setMenuResponses((m) => {
-        const cur = m[key] ?? Array.from({ length: inst.items.length }, () => null);
-        const next = [...cur];
-        next[idx] = value;
-        return { ...m, [key]: next };
-      });
+      // Compute the next-responses snapshot LOCALLY so the last-item
+      // persist gets the just-set value. Closure-captured menuResponses
+      // would still be the pre-tap array at this tick — same stale-
+      // closure class as the Cohort gender step. Passing the snapshot
+      // explicitly to finishMenuItem makes React's batching irrelevant
+      // to correctness; no microtask defer needed. The pure helper is
+      // what the regression tests exercise.
+      const nextArr = assembleNextResponses(
+        menuResponses[key],
+        idx,
+        value,
+        inst.items.length,
+      );
+      setMenuResponses((m) => ({ ...m, [key]: nextArr }));
       if (idx + 1 < inst.items.length) {
         setMenuStepIdx((s) => s + 1);
       } else {
-        // Defer so the setState above lands before persistence reads it.
-        Promise.resolve().then(() => {
-          void finishMenuItem(key, inst);
-        });
+        void finishMenuItem(key, inst, nextArr);
       }
     },
-    [finishMenuItem, menuStepIdx],
+    [finishMenuItem, menuResponses, menuStepIdx],
   );
 
   const goToApp = React.useCallback(() => {

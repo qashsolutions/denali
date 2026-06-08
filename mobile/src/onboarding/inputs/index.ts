@@ -18,6 +18,8 @@ export { StructuredFamilyHistoryInput } from "./StructuredFamilyHistoryInput";
 export type { StructuredFamilyHistoryInputProps } from "./StructuredFamilyHistoryInput";
 
 export {
+  assembleNextKeyedAnswers,
+  assembleNextResponses,
   buildFamilyHistoryRecord,
   buildOtherSelection,
   canSaveFamilyHistory,

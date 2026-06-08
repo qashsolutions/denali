@@ -311,3 +311,55 @@ export function isValidLikertValue(
     value < optionCount
   );
 }
+
+// ─── Closure-safety snapshot assembly ─────────────────────────────────────
+
+/**
+ * Build a new responses array with `value` set at `idx`. The caller is
+ * an auto-advance handler that has just received a new tap and needs to
+ * pass the updated snapshot to the persist function EXPLICITLY (to
+ * avoid the stale-closure class — pre-tap closure-captured state would
+ * lack the just-set last value, causing the persist call to write
+ * `null` for the final item).
+ *
+ * Returns a fresh array of length `total`; never mutates the input.
+ * If `prev` is undefined/null, seeds with all-nulls. If `prev` is the
+ * wrong length, pads (with null) or truncates to `total`.
+ *
+ * Used by InstrumentsScreen for both the PHQ-2/PHQ-9 mood path and the
+ * GAD-7 / AUDIT-C / Epworth / IPSS / MRS / ADAM menu path.
+ */
+export function assembleNextResponses(
+  prev: ReadonlyArray<number | null> | null | undefined,
+  idx: number,
+  value: number,
+  total: number,
+): Array<number | null> {
+  const base: Array<number | null> = Array.from({ length: total }, (_, i) =>
+    prev != null && i < prev.length ? prev[i] : null,
+  );
+  base[idx] = value;
+  return base;
+}
+
+/**
+ * Build a new keyed-answers map with `key` set to `value`. Same closure-
+ * safety pattern as `assembleNextResponses` — IntakeOnboardingScreen's
+ * lifestyle path calls this so the auto-advance persist sees the just-
+ * tapped value (previously the closure captured the pre-tap lifestyle
+ * map and the last response was lost on persist).
+ *
+ * Generic over the WHOLE shape `T` (not just <K, V>) so callers preserve
+ * the full record type through the call. Otherwise TS narrows `K` to the
+ * single literal key passed in and consumers lose access to the other
+ * properties on the returned object.
+ *
+ * Returns a fresh object; never mutates the input.
+ */
+export function assembleNextKeyedAnswers<T extends object>(
+  prev: Readonly<T>,
+  key: keyof T,
+  value: T[keyof T],
+): T {
+  return { ...prev, [key]: value } as T;
+}

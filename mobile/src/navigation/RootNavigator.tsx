@@ -27,22 +27,28 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
   return (
-    <Stack.Navigator initialRouteName="SignIn">
+    // Hide the native stack header by default — every screen renders its
+    // own visual hierarchy (OneItemScreen for onboarding; bespoke layouts
+    // for SignIn / PrivacyNotice; tab bar for MainTabs). The native
+    // header was previously leaking route names ("SignIn",
+    // "CohortOnboarding") as titles. UploadReview is the one screen with
+    // no in-body Back affordance, so it opts back into the native header
+    // with a human-readable title.
+    <Stack.Navigator
+      initialRouteName="SignIn"
+      screenOptions={{ headerShown: false }}
+    >
       <Stack.Screen name="SignIn" component={SignInScreen} />
-      <Stack.Screen
-        name="PrivacyNotice"
-        component={PrivacyNoticeScreen}
-        options={{ headerBackVisible: false }}
-      />
+      <Stack.Screen name="PrivacyNotice" component={PrivacyNoticeScreen} />
       <Stack.Screen name="CohortOnboarding" component={CohortOnboardingScreen} />
       <Stack.Screen name="Intake" component={IntakeOnboardingScreen} />
       <Stack.Screen name="Instruments" component={InstrumentsScreen} />
+      <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen
-        name="MainTabs"
-        component={MainTabs}
-        options={{ headerShown: false }}
+        name="UploadReview"
+        component={UploadReviewScreen}
+        options={{ headerShown: true, title: "Review" }}
       />
-      <Stack.Screen name="UploadReview" component={UploadReviewScreen} />
     </Stack.Navigator>
   );
 }

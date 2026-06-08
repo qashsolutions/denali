@@ -35,7 +35,11 @@ import type { RootStackParamList } from "@/navigation/types";
 import { fw } from "@/onboarding/fontWeight";
 import { LikertInput } from "@/onboarding/inputs";
 import { OneItemScreen } from "@/onboarding/OneItemScreen";
-import { buildCohortPayload, canSubmitCohort } from "@/onboarding/cohortPayload";
+import {
+  type CohortPayload,
+  decideCohortSubmission,
+  missingCohortFieldMessage,
+} from "@/onboarding/cohortPayload";
 import { useTheme } from "@/theme/useTheme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "CohortOnboarding">;
@@ -52,15 +56,20 @@ const MEDICARE_OPTIONS = [
   { value: 0, label: "No, I don't have Medicare" },
 ] as const;
 
-const GENDER_OPTIONS: ReadonlyArray<{ value: number; label: string; gid: GenderIdentity | null }> = [
-  { value: 0, label: "Prefer to skip", gid: null },
-  { value: 1, label: "Male", gid: "male" },
-  { value: 2, label: "Female", gid: "female" },
-  { value: 3, label: "Non-binary", gid: "non-binary" },
-  { value: 4, label: "Transgender male", gid: "transgender-male" },
-  { value: 5, label: "Transgender female", gid: "transgender-female" },
-  { value: 6, label: "Other", gid: "other" },
-  { value: 7, label: "Prefer not to say", gid: "prefer-not-to-say" },
+// Gender identity options. "Skip" is NOT in this list — the OneItemScreen's
+// onSkipSection footer button handles the defer/null path (gid stored as
+// null → buildCohortPayload omits the key → column untouched). The in-list
+// "Prefer not to say" is an EXPLICIT declination — gid stored as
+// "prefer-not-to-say" so the answer is recorded. Two distinct semantics,
+// distinct affordances: list = identities, footer = defer.
+const GENDER_OPTIONS: ReadonlyArray<{ value: number; label: string; gid: GenderIdentity }> = [
+  { value: 0, label: "Male", gid: "male" },
+  { value: 1, label: "Female", gid: "female" },
+  { value: 2, label: "Non-binary", gid: "non-binary" },
+  { value: 3, label: "Transgender male", gid: "transgender-male" },
+  { value: 4, label: "Transgender female", gid: "transgender-female" },
+  { value: 5, label: "Other", gid: "other" },
+  { value: 6, label: "Prefer not to say", gid: "prefer-not-to-say" },
 ];
 
 const TOTAL_STEPS = 4;
@@ -93,62 +102,15 @@ export function CohortOnboardingScreen(): React.ReactElement {
   const isOnMedicare: boolean | null =
     medicareLikert == null ? null : medicareLikert === 1;
 
-  // Auto-advance handlers — fire on selection.
-  const handleSexChange = React.useCallback((v: number) => {
-    setSexLikert(v);
-    setStepIndex((i) => Math.min(i + 1, TOTAL_STEPS));
-  }, []);
-  const handleMedicareChange = React.useCallback((v: number) => {
-    setMedicareLikert(v);
-    setStepIndex((i) => Math.min(i + 1, TOTAL_STEPS));
-  }, []);
-  const handleGenderChange = React.useCallback(
-    (v: number) => {
-      setGenderLikert(v);
-      // Gender is the last step — submit on selection.
-      // Defer the actual submit to a useEffect that watches all state
-      // so the local variable read is up-to-date.
-      // We use a microtask to avoid running submit inside setState.
-      Promise.resolve().then(() => {
-        // We have to call submit with the latest values. Read state at
-        // call time via the closure: by the time the microtask runs,
-        // genderLikert is the new value (React batches setState but
-        // the local `v` is the source of truth here).
-        // Build the payload directly to avoid stale-closure on
-        // genderIdentity.
-        const newGid =
-          GENDER_OPTIONS.find((g) => g.value === v)?.gid ?? null;
-        submitWithGender(newGid);
-      });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
-
-  // Variant of submit that takes an explicit gender (used by auto-advance)
-  const submitWithGender = React.useCallback(
-    async (gid: GenderIdentity | null) => {
-      if (submitting) return;
-      if (
-        !canSubmitCohort({
-          birthYear,
-          sexAtBirth,
-          isOnMedicare,
-          currentYear,
-        })
-      ) {
-        setErrorMsg("Please complete all required answers.");
-        return;
-      }
+  // Submit the cohort with an EXPLICIT payload. Takes the payload as an
+  // arg (not from closure) so the auto-advance path can pass the just-
+  // computed payload built from live state. This is the structural
+  // counterpart to `decideCohortSubmission` — together they make the
+  // submit path closure-safe.
+  const submitCohort = React.useCallback(
+    async (payload: CohortPayload) => {
       setSubmitting(true);
       setErrorMsg(null);
-
-      const payload = buildCohortPayload({
-        birthYear: birthYear as number,
-        sexAtBirth: sexAtBirth as SexAtBirth,
-        isOnMedicare: isOnMedicare as boolean,
-        genderIdentity: gid,
-      });
 
       const currentUser = api.getCurrentUser();
       if (dal != null && currentUser != null) {
@@ -156,10 +118,10 @@ export function CohortOnboardingScreen(): React.ReactElement {
           await dal.upsertProfile({
             id: currentUser.userId,
             email: currentUser.email,
-            birth_year: birthYear,
-            is_on_medicare: isOnMedicare,
-            sex_at_birth: sexAtBirth,
-            gender_identity: gid ?? null,
+            birth_year: payload.birth_year,
+            is_on_medicare: payload.is_on_medicare,
+            sex_at_birth: payload.sex_at_birth,
+            gender_identity: payload.gender_identity ?? null,
           });
         } catch (e) {
           setSubmitting(false);
@@ -182,17 +144,75 @@ export function CohortOnboardingScreen(): React.ReactElement {
       setSubmitting(false);
       navigation.navigate("Intake");
     },
+    [api, dal, navigation],
+  );
+
+  // Auto-advance handlers — fire on selection. Sex + Medicare just step
+  // forward; the closures here only call stable setState dispatchers, so
+  // `[]` deps are correct (no captured state).
+  const handleSexChange = React.useCallback((v: number) => {
+    setSexLikert(v);
+    setStepIndex((i) => Math.min(i + 1, TOTAL_STEPS));
+  }, []);
+  const handleMedicareChange = React.useCallback((v: number) => {
+    setMedicareLikert(v);
+    setStepIndex((i) => Math.min(i + 1, TOTAL_STEPS));
+  }, []);
+
+  // Gender is the last step. Build the decision from live state and the
+  // just-picked option, then either show a specific missing-field error
+  // or submit. NO microtask defer — the decision function takes state as
+  // explicit args, so React's batching is irrelevant to correctness.
+  // Deps include every captured value so the eslint rule passes naturally
+  // (no suppression — that's exactly the silence that hid the original
+  // stale-closure dead-end).
+  const handleGenderChange = React.useCallback(
+    (v: number) => {
+      setGenderLikert(v);
+      if (submitting) return;
+      const newGid =
+        GENDER_OPTIONS.find((g) => g.value === v)?.gid ?? null;
+      const decision = decideCohortSubmission({
+        birthYear,
+        sexAtBirth,
+        isOnMedicare,
+        genderIdentity: newGid,
+        currentYear,
+      });
+      if (decision.kind === "missing") {
+        setErrorMsg(missingCohortFieldMessage(decision.field));
+        return;
+      }
+      void submitCohort(decision.payload);
+    },
     [
-      api,
       birthYear,
       currentYear,
-      dal,
       isOnMedicare,
-      navigation,
       sexAtBirth,
+      submitCohort,
       submitting,
     ],
   );
+
+  // Skip the gender question. Submits with gender_identity=null →
+  // buildCohortPayload omits the key → server PATCH leaves the column
+  // untouched. Distinct from "Prefer not to say", which IS stored.
+  const handleSkipGender = React.useCallback(() => {
+    if (submitting) return;
+    const decision = decideCohortSubmission({
+      birthYear,
+      sexAtBirth,
+      isOnMedicare,
+      genderIdentity: null,
+      currentYear,
+    });
+    if (decision.kind === "missing") {
+      setErrorMsg(missingCohortFieldMessage(decision.field));
+      return;
+    }
+    void submitCohort(decision.payload);
+  }, [birthYear, currentYear, isOnMedicare, sexAtBirth, submitCohort, submitting]);
 
   const goBack = React.useCallback(() => {
     setErrorMsg(null);
@@ -335,6 +355,8 @@ export function CohortOnboardingScreen(): React.ReactElement {
           helperText="Optional. Helps us address you correctly. You can update this anytime in Settings."
           autoAdvance
           onBack={goBack}
+          onSkipSection={handleSkipGender}
+          skipLabel="Skip"
           errorMessage={errorMsg}
         >
           <LikertInput
