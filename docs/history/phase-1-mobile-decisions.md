@@ -173,6 +173,49 @@ Spec: `docs/design/phase-1-45plus.md`. Path-scoped rules: `mobile/CLAUDE.md`. Ag
 
 ---
 
+## D12 — On-device image OCR deferred; Phase 1 supports PDF text layer only (2026-06-05)
+
+**Decision:** on-device image OCR is deferred to a later phase. Phase 1 supports **PDF text-layer extraction only** via the `expo-pdf-text-extract` native bridge. Scanned PDFs (no text layer) and image uploads (JPG / PNG / HEIC) are accepted by the picker, encrypted on-device, and surfaced with a clean "not yet supported" UX — they are NOT sent to a cloud OCR service.
+
+**Why:** as of 2026-06-05, no on-device OCR library has a validated New-Arch + SDK 56 + RN 0.85 story (see the STEP 1 diagnosis for the survey). The local-first invariant (no health data persisted server-side, Invariant 1) forbids cloud OCR. Shipping PDF text-layer extraction now — which covers the bulk of "downloaded my lab report PDF from the patient portal" intake flows — earns the trust step the Phase 1 product depends on, without compromising the invariant.
+
+**Alternatives considered:**
+- Ship `@react-native-ml-kit/text-recognition` now, accepting unresolved New-Arch risk — rejected; latest release (2024-Q4) has no documented New-Arch support and would require turbo-module-only interop work outside Wave 2 scope.
+- Server-side OCR on encrypted blobs — rejected; Invariant 1 violation (would require decrypting health data server-side, even briefly).
+- Build a native VisionKit/MLKit bridge in this fix-up — rejected; out of scope for STEP 2, which is the PDF pivot.
+
+**Trade-off accepted:** Phase 1 users must upload PDFs with selectable text. Scanned images / photos surface a clean "not yet supported" UX in `UploadScreen.tsx` — the encrypted blob is still persisted in the `reports` row so the file is preserved on-device, but the parse step is gated with a `reason` (`pdf_has_no_text_layer` or `ocr_not_supported_phase_1`) the UI renders as: *"This file looks like a scanned image or photo. For now, please upload a PDF with selectable text. Image and scan support is coming in a future release."*
+
+**Encoded in code:**
+- `mobile/src/upload/extract.ts` — capability matrix in the header doc, `ExtractResult.reason` union (`pdf_has_no_text_layer | ocr_not_supported_phase_1 | extract_failed`).
+- `mobile/src/screens/UploadScreen.tsx:296-314` — the OCR-gap message string + `safeUpdateStatus(dal, reportId, "rejected", summary)` so the report row stays in a clean state.
+
+---
+
+## D13 — PDF text extraction via `expo-pdf-text-extract` (not pdfjs-dist) (2026-06-05)
+
+**Decision:** PDF text extraction is implemented via **`expo-pdf-text-extract` (native iOS PDFKit + Android PDFBox bridge)**, not via `pdfjs-dist`.
+
+**Why:** pdfjs-dist + Hermes + New Architecture + RN 0.85 has no documented working text-extraction reference as of 2026 (mozilla/pdf.js#18732 is still open). The Wave-2 `extract.ts` design used a `new Function("p","return import(p);")` lazy-load that is incompatible with Metro's static module resolution AND Hermes-fragile, so every PDF upload short-circuited to `extract_failed`. `expo-pdf-text-extract` v1.1.0 (zero npm deps, SDK 49+, published 2026-05-20) uses platform-standard text APIs (PDFKit on iOS, PDFBox on Android) with no JS-engine dependency, sidestepping both the Metro and Hermes problems.
+
+**Alternatives considered:**
+- Continue investing in pdfjs-dist — rejected; high risk, weeks of yak-shaving with no public success precedent on the New-Arch + Hermes + RN 0.85 stack.
+- Defer PDF extraction to Phase 2 entirely — rejected; defeats the Wave-2 acceptance promise that a user can upload a lab/EHR/visit PDF and land observations locally after review.
+- Write our own native PDFKit/PDFBox bridge in-house — rejected for this fix-up; package's source is small (one Swift file + one Kotlin file, zero deps) so audit is light. Kept as the fallback if STEP 3 fails.
+
+**Trade-off accepted:** third-party module (`expo-pdf-text-extract` v1.1.0, sole maintainer `gr8pathik`, published 2026-05-20). Audit is light by virtue of zero declared dependencies + native code touching only PDFKit (Apple framework) and PDFBox (Apache, widely used). The package requires a custom dev build — Denali already ships one via `expo-sqlite` (SQLCipher) and `expo-secure-store`, so no new build-pipeline burden.
+
+**Pending:** STEP 3 EAS / device dev-build smoke (iOS + Android simulators run by the main thread) confirms New-Arch + Hermes interop before this decision is fully validated. A boot-time self-test (`mobile/src/upload/extractSelfTest.ts`) logs `[EXTRACT-SELFTEST] ok: true|false …` to Metro / Logcat, so the main thread can grep for the result rather than driving UI. If STEP 3 fails on either platform, the team pivots to writing an own-wrapper native module.
+
+**Encoded in code:**
+- `mobile/package.json` — `expo-pdf-text-extract@^1.1.0` (installed via `npx expo install`).
+- `mobile/src/upload/extract.ts` — static `import * as PdfTextExtract from "expo-pdf-text-extract"`. The `new Function`-based lazy-load is removed.
+- `mobile/src/upload/extractSelfTest.ts` — dev-only boot-time self-test (`__DEV__` gated, fire-and-forget from `App.tsx`).
+- `mobile/src/upload/__tests__/fixtures/sample-lab.pdf` + `sample-lab.base64.ts` — deterministic 720-byte text-layer PDF for both the wrapper-logic test (mocks the native module) and the dev-mode self-test (uses the real bridge).
+- `mobile/src/upload/__tests__/extract.test.ts` — 12 wrapper-logic assertions proving the success / empty / throw / unavailable / image paths. Does NOT exercise the native module (node env can't load native code); STEP 3 covers that gap.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

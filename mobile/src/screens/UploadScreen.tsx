@@ -297,12 +297,15 @@ export function UploadScreen(): React.ReactElement {
         const isOcrGap =
           extracted.reason === "ocr_not_supported_phase_1" ||
           extracted.reason === "pdf_has_no_text_layer";
-        const summary =
-          extracted.reason === "ocr_not_supported_phase_1"
-            ? "Image OCR is not yet available on this device. Your file is saved."
-            : extracted.reason === "pdf_has_no_text_layer"
-              ? "This looks like a scanned PDF. We can't read scans yet. Your file is saved."
-              : "Couldn't read this file. Please try a different document.";
+        // Canonical "scanned / image" copy per the STEP 2 UX update — same
+        // message for both image picks AND scanned PDFs, since the user-
+        // visible problem is identical: no selectable text. § D12 records
+        // the deferral; the in-product copy must match this string.
+        const scannedOrImageCopy =
+          "This file looks like a scanned image or photo. For now, please upload a PDF with selectable text. Image and scan support is coming in a future release.";
+        const summary = isOcrGap
+          ? scannedOrImageCopy
+          : "Couldn't read this file. Please try a different document.";
         await safeUpdateStatus(dal, reportId, "rejected", summary);
         setError({ message: summary, isOcrGap });
         setPhase("error");

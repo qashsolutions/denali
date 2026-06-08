@@ -1,22 +1,49 @@
 /**
- * Phase 1 mobile — on-device text extraction (Wave 2).
+ * Phase 1 mobile — on-device text extraction (Wave 2; STEP 2 pivot to
+ * `expo-pdf-text-extract` after the pdfjs-dist + Hermes + New-Arch dead end).
  *
- * Contract:
- *   - `extractText(file: PickedFile, blobUri: string): Promise<ExtractResult>`
+ * Contract (unchanged from the Wave-2 design — UploadScreen.tsx is the sole
+ * consumer and must not need edits):
+ *
+ *   `extractText(file: PickedFile, reportId: string): Promise<ExtractResult>`
  *
  * Phase 1 capability matrix:
  *
  *   | Source     | Platform | Status                                     |
  *   |------------|----------|--------------------------------------------|
- *   | PDF text   | iOS+And  | SUPPORTED — pdfjs-dist on the encrypted    |
- *   |            |          | blob's decrypted bytes (pure JS, no native |
- *   |            |          | dep, New-Arch safe).                       |
- *   | PDF scan   | iOS+And  | DEFERRED — needs OCR; surface gap.         |
- *   | Image      | iOS+And  | DEFERRED — needs OCR; surface gap.         |
+ *   | PDF text   | iOS+And  | SUPPORTED via expo-pdf-text-extract — a    |
+ *   |            |          | native bridge (PDFKit on iOS / PDFBox on   |
+ *   |            |          | Android). Zero JS-engine dependency, so    |
+ *   |            |          | Hermes + New Architecture safe. Requires a |
+ *   |            |          | custom dev build (Denali already ships     |
+ *   |            |          | one via expo-sqlite + expo-secure-store).  |
+ *   | PDF scan   | iOS+And  | DEFERRED — needs OCR; surface gap          |
+ *   |            |          | (`pdf_has_no_text_layer`).                 |
+ *   | Image      | iOS+And  | DEFERRED — needs OCR; surface gap          |
+ *   |            |          | (`ocr_not_supported_phase_1`).             |
  *
- * OCR gap rationale (recorded for the Pass 2 follow-up):
+ * Why the native bridge (vs pdfjs-dist):
  *
- *   At work date 2026-06-04, no on-device OCR library is broadly validated
+ *   pdfjs-dist + Hermes + New Architecture + RN 0.85 has no documented
+ *   working text-extraction reference as of 2026 (mozilla/pdf.js#18732 is
+ *   still open). The earlier Wave-2 design used a `new Function(...)`
+ *   lazy-load to defer the install — but that pattern is incompatible with
+ *   Metro's static module resolution, so the PDF path always short-circuited
+ *   to `extract_failed`. `expo-pdf-text-extract` v1.1.0 (zero npm deps,
+ *   SDK 49+) bridges to PDFKit / PDFBox; both are platform-standard text
+ *   APIs with no JS-engine dependency, sidestepping both issues. See
+ *   `docs/history/phase-1-mobile-decisions.md` § D12 + § D13 for the full
+ *   decision record.
+ *
+ *   The native call accepts a `file://` URI. We decrypt the blob in-memory
+ *   via `blobStore.readBlob()` and write the plaintext to a temp file in
+ *   `Paths.cache` just long enough for the native call to read it, then
+ *   delete it (best-effort `finally`). The plaintext never persists across
+ *   the function boundary.
+ *
+ * OCR gap rationale (per § D12):
+ *
+ *   At work date 2026-06-05, no on-device OCR library is broadly validated
  *   against the New Architecture + Expo SDK 56 + RN 0.85.3 stack:
  *     - @react-native-ml-kit/text-recognition (latest 2024-Q4) has no
  *       documented New-Arch support; install would require turbo-module-only
@@ -25,22 +52,19 @@
  *     - VisionKit text recognition via expo-modules-core requires a custom
  *       native module — not landed.
  *
- * Per the upload-parse builder agent's hard rule ("On-device OCR or nothing.
- * No cloud OCR fallback in Phase 1.") we ship PDF text-layer support only
- * and surface a clear "OCR not yet supported on this device" message in the
- * UI for scanned PDFs and image uploads. The reports row is still created
- * (so the file is preserved encrypted on-device); the parse step is gated
- * with a `reason` field downstream code can render.
- *
- * Pdfjs-dist note: we use the legacy build (`pdfjs-dist/legacy/build/pdf`)
- * which is the same ES-module build that runs in pure JavaScript on
- * arbitrary runtimes — no DOM dependency, no worker required for plain
- * text extraction. The build is loaded lazily so apps that never upload a
- * PDF don't pay the parser cost on cold boot.
+ *   Per the upload-parse builder agent's hard rule ("On-device OCR or
+ *   nothing. No cloud OCR fallback in Phase 1.") we ship PDF text-layer
+ *   support only and surface a clear "OCR not yet supported on this device"
+ *   message in the UI for scanned PDFs and image uploads. The reports row
+ *   is still created (so the file is preserved encrypted on-device); the
+ *   parse step is gated with a `reason` field downstream code can render.
  */
 
-import type { PickedFile } from "./picker";
+import { Directory, File, Paths } from "expo-file-system";
+import * as PdfTextExtract from "expo-pdf-text-extract";
+
 import { readBlob } from "./blobStore";
+import type { PickedFile } from "./picker";
 
 export type ExtractResult =
   | {
@@ -61,10 +85,11 @@ export type ExtractResult =
 
 /**
  * Extract plain text from a picked file. Reads the encrypted blob via
- * `blobStore.readBlob(reportId)`, decrypts in memory, and runs the
- * appropriate extractor.
+ * `blobStore.readBlob(reportId)`, decrypts in memory, hands the plaintext
+ * to the native PDF bridge, and returns the extracted text.
  *
- * The plaintext bytes never touch disk in plaintext form.
+ * The plaintext bytes touch disk only inside `Paths.cache` and are deleted
+ * before this function returns (best-effort).
  */
 export async function extractText(
   file: PickedFile,
@@ -74,7 +99,7 @@ export async function extractText(
     if (file.kind === "pdf") {
       return await extractPdfTextLayer(reportId);
     }
-    // Images are deferred until on-device OCR lands.
+    // Images are deferred until on-device OCR lands (§ D12).
     return {
       ok: false,
       reason: "ocr_not_supported_phase_1",
@@ -91,99 +116,63 @@ export async function extractText(
 }
 
 /**
- * Extract the text layer from a PDF. Returns
- * `{ ok: false, reason: "pdf_has_no_text_layer" }` for scanned PDFs that
- * yield zero (or near-zero) text — these need OCR, which is the Pass 2 gap.
+ * Extract the text layer from a PDF via the native bridge. Maps the bridge's
+ * outputs to the existing `ExtractResult` contract:
+ *
+ *   - Empty / near-empty text     → `{ ok: false, reason: "pdf_has_no_text_layer" }`
+ *   - Throw (corrupt / bridge OK) → `{ ok: false, reason: "extract_failed",
+ *                                       detail: <error message> }`
+ *   - `isAvailable()` false       → `{ ok: false, reason: "extract_failed",
+ *                                       detail: "Native PDF parser not available
+ *                                                — install a dev build." }`
+ *   - Success                     → `{ ok: true, text, method: "pdf-text-layer" }`
  */
 async function extractPdfTextLayer(reportId: string): Promise<ExtractResult> {
-  const bytes = await readBlob(reportId);
-
-  // Lazy-load pdfjs-dist. The legacy build runs in plain JS contexts and
-  // doesn't require a worker for sequential text extraction.
-  //
-  // The module path is computed at runtime (via `dynamicImport` below) so
-  // TypeScript doesn't fail when pdfjs-dist isn't yet installed. Treating
-  // pdfjs-dist as an optional Pass-2 dependency means the rest of the
-  // upload pipeline ships even when PDF parsing is opt-in.
-  let pdfjs: PdfjsModule;
-  try {
-    pdfjs = (await dynamicImport("pdfjs-dist/legacy/build/pdf.mjs")) as PdfjsModule;
-  } catch (err) {
-    void err;
-    // The pdf parser isn't installed yet at scaffold time. Surface a clear
-    // error so the UI can prompt "PDF parsing is being set up" — the
-    // operator can install pdfjs-dist as a Pass 2 follow-up.
+  if (!PdfTextExtract.isAvailable()) {
     return {
       ok: false,
       reason: "extract_failed",
       detail:
-        "PDF parser not installed. Install pdfjs-dist or use a text-only export.",
+        "Native PDF parser not available on this device. Run a development build (`npx expo run:ios` / `npx expo run:android`) — Expo Go cannot load native modules.",
     };
   }
 
-  const loadingTask = pdfjs.getDocument({
-    data: bytes,
-    // No worker / no font / no canvas — text extraction only.
-    disableFontFace: true,
-    isEvalSupported: false,
-  });
-  const doc = await loadingTask.promise;
+  const bytes = await readBlob(reportId);
 
-  const pages: string[] = [];
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items
-      .map((item) => ("str" in item && typeof item.str === "string" ? item.str : ""))
-      .filter((s: string) => s.length > 0)
-      .join(" ");
-    if (pageText.length > 0) pages.push(pageText);
+  // Stage the plaintext into a temp file the native bridge can open by URI.
+  // The native module accepts a `file://` URI; we write into `Paths.cache`
+  // (OS-managed, not Documents) and unlink in `finally`.
+  const tmpDir = new Directory(Paths.cache, "pdf-extract-tmp");
+  if (!tmpDir.exists) tmpDir.create({ intermediates: true });
+  const tmpFile = new File(tmpDir, `${reportId}.pdf`);
+  if (tmpFile.exists) tmpFile.delete();
+  tmpFile.create();
+  tmpFile.write(bytes);
+
+  try {
+    const text = await PdfTextExtract.extractText(tmpFile.uri);
+    const trimmed = (text ?? "").trim();
+    if (trimmed.length < 16) {
+      // A near-empty extraction strongly suggests a scanned PDF — PDFKit /
+      // PDFBox both return an empty string when no text layer exists.
+      return { ok: false, reason: "pdf_has_no_text_layer" };
+    }
+    return { ok: true, text: trimmed, method: "pdf-text-layer" };
+  } catch (err) {
+    // The native bridge surfaces specific error codes (PASSWORD_REQUIRED,
+    // INCORRECT_PASSWORD, FILE_NOT_FOUND, CORRUPT_PDF, UNKNOWN). We don't
+    // surface those codes individually in Phase 1 — `extract_failed` with a
+    // short message is enough for the UI. The detail message intentionally
+    // carries no raw bytes / file contents.
+    const detail = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: "extract_failed", detail };
+  } finally {
+    // Best-effort cleanup — keep the temp directory but unlink the file. If
+    // unlink fails the OS will reclaim the cache directory eventually.
+    try {
+      if (tmpFile.exists) tmpFile.delete();
+    } catch {
+      // ignore
+    }
   }
-
-  const text = pages.join("\n\n").trim();
-  if (text.length < 16) {
-    // A near-empty extraction strongly suggests a scanned PDF.
-    return { ok: false, reason: "pdf_has_no_text_layer" };
-  }
-  return { ok: true, text, method: "pdf-text-layer" };
-}
-
-// ── Optional-dependency dynamic import ───────────────────────────────────
-//
-// TypeScript's static `import()` requires the module to be resolvable at
-// compile time. pdfjs-dist is an optional Pass-2 install, so we hide the
-// path behind a runtime-evaluated function. This same pattern is used in
-// `app/src/app/api/diabetes/insights/route.ts` (the `await import()` call
-// to `@/lib/fhir/transforms`) — but for non-resolvable optional deps the
-// indirection below is necessary.
-
-function dynamicImport(modulePath: string): Promise<unknown> {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
-  const importer = new Function(
-    "p",
-    "return import(p);",
-  ) as (p: string) => Promise<unknown>;
-  return importer(modulePath);
-}
-
-// ── pdfjs-dist type subset ───────────────────────────────────────────────
-//
-// We type only what we use. Avoids forcing pdfjs-dist's @types into the
-// project and keeps the lazy-import boundary explicit.
-
-interface PdfjsModule {
-  getDocument(params: {
-    data: Uint8Array;
-    disableFontFace?: boolean;
-    isEvalSupported?: boolean;
-  }): { promise: Promise<PdfDocument> };
-}
-
-interface PdfDocument {
-  numPages: number;
-  getPage(pageNumber: number): Promise<PdfPage>;
-}
-
-interface PdfPage {
-  getTextContent(): Promise<{ items: Array<{ str?: string }> }>;
 }
