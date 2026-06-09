@@ -27,21 +27,34 @@ import {
 } from "react-native";
 
 import { useApiClient } from "@/auth";
-import type { ObservationRow } from "@/contracts";
+import type { ObservationRow, SexAtBirth } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import { useTheme } from "@/theme/useTheme";
 
+import { dateKeyOf, formatGroupHeader } from "./timeline/groupObservations";
 import {
-  formatGroupHeader,
-  groupObservationsByDate,
-  type TimelineGroup,
-} from "./timeline/groupObservations";
+  groupByInstrumentSession,
+  type TimelineCard,
+} from "./timeline/grouping";
+import { TimelineCardView } from "./timeline/TimelineCardView";
 
 const PAGE_SIZE = 200;
 
 type ListItem =
   | { kind: "header"; dateKey: string }
-  | { kind: "row"; row: ObservationRow };
+  | { kind: "card"; card: TimelineCard };
+
+function cardEffectiveAt(card: TimelineCard): string {
+  return card.kind === "instrument-session"
+    ? card.effective_at
+    : card.row.effective_at;
+}
+
+function cardId(card: TimelineCard): string {
+  return card.kind === "instrument-session"
+    ? `s:${card.instrumentId}|${card.effective_at}`
+    : `r:${card.row.id}`;
+}
 
 export function TimelineScreen(): React.ReactElement {
   const dal = useDal();
@@ -87,24 +100,82 @@ export function TimelineScreen(): React.ReactElement {
     };
   }, [api, dal]);
 
-  const groups: TimelineGroup[] = React.useMemo(
-    () => groupObservationsByDate(rows),
+  // Two-stage transformation:
+  //   1. groupByInstrumentSession collapses questionnaire items into
+  //      one card per submission, filters source='derived' rows out
+  //      (operator delta 1), and lets non-instrument rows through as
+  //      `kind: "single"`.
+  //   2. Bucket the resulting cards by calendar day for section headers.
+  // No coded data is dropped — Details on each card surfaces the raw
+  // codes, and any export path reads the DAL directly.
+  const cards: TimelineCard[] = React.useMemo(
+    () => groupByInstrumentSession(rows),
     [rows],
   );
 
-  // Flatten {header, row, row, header, row} for FlatList. FlatList is
-  // perf-friendly on long lists; the 45+ audience may accumulate hundreds
-  // of rows over time.
   const items: ListItem[] = React.useMemo(() => {
+    if (cards.length === 0) return [];
+    const buckets = new Map<string, TimelineCard[]>();
+    for (const card of cards) {
+      const key = dateKeyOf(cardEffectiveAt(card));
+      const bucket = buckets.get(key);
+      if (bucket) bucket.push(card);
+      else buckets.set(key, [card]);
+    }
+    for (const bucket of buckets.values()) {
+      bucket.sort((a, b) =>
+        cardEffectiveAt(a) < cardEffectiveAt(b) ? 1 : -1,
+      );
+    }
+    const sortedKeys = [...buckets.keys()].sort((a, b) =>
+      a < b ? 1 : -1,
+    );
     const out: ListItem[] = [];
-    for (const group of groups) {
-      out.push({ kind: "header", dateKey: group.dateKey });
-      for (const row of group.rows) {
-        out.push({ kind: "row", row });
+    for (const key of sortedKeys) {
+      out.push({ kind: "header", dateKey: key });
+      for (const card of buckets.get(key) ?? []) {
+        out.push({ kind: "card", card });
       }
     }
     return out;
-  }, [groups]);
+  }, [cards]);
+
+  // Expand-state per card id. Defaults to collapsed; tapping "Show
+  // details" toggles membership in the set.
+  const [expandedCardIds, setExpandedCardIds] = React.useState<Set<string>>(
+    () => new Set<string>(),
+  );
+  const toggleExpand = React.useCallback((id: string) => {
+    setExpandedCardIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // User's sex_at_birth — feeds AUDIT-C's sex-dependent interpretation.
+  // Loaded from the local profile if present. Null falls back to the
+  // more-sensitive female bands per delta 3 with a surfaced note.
+  const [userSexAtBirth, setUserSexAtBirth] = React.useState<SexAtBirth | null>(
+    null,
+  );
+  React.useEffect(() => {
+    if (!dal) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const profile = await dal.getProfile();
+        if (cancelled) return;
+        setUserSexAtBirth(profile?.sex_at_birth ?? null);
+      } catch (err) {
+        console.warn("[Timeline] getProfile failed", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, dal]);
 
   const styles = React.useMemo(
     () =>
@@ -245,7 +316,16 @@ export function TimelineScreen(): React.ReactElement {
         </View>
       );
     }
-    return <ObservationRowView row={item.row} styles={styles} />;
+    const id = cardId(item.card);
+    return (
+      <TimelineCardView
+        card={item.card}
+        isExpanded={expandedCardIds.has(id)}
+        onToggleExpand={() => toggleExpand(id)}
+        formattedDate={formatGroupHeader(dateKeyOf(cardEffectiveAt(item.card)))}
+        userSexAtBirth={userSexAtBirth}
+      />
+    );
   };
 
   return (
@@ -261,44 +341,6 @@ export function TimelineScreen(): React.ReactElement {
 }
 
 function keyForItem(item: ListItem): string {
-  return item.kind === "header" ? `h:${item.dateKey}` : `r:${item.row.id}`;
+  return item.kind === "header" ? `h:${item.dateKey}` : cardId(item.card);
 }
 
-interface ObservationRowViewProps {
-  row: ObservationRow;
-  styles: ReturnType<typeof StyleSheet.create>;
-}
-
-function ObservationRowView({
-  row,
-  styles,
-}: ObservationRowViewProps): React.ReactElement {
-  const valueDisplay = formatValue(row);
-  return (
-    <View style={styles.row}>
-      <View style={styles.rowHeader}>
-        <Text style={styles.display} numberOfLines={2}>
-          {row.display || row.code}
-        </Text>
-        <Text style={styles.category}>{row.category}</Text>
-      </View>
-      {valueDisplay != null && (
-        <Text style={styles.valueLine}>{valueDisplay}</Text>
-      )}
-      <Text style={styles.metaLine}>
-        {row.code_system} {row.code} · {row.source.replace("_", " ")}
-      </Text>
-    </View>
-  );
-}
-
-/** Pure-helper formatting; exported only for the test suite. */
-export function formatValue(row: ObservationRow): string | null {
-  if (row.value_num != null) {
-    return row.unit ? `${row.value_num} ${row.unit}` : String(row.value_num);
-  }
-  if (row.value_text != null) {
-    return row.value_text;
-  }
-  return null;
-}
