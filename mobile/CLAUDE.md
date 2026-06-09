@@ -17,6 +17,77 @@ Spec: @docs/design/phase-1-45plus.md (read it before implementing).
 
 ---
 
+## Engineering rules (durable, learned the hard way)
+
+Operational rules earned from concrete defects in this codebase. CI / lint / hooks enforce where possible; the rest is on the agent. Each rule cites the artifact that backs it.
+
+### Stale-closure class — pure helpers with explicit live state, never via suppression
+
+Auto-advance handlers, modal-acknowledged effects, and any persist-on-last-tap path MUST keep their decision logic in **pure helpers that take live state as explicit arguments**, not in `useCallback` / `useEffect` bodies that close over component state. The closure-stale-on-last-tap class produced the cohort gender dead-end + silent persist losses in PHQ-2 / PHQ-9 + Intake lifestyle.
+
+Enforcement:
+
+- `react-hooks/exhaustive-deps` is **error** in `mobile/eslint.config.js`. CI fails on any violation.
+- `eslint-comments/no-restricted-disable` forbids `eslint-disable-next-line react-hooks/exhaustive-deps` (and `rules-of-hooks`) so the exact suppression that hid the original defect cannot return.
+- When concurrent paths both call the same persist (modal-ack + line-380 effect both firing `persistInstrument(PHQ9, …)` is the canonical case), wrap with `runOnceInFlight(ref, () => persist(…))` from `src/lib/runOnceInFlight.ts`. Unit-test the once-only invariant; trust the structure, not the gate-by-convention.
+
+### Verification layering — match the assertion to the layer
+
+- **vitest** proves pure logic. It does NOT prove a screen renders, a handler fires, or a tap lands. The Cohort gender dead-end passed every unit test on the helpers it called; the screen still froze.
+- **Maestro** is the screen gate. testIDs + accessibilityLabels enumerated in `mobile/maestro/README.md` are the selector contract. Flows under `mobile/maestro/flows/` (Phase-3 work) drive the real surface and are the proof a UI path is end-to-end live.
+- **A manual on-device check** proves only the bundle on that device works. Maestro on a CI emulator widens the proof to "every PR".
+
+Pick the assertion that matches the bug's layer. A once-only DB-row invariant belongs in unit tests; a "user can complete onboarding" assertion belongs in Maestro.
+
+### Build freshness — "live" ≠ "fixed code running"
+
+A fast Metro re-bundle (~500–1000 ms) is suspicious. It can be a 304 cache hit, a stale APK with embedded JS, a Fast-Refresh partial graph, or a different Metro instance entirely. Before trusting an on-device check after editing JS:
+
+1. Re-bundle log should read like `Android Bundled 4258ms node_modules/expo/AppEntry.js (1081 modules)` — slow + many modules = cold cache.
+2. Grep the served bundle: `curl 'http://localhost:8081/node_modules/expo/AppEntry.bundle?platform=android&dev=true' | grep <new-symbol>` returns matches.
+3. If still in doubt: `adb uninstall <pkg>` → `npx expo start --clear` → `npx expo run:android` for a fully clean install.
+
+Stale-build trust cost ~90 minutes of back-and-forth on the cohort dead-end before the clean reinstall surfaced the truth.
+
+### Display + clinical boundary — explain, never recommend
+
+Information-layer rules (load-bearing for HIPAA + clinical safety):
+
+- **Storage is source of truth; display is read-only.** LOINC codes, ICD-10 codes, instrument metadata, `source` provenance all stay in the DAL untouched. Display layers translate codes → plain language; they NEVER strip storage or alter exports.
+- **Interpretation strings come from a versioned table, never from render-time code.** `src/screens/timeline/interpretation/tableV1.ts` (and successors) hold every band headline, explanation, pill, and trend statement. Render code looks them up; it never synthesizes wording.
+- **Every shipped clinical string carries `provisional: true`** until a named clinical reviewer signs off (`lastClinicallyReviewedBy` non-null). The renderer surfaces `‡` + "Interpretation pending clinical review." until then.
+- **Standing disclaimer on every card:** "Information only — not a diagnosis or medical advice."
+- **Explain, never recommend.** Strings describe the user's score / value; they do NOT recommend tests, treatments, or actions. "Get tested for X" is forbidden; "talking with your doctor could help" is the referral-verb placeholder, pending an operator-locked final verb.
+- **Clinical key is `sex_at_birth`, not `gender_identity`.** All analysis branches on `sex_at_birth`. `gender_identity` is a respect/display field — never an analysis key. Gender-affirming hormone therapy is a clinical-reviewer-note concern carried on the affected entries (`clinicalReviewerNotes`); never auto-applied at render.
+- **Age + sex condition analysis where evidence supports it.** Labs / vitals / fitness use age+sex reference ranges via the `age-sex-specific` strategy. Symptom screeners (PHQ-2 / PHQ-9, GAD-7, Epworth) stay UNIFORM — they have validated adult bands; adjusting them invents clinical content. AUDIT-C is sex-specific per Bradley 2007. **NEVER apply an age-specific range when `ageYears` is null** — return null + a `gentleNudge` instead.
+
+### Repo hygiene — `mobile/` is its own project root
+
+`mobile/` has its own `package.json`, `node_modules`, `eslint.config.js`, `vitest.config.ts`, `tsconfig.json`. Tooling must be invoked from `mobile/` cwd:
+
+- `cd mobile && npx tsc --noEmit` — not from the repo root (`npx` finds a different `tsc` binary outside the project).
+- `cd mobile && npx vitest run` — same; outside `mobile/` it picks up the web app's vitest config + 100 unrelated suites.
+- `cd mobile && npx expo run:android` — Expo's project-root detection has misfired when invoked from a parent containing a stray `.env.local` (the web app's secrets file). Cwd matters.
+
+Repo-root `.env.local` belongs to the Next.js `app/` and carries web-only secrets (Stripe, Anthropic, AMA, etc.). It must not leak into a mobile build. A mobile-scoped `.envrc` blocking parent inheritance is a documented follow-up; until then, verify cwd before running any mobile tool.
+
+`.mcp.json` is gitignored repo-wide. Each developer re-registers project-scoped MCP servers in their own checkout (e.g. `claude mcp add maestro --scope project -- maestro mcp`). The Maestro CLI works without MCP — MCP is only useful for interactive Maestro use from inside a Claude Code session.
+
+### Test-only auth paths — fail closed in prod, full stop
+
+Any auth bypass for E2E automation MUST:
+
+1. **Live in its own isolated module** (e.g. `app/src/lib/e2e-test-otp.ts`), named obviously, invoked from exactly one route, never imported elsewhere.
+2. **Run a five-guard stack of independent signals:** explicit env flag (exact string match — `=== "true"`, NOT truthy), AND `NODE_ENV !== "production"`, AND request `host` not in `PROD_HOST_ALLOWLIST` (exact set membership — not substring; `staging.denali.health` must not match `denali.health`), AND email on an allowlist env var, AND constant-time code compare against a fixed env value, AND a static test password from AWS Secrets Manager (env-injected by ECS).
+3. **Run a module-load startup assertion** that throws if the flag + `NODE_ENV=production` are both set. The contradiction is impossible to ship — the ECS container fails its health check, the deploy rolls back — not merely impossible to use.
+4. **Have a CI deploy-gate** (`.github/workflows/deploy.yml`) that fails the prod deploy if any task-def env key starts with `E2E_TEST_OTP*`. Belt-and-braces alongside the in-process startup assertion.
+5. **Log on G3+ denials and on success only.** G1 / G2 denials are silent (would otherwise page in prod). Log prefix `[E2E_TEST_OTP]` so CloudWatch metric filters can alarm if anything tagged ever lands in prod logs.
+6. **NEVER fabricate tokens.** The bypass completes a REAL Cognito session via `ADMIN_USER_PASSWORD_AUTH` with the static test password. Token signing stays with Cognito; the bypass only short-circuits the OTP verification, never the cryptographic trust path.
+
+If you can't satisfy every line above, the bypass is too dangerous to ship.
+
+---
+
 ## Contract rule
 
 Import `LocalDataDAL`, `Theme`, `ApiClient` (and their auxiliary types) from `mobile/src/contracts`. **Never redefine these shapes locally** in any consumer module. The frozen contracts are the seam between the foundation agents (Wave 1) and the consumer agents (Wave 2 + Pass 2). After Wave 0, changes to `mobile/src/contracts/**` should be additive only — never breaking.
