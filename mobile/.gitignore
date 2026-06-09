@@ -19,6 +19,11 @@ android/app/build/
 # Test + coverage
 coverage/
 
+# Maestro flow screenshots (CLI writes the named screenshot file into cwd)
+install_check.png
+maestro/screenshots/
+.maestro/
+
 # OS / editor
 .DS_Store
 *.log

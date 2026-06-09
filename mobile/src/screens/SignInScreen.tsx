@@ -190,6 +190,7 @@ export function SignInScreen(): React.ReactElement {
           <>
             <Text style={styles.label}>Email</Text>
             <TextInput
+              testID="signin_email_input"
               accessibilityLabel="Email address"
               autoCapitalize="none"
               autoComplete="email"
@@ -207,7 +208,9 @@ export function SignInScreen(): React.ReactElement {
               value={email}
             />
             <Pressable
+              testID="signin_send_code_button"
               accessibilityRole="button"
+              accessibilityLabel="Send code"
               disabled={submitting || !emailValid}
               onPress={onSendOtp}
               style={({ pressed }) => [
@@ -226,6 +229,7 @@ export function SignInScreen(): React.ReactElement {
           <>
             <Text style={styles.label}>6-digit code</Text>
             <TextInput
+              testID="signin_otp_input"
               accessibilityLabel="Six digit verification code"
               autoComplete="one-time-code"
               editable={!submitting}
@@ -242,7 +246,9 @@ export function SignInScreen(): React.ReactElement {
               value={otp}
             />
             <Pressable
+              testID="signin_verify_button"
               accessibilityRole="button"
+              accessibilityLabel="Verify code"
               disabled={submitting || !otpValid}
               onPress={onVerifyOtp}
               style={({ pressed }) => [
@@ -257,7 +263,9 @@ export function SignInScreen(): React.ReactElement {
               )}
             </Pressable>
             <Pressable
+              testID="signin_use_different_email_button"
               accessibilityRole="button"
+              accessibilityLabel="Use a different email"
               disabled={submitting}
               onPress={() => {
                 setOtp("");

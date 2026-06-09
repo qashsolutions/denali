@@ -245,6 +245,7 @@ export function OneItemScreen({
         <View style={styles.footer}>
           {!hideBack && onBack != null ? (
             <Pressable
+              testID="oneitem_back_button"
               style={styles.backButton}
               onPress={onBack}
               disabled={disabled}
@@ -257,6 +258,7 @@ export function OneItemScreen({
           <View style={styles.spacer} />
           {onSkipSection != null ? (
             <Pressable
+              testID="oneitem_skip_button"
               style={styles.skipButton}
               onPress={onSkipSection}
               disabled={disabled}
@@ -268,6 +270,7 @@ export function OneItemScreen({
           ) : null}
           {!autoAdvance && onContinue != null ? (
             <Pressable
+              testID="oneitem_continue_button"
               style={[
                 styles.continueButton,
                 continueDisabled && styles.continueDisabled,

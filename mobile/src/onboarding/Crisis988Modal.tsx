@@ -144,7 +144,11 @@ export function Crisis988Modal({
         /* intentionally no-op */
       }}
     >
-      <View style={styles.backdrop} accessibilityViewIsModal>
+      <View
+        testID="crisis988_modal"
+        style={styles.backdrop}
+        accessibilityViewIsModal
+      >
         <View style={styles.card}>
           <Text
             style={styles.title}
@@ -156,6 +160,7 @@ export function Crisis988Modal({
           <Text style={styles.body}>{CRISIS_988_COPY.body}</Text>
           <View style={styles.actions}>
             <Pressable
+              testID="crisis988_call_button"
               style={[styles.actionButton, styles.callButton]}
               onPress={() => openUrl(CRISIS_988_COPY.callUrl)}
               accessibilityRole="button"
@@ -164,6 +169,7 @@ export function Crisis988Modal({
               <Text style={styles.actionLabel}>{CRISIS_988_COPY.callLabel}</Text>
             </Pressable>
             <Pressable
+              testID="crisis988_text_button"
               style={[styles.actionButton, styles.textButton]}
               onPress={() => openUrl(CRISIS_988_COPY.textUrl)}
               accessibilityRole="button"
@@ -172,6 +178,7 @@ export function Crisis988Modal({
               <Text style={styles.actionLabel}>{CRISIS_988_COPY.textLabel}</Text>
             </Pressable>
             <Pressable
+              testID="crisis988_acknowledge_button"
               style={[styles.actionButton, styles.ackButton]}
               onPress={onAcknowledge}
               accessibilityRole="button"

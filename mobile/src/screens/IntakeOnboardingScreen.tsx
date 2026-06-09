@@ -545,6 +545,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
             return (
               <Pressable
                 key={id}
+                testID={`intake_section_${id}`}
                 style={styles.sectionCard}
                 onPress={() => setSection(id)}
                 accessibilityRole="button"
@@ -579,6 +580,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
           ) : null}
 
           <Pressable
+            testID="intake_finish_button"
             style={styles.primaryAction}
             onPress={goToInstruments}
             accessibilityRole="button"

@@ -40,6 +40,7 @@ import {
 import { useApiClient } from "@/auth";
 import type { ObservationInsertInput } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
+import { runOnceInFlight } from "@/lib/runOnceInFlight";
 import type { RootStackParamList } from "@/navigation/types";
 import { Crisis988Modal } from "@/onboarding/Crisis988Modal";
 import { fw } from "@/onboarding/fontWeight";
@@ -294,6 +295,14 @@ export function InstrumentsScreen(): React.ReactElement {
   // the last-item persist sees the just-set value. Closure-captured
   // phqResponses would lag — same stale-closure class as Cohort/Intake.
   // `phqResponses` is no longer in this callback's deps for that reason.
+  // Once-only guard for the mood-path persist. Wraps both the PHQ-2
+  // negative persist AND the PHQ-9 persist so that a rapid double-fire
+  // (modal-ack racing the line-380 effect) writes one row, not two.
+  // The `!moodDone` gate in the effect is correctness-by-convention;
+  // this ref is correctness-by-structure. See lib/runOnceInFlight.ts
+  // + its tests for the invariant.
+  const moodPersistInFlightRef = React.useRef(false);
+
   const advanceMoodAfterResponse = React.useCallback(
     (idx: number, responses: ReadonlyArray<number | null>) => {
       const totalItems = phqExpanded ? 9 : 2;
@@ -313,7 +322,9 @@ export function InstrumentsScreen(): React.ReactElement {
         // Negative PHQ-2 — persist + flag mood done.
         setSubmitting(true);
         setErrorMsg(null);
-        persistInstrument(PHQ2, responses, 2)
+        runOnceInFlight(moodPersistInFlightRef, () =>
+          persistInstrument(PHQ2, responses, 2),
+        )
           .then(() => {
             setSubmitting(false);
             setMoodDone(true);
@@ -328,10 +339,13 @@ export function InstrumentsScreen(): React.ReactElement {
           });
         return;
       }
-      // PHQ-9 expanded path complete — persist as PHQ-9.
+      // PHQ-9 expanded path complete — persist as PHQ-9. Guard prevents
+      // the once-only persist defect in the 988 modal-ack flow.
       setSubmitting(true);
       setErrorMsg(null);
-      persistInstrument(PHQ9, responses, 9)
+      runOnceInFlight(moodPersistInFlightRef, () =>
+        persistInstrument(PHQ9, responses, 9),
+      )
         .then(() => {
           setSubmitting(false);
           setMoodDone(true);
@@ -654,7 +668,15 @@ export function InstrumentsScreen(): React.ReactElement {
           errorMessage={errorMsg}
         >
           <LikertInput
-            options={[...inst.responseOptions]}
+            options={inst.responseOptions.map((opt) => ({
+              ...opt,
+              // Distinguish PHQ-9 item 9 from the others so the
+              // crisis-path Maestro flow can target it directly.
+              testID:
+                itemIndex === PHQ9_ITEM_9_INDEX
+                  ? `instruments_phq9_item9_option_${opt.value}`
+                  : `instruments_mood_item${itemIndex + 1}_option_${opt.value}`,
+            }))}
             value={phqResponses[itemIndex] ?? null}
             onChange={onMoodSelectResponse}
             accessibilityLabel={`Mood question ${itemIndex + 1}`}
@@ -694,7 +716,10 @@ export function InstrumentsScreen(): React.ReactElement {
             errorMessage={errorMsg}
           >
             <LikertInput
-              options={[...instrument.responseOptions]}
+              options={instrument.responseOptions.map((opt) => ({
+                ...opt,
+                testID: `instruments_${activeMenuKey}_item${menuStepIdx + 1}_option_${opt.value}`,
+              }))}
               value={responses[menuStepIdx] ?? null}
               onChange={(v) => onMenuSelectResponse(activeMenuKey, instrument, v)}
               accessibilityLabel={`Question ${menuStepIdx + 1}`}
@@ -721,6 +746,7 @@ export function InstrumentsScreen(): React.ReactElement {
           return (
             <Pressable
               key={m.key}
+              testID={`instruments_menu_${m.key}`}
               style={styles.menuCard}
               onPress={() => startMenuItem(m.key)}
               accessibilityRole="button"
@@ -747,6 +773,7 @@ export function InstrumentsScreen(): React.ReactElement {
         ) : null}
 
         <Pressable
+          testID="instruments_finish_button"
           style={styles.primaryAction}
           onPress={goToApp}
           accessibilityRole="button"

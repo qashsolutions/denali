@@ -45,15 +45,15 @@ import { useTheme } from "@/theme/useTheme";
 type Nav = NativeStackNavigationProp<RootStackParamList, "CohortOnboarding">;
 
 const SEX_OPTIONS = [
-  { value: 0, label: "Male" },
-  { value: 1, label: "Female" },
-  { value: 2, label: "Prefer not to say" },
+  { value: 0, label: "Male", testID: "cohort_step2_option_male" },
+  { value: 1, label: "Female", testID: "cohort_step2_option_female" },
+  { value: 2, label: "Prefer not to say", testID: "cohort_step2_option_unknown" },
 ] as const;
 const SEX_TO_API: ReadonlyArray<SexAtBirth> = ["male", "female", "unknown"];
 
 const MEDICARE_OPTIONS = [
-  { value: 1, label: "Yes, I have Medicare" },
-  { value: 0, label: "No, I don't have Medicare" },
+  { value: 1, label: "Yes, I have Medicare", testID: "cohort_step3_option_yes" },
+  { value: 0, label: "No, I don't have Medicare", testID: "cohort_step3_option_no" },
 ] as const;
 
 // Gender identity options. "Skip" is NOT in this list — the OneItemScreen's
@@ -62,14 +62,19 @@ const MEDICARE_OPTIONS = [
 // "Prefer not to say" is an EXPLICIT declination — gid stored as
 // "prefer-not-to-say" so the answer is recorded. Two distinct semantics,
 // distinct affordances: list = identities, footer = defer.
-const GENDER_OPTIONS: ReadonlyArray<{ value: number; label: string; gid: GenderIdentity }> = [
-  { value: 0, label: "Male", gid: "male" },
-  { value: 1, label: "Female", gid: "female" },
-  { value: 2, label: "Non-binary", gid: "non-binary" },
-  { value: 3, label: "Transgender male", gid: "transgender-male" },
-  { value: 4, label: "Transgender female", gid: "transgender-female" },
-  { value: 5, label: "Other", gid: "other" },
-  { value: 6, label: "Prefer not to say", gid: "prefer-not-to-say" },
+const GENDER_OPTIONS: ReadonlyArray<{
+  value: number;
+  label: string;
+  gid: GenderIdentity;
+  testID: string;
+}> = [
+  { value: 0, label: "Male", gid: "male", testID: "cohort_step4_option_male" },
+  { value: 1, label: "Female", gid: "female", testID: "cohort_step4_option_female" },
+  { value: 2, label: "Non-binary", gid: "non-binary", testID: "cohort_step4_option_non_binary" },
+  { value: 3, label: "Transgender male", gid: "transgender-male", testID: "cohort_step4_option_transgender_male" },
+  { value: 4, label: "Transgender female", gid: "transgender-female", testID: "cohort_step4_option_transgender_female" },
+  { value: 5, label: "Other", gid: "other", testID: "cohort_step4_option_other" },
+  { value: 6, label: "Prefer not to say", gid: "prefer-not-to-say", testID: "cohort_step4_option_prefer_not_to_say" },
 ];
 
 const TOTAL_STEPS = 4;
@@ -288,6 +293,7 @@ export function CohortOnboardingScreen(): React.ReactElement {
           errorMessage={errorMsg}
         >
           <TextInput
+            testID="cohort_step1_birth_year_input"
             style={styles.input}
             keyboardType="number-pad"
             placeholder="e.g. 1965"

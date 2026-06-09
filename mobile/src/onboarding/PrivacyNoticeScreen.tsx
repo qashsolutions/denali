@@ -119,6 +119,7 @@ export function PrivacyNoticeScreen(): React.ReactElement {
           ))}
         </View>
         <Pressable
+          testID="privacy_acknowledge_button"
           style={styles.button}
           onPress={() => navigation.navigate("CohortOnboarding")}
           accessibilityRole="button"

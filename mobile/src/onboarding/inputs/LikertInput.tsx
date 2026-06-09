@@ -26,6 +26,13 @@ export interface LikertOption {
   label: string;
   /** Optional supporting copy under the label (e.g. score range). */
   helperText?: string;
+  /**
+   * Optional stable identifier surfaced to Maestro / accessibility
+   * tooling as `testID` on the Pressable. Use a screen-scoped slug
+   * like `cohort_step2_option_male`. Phase-1 testIDs are documented
+   * in `mobile/maestro/README.md`.
+   */
+  testID?: string;
 }
 
 export interface LikertInputProps {
@@ -93,6 +100,7 @@ export function LikertInput({
         return (
           <Pressable
             key={opt.value}
+            testID={opt.testID}
             style={[
               styles.card,
               selected && styles.cardSelected,
