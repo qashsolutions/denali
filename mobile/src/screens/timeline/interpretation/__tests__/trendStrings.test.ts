@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatLastCheckins,
   formatTrendAccessibilityLabel,
   formatTrendDelta,
   TREND_EMPTY_STATE,
@@ -64,5 +65,11 @@ describe("trend strings — versioned templates", () => {
     expect(TREND_STRINGS_PROVENANCE.review_status).toBe(
       "pending_clinical_review",
     );
+  });
+
+  it("sparkline meta line (Increment 2): plural template + singular form", () => {
+    expect(formatLastCheckins(5)).toBe("Last 5 check-ins");
+    expect(formatLastCheckins(2)).toBe("Last 2 check-ins");
+    expect(formatLastCheckins(1)).toBe("Last check-in");
   });
 });

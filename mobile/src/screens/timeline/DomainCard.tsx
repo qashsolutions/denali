@@ -34,10 +34,18 @@ import {
   getDomainName,
   getDomainPrompt,
 } from "./displayMapping";
+import type { TimelineCard } from "./grouping";
 import { dateKeyOf, formatGroupHeader } from "./groupObservations";
 import { lookupInterpretation } from "./interpretation/lookup";
+import { INTERPRETATION_TABLE_V1 } from "./interpretation/tableV1";
+import { formatLastCheckins } from "./interpretation/trendStrings";
 import { makePillStyles, pillTintForBand } from "./pill";
 import type { DomainRollup } from "./rollup";
+import { MiniSparkline, useSparklineScores } from "./trend/MiniSparkline";
+
+/** Stable empty list so the top-level sparkline hook memo stays stable
+ *  for non-instrument rollups. */
+const NO_SESSIONS: ReadonlyArray<TimelineCard> = [];
 
 export interface DomainCardProps {
   rollup: DomainRollup;
@@ -63,10 +71,21 @@ export function DomainCard({
   const Icon = getDomainIcon(rollup.domainId);
   const name = getDomainName(rollup.domainId);
 
+  // Sparkline scores (Increment 2) — computed once at top level so the
+  // hook is unconditional; empty for non-instrument rollups. The card
+  // shows the sparkline only when its honesty gate (≥2) is met AND the
+  // instrument is chartable (scoreRange present — excludes ADAM).
+  const sparkScores = useSparklineScores(
+    rollup.kind === "instrument-domain" ? rollup.sessions : NO_SESSIONS,
+  );
+
   const chevron = <ChevronRight color={redesign.ink3} size={18} />;
 
   // INSTRUMENT-DOMAIN — instrument session with interpretation pill.
   if (rollup.kind === "instrument-domain") {
+    const scoreRange =
+      INTERPRETATION_TABLE_V1.instruments[rollup.latestInstrumentId]?.scoreRange;
+    const showSparkline = scoreRange != null && sparkScores.length >= 2;
     const lookup =
       rollup.latestScore == null
         ? null
@@ -124,6 +143,14 @@ export function DomainCard({
           <Text style={styles.caption}>
             Adding your birth year sharpens this comparison.
           </Text>
+        ) : null}
+        {showSparkline ? (
+          <View style={styles.sparkWrap}>
+            <MiniSparkline scores={sparkScores} scoreRange={scoreRange} />
+            <Text style={styles.sparkMeta}>
+              {formatLastCheckins(sparkScores.length)}
+            </Text>
+          </View>
         ) : null}
       </Pressable>
     );
@@ -247,6 +274,16 @@ function makeStyles(
       fontSize: theme.typography.sizes.xs,
       fontStyle: "italic",
       marginTop: theme.spacing.sm,
+      ...fontStyle("body", 400, fontsLoaded),
+    },
+    // Sparkline + meta (Increment 2) — mockup .dash-spark / .last.
+    sparkWrap: {
+      marginTop: theme.spacing.sm,
+      gap: theme.spacing.xs,
+    },
+    sparkMeta: {
+      color: redesign.ink3,
+      fontSize: theme.typography.sizes.xs,
       ...fontStyle("body", 400, fontsLoaded),
     },
     // Mockup markers-card prompt: 13.5px, ink-2, 11 top margin.

@@ -31,6 +31,18 @@ export const TREND_STRINGS_PROVENANCE: ProvenanceRecord = {
 export const TREND_EMPTY_STATE =
   "Your trend will appear after your next check-in.";
 
+const LAST_CHECKINS = "Last {{n}} check-ins";
+const LAST_CHECKIN_SINGULAR = "Last check-in";
+
+/**
+ * Dashboard sparkline meta line (Increment 2) — navigation/structural
+ * label restating how many points the mini-trend shows. Factual, no
+ * clinical claim; versioned here rather than inlined as a JSX literal.
+ */
+export function formatLastCheckins(n: number): string {
+  return n === 1 ? LAST_CHECKIN_SINGULAR : LAST_CHECKINS.replace("{{n}}", String(n));
+}
+
 const DELTA_MOVED = "Your score moved from {{from}} to {{to}} since {{date}}.";
 const DELTA_UNCHANGED = "Your score is unchanged since {{date}}.";
 
