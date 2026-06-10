@@ -19,10 +19,10 @@
 #   app, which is out of scope for the in-app assertion and not safe to
 #   trigger in automation.
 #
-# GATE — DOES NOT RUN until the operator seeds the staging test-OTP env.
-# See signin_onboarding.yaml / ./README.md for the full seed checklist
-# (Cognito user, Secrets Manager password, staging task-def env vars,
-# RDS row). The mobile build must point at staging, not prod.
+# GATE — needs an E2E test-OTP backend running NODE_ENV != production.
+# See signin_onboarding.yaml / ./README.md for setup. The bypass works
+# ONLY in a NODE_ENV != production backend (local next dev / CI), never
+# the deployed staging service. Point the mobile build's API_BASE_URL at it.
 #
 # Selectors are the testID / accessibilityLabel inventory in ../README.md.
 # This flow is intentionally self-contained (it does NOT runFlow

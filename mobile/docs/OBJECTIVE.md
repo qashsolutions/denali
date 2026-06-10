@@ -119,11 +119,14 @@ one named clinical review has cleared its entries' ‡ marks.
 subagents (clinical-boundary, security, terminology-verifier), skills
 (clinical-strings, band-config, mcp-verification, step-verification),
 project-scoped `.mcp.json`, SessionStart hook decision · Maestro E2E flows
-(testID inventory shipped; flows gated on the staging test-OTP mode, whose
-backend pieces are built and uncommitted).
+(testID inventory shipped; flows gated on an E2E test-OTP backend running
+NODE_ENV ≠ production — the bypass code is committed but does NOT run on
+the deployed staging service, which is NODE_ENV=production; see
+STAGING-LOCKDOWN.md).
 **Done when:** all four v2 review/verification subagents, the four skills,
 and the `.mcp.json` connectors exist and each has been exercised on at
-least one real step; Maestro flows run against staging test-OTP in CI.
+least one real step; Maestro flows run in CI against an E2E test-OTP
+backend (NODE_ENV ≠ production).
 
 ## 4. Non-goals (Phase 1 — verbatim from the spec)
 

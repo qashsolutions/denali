@@ -5,19 +5,17 @@
 #   (birth year / sex at birth / Medicare / gender identity) → Intake
 #   → land on MainTabs Timeline tab ("Your health").
 #
-# GATE — DOES NOT RUN until the operator seeds the staging test-OTP env.
-# This flow signs in via the staging-only E2E test-OTP bypass
-# (email e2e@denali.health, code 999999). That path is gated behind a
-# five-guard stack and is structurally unreachable in production. Before
-# this flow can pass, the operator must have completed the one-shot
-# staging seed described in STAGING-LOCKDOWN.md "E2E test-OTP bypass":
-#   1. Cognito user e2e@denali.health created with the static password.
-#   2. Secrets Manager `denali/staging/e2e-test-account-password` seeded;
-#      task def `secrets` injects E2E_TEST_OTP_STATIC_PASSWORD.
-#   3. Staging task-def env: E2E_TEST_OTP_ENABLED=true,
-#      E2E_TEST_OTP_EMAILS=e2e@denali.health, E2E_TEST_OTP_CODE=999999.
-#   4. RDS users + user_verification row whose id == the Cognito sub.
-# The mobile build must point at staging (sandbox CMS), not prod.
+# GATE — needs an E2E test-OTP backend running NODE_ENV != production.
+# This flow signs in via the E2E test-OTP bypass (email e2e@denali.health,
+# code 999999), gated behind a five-guard stack that is structurally
+# unreachable in production. Because guard G2 + the module-load assertion
+# key on NODE_ENV, the bypass works ONLY in a NODE_ENV != production
+# backend (local `next dev` or CI) — NOT the deployed staging service,
+# which runs NODE_ENV=production (setting the flag there crashes verify-otp).
+# Before this flow can pass, stand up that backend per STAGING-LOCKDOWN.md
+# "E2E test-OTP bypass — operating instructions" (process env + Cognito
+# user + DB row; note the send-otp / static-password caveat), then point
+# the mobile build's API_BASE_URL at it — not deployed staging or prod.
 #
 # Selectors are the testID / accessibilityLabel inventory in
 # ../README.md. No coordinate-based taps.

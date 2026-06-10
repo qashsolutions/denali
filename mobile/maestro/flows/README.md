@@ -9,9 +9,9 @@ gate — the proof a UI path is end-to-end live, on every PR).
 Selectors are drawn ONLY from the testID / accessibilityLabel inventory
 in [`../README.md`](../README.md). No coordinate-based taps anywhere.
 
-## ⚠️ Gate — these flows DO NOT RUN until the staging test-OTP env is seeded
+## ⚠️ Gate — these flows need an E2E test-OTP backend (NODE_ENV ≠ production)
 
-Every flow signs in through the **staging-only** E2E test-OTP bypass
+Every flow signs in through the E2E test-OTP bypass
 (`app/src/lib/e2e-test-otp.ts`, invoked from
 `app/src/app/api/auth/verify-otp/route.ts`):
 
@@ -22,30 +22,26 @@ Every flow signs in through the **staging-only** E2E test-OTP bypass
 
 That bypass is protected by a five-guard stack (see the module docstring
 + `../../CLAUDE.md` "Test-only auth paths") and is **structurally
-unreachable in production** — the prod deploy gate refuses any task-def
-with an `E2E_TEST_OTP*` env key, and a module-load assertion crashes the
-container if the flag is ever set with `NODE_ENV=production`.
+unreachable in production**. Critically, that protection means **the
+bypass only works when the backend runs `NODE_ENV !== "production"`**:
+guard G2 denies on `NODE_ENV==="production"`, and a module-load assertion
+*crashes `verify-otp`* if the flag is set while `NODE_ENV==="production"`.
 
-**Before any flow here can pass, the operator must complete the one-shot
-staging seed** (full detail in `../../../STAGING-LOCKDOWN.md` →
-"E2E test-OTP bypass — operating instructions"):
+**`next start` forces `NODE_ENV=production` on every deployed service —
+staging included.** So these flows do **NOT** run against the deployed
+staging URL with the flag set there (that would 500 sign-in). They run
+against a **local `next dev` or CI backend** (NODE_ENV ≠ production),
+which may still point at the staging Cognito pool / RDS / sandbox CMS.
 
-1. **Cognito** — create `e2e@denali.health` in the staging user pool with
-   a permanent password equal to the static-password secret; confirm the
-   app client has `ALLOW_ADMIN_USER_PASSWORD_AUTH` enabled.
-2. **Secrets Manager** — create `denali/staging/e2e-test-account-password`;
-   the staging task-def `secrets` block injects it as
-   `E2E_TEST_OTP_STATIC_PASSWORD`.
-3. **Staging task-def env** — `E2E_TEST_OTP_ENABLED=true`,
-   `E2E_TEST_OTP_EMAILS=e2e@denali.health`, `E2E_TEST_OTP_CODE=999999`.
-4. **RDS** — insert the matching `users` + `user_verification` rows whose
-   `users.id` equals the Cognito `sub` from step 1.
-
-The **mobile build under test must point at staging** (sandbox CMS /
-staging auth host), never prod — the bypass denies on any prod host.
-
-Until all four are in place, the sign-in step fails and every flow is
-red by design. This is intentional: the bypass fails closed.
+**Before any flow can pass**, stand up that backend per
+`../../../STAGING-LOCKDOWN.md` → "E2E test-OTP bypass — operating
+instructions" (process env + Cognito user + DB row), then **point the
+mobile build under test at it** (`API_BASE_URL` → the local/CI host),
+not at deployed staging or prod. Note the two known caveats there (the
+`STAGING_EMAIL_ALLOWLIST` gate and `send-otp` rotating the Cognito
+password) — the current code has an unresolved tension the run must work
+around. Until the backend is in place, the sign-in step fails and every
+flow is red by design: the bypass fails closed.
 
 ## Flows
 
@@ -70,8 +66,8 @@ unsafe to trigger in automation).
 ## How to run
 
 Maestro CLI lives at `~/.maestro/bin/maestro` (see `../README.md`
-"Toolchain"). With the emulator/simulator running, the app installed, and
-the staging seed in place:
+"Toolchain"). With the emulator/simulator running, the app installed and
+pointed at an E2E backend (NODE_ENV ≠ production, test-OTP env set):
 
 ```bash
 # A single flow:
