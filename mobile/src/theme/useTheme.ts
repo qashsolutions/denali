@@ -40,13 +40,19 @@ import { useColorScheme } from "react-native";
 
 import type { Theme, ThemeColors } from "@/contracts";
 
-import { tokens } from "./tokens";
+import { redesign, tokens } from "./tokens";
 
 export interface UseThemeResult {
   /** The resolved palette for the current OS color scheme. */
   active: ThemeColors;
   /** The full token bundle (typography, spacing, radii, both palettes). */
   theme: Theme;
+  /**
+   * Redesign-specific named tokens (washes, blue, teal-deep, card radius)
+   * that have no slot in the frozen ThemeColors contract. Additive — same
+   * single source (src/theme/tokens.ts) as everything else.
+   */
+  redesign: typeof redesign;
 }
 
 export function useTheme(): UseThemeResult {
@@ -55,7 +61,7 @@ export function useTheme(): UseThemeResult {
   return useMemo<UseThemeResult>(() => {
     const active: ThemeColors =
       scheme === "dark" ? tokens.colors.dark : tokens.colors.light;
-    return { active, theme: tokens };
+    return { active, theme: tokens, redesign };
   }, [scheme]);
 }
 

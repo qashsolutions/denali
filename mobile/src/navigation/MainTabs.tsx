@@ -21,15 +21,17 @@ import {
 import React from "react";
 
 import { ChatScreen } from "@/screens/ChatScreen";
+import { HealthDashboardScreen } from "@/screens/HealthDashboardScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
-import { TimelineScreen } from "@/screens/TimelineScreen";
 import { UploadScreen } from "@/screens/UploadScreen";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
+import { useTheme } from "@/theme/useTheme";
 
 import type { MainTabsParamList } from "./types";
 
 const Tab = createBottomTabNavigator<MainTabsParamList>();
 
-const TAB_ICON_SIZE = 24;
+const TAB_ICON_SIZE = 22;
 
 interface TabIconProps {
   color: string;
@@ -52,25 +54,48 @@ function SettingsTabIcon({ color, size }: TabIconProps): React.ReactElement {
 }
 
 export function MainTabs() {
+  // Redesign step-1 tab bar (mockup .tabbar): white surface, hairline top
+  // border, teal active tint, ink-3 inactive, small medium-weight labels.
+  const { redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarIconStyle: { width: TAB_ICON_SIZE, height: TAB_ICON_SIZE },
+        tabBarActiveTintColor: redesign.teal,
+        tabBarInactiveTintColor: redesign.ink3,
+        tabBarStyle: {
+          backgroundColor: redesign.surface,
+          borderTopColor: redesign.line,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10.5,
+          ...fontStyle("body", 500, fontsLoaded),
+        },
       }}
     >
       {/*
-       * Maestro targets each tab by its visible label text ("Timeline",
-       * "Upload", "Chat", "Settings"). React Navigation 7's typed options
-       * don't expose `tabBarTestID`, but they do expose
-       * `tabBarAccessibilityLabel`, which Maestro reads via the
-       * accessibility tree — same effect, type-safe.
+       * Maestro targets each tab by its accessibility label ("Timeline
+       * tab", ...). React Navigation 7's typed options don't expose
+       * `tabBarTestID`, but they do expose `tabBarAccessibilityLabel`,
+       * which Maestro reads via the accessibility tree — same effect,
+       * type-safe. The Timeline route keeps its name; only the visible
+       * label changes to the mockup's "Health".
+       */}
+      {/*
+       * Phase-3 increment 1: the Timeline TAB now lands on the
+       * domain-organized HealthDashboardScreen. The chronological
+       * feed (TimelineScreen) is reached through the dashboard's
+       * "All activity" footer entry, gated by EXPO_PUBLIC_LEGACY_TIMELINE,
+       * so its `LegacyTimeline` route lives in the root stack.
        */}
       <Tab.Screen
         name="Timeline"
-        component={TimelineScreen}
+        component={HealthDashboardScreen}
         options={{
           tabBarIcon: TimelineIcon,
+          tabBarLabel: "Health",
           tabBarAccessibilityLabel: "Timeline tab",
         }}
       />

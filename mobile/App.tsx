@@ -10,20 +10,35 @@
 
 import { NavigationContainer } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ApiClientProvider } from "@/auth";
 import { DalProvider } from "@/db/DalProvider";
 import { RootNavigator } from "@/navigation/RootNavigator";
+import { FontProvider } from "@/theme/fonts";
 
 export default function App() {
+  // SafeAreaProvider wraps everything so screens that consume
+  // `useSafeAreaInsets()` (e.g. HealthDashboardScreen, DomainDetailScreen)
+  // get the device's real top/bottom inset. Without it, the hook returns
+  // zeroed insets and headers slide under the system status bar.
+  //
+  // FontProvider loads the redesign faces (Inter / Inter Tight / Bricolage
+  // Grotesque) via expo-font before the first content render; on load
+  // error it renders anyway with the OS system-font floor (see
+  // src/theme/fonts.tsx).
   return (
-    <ApiClientProvider>
-      <DalProvider>
-        <NavigationContainer>
-          <StatusBar style="auto" />
-          <RootNavigator />
-        </NavigationContainer>
-      </DalProvider>
-    </ApiClientProvider>
+    <SafeAreaProvider>
+      <FontProvider>
+        <ApiClientProvider>
+          <DalProvider>
+            <NavigationContainer>
+              <StatusBar style="auto" />
+              <RootNavigator />
+            </NavigationContainer>
+          </DalProvider>
+        </ApiClientProvider>
+      </FontProvider>
+    </SafeAreaProvider>
   );
 }

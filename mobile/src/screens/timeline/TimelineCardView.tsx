@@ -1,18 +1,27 @@
 /**
  * TimelineCardView — render one card from `groupByInstrumentSession`.
  *
- * Two variants in one component:
- *   - kind: "instrument-session"  → friendly name, plain headline,
- *     descriptive pill, optional Details (per-item list + raw codes
- *     + provenance). Standing disclaimer at the bottom.
- *   - kind: "single"              → friendly name (from displayMapping),
- *     value, source. Details shows raw code + clinical name + source.
+ * Redesign step-2 skin ("Alpine clarity"): white r-18 surface cards on
+ * paper, icon chips, display-face titles, and the shared verdict-pill
+ * construction from ./pill.ts (teal-wash ok / neutral soft / amber-wash
+ * watch / alarm-wash severe). CONTENT AND BEHAVIOR ARE UNCHANGED from
+ * the pre-redesign card — clinical invariants:
+ *
+ *   - kind: "instrument-session"  → friendly name, plain headline (+ ‡
+ *     when provisional), explanation string, band pill, Show/Hide
+ *     details expand (per-item scores + Source line), two-line
+ *     disclaimer (standing + ‡ legend).
+ *   - kind: "single"              → friendly name, value, category pill,
+ *     Details shows Source / clinical name / code-system reference.
  *
  * No coded data is hidden from EXPORT — Details is purely a visual
  * accordion for the user. Storage and any export path still see the
  * full DAL row.
  *
- * All theme tokens resolved via useTheme(); no hardcoded hex.
+ * All theme tokens resolved via useTheme(); no hardcoded hex. All
+ * testIDs preserved (timeline_card, timeline_card_pill,
+ * timeline_card_details_toggle, timeline_card_disclaimer,
+ * timeline_card_provisional_footnote).
  */
 
 import {
@@ -24,7 +33,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { ObservationRow, SexAtBirth } from "@/contracts";
-import { fw } from "@/onboarding/fontWeight";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import {
@@ -42,10 +51,8 @@ import {
   computeAdamOutcome,
   lookupInterpretation,
 } from "./interpretation/lookup";
-import type {
-  BandId,
-  InterpretationBand,
-} from "./interpretation/tableV1";
+import type { InterpretationBand } from "./interpretation/tableV1";
+import { makePillStyles, pillTintFor } from "./pill";
 
 // ─── score computation ───────────────────────────────────────────────────
 
@@ -70,35 +77,6 @@ function computeInstrumentScore(
   return total;
 }
 
-// ─── band palette: stable id → calm tint (theme-token-friendly) ──────────
-
-function pillTintFor(active: ReturnType<typeof useTheme>["active"], bandId: BandId): {
-  bg: string;
-  fg: string;
-} {
-  // Map band ids to existing theme tokens. The "calm palette" the operator
-  // wants comes from the existing condition tokens — they're already
-  // tuned for legibility on the warm reference background.
-  switch (bandId) {
-    case "negative":
-    case "minimal":
-    case "lower-normal":
-    case "lower-risk":
-      return { bg: active.bgTertiary, fg: active.textPrimary };
-    case "higher-normal":
-    case "mild":
-      return { bg: active.bgSecondary, fg: active.accentPrimary };
-    case "moderate":
-    case "higher-risk":
-      return { bg: active.bgSecondary, fg: active.warning ?? active.accentPrimary };
-    case "moderately-severe":
-    case "severe":
-    case "likely-aud":
-    case "positive":
-      return { bg: active.bgSecondary, fg: active.error };
-  }
-}
-
 // ─── instrument-session sub-renderer ─────────────────────────────────────
 
 interface SessionCardProps {
@@ -120,7 +98,8 @@ function InstrumentSessionCard({
   onToggleExpand,
   userSexAtBirth,
 }: SessionCardProps): React.ReactElement {
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
   const Icon: LucideIcon = getInstrumentIcon(instrumentId);
   const friendlyName = getInstrumentName(instrumentId);
   const score = computeInstrumentScore(instrumentId, items);
@@ -129,15 +108,17 @@ function InstrumentSessionCard({
       ? null
       : lookupInterpretation(instrumentId, score, userSexAtBirth);
 
-  const styles = sessionStyles(active, theme);
+  const styles = sessionStyles(theme, redesign, fontsLoaded);
   const tint =
-    interp != null ? pillTintFor(active, interp.band.bandId) : null;
+    interp != null ? pillTintFor(redesign, interp.band.bandId) : null;
   const band: InterpretationBand | null = interp?.band ?? null;
 
   return (
     <View testID="timeline_card" style={styles.card}>
       <View style={styles.headerRow}>
-        <Icon color={active.accentPrimary} size={20} />
+        <View style={styles.iconChip}>
+          <Icon color={redesign.teal} size={18} />
+        </View>
         <Text style={styles.titleText} numberOfLines={1}>
           {friendlyName}
         </Text>
@@ -186,9 +167,9 @@ function InstrumentSessionCard({
             {isExpanded ? "Hide details" : "Show details"}
           </Text>
           {isExpanded ? (
-            <ChevronUp color={active.textSecondary} size={16} />
+            <ChevronUp color={redesign.tealDeep} size={16} />
           ) : (
-            <ChevronDown color={active.textSecondary} size={16} />
+            <ChevronDown color={redesign.tealDeep} size={16} />
           )}
         </Pressable>
       </View>
@@ -222,8 +203,9 @@ function SessionDetails({
   items,
   userSexAtBirthKnown: _userSexAtBirthKnown,
 }: SessionDetailsProps): React.ReactElement {
-  const { active, theme } = useTheme();
-  const styles = sessionStyles(active, theme);
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
+  const styles = sessionStyles(theme, redesign, fontsLoaded);
   // Derive source from the first item — all items in a session share a
   // source by construction (persistInstrument writes them uniformly).
   const firstSource = items.length > 0 ? items[0].source : null;
@@ -270,8 +252,9 @@ function SingleRowCard({
   isExpanded,
   onToggleExpand,
 }: SingleCardProps): React.ReactElement {
-  const { active, theme } = useTheme();
-  const styles = sessionStyles(active, theme);
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
+  const styles = sessionStyles(theme, redesign, fontsLoaded);
   const display = resolveSingleRowDisplay({
     category: row.category,
     code_system: row.code_system,
@@ -289,7 +272,9 @@ function SingleRowCard({
   return (
     <View testID="timeline_card" style={styles.card}>
       <View style={styles.headerRow}>
-        <Icon color={active.accentPrimary} size={20} />
+        <View style={styles.iconChip}>
+          <Icon color={redesign.teal} size={18} />
+        </View>
         <Text style={styles.titleText} numberOfLines={1}>
           {display.name}
         </Text>
@@ -302,9 +287,9 @@ function SingleRowCard({
       <View style={styles.footerRow}>
         <View
           testID="timeline_card_pill"
-          style={[styles.pill, { backgroundColor: active.bgTertiary }]}
+          style={[styles.pill, { backgroundColor: redesign.pillSoft }]}
         >
-          <Text style={[styles.pillText, { color: active.textPrimary }]}>
+          <Text style={[styles.pillText, { color: redesign.ink2 }]}>
             {getCategoryName(row.category)}
           </Text>
         </View>
@@ -319,9 +304,9 @@ function SingleRowCard({
             {isExpanded ? "Hide details" : "Show details"}
           </Text>
           {isExpanded ? (
-            <ChevronUp color={active.textSecondary} size={16} />
+            <ChevronUp color={redesign.tealDeep} size={16} />
           ) : (
-            <ChevronDown color={active.textSecondary} size={16} />
+            <ChevronDown color={redesign.tealDeep} size={16} />
           )}
         </Pressable>
       </View>
@@ -396,60 +381,81 @@ export function TimelineCardView({
 // ─── styles ──────────────────────────────────────────────────────────────
 
 function sessionStyles(
-  active: ReturnType<typeof useTheme>["active"],
   theme: ReturnType<typeof useTheme>["theme"],
+  redesign: ReturnType<typeof useTheme>["redesign"],
+  fontsLoaded: boolean,
 ) {
+  const pillStyles = makePillStyles(theme, fontsLoaded);
   return StyleSheet.create({
+    // Mockup .card: surface, 1px line border, r=18, soft slate shadow.
     card: {
-      backgroundColor: active.bgPrimary,
-      borderColor: active.border,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: theme.radii.md,
-      padding: theme.spacing.lg,
-      marginHorizontal: theme.spacing.lg,
-      marginVertical: theme.spacing.sm,
+      backgroundColor: redesign.surface,
+      borderColor: redesign.line,
+      borderWidth: 1,
+      borderRadius: redesign.rCard,
+      padding: theme.spacing.md,
+      marginHorizontal: theme.spacing.space5,
+      marginBottom: theme.spacing.space3,
       gap: theme.spacing.xs,
+      shadowColor: redesign.ink,
+      shadowOpacity: 0.05,
+      shadowRadius: 7,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 2,
     },
     headerRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: theme.spacing.sm,
+      gap: theme.spacing.space3,
     },
+    // Mockup .cicon: 32×32, r=10, teal on teal-wash.
+    iconChip: {
+      width: theme.spacing.xl,
+      height: theme.spacing.xl,
+      borderRadius: redesign.rChip,
+      backgroundColor: redesign.tealWash,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Mockup .cname: display 600, 18px, ink, -.01em.
     titleText: {
-      color: active.textPrimary,
-      fontFamily: theme.typography.fonts.serif,
-      fontSize: theme.typography.sizes.xl,
-      fontWeight: fw(theme.typography.weights.semibold),
+      color: redesign.ink,
+      fontSize: theme.typography.sizes.lg,
+      letterSpacing: -0.18,
       flexShrink: 1,
+      ...fontStyle("display", 600, fontsLoaded),
     },
     dateText: {
-      color: active.textSecondary,
-      fontFamily: theme.typography.fonts.sans,
+      color: redesign.ink3,
       fontSize: theme.typography.sizes.sm,
+      ...fontStyle("body", 400, fontsLoaded),
     },
     headline: {
-      color: active.textPrimary,
-      fontFamily: theme.typography.fonts.sans,
+      color: redesign.ink,
       fontSize: theme.typography.sizes.base,
-      fontWeight: fw(theme.typography.weights.medium),
+      lineHeight: theme.typography.sizes.base * 1.4,
       marginTop: theme.spacing.sm,
+      ...fontStyle("body", 500, fontsLoaded),
     },
     explanation: {
-      color: active.textSecondary,
-      fontFamily: theme.typography.fonts.sans,
+      color: redesign.ink2,
       fontSize: theme.typography.sizes.sm,
+      lineHeight: theme.typography.sizes.sm * 1.5,
+      ...fontStyle("body", 400, fontsLoaded),
     },
     fallbackNote: {
-      color: active.textMuted,
-      fontFamily: theme.typography.fonts.sans,
+      color: redesign.ink3,
       fontSize: theme.typography.sizes.xs,
       fontStyle: "italic",
+      ...fontStyle("body", 400, fontsLoaded),
     },
+    // Numeric values use the numbers role (Inter Tight, tabular).
     singleValue: {
-      color: active.textPrimary,
-      fontFamily: theme.typography.fonts.mono,
+      color: redesign.ink,
       fontSize: theme.typography.sizes.xl,
       marginTop: theme.spacing.sm,
+      fontVariant: ["tabular-nums"],
+      ...fontStyle("numbers", 600, fontsLoaded),
     },
     footerRow: {
       flexDirection: "row",
@@ -457,16 +463,9 @@ function sessionStyles(
       justifyContent: "space-between",
       marginTop: theme.spacing.sm,
     },
-    pill: {
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.xs,
-      borderRadius: theme.radii.full ?? 999,
-    },
-    pillText: {
-      fontFamily: theme.typography.fonts.sans,
-      fontSize: theme.typography.sizes.sm,
-      fontWeight: fw(theme.typography.weights.medium),
-    },
+    // Shared verdict-pill construction — see ./pill.ts.
+    pill: pillStyles.pill,
+    pillText: pillStyles.pillText,
     detailsButton: {
       flexDirection: "row",
       alignItems: "center",
@@ -474,16 +473,17 @@ function sessionStyles(
       paddingVertical: theme.spacing.xs,
       paddingHorizontal: theme.spacing.sm,
     },
+    // Interactive affordance — contrast-safe teal text (tealDeep rule).
     detailsText: {
-      color: active.textSecondary,
-      fontFamily: theme.typography.fonts.sans,
+      color: redesign.tealDeep,
       fontSize: theme.typography.sizes.sm,
+      ...fontStyle("body", 500, fontsLoaded),
     },
     detailsBlock: {
       marginTop: theme.spacing.sm,
       paddingTop: theme.spacing.sm,
-      borderTopColor: active.border,
-      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: redesign.line,
+      borderTopWidth: 1,
       gap: theme.spacing.xs,
     },
     itemRow: {
@@ -492,44 +492,45 @@ function sessionStyles(
       gap: theme.spacing.sm,
     },
     itemNumber: {
-      color: active.textMuted,
-      fontFamily: theme.typography.fonts.sans,
+      color: redesign.ink3,
       fontSize: theme.typography.sizes.sm,
       width: 20,
+      ...fontStyle("body", 400, fontsLoaded),
     },
     itemLabel: {
-      color: active.textPrimary,
-      fontFamily: theme.typography.fonts.sans,
+      color: redesign.ink,
       fontSize: theme.typography.sizes.sm,
       flex: 1,
+      ...fontStyle("body", 400, fontsLoaded),
     },
     itemValue: {
-      color: active.textPrimary,
-      fontFamily: theme.typography.fonts.mono,
+      color: redesign.ink,
       fontSize: theme.typography.sizes.sm,
+      fontVariant: ["tabular-nums"],
+      ...fontStyle("numbers", 600, fontsLoaded),
     },
     provenance: {
-      color: active.textSecondary,
-      fontFamily: theme.typography.fonts.sans,
+      color: redesign.ink2,
       fontSize: theme.typography.sizes.sm,
+      ...fontStyle("body", 400, fontsLoaded),
     },
     disclaimerRow: {
       marginTop: theme.spacing.sm,
       paddingTop: theme.spacing.sm,
-      borderTopColor: active.border,
-      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: redesign.line,
+      borderTopWidth: 1,
       gap: theme.spacing.xs,
     },
     disclaimer: {
-      color: active.textMuted,
-      fontFamily: theme.typography.fonts.sans,
+      color: redesign.ink3,
       fontSize: theme.typography.sizes.xs,
       fontStyle: "italic",
+      ...fontStyle("body", 400, fontsLoaded),
     },
     footnote: {
-      color: active.textMuted,
-      fontFamily: theme.typography.fonts.sans,
+      color: redesign.ink3,
       fontSize: theme.typography.sizes.xs,
+      ...fontStyle("body", 400, fontsLoaded),
     },
   });
 }

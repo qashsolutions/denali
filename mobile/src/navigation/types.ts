@@ -12,6 +12,8 @@
  * `.claude/agents/mobile-app-shell.md` Pass 1, step 4.
  */
 
+import type { DomainId } from "@/screens/timeline/domains/registry";
+
 export type RootStackParamList = {
   SignIn: undefined;
   /**
@@ -25,6 +27,20 @@ export type RootStackParamList = {
   Instruments: undefined;
   MainTabs: undefined;
   UploadReview: { reportId: string };
+  /**
+   * Phase-3 increment 1: per-domain detail screen reached by tapping a
+   * DomainCard on HealthDashboardScreen. Renders the domain's history
+   * (reusing TimelineCardView) and a header. Chart lands in
+   * increment 2.
+   */
+  DomainDetail: { domainId: DomainId };
+  /**
+   * Phase-3 — the ported chronological "All activity" view of every
+   * observation. Gated behind `EXPO_PUBLIC_LEGACY_TIMELINE` during
+   * the transition; surfaced as a de-emphasized footer entry on the
+   * dashboard.
+   */
+  LegacyTimeline: undefined;
 };
 
 export type MainTabsParamList = {

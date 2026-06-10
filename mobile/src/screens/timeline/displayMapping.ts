@@ -17,7 +17,9 @@
 
 import {
   Activity as ActivityIcon,
+  Beaker,
   ClipboardCheck,
+  ClipboardList,
   CloudDrizzle,
   Droplets,
   FileText,
@@ -35,6 +37,8 @@ import {
 } from "lucide-react-native";
 
 import type { ObservationCategory, ObservationSource } from "@/contracts";
+
+import type { DomainId } from "./domains/registry";
 
 // ─── Instrument id → user-facing name ────────────────────────────────────
 // Keys MUST match `metadata_json.instrument` written by InstrumentsScreen.
@@ -218,3 +222,68 @@ export function resolveSingleRowDisplay(row: RowForDisplay): SinglerowDisplay {
 
 export const STANDING_DISCLAIMER =
   "Information only — not a diagnosis or medical advice.";
+
+// ─── Phase-3 — domain registry display layer ─────────────────────────────
+//
+// Plain-language names, lucide icons, and empty-state prompts per
+// domain id. The dashboard reads from these to render DomainCards;
+// the detail screen reuses the friendly name for its title.
+
+export const DOMAIN_FRIENDLY_NAME: Readonly<Record<DomainId, string>> = {
+  mood: "Mood",
+  anxiety: "Anxiety",
+  sleep: "Sleep",
+  alcohol: "Alcohol",
+  urinary: "Urinary",
+  menopause: "Menopause",
+  hormonal: "Hormonal",
+  health_markers: "Health markers",
+  health_history: "Health history",
+};
+
+export const DOMAIN_ICON: Readonly<Record<DomainId, LucideIcon>> = {
+  mood: Heart,
+  anxiety: CloudDrizzle,
+  sleep: Moon,
+  alcohol: Wine,
+  urinary: Droplets,
+  menopause: ThermometerSun,
+  hormonal: User2,
+  health_markers: Beaker,
+  health_history: ClipboardList,
+};
+
+/**
+ * Empty-state prompt shown on the dashboard card when a cohort-gated
+ * domain has no observations yet. Reads as an invitation, never a
+ * test directive (mobile/CLAUDE.md → Display + clinical boundary).
+ */
+export const DOMAIN_PROMPT: Readonly<Record<DomainId, string>> = {
+  mood: "Start a mood check-in to see how you're doing over time.",
+  anxiety: "Start an anxiety check-in to see how you're doing over time.",
+  sleep: "Start a sleep check-in to see how you're doing over time.",
+  alcohol: "Start a drinking check-in to see how you're doing over time.",
+  urinary: "Start a urinary-symptoms check-in to see how you're doing over time.",
+  menopause: "Start a menopause check-in to see how you're doing over time.",
+  hormonal: "Start a hormonal check-in to see how you're doing over time.",
+  health_markers:
+    "Markers commonly tracked at your age and sex appear here as you upload labs or log values. Talking with your doctor about which markers matter for you could help.",
+  health_history:
+    "Conditions, family history, lifestyle, and symptoms appear here as you record them.",
+};
+
+export function getDomainName(domainId: DomainId): string {
+  return DOMAIN_FRIENDLY_NAME[domainId];
+}
+
+export function getDomainIcon(domainId: DomainId): LucideIcon {
+  return DOMAIN_ICON[domainId];
+}
+
+export function getDomainPrompt(domainId: DomainId): string {
+  return DOMAIN_PROMPT[domainId];
+}
+
+// Curated single-domain card summary lives in ./domainSummary.ts (pure
+// module, node-testable — this file pulls in lucide-react-native).
+export { formatDomainSummary } from "./domainSummary";

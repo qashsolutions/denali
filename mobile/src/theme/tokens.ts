@@ -1,9 +1,17 @@
 /**
  * Phase 1 mobile design tokens — single source of truth for native styling.
  *
- * Values mirror app/src/app/globals.css EXACTLY (no invented shades, no
- * rounding). A drift test at src/theme/__tests__/tokens.test.ts parses
- * globals.css and asserts these values still match.
+ * REDESIGN STEP 1 (2026-06-09): the palette now mirrors the "Alpine
+ * clarity" direction in docs/design/denali-redesign-mockups.html (:root
+ * block) EXACTLY — cool paper / slate ink / glacier teal — replacing the
+ * web's cream/terracotta. The drift test at
+ * src/theme/__tests__/tokens.test.ts parses the mockup HTML and asserts
+ * these values still match. Non-color tokens (spacing, radii) still
+ * mirror app/src/app/globals.css.
+ *
+ * The mockup defines a single (light) appearance. Until a dark variant
+ * is designed, BOTH light and dark palettes resolve to the redesign
+ * values so the visual review matches the spec on any OS scheme.
  *
  * ────────────────────────────────────────────────────────────────────────
  * STYLING APPROACH: typed StyleSheet via useTheme() hook.
@@ -38,19 +46,15 @@
  * colors/spacing/radii in components") is enforced either way.
  *
  * ────────────────────────────────────────────────────────────────────────
- * COLOR PALETTE MIRRORING
+ * COLOR PALETTE SOURCE
  * ────────────────────────────────────────────────────────────────────────
  *
- * globals.css layout (as of 2026-06-04, file is 423 lines):
- *   • Lines  8-39   :root            — non-color tokens (fonts, space, radii)
- *   • Lines 45-93   :root            — DARK palette (web's default)
- *   • Lines 99-147  [data-theme=dark] — DARK explicit (duplicate of above)
- *   • Lines 153-201 [data-theme=light] — LIGHT palette
- *   • Lines 410-423 @theme inline    — Tailwind v4 color-utility bindings
- *
- * Web defaults to dark and lets the user toggle to light. Mobile uses
- * useColorScheme() (the OS theme) — see src/theme/useTheme.ts. The token
- * values are identical between the two platforms.
+ * Colors come from the redesign mockup's :root block
+ * (docs/design/denali-redesign-mockups.html) — see the `redesign` export
+ * below for the full named vocabulary. The mobile app adopts the redesign
+ * first; the web app migrates later. useColorScheme() still drives
+ * light/dark selection in src/theme/useTheme.ts, but both modes currently
+ * resolve to the same redesign palette (no dark variant designed yet).
  *
  * ────────────────────────────────────────────────────────────────────────
  * WAVE-1 POST-AUDIT AMENDMENT (added 2026-06-04 during the controlled thaw)
@@ -72,75 +76,113 @@
 import type { Theme, ThemeColors, ThemeChatColors, ThemeConditionAccents } from "@/contracts";
 
 /**
- * Dark palette — mirrors globals.css :root (lines 45-93) which is also
- * duplicated under [data-theme="dark"] (lines 99-147). Both blocks are
- * byte-identical for the keys we expose.
+ * Redesign palette — mirrors the :root block of
+ * docs/design/denali-redesign-mockups.html EXACTLY. These named tokens are
+ * the redesign's full vocabulary; ThemeColors keys below map onto them.
+ *
+ * `tealDeep` is the contrast-safe teal for TEXT (the base `teal` is a
+ * fill/stroke accent — too low-contrast for copy on paper/surface).
  */
-const darkColors: ThemeColors = {
-  // Backgrounds (lines 47-49 / 101-103)
-  bgPrimary: "#1A1612",
-  bgSecondary: "#241F1A",
-  bgTertiary: "#362F28",
-
-  // Text (lines 52-54 / 106-108)
-  textPrimary: "#ffffff",
-  textSecondary: "#A09488",
-  textMuted: "#6B5F55",
-
-  // Accents (lines 57-58 / 111-112)
-  accentPrimary: "#D4845A",
-  accentSecondary: "#A08468",
-
-  // Structural (line 69 / 123)
-  border: "#3A3228",
-
-  // Semantic (lines 61-63 / 115-117)
-  success: "#10b981",
-  warning: "#f59e0b",
-  error: "#ef4444",
-};
+export const redesign = {
+  /** Cool high-altitude light — screen background. */
+  paper: "#F4F7F9",
+  /** Cards. */
+  surface: "#FFFFFF",
+  /** Deep slate-navy — primary text. */
+  ink: "#142433",
+  /** Secondary text. */
+  ink2: "#566472",
+  /** Tertiary / captions / disclaimer. */
+  ink3: "#93A1AC",
+  /** Hairlines. */
+  line: "#E4EBF0",
+  /** Softer hairline / neutral tertiary fill. */
+  line2: "#EEF3F6",
+  /** Glacier teal — the single accent. */
+  teal: "#0E8C86",
+  /** Contrast-safe teal for any teal-colored TEXT. */
+  tealDeep: "#0A6B66",
+  /** Soft active / pill background. */
+  tealWash: "#E4F1F0",
+  /** Calm secondary data line (e.g. diastolic). */
+  blue: "#4E8FA6",
+  /** Reserved attention (calm). */
+  amber: "#B0791F",
+  /** Calm reference band / watch-pill background. */
+  amberWash: "#F6ECD7",
+  /** Calm "typical range" band. */
+  sageWash: "#E7F0EA",
+  /**
+   * Alarm red — INTENTIONAL ADDITION beyond the mockup :root (the mockup
+   * defines no alarm state). Carried over from the pre-redesign palette.
+   * Consumers: severe screener bands and crisis-path UI ONLY.
+   */
+  alarm: "#C44536",
+  /**
+   * Light alarm wash — companion to `alarm`, built to the same
+   * construction as the other *-wash tokens (pale tint of the base hue
+   * for pill/band backgrounds). Same two consumers as `alarm`.
+   */
+  alarmWash: "#F8E9E5",
+  /** Neutral pill background (mockup .pill-soft). */
+  pillSoft: "#EEF2F5",
+  /** Card corner radius (mockup --r: 18px). */
+  rCard: 18,
+  /** Icon-chip corner radius (mockup .cicon border-radius: 10px). */
+  rChip: 10,
+} as const;
 
 /**
- * Light palette — mirrors globals.css [data-theme="light"] (lines 153-201).
+ * The redesign mockup ships a single light appearance. Both ThemeColors
+ * palettes resolve to it (dark variant deferred — see file header).
+ *
+ * Mapping notes:
+ *   - bgTertiary → line2 (the soft neutral fill; mockup has no third bg).
+ *   - accentSecondary → tealDeep, per the contrast rule for teal text.
+ *   - success → teal (the mockup reserves green washes for range bands,
+ *     not semantic success); warning → amber.
+ *   - error → alarm (the formalized alarm token — an intentional addition
+ *     beyond the mockup, which defines no alarm state).
  */
-const lightColors: ThemeColors = {
-  // Backgrounds (lines 155-157)
-  bgPrimary: "#FEFCF8",
-  bgSecondary: "#FFFEFA",
-  bgTertiary: "#F5F0E8",
+const redesignColors: ThemeColors = {
+  // Backgrounds
+  bgPrimary: redesign.paper,
+  bgSecondary: redesign.surface,
+  bgTertiary: redesign.line2,
 
-  // Text (lines 160-162)
-  textPrimary: "#2C1810",
-  textSecondary: "#6B5B4E",
-  textMuted: "#A89888",
+  // Text
+  textPrimary: redesign.ink,
+  textSecondary: redesign.ink2,
+  textMuted: redesign.ink3,
 
-  // Accents (lines 165-166)
-  accentPrimary: "#C26A3E",
-  accentSecondary: "#8B6D4F",
+  // Accents
+  accentPrimary: redesign.teal,
+  accentSecondary: redesign.tealDeep,
 
-  // Structural (line 177)
-  border: "#E8DFD3",
+  // Structural
+  border: redesign.line,
 
-  // Semantic (lines 169-171)
-  success: "#2D8659",
-  warning: "#C26A3E",
-  error: "#C44536",
+  // Semantic
+  success: redesign.teal,
+  warning: redesign.amber,
+  error: redesign.alarm,
 };
+
+const darkColors: ThemeColors = redesignColors;
+const lightColors: ThemeColors = redesignColors;
 
 /**
- * Chat-surface colors — globals.css lines 66-68 (dark) and 174-176 (light).
+ * Chat-surface colors — rethemed to the redesign accent: user bubble
+ * gradient teal → teal-deep, assistant bubble on the card surface.
  */
-const darkChat: ThemeChatColors = {
-  userBubbleFrom: "#D4845A",
-  userBubbleTo: "#B8704E",
-  assistantBubble: "#241F1A",
+const redesignChat: ThemeChatColors = {
+  userBubbleFrom: redesign.teal,
+  userBubbleTo: redesign.tealDeep,
+  assistantBubble: redesign.surface,
 };
 
-const lightChat: ThemeChatColors = {
-  userBubbleFrom: "#C26A3E",
-  userBubbleTo: "#A85A33",
-  assistantBubble: "#FFFEFA",
-};
+const darkChat: ThemeChatColors = redesignChat;
+const lightChat: ThemeChatColors = redesignChat;
 
 /**
  * Domain-condition accents — globals.css lines 74-88 (dark) and 182-196 (light).
@@ -179,21 +221,23 @@ export const tokens = {
 
   typography: {
     /**
-     * Font families. Web globals.css lines 10-12:
-     *   --font-sans:  DM Sans + system fallbacks
-     *   --font-serif: Instrument Serif + Georgia fallback
-     *   --font-mono:  SF Mono / Fira Code / etc.
+     * Font families — redesign roles, mapped onto the frozen contract keys:
+     *   sans  → BODY    = Inter        (mockup --body)
+     *   serif → DISPLAY = Bricolage Grotesque (mockup --display)
+     *   mono  → NUMBERS = Inter Tight  (mockup --num, tabular numerals)
      *
-     * On RN we name the canonical face. Future work: load the actual
-     * Instrument Serif + DM Sans via expo-font so headings render in the
-     * right typeface. Until then, RN falls back to the platform sans
-     * (San Francisco on iOS, Roboto on Android), which is the same fallback
-     * chain the web uses — no visual surprise.
+     * Values are the expo-font registration KEYS from src/theme/fonts.tsx
+     * (RN has no CSS-style font stacks — one registered face per name).
+     * Each key names the role's default face; weight-precise styling on
+     * redesigned surfaces goes through fontStyle() in src/theme/fonts.tsx,
+     * which also provides the OS-system-font floor when fonts haven't
+     * loaded. Legacy screens pairing these families with fontWeight get
+     * nearest-face/synthetic rendering — restyled in later redesign steps.
      */
     fonts: {
-      sans: "DM Sans",
-      serif: "Instrument Serif",
-      mono: "SF Mono",
+      sans: "Inter-Regular",
+      serif: "Bricolage-SemiBold",
+      mono: "InterTight-SemiBold",
     },
 
     /**

@@ -19,6 +19,7 @@
  * Pure data module — no side effects. Importable from node-env tests.
  */
 import type { CodeSystem } from "@/contracts";
+import type { ProvenanceRecord } from "@/lib/provenance";
 
 export interface ConditionVocabEntry {
   /** ICD-10-CM code, e.g. "I10". */
@@ -192,3 +193,19 @@ export const CONDITIONS_45_PLUS: ReadonlyArray<ConditionVocabEntry> = [
     aliases: ["liver disease", "cirrhosis", "fatty liver", "hepatitis"],
   },
 ] as const;
+
+/**
+ * Vocabulary-level provenance (v1.2 evidence pipeline). The list is a
+ * coded ICD-10-CM vocabulary, so provenance is carried per-vocabulary
+ * (code-system version), not per-entry — PMIDs don't apply to code
+ * picks. `pmid_or_code_system_version` is pinned by the
+ * terminology-verifier (e.g. "ICD-10-CM 2026") once the icd10 MCP
+ * connector is reachable; the annual drift job re-validates it.
+ */
+export const CONDITIONS_45_PLUS_PROVENANCE: ProvenanceRecord = {
+  source:
+    "Curated 45+ condition shortlist; ICD-10-CM parent codes matching the web app's government-API code set (app/src/lib/tools/*).",
+  pmid_or_code_system_version: null,
+  retrieved_at: null,
+  review_status: "pending_clinical_review",
+};

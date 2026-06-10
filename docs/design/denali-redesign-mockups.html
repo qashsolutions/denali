@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>denali.health — design direction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F4F7F9;          /* cool high-altitude light (screen bg) */
+    --surface:#FFFFFF;        /* cards */
+    --ink:#142433;            /* deep slate-navy, primary text */
+    --ink-2:#566472;          /* secondary text */
+    --ink-3:#93A1AC;          /* tertiary / captions / disclaimer */
+    --line:#E4EBF0;           /* hairlines */
+    --line-2:#EEF3F6;
+    --teal:#0E8C86;           /* glacier teal — accent */
+    --teal-deep:#0A6B66;
+    --teal-wash:#E4F1F0;      /* soft active / pill bg */
+    --blue:#4E8FA6;           /* calm secondary data line (diastolic) */
+    --amber:#B0791F;          /* reserved attention (calm) */
+    --amber-wash:#F6ECD7;     /* calm reference band */
+    --sage-wash:#E7F0EA;      /* calm "typical range" band */
+    --bezel:#0D1722;          /* phone bezel */
+    --board:#DCE3E8;          /* design board behind phones */
+    --shadow: 0 1px 2px rgba(20,36,51,.05), 0 6px 22px rgba(20,36,51,.06);
+    --shadow-card: 0 1px 2px rgba(20,36,51,.04), 0 3px 14px rgba(20,36,51,.045);
+    --r:18px;
+    --display:"Bricolage Grotesque", system-ui, sans-serif;
+    --num:"Inter Tight", system-ui, sans-serif;
+    --body:"Inter", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:var(--body);
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 600px at 20% -5%, #E6ECF0 0%, rgba(230,236,240,0) 60%),
+      var(--board);
+    -webkit-font-smoothing:antialiased;
+    padding:40px 28px 64px;
+  }
+
+  /* ---------- intro / design system strip ---------- */
+  .dn-intro{max-width:1180px;margin:0 auto 40px}
+  .dn-kicker{font-family:var(--body);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--teal-deep);font-weight:600;margin:0 0 8px}
+  .dn-h1{font-family:var(--display);font-weight:700;font-size:34px;letter-spacing:-.02em;margin:0 0 6px;color:var(--ink)}
+  .dn-lede{font-size:16px;line-height:1.55;color:var(--ink-2);max-width:760px;margin:0 0 22px}
+  .dn-sys{display:flex;flex-wrap:wrap;gap:14px}
+  .dn-syscard{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-card);padding:16px 18px;flex:1 1 240px;min-width:230px}
+  .dn-syscard h4{font-family:var(--body);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:0 0 12px;font-weight:600}
+  .dn-swatches{display:flex;gap:8px;flex-wrap:wrap}
+  .dn-sw{width:34px;height:34px;border-radius:9px;border:1px solid rgba(20,36,51,.08);position:relative}
+  .dn-sw span{position:absolute;left:0;right:0;bottom:-16px;font-size:9px;color:var(--ink-3);text-align:center}
+  .dn-type-row{display:flex;align-items:baseline;gap:10px;margin-bottom:9px}
+  .dn-type-row .lab{font-size:10px;color:var(--ink-3);width:54px;flex:none;letter-spacing:.04em}
+  .dn-spec-display{font-family:var(--display);font-weight:700;font-size:22px;color:var(--ink);letter-spacing:-.01em}
+  .dn-spec-num{font-family:var(--num);font-weight:700;font-size:24px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .dn-spec-body{font-family:var(--body);font-weight:400;font-size:15px;color:var(--ink-2)}
+
+  /* ---------- phones layout ---------- */
+  .dn-frames{display:flex;flex-wrap:wrap;gap:30px;justify-content:center;align-items:flex-start;max-width:1240px;margin:0 auto}
+  .dn-frame{width:348px}
+  .dn-cap{margin:0 0 12px;padding-left:4px}
+  .dn-cap .t{font-family:var(--display);font-weight:600;font-size:16px;color:var(--ink);letter-spacing:-.01em}
+  .dn-cap .badge{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.02em;padding:3px 9px;border-radius:999px;margin-left:8px;vertical-align:middle}
+  .badge-now{background:var(--teal-wash);color:var(--teal-deep)}
+  .badge-next{background:#EAEFF3;color:var(--ink-2)}
+  .dn-cap .d{font-size:12.5px;color:var(--ink-2);line-height:1.45;margin-top:5px;max-width:320px}
+
+  /* phone shell */
+  .ph{background:var(--bezel);border-radius:46px;padding:11px;box-shadow:0 24px 60px rgba(13,23,34,.30), 0 4px 12px rgba(13,23,34,.22)}
+  .scr{position:relative;background:var(--paper);border-radius:36px;overflow:hidden;height:740px;display:flex;flex-direction:column}
+  .statusbar{position:relative;z-index:3;height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 24px 0 26px;flex:none}
+  .statusbar .time{font-family:var(--body);font-weight:600;font-size:14px;color:var(--ink)}
+  .statusbar .ic{display:flex;gap:6px;align-items:center;color:var(--ink)}
+  .home-ind{position:absolute;left:50%;transform:translateX(-50%);bottom:8px;width:128px;height:5px;border-radius:3px;background:rgba(20,36,51,.22);z-index:4}
+
+  /* ridgeline signature */
+  .ridge{position:absolute;top:0;left:0;right:0;height:170px;z-index:0;pointer-events:none}
+  .ridge svg{width:100%;height:100%}
+
+  .body{position:relative;z-index:2;flex:1;overflow:hidden;display:flex;flex-direction:column}
+  .scroll{flex:1;overflow:hidden;padding:2px 20px 0}
+  .scroll.pad-bottom{padding-bottom:8px}
+
+  /* headers */
+  .scr-title{font-family:var(--display);font-weight:700;font-size:30px;letter-spacing:-.025em;color:var(--ink);margin:6px 0 2px}
+  .scr-date{font-family:var(--body);font-size:14px;color:var(--ink-2);margin:0 0 4px}
+  .eyebrow{font-family:var(--body);font-size:11px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3);margin:20px 2px 11px}
+
+  /* detail nav header */
+  .navh{display:flex;align-items:center;gap:10px;padding:2px 0 2px}
+  .navh .back{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--teal-deep);background:var(--teal-wash);flex:none}
+  .navh .dot{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--teal);background:var(--teal-wash)}
+  .navh .ttl{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:-.02em;color:var(--ink)}
+
+  /* cards */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-card);padding:16px 16px 15px;margin-bottom:13px}
+  .card-tap{cursor:pointer}
+  .crow{display:flex;align-items:center;gap:11px}
+  .cicon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--teal);background:var(--teal-wash);flex:none}
+  .cname{font-family:var(--display);font-weight:600;font-size:18px;letter-spacing:-.01em;color:var(--ink)}
+  .spacer{flex:1}
+  .chev{color:var(--ink-3);display:flex}
+
+  /* pills */
+  .pill{display:inline-flex;align-items:center;font-family:var(--body);font-weight:600;font-size:12.5px;padding:5px 11px;border-radius:999px;letter-spacing:.01em}
+  .pill-ok{background:var(--teal-wash);color:var(--teal-deep)}
+  .pill-soft{background:#EEF2F5;color:var(--ink-2)}
+  .pill-watch{background:var(--amber-wash);color:var(--amber)}
+
+  /* dashboard card internals */
+  .dash-meta{display:flex;align-items:center;justify-content:space-between;margin-top:13px}
+  .dash-spark{height:38px;margin-top:10px}
+  .dash-spark svg{width:100%;height:100%;display:block}
+  .last{font-size:12px;color:var(--ink-3)}
+
+  /* hero (detail) */
+  .hero{margin-top:12px}
+  .hero .lab{font-family:var(--body);font-size:11px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+  .verdict{font-family:var(--display);font-weight:700;font-size:26px;letter-spacing:-.02em;color:var(--ink);line-height:1.12;margin:2px 0 8px}
+  .sup{font-family:var(--num);font-size:13px;font-weight:600;color:var(--teal-deep);vertical-align:super}
+  .plain{font-size:15px;line-height:1.5;color:var(--ink-2);margin:0}
+  .bignum{font-family:var(--num);font-weight:700;font-variant-numeric:tabular-nums;font-size:50px;letter-spacing:-.02em;color:var(--ink);line-height:1}
+  .bignum .u{font-family:var(--body);font-size:16px;font-weight:600;color:var(--ink-3);margin-left:6px}
+  .stamp{font-size:13px;color:var(--ink-3);margin-top:6px}
+
+  /* range toggle */
+  .range{display:flex;gap:6px;background:#EAEFF2;border-radius:12px;padding:4px;margin:16px 0 4px}
+  .range b{flex:1;text-align:center;font-family:var(--body);font-weight:600;font-size:13px;color:var(--ink-2);padding:7px 0;border-radius:9px}
+  .range b.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(20,36,51,.10)}
+
+  /* chart wrap */
+  .chart{margin:10px 0 2px}
+  .chart svg{width:100%;display:block}
+  .legend{display:flex;gap:16px;margin-top:8px;padding-left:2px}
+  .legend i{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-2)}
+  .legend .sw{width:18px;height:3px;border-radius:2px}
+
+  /* collapsible answer row */
+  .disc-row{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-card);padding:15px 16px;margin-bottom:13px;cursor:pointer}
+  .disc-row .l{display:flex;align-items:center;gap:11px}
+  .disc-row .ttl{font-family:var(--body);font-weight:600;font-size:15px;color:var(--ink)}
+  .disc-row .sub{font-size:12.5px;color:var(--ink-3);margin-top:2px}
+
+  /* education block */
+  .edu{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-card);padding:16px;margin-bottom:13px}
+  .edu h5{font-family:var(--display);font-weight:600;font-size:15px;color:var(--ink);margin:0 0 7px}
+  .edu p{font-size:14px;line-height:1.55;color:var(--ink-2);margin:0}
+  .edu .src{font-size:12px;color:var(--ink-3);margin-top:9px}
+
+  /* typical-range mini band */
+  .tr{margin-top:14px}
+  .tr .h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px}
+  .tr .h span{font-family:var(--body);font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+  .tr .h em{font-style:normal;font-size:12px;color:var(--ink-3)}
+  .trbar{position:relative;height:14px;border-radius:8px;background:linear-gradient(90deg,var(--sage-wash) 0 58%, var(--amber-wash) 58% 100%);overflow:hidden}
+  .trmark{position:absolute;top:-4px;width:3px;height:22px;border-radius:2px;background:var(--ink)}
+  .trscale{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);margin-top:6px}
+
+  /* primary action */
+  .cta{display:flex;align-items:center;justify-content:center;gap:9px;background:var(--teal);color:#fff;font-family:var(--body);font-weight:600;font-size:16px;padding:15px;border-radius:14px;margin:6px 0 14px;box-shadow:0 6px 16px rgba(14,140,134,.28)}
+  .cta.ghost{background:var(--surface);color:var(--teal-deep);border:1px solid var(--teal-wash);box-shadow:none}
+
+  /* empty state */
+  .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 30px}
+  .empty .rg{width:150px;height:74px;margin-bottom:18px}
+  .empty h3{font-family:var(--display);font-weight:700;font-size:21px;color:var(--ink);margin:0 0 6px;letter-spacing:-.01em}
+  .empty p{font-size:14.5px;line-height:1.5;color:var(--ink-2);margin:0 0 20px;max-width:240px}
+
+  /* disclaimer (sticky bottom) */
+  .disclaimer{flex:none;z-index:3;background:linear-gradient(180deg, rgba(244,247,249,0) 0%, var(--paper) 22%);padding:12px 22px 12px;text-align:center}
+  .disclaimer p{margin:0;font-size:12px;line-height:1.45;color:var(--ink-3)}
+  .disclaimer .dag{display:block;margin-top:3px}
+
+  /* tab bar */
+  .tabbar{flex:none;z-index:3;display:flex;justify-content:space-around;align-items:center;padding:10px 8px 8px;border-top:1px solid var(--line);background:rgba(255,255,255,.86);backdrop-filter:blur(8px)}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--ink-3);font-size:10.5px;font-weight:500}
+  .tab.on{color:var(--teal)}
+
+  .notes{max-width:900px;margin:44px auto 0;color:var(--ink-2);font-size:13.5px;line-height:1.6;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-card);padding:20px 22px}
+  .notes b{color:var(--ink)}
+  .notes ul{margin:8px 0 0;padding-left:18px}
+  .notes li{margin:5px 0}
+
+  svg{display:block}
+</style>
+</head>
+<body>
+
+  <div class="dn-intro">
+    <p class="dn-kicker">denali.health · proposed design direction</p>
+    <h1 class="dn-h1">Alpine clarity</h1>
+    <p class="dn-lede">A cooler, more clinical-premium language than the current cream/terracotta. Deep slate ink for legibility, a single glacier-teal accent for trust, generous space, big honest numbers — and a faint topographic ridgeline as the one signature, because a longitudinal health record <em>is</em> the long view from altitude.</p>
+    <div class="dn-sys">
+      <div class="dn-syscard">
+        <h4>Palette</h4>
+        <div class="dn-swatches">
+          <div class="dn-sw" style="background:#F4F7F9"><span>paper</span></div>
+          <div class="dn-sw" style="background:#142433"><span>ink</span></div>
+          <div class="dn-sw" style="background:#0E8C86"><span>teal</span></div>
+          <div class="dn-sw" style="background:#4E8FA6"><span>blue</span></div>
+          <div class="dn-sw" style="background:#B0791F"><span>amber</span></div>
+          <div class="dn-sw" style="background:#E7F0EA"><span>sage</span></div>
+        </div>
+      </div>
+      <div class="dn-syscard">
+        <h4>Type</h4>
+        <div class="dn-type-row"><span class="lab">Display</span><span class="dn-spec-display">Your health</span></div>
+        <div class="dn-type-row"><span class="lab">Numbers</span><span class="dn-spec-num">128 / 82</span></div>
+        <div class="dn-type-row"><span class="lab">Body</span><span class="dn-spec-body">Readable at arm's length.</span></div>
+      </div>
+      <div class="dn-syscard">
+        <h4>Signature</h4>
+        <svg viewBox="0 0 230 60" style="width:100%;height:54px">
+          <polyline points="0,46 26,38 50,44 78,26 110,40 140,22 172,42 200,30 230,38" fill="none" stroke="#4E8FA6" stroke-width="1.4" opacity=".35"/>
+          <polyline points="0,52 30,44 58,50 92,34 124,48 156,32 188,49 214,40 230,46" fill="none" stroke="#0E8C86" stroke-width="1.6" opacity=".7"/>
+          <circle cx="156" cy="32" r="3.2" fill="#0E8C86"/>
+        </svg>
+        <p style="font-size:11.5px;color:#93A1AC;margin:6px 0 0">Layered Denali ridgelines — quiet, never competing with data.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="dn-frames">
+
+    <!-- ================= FRAME 1 — DASHBOARD ================= -->
+    <div class="dn-frame">
+      <div class="dn-cap">
+        <div><span class="t">Your health</span><span class="badge badge-now">buildable now</span></div>
+        <div class="d">Leaner cards: a quiet trend on each, the verdict as a pill, the wordy explanation moved into the detail. One disclaimer, pinned.</div>
+      </div>
+      <div class="ph"><div class="scr">
+        <div class="statusbar">
+          <span class="time">9:41</span>
+          <span class="ic">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="none"><path d="M1 7.5C3.5 4 6 2.5 8.5 2.5S13.5 4 16 7.5" stroke="#142433" stroke-width="1.3" stroke-linecap="round" opacity=".5"/><path d="M4 9.2C5.7 7.4 7 6.7 8.5 6.7s2.8.7 4.5 2.5" stroke="#142433" stroke-width="1.3" stroke-linecap="round"/><circle cx="8.5" cy="11" r="1" fill="#142433"/></svg>
+            <svg width="24" height="12" viewBox="0 0 24 12" fill="none"><rect x="1" y="2" width="20" height="8" rx="2.2" stroke="#142433" stroke-width="1.2" opacity=".5"/><rect x="2.6" y="3.6" width="15" height="4.8" rx="1.2" fill="#142433"/><rect x="22" y="4.4" width="1.6" height="3.2" rx=".8" fill="#142433" opacity=".5"/></svg>
+          </span>
+        </div>
+        <div class="ridge">
+          <svg viewBox="0 0 348 170" preserveAspectRatio="none">
+            <polyline points="-10,120 50,96 96,112 150,72 210,104 268,66 320,108 358,84" fill="none" stroke="#4E8FA6" stroke-width="1.5" opacity=".16"/>
+            <polyline points="-10,150 44,124 92,140 150,96 214,132 276,92 330,134 358,112" fill="none" stroke="#0E8C86" stroke-width="1.6" opacity=".18"/>
+          </svg>
+        </div>
+        <div class="body">
+          <div class="scroll">
+            <div class="scr-title">Your health</div>
+            <div class="scr-date">June 9, 2026</div>
+
+            <div class="eyebrow">Your checks</div>
+
+            <!-- Mood -->
+            <div class="card card-tap">
+              <div class="crow">
+                <div class="cicon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z" stroke="#0E8C86" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+                <div class="cname">Mood</div>
+                <div class="spacer"></div>
+                <div class="pill pill-ok">Negative screen</div>
+              </div>
+              <div class="dash-spark">
+                <svg viewBox="0 0 308 38" preserveAspectRatio="none">
+                  <polyline points="6,16 81,24 156,30 231,24 300,30" fill="none" stroke="#0E8C86" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="300" cy="30" r="3" fill="#0E8C86"/>
+                </svg>
+              </div>
+              <div class="dash-meta"><span class="last">Last 5 check-ins</span><span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 18 6-6-6-6" stroke="#93A1AC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            </div>
+
+            <!-- Anxiety -->
+            <div class="card card-tap">
+              <div class="crow">
+                <div class="cicon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 16a4 4 0 0 1 .9-7.9 5.5 5.5 0 0 1 10.8.9A3.5 3.5 0 0 1 17 16H5Z" stroke="#0E8C86" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2" stroke="#0E8C86" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+                <div class="cname">Anxiety</div>
+                <div class="spacer"></div>
+                <div class="pill pill-ok">Minimal</div>
+              </div>
+              <div class="dash-spark">
+                <svg viewBox="0 0 308 38" preserveAspectRatio="none">
+                  <polyline points="6,26 81,28 156,30 231,27 300,29" fill="none" stroke="#0E8C86" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="300" cy="29" r="3" fill="#0E8C86"/>
+                </svg>
+              </div>
+              <div class="dash-meta"><span class="last">Last 5 check-ins</span><span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 18 6-6-6-6" stroke="#93A1AC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            </div>
+
+            <!-- Sleep -->
+            <div class="card card-tap">
+              <div class="crow">
+                <div class="cicon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" stroke="#0E8C86" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+                <div class="cname">Sleep</div>
+                <div class="spacer"></div>
+                <div class="pill pill-soft">Lower&nbsp;normal</div>
+              </div>
+              <div class="dash-spark">
+                <svg viewBox="0 0 308 38" preserveAspectRatio="none">
+                  <polyline points="6,14 81,22 156,18 231,26 300,20" fill="none" stroke="#0E8C86" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="300" cy="20" r="3" fill="#0E8C86"/>
+                </svg>
+              </div>
+              <div class="dash-meta"><span class="last">Last 5 check-ins</span><span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 18 6-6-6-6" stroke="#93A1AC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            </div>
+
+            <div class="eyebrow">Your markers</div>
+            <div class="card card-tap">
+              <div class="crow">
+                <div class="cicon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5S12.5 5 12 2.5C11.5 5 10 7.5 8 9S5 13 5 15a7 7 0 0 0 7 7Z" stroke="#0E8C86" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+                <div class="cname">Blood pressure</div>
+                <div class="spacer"></div>
+                <span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 18 6-6-6-6" stroke="#93A1AC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              </div>
+              <p style="font-size:13.5px;color:var(--ink-2);margin:11px 0 0;line-height:1.45">Commonly tracked at your age. Add a reading to start your trend.</p>
+            </div>
+          </div>
+
+          <div class="disclaimer"><p>Information only — not a diagnosis or medical advice.</p></div>
+          <div class="tabbar">
+            <div class="tab on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#0E8C86" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>Health</div>
+            <div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L8 8m4-4 4 4" stroke="#93A1AC" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="#93A1AC" stroke-width="1.9" stroke-linecap="round"/></svg>Upload</div>
+            <div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4L3 21l1.1-3.3A8.4 8.4 0 1 1 21 11.5Z" stroke="#93A1AC" stroke-width="1.9" stroke-linejoin="round"/></svg>Chat</div>
+            <div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#93A1AC" stroke-width="1.9"/><path d="M19.4 13a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V20a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 18.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 4 11.6a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 5.7 5l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 19 2.7l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H23" stroke="#93A1AC" stroke-width="1.5" stroke-linejoin="round" transform="scale(.84) translate(2.3,2.3)"/></svg>Settings</div>
+          </div>
+        </div>
+        <div class="home-ind"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= FRAME 2 — MOOD DETAIL ================= -->
+    <div class="dn-frame">
+      <div class="dn-cap">
+        <div><span class="t">Mood — detail</span><span class="badge badge-now">buildable now</span></div>
+        <div class="d">The honest screener treatment: a calm trend of recent check-ins, the verdict once, answers tucked behind a tap, short education. No faked density.</div>
+      </div>
+      <div class="ph"><div class="scr">
+        <div class="statusbar">
+          <span class="time">9:41</span>
+          <span class="ic">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="none"><path d="M1 7.5C3.5 4 6 2.5 8.5 2.5S13.5 4 16 7.5" stroke="#142433" stroke-width="1.3" stroke-linecap="round" opacity=".5"/><path d="M4 9.2C5.7 7.4 7 6.7 8.5 6.7s2.8.7 4.5 2.5" stroke="#142433" stroke-width="1.3" stroke-linecap="round"/><circle cx="8.5" cy="11" r="1" fill="#142433"/></svg>
+            <svg width="24" height="12" viewBox="0 0 24 12" fill="none"><rect x="1" y="2" width="20" height="8" rx="2.2" stroke="#142433" stroke-width="1.2" opacity=".5"/><rect x="2.6" y="3.6" width="15" height="4.8" rx="1.2" fill="#142433"/><rect x="22" y="4.4" width="1.6" height="3.2" rx=".8" fill="#142433" opacity=".5"/></svg>
+          </span>
+        </div>
+        <div class="ridge">
+          <svg viewBox="0 0 348 170" preserveAspectRatio="none">
+            <polyline points="-10,120 50,96 96,112 150,72 210,104 268,66 320,108 358,84" fill="none" stroke="#4E8FA6" stroke-width="1.5" opacity=".13"/>
+            <polyline points="-10,150 44,124 92,140 150,96 214,132 276,92 330,134 358,112" fill="none" stroke="#0E8C86" stroke-width="1.6" opacity=".15"/>
+          </svg>
+        </div>
+        <div class="body">
+          <div class="scroll pad-bottom">
+            <div class="navh">
+              <div class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="m15 18-6-6 6-6" stroke="#0A6B66" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <div class="dot"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z" stroke="#0E8C86" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+              <div class="ttl">Mood</div>
+            </div>
+
+            <div class="hero">
+              <div class="lab">Last 5 check-ins · negative screen each time</div>
+              <div class="chart">
+                <svg viewBox="0 0 308 118">
+                  <!-- soft "follow-up" zone above threshold -->
+                  <rect x="0" y="0" width="308" height="40" fill="#F6ECD7" opacity=".5"/>
+                  <line x1="0" y1="40" x2="308" y2="40" stroke="#B0791F" stroke-width="1" stroke-dasharray="3 4" opacity=".5"/>
+                  <text x="6" y="33" font-family="Inter" font-size="10" fill="#B0791F" opacity=".85">closer-look threshold</text>
+                  <!-- trend line + dots (scores 2,1,0,1,0 on 0–6) -->
+                  <polyline points="30,72 99,86 168,100 237,86 300,100" fill="none" stroke="#0E8C86" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <g fill="#fff" stroke="#0E8C86" stroke-width="2.2">
+                    <circle cx="30" cy="72" r="4"/><circle cx="99" cy="86" r="4"/><circle cx="168" cy="100" r="4"/><circle cx="237" cy="86" r="4"/>
+                  </g>
+                  <circle cx="300" cy="100" r="5" fill="#0E8C86"/>
+                  <g font-family="Inter" font-size="10" fill="#93A1AC">
+                    <text x="30" y="115" text-anchor="middle">Apr</text>
+                    <text x="99" y="115" text-anchor="middle">Apr</text>
+                    <text x="168" y="115" text-anchor="middle">May</text>
+                    <text x="237" y="115" text-anchor="middle">May</text>
+                    <text x="300" y="115" text-anchor="end">Jun 9</text>
+                  </g>
+                </svg>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;margin:8px 0 10px">
+                <span class="pill pill-ok">Negative screen</span>
+                <span style="font-size:12.5px;color:var(--ink-3)">stable</span>
+              </div>
+              <p class="plain">Your two-question check did not indicate likely depression over the last two weeks.<span class="sup">‡</span></p>
+            </div>
+
+            <div class="range">
+              <b class="on">5 checks</b><b>30 days</b><b>90 days</b><b>1 yr</b>
+            </div>
+
+            <div style="height:14px"></div>
+
+            <div class="disc-row">
+              <div class="l">
+                <div class="cicon" style="background:#EEF2F5;color:#566472"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3 8-8" stroke="#566472" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12a9 9 0 1 1-6.2-8.5" stroke="#566472" stroke-width="2" stroke-linecap="round"/></svg></div>
+                <div>
+                  <div class="ttl">This check-in's answers</div>
+                  <div class="sub">June 9 · 2 questions · you told us</div>
+                </div>
+              </div>
+              <span class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="m9 18 6-6-6-6" stroke="#93A1AC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            </div>
+
+            <div class="edu">
+              <h5>About this check-in</h5>
+              <p>The two-question check is a brief screen for low mood over the past two weeks. A higher total can suggest a fuller check would be worthwhile — it is not a diagnosis.<span class="sup">‡</span></p>
+              <div class="src">Based on the PHQ-2 screening instrument.</div>
+            </div>
+
+            <div class="cta"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>Start a check-in</div>
+          </div>
+
+          <div class="disclaimer">
+            <p>Information only — not a diagnosis or medical advice.<span class="dag">‡ Interpretation pending clinical review.</span></p>
+          </div>
+        </div>
+        <div class="home-ind"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= FRAME 3 — BLOOD PRESSURE DETAIL ================= -->
+    <div class="dn-frame">
+      <div class="dn-cap">
+        <div><span class="t">Blood pressure — detail</span><span class="badge badge-next">where it goes · Tier 2</span></div>
+        <div class="d">The full graphical ceiling, on continuous data: a real trend with calm reference bands and a descriptive typical range. Needs a data feed + sourced reference tables. Same pattern fits weight, labs, resting HR.</div>
+      </div>
+      <div class="ph"><div class="scr">
+        <div class="statusbar">
+          <span class="time">9:41</span>
+          <span class="ic">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="none"><path d="M1 7.5C3.5 4 6 2.5 8.5 2.5S13.5 4 16 7.5" stroke="#142433" stroke-width="1.3" stroke-linecap="round" opacity=".5"/><path d="M4 9.2C5.7 7.4 7 6.7 8.5 6.7s2.8.7 4.5 2.5" stroke="#142433" stroke-width="1.3" stroke-linecap="round"/><circle cx="8.5" cy="11" r="1" fill="#142433"/></svg>
+            <svg width="24" height="12" viewBox="0 0 24 12" fill="none"><rect x="1" y="2" width="20" height="8" rx="2.2" stroke="#142433" stroke-width="1.2" opacity=".5"/><rect x="2.6" y="3.6" width="15" height="4.8" rx="1.2" fill="#142433"/><rect x="22" y="4.4" width="1.6" height="3.2" rx=".8" fill="#142433" opacity=".5"/></svg>
+          </span>
+        </div>
+        <div class="ridge">
+          <svg viewBox="0 0 348 170" preserveAspectRatio="none">
+            <polyline points="-10,120 50,96 96,112 150,72 210,104 268,66 320,108 358,84" fill="none" stroke="#4E8FA6" stroke-width="1.5" opacity=".13"/>
+            <polyline points="-10,150 44,124 92,140 150,96 214,132 276,92 330,134 358,112" fill="none" stroke="#0E8C86" stroke-width="1.6" opacity=".15"/>
+          </svg>
+        </div>
+        <div class="body">
+          <div class="scroll pad-bottom">
+            <div class="navh">
+              <div class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="m15 18-6-6 6-6" stroke="#0A6B66" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <div class="dot"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5S12.5 5 12 2.5C11.5 5 10 7.5 8 9S5 13 5 15a7 7 0 0 0 7 7Z" stroke="#0E8C86" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+              <div class="ttl">Blood pressure</div>
+            </div>
+
+            <div class="range">
+              <b>D</b><b>W</b><b>M</b><b class="on">6M</b><b>Y</b>
+            </div>
+
+            <div class="hero" style="margin-top:16px">
+              <div class="lab">Latest reading · Jun 9, 8:24 AM</div>
+              <div style="display:flex;align-items:flex-end;gap:0"><span class="bignum">128/82</span><span class="bignum" style="font-size:50px"></span></div>
+              <div style="margin-top:2px"><span class="bignum" style="font-size:0"></span></div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+                <span class="pill pill-ok">In the typical range</span>
+                <span style="font-size:12.5px;color:var(--ink-3)">mmHg</span>
+              </div>
+            </div>
+
+            <div class="chart" style="margin-top:16px">
+              <svg viewBox="0 0 308 172">
+                <!-- typical systolic band (90–120) -->
+                <rect x="34" y="58" width="274" height="44" fill="#E7F0EA" opacity=".7"/>
+                <!-- gridlines -->
+                <g stroke="#EAF0F3" stroke-width="1">
+                  <line x1="34" y1="36" x2="308" y2="36"/><line x1="34" y1="80" x2="308" y2="80"/><line x1="34" y1="124" x2="308" y2="124"/>
+                </g>
+                <g font-family="Inter" font-size="10" fill="#93A1AC">
+                  <text x="30" y="40" text-anchor="end">130</text>
+                  <text x="30" y="84" text-anchor="end">110</text>
+                  <text x="30" y="128" text-anchor="end">90</text>
+                </g>
+                <!-- systolic line (132,128,126,130,128,124) -->
+                <polyline points="48,33 98,40 148,42 198,36 248,40 296,45" fill="none" stroke="#0E8C86" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <g fill="#fff" stroke="#0E8C86" stroke-width="2"><circle cx="48" cy="33" r="3.5"/><circle cx="98" cy="40" r="3.5"/><circle cx="148" cy="42" r="3.5"/><circle cx="198" cy="36" r="3.5"/><circle cx="248" cy="40" r="3.5"/></g>
+                <circle cx="296" cy="45" r="4.5" fill="#0E8C86"/>
+                <!-- diastolic line (85,82,80,83,82,79) -->
+                <polyline points="48,109 98,114 148,117 198,113 248,114 296,119" fill="none" stroke="#4E8FA6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <g fill="#fff" stroke="#4E8FA6" stroke-width="2"><circle cx="48" cy="109" r="3.5"/><circle cx="98" cy="114" r="3.5"/><circle cx="148" cy="117" r="3.5"/><circle cx="198" cy="113" r="3.5"/><circle cx="248" cy="114" r="3.5"/></g>
+                <circle cx="296" cy="119" r="4.5" fill="#4E8FA6"/>
+                <g font-family="Inter" font-size="10" fill="#93A1AC">
+                  <text x="48" y="166" text-anchor="middle">Jan</text>
+                  <text x="148" y="166" text-anchor="middle">Mar</text>
+                  <text x="248" y="166" text-anchor="middle">May</text>
+                </g>
+              </svg>
+              <div class="legend">
+                <i><span class="sw" style="background:#0E8C86"></span>Systolic</i>
+                <i><span class="sw" style="background:#4E8FA6"></span>Diastolic</i>
+                <i><span class="sw" style="background:#E7F0EA"></span>Typical range</i>
+              </div>
+            </div>
+
+            <div class="tr">
+              <div class="h"><span>Typical for adults</span><em>descriptive, not a target</em></div>
+              <div class="trbar"><div class="trmark" style="left:62%"></div></div>
+              <div class="trscale"><span>lower</span><span>your latest</span><span>higher</span></div>
+            </div>
+
+            <div class="edu" style="margin-top:16px">
+              <h5>About blood pressure</h5>
+              <p>Blood pressure is the force of blood against your artery walls, shown as systolic over diastolic. Single readings vary; the trend over time is what's informative.<span class="sup">‡</span></p>
+              <div class="src">Reference ranges from published clinical guidelines.</div>
+            </div>
+
+            <div class="cta ghost"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#0A6B66" stroke-width="2.2" stroke-linecap="round"/></svg>Add a reading</div>
+          </div>
+
+          <div class="disclaimer">
+            <p>Information only — not a diagnosis or medical advice.<span class="dag">‡ Interpretation pending clinical review.</span></p>
+          </div>
+        </div>
+        <div class="home-ind"></div>
+      </div></div>
+    </div>
+
+  </div>
+
+  <div class="notes">
+    <b>How to read these:</b>
+    <ul>
+      <li><b>Your health</b> and <b>Mood detail</b> are buildable now on your existing screener data — the only new piece is the sparkline (increment 2) and the detail-screen restructure.</li>
+      <li><b>Blood pressure</b> is the Tier-2 ceiling: it shows what a continuous marker looks like once there's a data feed (HealthKit / Health Connect or manual entry) plus sourced reference tables. I used blood pressure rather than cardio fitness since you noted that was just an example — the layout is identical for weight, labs, or resting heart rate.</li>
+      <li><b>Deliberately restrained:</b> screeners get a calm dot-trend, never a steps-style bar chart — sparse ordinal data can't honestly support that, and a dramatic mental-health trend would be the wrong call clinically. Boldness is spent only on the ridgeline signature and the single teal accent.</li>
+      <li>Every clinical line still carries the ‡ provisional mark, and the disclaimer is pinned once per screen.</li>
+    </ul>
+  </div>
+
+</body>
+</html>

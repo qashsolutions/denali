@@ -15,9 +15,11 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { PrivacyNoticeScreen } from "@/onboarding/PrivacyNoticeScreen";
 import { CohortOnboardingScreen } from "@/screens/CohortOnboardingScreen";
+import { DomainDetailScreen } from "@/screens/DomainDetailScreen";
 import { InstrumentsScreen } from "@/screens/InstrumentsScreen";
 import { IntakeOnboardingScreen } from "@/screens/IntakeOnboardingScreen";
 import { SignInScreen } from "@/screens/SignInScreen";
+import { TimelineScreen } from "@/screens/TimelineScreen";
 import { UploadReviewScreen } from "@/screens/UploadReviewScreen";
 
 import { MainTabs } from "./MainTabs";
@@ -49,6 +51,20 @@ export function RootNavigator() {
         component={UploadReviewScreen}
         options={{ headerShown: true, title: "Review" }}
       />
+      {/*
+       * Phase-3 increment 1: the dashboard is the new Timeline-tab landing.
+       * Tapping a DomainCard navigates here with a {domainId} param. The
+       * detail screen renders its own back affordance since the stack is
+       * headerless. Chart lands in increment 2.
+       */}
+      <Stack.Screen name="DomainDetail" component={DomainDetailScreen} />
+      {/*
+       * The legacy chronological feed remains reachable via a footer entry
+       * on the dashboard, gated behind `EXPO_PUBLIC_LEGACY_TIMELINE=true`.
+       * Same screen as before — just rerouted from the tab to its own
+       * stack entry while the new dashboard occupies the Timeline tab.
+       */}
+      <Stack.Screen name="LegacyTimeline" component={TimelineScreen} />
     </Stack.Navigator>
   );
 }

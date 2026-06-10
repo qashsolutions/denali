@@ -12,7 +12,10 @@
  * Wave-2 redesign report for the contract-gap rationale).
  */
 export type { ConditionVocabEntry } from "./conditions45plus";
-export { CONDITIONS_45_PLUS } from "./conditions45plus";
+export {
+  CONDITIONS_45_PLUS,
+  CONDITIONS_45_PLUS_PROVENANCE,
+} from "./conditions45plus";
 
 export type { SymptomVocabEntry } from "./symptoms";
-export { SYMPTOMS } from "./symptoms";
+export { SYMPTOMS, SYMPTOMS_PROVENANCE } from "./symptoms";

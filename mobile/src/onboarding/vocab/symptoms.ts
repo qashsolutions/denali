@@ -14,6 +14,7 @@
  * Pure data module — no side effects.
  */
 import type { CodeSystem } from "@/contracts";
+import type { ProvenanceRecord } from "@/lib/provenance";
 
 export interface SymptomVocabEntry {
   /** Stable internal code: `denali.symptom.<slug>`. */
@@ -207,3 +208,17 @@ export const SYMPTOMS: ReadonlyArray<SymptomVocabEntry> = [
     aliases: ["cough", "chronic cough", "coughing"],
   },
 ] as const;
+
+/**
+ * Vocabulary-level provenance (v1.2 evidence pipeline). Internal
+ * `denali.symptom.*` codes — no external code system to pin; the
+ * record still tracks review status so the clinical reviewer signs off
+ * on the symptom labels/aliases like any other curated content.
+ */
+export const SYMPTOMS_PROVENANCE: ProvenanceRecord = {
+  source:
+    "Curated chief-complaint shortlist for the 45+ audience; internal denali.symptom.* codes (no external code system).",
+  pmid_or_code_system_version: null,
+  retrieved_at: null,
+  review_status: "pending_clinical_review",
+};

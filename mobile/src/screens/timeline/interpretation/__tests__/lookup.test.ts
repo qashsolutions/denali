@@ -24,7 +24,13 @@ import {
   computeAdamOutcome,
   lookupInterpretation,
 } from "../lookup";
-import { INTERPRETATION_TABLE_V1 } from "../tableV1";
+import {
+  flattenStrategyBands,
+  INTERPRETATION_TABLE_V1,
+  pendingReview,
+  type InterpretationBand,
+  type InterpretationTableV1_1,
+} from "../tableV1";
 
 describe("lookupInterpretation — unknown instrument / out-of-range", () => {
   it("returns null for an unknown instrument id", () => {
@@ -48,6 +54,16 @@ describe("lookupInterpretation — PHQ-2 (Kroenke 2003)", () => {
   ])("score %i → band %s", (score, bandId) => {
     const r = lookupInterpretation("PHQ-2", score, "male");
     expect(r?.band.bandId).toBe(bandId);
+  });
+
+  // 2026-06-09 delta (table v1.1.1): the negative-band pill was
+  // "Negative" — screening jargon that misreads as "negative mood" on
+  // the dashboard. Plain-language lowest-band vocabulary instead; the
+  // stable bandId stays "negative" so styling/telemetry are unaffected.
+  it('negative-band pill is plain-language "Minimal", not "Negative"', () => {
+    const r = lookupInterpretation("PHQ-2", 1, "male");
+    expect(r?.band.bandId).toBe("negative");
+    expect(r?.band.pill).toBe("Minimal");
   });
 });
 
@@ -212,8 +228,8 @@ describe("lookupInterpretation — score interpolation", () => {
 });
 
 describe("provisional gate — every shipped band is provisional until clinical review", () => {
-  it("table version is 1.0.0-provisional", () => {
-    expect(INTERPRETATION_TABLE_V1.version).toBe("1.0.0-provisional");
+  it("table version is 1.2.0-provisional", () => {
+    expect(INTERPRETATION_TABLE_V1.version).toBe("1.2.0-provisional");
   });
 
   it("no clinical reviewer is named", () => {
@@ -223,12 +239,7 @@ describe("provisional gate — every shipped band is provisional until clinical 
 
   it("every band on every instrument carries provisional: true", () => {
     for (const [id, inst] of Object.entries(INTERPRETATION_TABLE_V1.instruments)) {
-      const allBands = [
-        ...inst.bands,
-        ...(inst.sexDependent?.male ?? []),
-        ...(inst.sexDependent?.female ?? []),
-      ];
-      for (const band of allBands) {
+      for (const band of flattenStrategyBands(inst.strategy)) {
         expect(band.provisional).toBe(true);
       }
       // Silence unused-id by referencing it.
@@ -238,10 +249,204 @@ describe("provisional gate — every shipped band is provisional until clinical 
 
   it("ADAM positive string does NOT mention 'testing' (operator delta 4)", () => {
     const adam = INTERPRETATION_TABLE_V1.instruments["ADAM"];
-    const positiveBand = adam.bands.find((b) => b.bandId === "positive");
+    const positiveBand = flattenStrategyBands(adam.strategy).find(
+      (b) => b.bandId === "positive",
+    );
     expect(positiveBand).toBeDefined();
     expect(positiveBand?.headline.toLowerCase()).not.toContain("testing");
     expect(positiveBand?.explanation.toLowerCase()).not.toContain("testing");
+  });
+});
+
+// ─── V1.1 new surface ──────────────────────────────────────────────────
+//
+// The new dimensions are tested via the object-form signature so the
+// `kind: "biomarker"` and `ageYears` paths can be exercised. The
+// positional back-compat path is exercised by every test above.
+
+describe("V1.1 — object-form signature + kind: 'biomarker' path", () => {
+  it("kind: 'biomarker' on an empty biomarkers map returns null", () => {
+    const r = lookupInterpretation({
+      key: "4548-4",
+      score: 5.6,
+      sexAtBirth: "male",
+      ageYears: 50,
+      kind: "biomarker",
+    });
+    expect(r).toBeNull();
+  });
+
+  it("kind: 'instrument' object-form is byte-equivalent to positional form", () => {
+    const obj = lookupInterpretation({
+      key: "PHQ-9",
+      score: 12,
+      sexAtBirth: "male",
+      ageYears: null,
+      kind: "instrument",
+    });
+    const pos = lookupInterpretation("PHQ-9", 12, "male");
+    expect(obj).toEqual(pos);
+  });
+
+  it("ageYears is IGNORED for uniform strategies (PHQ-9 same band at any age)", () => {
+    const at40 = lookupInterpretation({
+      key: "PHQ-9",
+      score: 12,
+      sexAtBirth: "male",
+      ageYears: 40,
+      kind: "instrument",
+    });
+    const at80 = lookupInterpretation({
+      key: "PHQ-9",
+      score: 12,
+      sexAtBirth: "male",
+      ageYears: 80,
+      kind: "instrument",
+    });
+    const ageless = lookupInterpretation({
+      key: "PHQ-9",
+      score: 12,
+      sexAtBirth: "male",
+      ageYears: null,
+      kind: "instrument",
+    });
+    expect(at40?.band.bandId).toBe("moderate");
+    expect(at80?.band.bandId).toBe("moderate");
+    expect(ageless?.band.bandId).toBe("moderate");
+  });
+});
+
+describe("V1.1 — age-sex-specific strategy (synthetic table for testing)", () => {
+  // No real instrument uses age-sex-specific in V1.1 (biomarkers ship
+  // empty), so these tests use a synthetic table to exercise the lookup
+  // branch directly. The branch correctness is what matters; the
+  // production table will populate with sourced ranges later.
+  const makeSynthBand = (): InterpretationBand => ({
+    minScore: 0,
+    maxScore: 10,
+    bandId: "lower-normal",
+    pill: "Lower normal",
+    headline: "Your value of {{score}} is in the lower-normal range.",
+    explanation: "Synthetic test band.",
+    provisional: true,
+  });
+
+  const synthTable: InterpretationTableV1_1 = {
+    version: "1.2.0-provisional",
+    lastClinicallyReviewedAt: null,
+    lastClinicallyReviewedBy: null,
+    instruments: {
+      "SYNTH-AGE": {
+        instrument: "SYNTH-AGE",
+        provenance: pendingReview("synthetic for tests"),
+        loincPanel: "synthetic",
+        cutoffSource: "synthetic for tests",
+        strategy: {
+          kind: "age-sex-specific",
+          ranges: [
+            {
+              sex: "male",
+              ageMin: 40,
+              ageMax: 64,
+              bands: [makeSynthBand()],
+              rangeSource: "synthetic 40-64",
+            },
+            {
+              sex: "female",
+              ageMin: 40,
+              ageMax: 64,
+              bands: [makeSynthBand()],
+              rangeSource: "synthetic 40-64",
+            },
+          ],
+        },
+      },
+      "SYNTH-AGE-WITH-FALLBACK": {
+        instrument: "SYNTH-AGE-WITH-FALLBACK",
+        provenance: pendingReview("synthetic for tests"),
+        loincPanel: "synthetic",
+        cutoffSource: "synthetic for tests",
+        strategy: {
+          kind: "age-sex-specific",
+          ranges: [],
+          sexOnlyFallback: {
+            male: [makeSynthBand()],
+            female: [makeSynthBand()],
+          },
+        },
+      },
+    },
+    biomarkers: {},
+  };
+
+  it("returns null when sexAtBirth is unknown (no age-specific claim without sex)", () => {
+    const r = lookupInterpretation({
+      key: "SYNTH-AGE",
+      score: 5,
+      sexAtBirth: "unknown",
+      ageYears: 50,
+      table: synthTable,
+      kind: "instrument",
+    });
+    expect(r).toBeNull();
+  });
+
+  it("returns null when ageYears is null AND no sexOnlyFallback (no age-specific claim without age)", () => {
+    const r = lookupInterpretation({
+      key: "SYNTH-AGE",
+      score: 5,
+      sexAtBirth: "male",
+      ageYears: null,
+      table: synthTable,
+      kind: "instrument",
+    });
+    expect(r).toBeNull();
+  });
+
+  it("returns band + gentleNudge when ageYears is null AND sexOnlyFallback present", () => {
+    const r = lookupInterpretation({
+      key: "SYNTH-AGE-WITH-FALLBACK",
+      score: 5,
+      sexAtBirth: "male",
+      ageYears: null,
+      table: synthTable,
+      kind: "instrument",
+    });
+    expect(r).not.toBeNull();
+    expect(r?.band.bandId).toBe("lower-normal");
+    expect(r?.gentleNudge).toEqual({ reason: "age-missing" });
+  });
+
+  it("returns band WITHOUT gentleNudge when (sex, age) match a range", () => {
+    const r = lookupInterpretation({
+      key: "SYNTH-AGE",
+      score: 5,
+      sexAtBirth: "male",
+      ageYears: 50,
+      table: synthTable,
+      kind: "instrument",
+    });
+    expect(r).not.toBeNull();
+    expect(r?.band.bandId).toBe("lower-normal");
+    expect(r?.gentleNudge).toBeUndefined();
+  });
+
+  it("returns null when (sex, age) is outside every range", () => {
+    const r = lookupInterpretation({
+      key: "SYNTH-AGE",
+      score: 5,
+      sexAtBirth: "male",
+      ageYears: 30, // outside 40-64
+      table: synthTable,
+      kind: "instrument",
+    });
+    expect(r).toBeNull();
+  });
+});
+
+describe("V1.1 — empty biomarkers map shape", () => {
+  it("INTERPRETATION_TABLE_V1.biomarkers is empty in increment 1", () => {
+    expect(Object.keys(INTERPRETATION_TABLE_V1.biomarkers)).toEqual([]);
   });
 });
 
