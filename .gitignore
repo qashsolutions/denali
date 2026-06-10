@@ -9,9 +9,12 @@
 .claude/*.lock
 
 # MCP (Model Context Protocol)
-.mcp.json
+# Root .mcp.json IS committed per SELF-PROMPTING RULES v2 (project-scoped
+# connectors: icd10/pubmed/npi — every session needs them). Supersedes the
+# earlier ignore-everywhere policy; other .mcp artifacts stay ignored.
 .mcp/
 *.mcp.json
+!/.mcp.json
 
 # Environment / Secrets
 .env

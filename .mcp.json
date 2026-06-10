@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=nqovjeaxstvpnryqcwox"
+    },
+    "icd10": {
+      "type": "http",
+      "url": "https://mcp.deepsense.ai/icd10_codes/mcp"
+    },
+    "pubmed": {
+      "type": "http",
+      "url": "https://pubmed.mcp.claude.com/mcp"
+    },
+    "npi": {
+      "type": "http",
+      "url": "https://mcp.deepsense.ai/npi_registry/mcp"
+    }
+  }
+}

@@ -2,6 +2,14 @@
 
 This file is loaded automatically whenever Claude Code operates under `mobile/`, concatenated with the root `CLAUDE.md`. Keep edits to it minimal — these rules are load-bearing.
 
+**MANDATORY FIRST READ for every fresh task:** `mobile/docs/review.md` — the
+pre-task gate (branch check, OBJECTIVE.md anchor, PLAN-FIRST trigger scan) and
+the step Definition of Done (acceptance matrix, on-device evidence,
+Confidence/Assumptions/Deviations). Read it in full and run section A before
+writing any plan or code; run section C before delivering any step report.
+`mobile/docs/OBJECTIVE.md` is the canonical objective doc — if missing,
+creating it (then STOPPING for approval) is the first task of the session.
+
 Spec: @docs/design/phase-1-45plus.md (read it before implementing).
 
 ---
@@ -71,7 +79,7 @@ Information-layer rules (load-bearing for HIPAA + clinical safety):
 
 Repo-root `.env.local` belongs to the Next.js `app/` and carries web-only secrets (Stripe, Anthropic, AMA, etc.). It must not leak into a mobile build. A mobile-scoped `.envrc` blocking parent inheritance is a documented follow-up; until then, verify cwd before running any mobile tool.
 
-`.mcp.json` is gitignored repo-wide. Each developer re-registers project-scoped MCP servers in their own checkout (e.g. `claude mcp add maestro --scope project -- maestro mcp`). The Maestro CLI works without MCP — MCP is only useful for interactive Maestro use from inside a Claude Code session.
+The root `.mcp.json` IS committed (SELF-PROMPTING RULES v2): it carries the project-scoped terminology connectors (icd10 / pubmed / npi) every session needs. Other `.mcp` artifacts (`.mcp/`, `*.mcp.json` elsewhere) stay gitignored. Local-only servers (e.g. `claude mcp add maestro --scope project -- maestro mcp`) still get re-registered per checkout. The Maestro CLI works without MCP — MCP is only useful for interactive Maestro use from inside a Claude Code session.
 
 ### Test-only auth paths — fail closed in prod, full stop
 
@@ -151,3 +159,18 @@ Two of the load-bearing invariants are hard-gated by hooks. They run regardless 
 - Decision record: `docs/history/phase-1-mobile-decisions.md`
 - Agents: `.claude/agents/mobile-*.md`
 - Hooks: `.claude/hooks/guard-contracts.sh` (wired), `.claude/hooks/guard-persistence.sh` (Wave-1 deliverable, deferred)
+
+## Deferred items (redesign)
+
+Tracked here until resolved; each is a deliberate deferral, not an oversight.
+
+- **Dark-mode variant deferred.** The redesign mockup
+  (`docs/design/denali-redesign-mockups.html`) defines a single light
+  appearance; both light and dark palettes in `src/theme/tokens.ts`
+  currently resolve to it. `useColorScheme()` plumbing is intact — when a
+  dark palette is designed, populate `darkColors` and the split resumes.
+- **Token-drift test source-of-truth inversion.** While the redesign is in
+  flux, `src/theme/__tests__/tokens.test.ts` treats the mockup HTML as the
+  color source of truth and asserts `tokens.ts` matches it. Once the
+  redesign stabilizes, invert: `tokens.ts` becomes canonical and the
+  mockup (or its successor doc) is checked against it.
