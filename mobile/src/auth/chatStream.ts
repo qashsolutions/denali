@@ -141,11 +141,30 @@ function createIterator(
       return;
     }
 
+    // Map the ChatTurnInput contract → the wire shape the route expects.
+    // The route validates `body.messages` (a non-empty {role,content}[]
+    // array) BEFORE the mobile dispatch + consent gate, so sending the raw
+    // {content,history,noPersist} was rejected with HTTP 400. `history`
+    // already ends with the new user turn (ChatScreen's appendUserTurn),
+    // so it IS the full conversation; fall back to a single user turn when
+    // absent. noPersist stays top-level for the D9 guard. (2026-06-10 fix.)
+    const messages =
+      input.history && input.history.length > 0
+        ? input.history
+        : [{ role: "user" as const, content: input.content }];
+    const wireBody = {
+      messages,
+      noPersist: input.noPersist,
+      ...(input.modelOverride != null
+        ? { modelOverride: input.modelOverride }
+        : {}),
+    };
+
     const response = await rawRequest(
       {
         method: "POST",
         path: "/api/chat",
-        body: JSON.stringify(input),
+        body: JSON.stringify(wireBody),
         headers: { Accept: "text/event-stream" },
         options: {
           signal: options?.signal,

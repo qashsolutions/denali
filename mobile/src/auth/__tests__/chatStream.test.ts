@@ -161,11 +161,18 @@ describe("chatStream — request shape", () => {
     expect(req.path).toBe("/api/chat");
     expect(req.headers?.Accept).toBe("text/event-stream");
 
-    // Body must include noPersist:true.
+    // Wire body must carry noPersist:true AND a `messages` array (the
+    // shape the route validates) — NOT the raw {content} field, which the
+    // route ignores and which caused HTTP 400. (2026-06-10 fix.)
     expect(req.body).toBeDefined();
-    const parsed = JSON.parse(req.body!) as ChatTurnInput;
+    const parsed = JSON.parse(req.body!) as {
+      noPersist: boolean;
+      messages: Array<{ role: string; content: string }>;
+      content?: unknown;
+    };
     expect(parsed.noPersist).toBe(true);
-    expect(parsed.content).toBe("hi there");
+    expect(parsed.messages).toEqual([{ role: "user", content: "hi there" }]);
+    expect(parsed.content).toBeUndefined();
 
     // Default timeout = CHAT_TIMEOUT_MS (the chat ceiling).
     expect(req.options?.timeoutMs).toBe(330_000);

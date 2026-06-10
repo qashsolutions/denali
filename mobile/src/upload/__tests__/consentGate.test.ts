@@ -7,9 +7,16 @@
  *   - When `health_data_ai` is OFF, the upload client MUST NOT call
  *     `apiPost("/api/parse-report", …)` even if the consumer code path
  *     somehow reaches the submit step.
- *   - `fetchHealthDataAiConsent` returns true ONLY when the consent row
- *     exists with `granted = true`. Missing rows / network failures /
- *     unknown response shapes all collapse to false (fail-closed).
+ *   - `fetchHealthDataAiConsent` returns true ONLY when the route's
+ *     `{ consent: { health_data_ai: true } }` map says so. Anything else —
+ *     false, missing, unknown shape, network failure — collapses to false
+ *     (fail-closed).
+ *
+ * 2026-06-10: corrected the mocked response to the ACTUAL route shape
+ * `{ consent: { health_data_ai, ... } }`. The prior mocks used
+ * `{ consents: [...] }` / `{ health_data_ai }`, which never matched the
+ * route — so the reader returned false unconditionally and Upload always
+ * showed "AI parsing is off".
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -38,35 +45,36 @@ function makeApi(overrides: Partial<ApiClient>): ApiClient {
 }
 
 describe("fetchHealthDataAiConsent — fail-closed semantics", () => {
-  it("returns true when the consents array contains health_data_ai granted", async () => {
+  it("returns true when consent.health_data_ai is true (real route shape)", async () => {
     const api = makeApi({
       apiGet: vi.fn().mockResolvedValue({
-        consents: [
-          { type: "health_data_ai", granted: true },
-          { type: "analytics", granted: false },
-        ],
+        consent: {
+          health_data_ai: true,
+          health_data_storage: false,
+          analytics: false,
+        },
       }),
     });
     expect(await fetchHealthDataAiConsent(api)).toBe(true);
   });
 
-  it("returns false when the consents row exists but granted=false", async () => {
+  it("returns false when consent.health_data_ai is false", async () => {
     const api = makeApi({
       apiGet: vi.fn().mockResolvedValue({
-        consents: [{ type: "health_data_ai", granted: false }],
+        consent: { health_data_ai: false },
       }),
     });
     expect(await fetchHealthDataAiConsent(api)).toBe(false);
   });
 
-  it("returns false when no row is present", async () => {
+  it("returns false when health_data_ai is absent from the consent map", async () => {
     const api = makeApi({
-      apiGet: vi.fn().mockResolvedValue({ consents: [] }),
+      apiGet: vi.fn().mockResolvedValue({ consent: {} }),
     });
     expect(await fetchHealthDataAiConsent(api)).toBe(false);
   });
 
-  it("returns false when the response shape is unknown", async () => {
+  it("returns false when the response shape is unknown (no consent key)", async () => {
     const api = makeApi({
       apiGet: vi.fn().mockResolvedValue({ unexpected: "shape" }),
     });
@@ -78,13 +86,6 @@ describe("fetchHealthDataAiConsent — fail-closed semantics", () => {
       apiGet: vi.fn().mockRejectedValue(new Error("network down")),
     });
     expect(await fetchHealthDataAiConsent(api)).toBe(false);
-  });
-
-  it("honors the flat { health_data_ai: bool } projection if present", async () => {
-    const api = makeApi({
-      apiGet: vi.fn().mockResolvedValue({ health_data_ai: true }),
-    });
-    expect(await fetchHealthDataAiConsent(api)).toBe(true);
   });
 });
 
@@ -98,17 +99,15 @@ describe("consent gate — parse-report MUST NOT be called when consent is OFF",
     const apiPostSpy = vi.fn();
     const api = makeApi({
       apiGet: vi.fn().mockResolvedValue({
-        consents: [{ type: "health_data_ai", granted: false }],
+        consent: { health_data_ai: false },
       }),
       apiPost: apiPostSpy,
     });
 
-    // Simulated submit path matching UploadScreen.runPipeline:
     const consentOk = await fetchHealthDataAiConsent(api);
     expect(consentOk).toBe(false);
 
     if (consentOk) {
-      // Branch intentionally unreachable for this test.
       await parseReport(api, {
         reportType: "lab",
         extractedText: "should not be sent",
@@ -125,7 +124,7 @@ describe("consent gate — parse-report MUST NOT be called when consent is OFF",
     });
     const api = makeApi({
       apiGet: vi.fn().mockResolvedValue({
-        consents: [{ type: "health_data_ai", granted: true }],
+        consent: { health_data_ai: true },
       }),
       apiPost: apiPostSpy,
     });

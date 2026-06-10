@@ -110,6 +110,11 @@ export function ChatScreen(): React.ReactElement {
           break;
         } else if (event.type === "error") {
           // D11: render a generic message — no PHI from the error body.
+          // Diagnostic: the event.message carries the HTTP status (e.g.
+          // "Chat request failed (HTTP 403)."), which the UI intentionally
+          // hides — log it (status only, no body/PHI) so failures are
+          // diagnosable from logcat.
+          console.warn("[Chat] server error event:", event.message);
           setError("Something went wrong. Please try again.");
           break;
         }

@@ -22,8 +22,15 @@
 import type { ApiClient } from "@/contracts";
 
 interface ConsentResponse {
-  health_data_ai?: boolean;
-  consents?: Array<{ type?: string; granted?: boolean }>;
+  /**
+   * The route returns `{ consent: { health_data_ai, health_data_storage,
+   * analytics } }` (a per-type boolean map) — see
+   * app/src/app/api/consent/route.ts GET. (2026-06-10 fix: the previous
+   * shapes `{ health_data_ai }` / `{ consents: [...] }` never matched the
+   * route, so this read returned false unconditionally — Upload always
+   * showed "AI parsing is off" even with the toggle on.)
+   */
+  consent?: { health_data_ai?: boolean };
 }
 
 const CONSENT_PATH = "/api/consent";
@@ -33,16 +40,7 @@ export async function fetchHealthDataAiConsent(
 ): Promise<boolean> {
   try {
     const res = await api.apiGet<ConsentResponse>(CONSENT_PATH);
-    // Two shapes are tolerated: the flat `{ health_data_ai: bool }` projection
-    // OR the underlying `{ consents: [{type, granted}] }` array. The route
-    // returns the latter (see app/src/app/api/consent/route.ts); the former
-    // is preserved in case a downstream simplification ships.
-    if (typeof res.health_data_ai === "boolean") return res.health_data_ai;
-    if (Array.isArray(res.consents)) {
-      const row = res.consents.find((c) => c.type === "health_data_ai");
-      return row?.granted === true;
-    }
-    return false;
+    return res.consent?.health_data_ai === true;
   } catch {
     return false;
   }

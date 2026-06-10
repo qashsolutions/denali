@@ -19,7 +19,7 @@
  * All styling via `useTheme()` — no hardcoded colors / sizes.
  */
 
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Crypto from "expo-crypto";
 import React from "react";
@@ -86,17 +86,23 @@ export function UploadScreen(): React.ReactElement {
   const [error, setError] = React.useState<ErrorState | null>(null);
   const [consentReady, setConsentReady] = React.useState<boolean | null>(null);
 
-  // Check consent on mount and whenever the screen is focused. Cheap.
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const ok = await fetchHealthDataAiConsent(api);
-      if (!cancelled) setConsentReady(ok);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [api]);
+  // Re-check consent on every screen FOCUS (not just mount). The Upload
+  // tab stays mounted in the bottom-tab navigator, so a mount-only effect
+  // showed a stale "AI parsing is off" banner after the user enabled the
+  // toggle in Settings and returned here. useFocusEffect re-reads on each
+  // focus so the banner reflects the current consent. (2026-06-10 fix.)
+  useFocusEffect(
+    React.useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const ok = await fetchHealthDataAiConsent(api);
+        if (!cancelled) setConsentReady(ok);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [api]),
+  );
 
   const styles = React.useMemo(
     () =>
