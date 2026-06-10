@@ -32,7 +32,6 @@ import { useApiClient } from "@/auth";
 import type { GenderIdentity, SexAtBirth } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
-import { fw } from "@/onboarding/fontWeight";
 import { LikertInput } from "@/onboarding/inputs";
 import { OneItemScreen } from "@/onboarding/OneItemScreen";
 import {
@@ -40,6 +39,7 @@ import {
   decideCohortSubmission,
   missingCohortFieldMessage,
 } from "@/onboarding/cohortPayload";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "CohortOnboarding">;
@@ -83,7 +83,8 @@ export function CohortOnboardingScreen(): React.ReactElement {
   const api = useApiClient();
   const dal = useDal();
   const navigation = useNavigation<Nav>();
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
 
   const [stepIndex, setStepIndex] = React.useState(1); // 1-based
@@ -238,16 +239,17 @@ export function CohortOnboardingScreen(): React.ReactElement {
     () =>
       StyleSheet.create({
         input: {
-          borderColor: active.border,
+          borderColor: redesign.line,
           borderWidth: 1,
           borderRadius: theme.radii.md,
           padding: theme.spacing.md,
           fontSize: theme.typography.sizes["2xl"],
-          fontFamily: theme.typography.fonts.mono,
-          color: active.textPrimary,
-          backgroundColor: active.bgSecondary,
+          color: redesign.ink,
+          backgroundColor: redesign.surface,
           minHeight: 56,
           textAlign: "center",
+          fontVariant: ["tabular-nums"],
+          ...fontStyle("numbers", 600, fontsLoaded),
         },
         submittingRow: {
           flexDirection: "row",
@@ -256,17 +258,17 @@ export function CohortOnboardingScreen(): React.ReactElement {
         },
         submittingLabel: {
           fontSize: theme.typography.sizes.sm,
-          color: active.textSecondary,
-          fontWeight: fw(theme.typography.weights.medium),
+          color: redesign.ink2,
+          ...fontStyle("body", 500, fontsLoaded),
         },
       }),
-    [active, theme],
+    [theme, redesign, fontsLoaded],
   );
 
   if (submitting) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: active.bgPrimary }}>
-        <ActivityIndicator color={active.accentPrimary} />
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: redesign.paper }}>
+        <ActivityIndicator color={redesign.teal} />
         <Text style={[styles.submittingLabel, { marginTop: theme.spacing.sm }]}>
           Saving your answers…
         </Text>
@@ -297,7 +299,7 @@ export function CohortOnboardingScreen(): React.ReactElement {
             style={styles.input}
             keyboardType="number-pad"
             placeholder="e.g. 1965"
-            placeholderTextColor={active.textMuted}
+            placeholderTextColor={redesign.ink3}
             value={birthYearStr}
             onChangeText={(text) =>
               setBirthYearStr(text.replace(/[^0-9]/g, "").slice(0, 4))

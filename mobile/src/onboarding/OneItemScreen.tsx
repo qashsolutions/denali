@@ -20,6 +20,7 @@
  */
 import React from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -29,9 +30,8 @@ import {
   View,
 } from "react-native";
 
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
-
-import { fw } from "./fontWeight";
 
 export interface OneItemScreenProps {
   /** 1-based step index (e.g., 3 for "3 of 9"). */
@@ -86,7 +86,16 @@ export function OneItemScreen({
   disabled = false,
   errorMessage,
 }: OneItemScreenProps): React.ReactElement {
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
+
+  // Dismiss the keyboard before advancing — a focused text input (Intake
+  // free-text / autocomplete) otherwise keeps the soft keyboard (and the
+  // emulator's hardware-keyboard bar) up across the step transition.
+  const handleContinue = React.useCallback(() => {
+    Keyboard.dismiss();
+    onContinue?.();
+  }, [onContinue]);
 
   // Defensive: progress fraction clamped to [0, 1].
   const progress = React.useMemo(() => {
@@ -97,55 +106,60 @@ export function OneItemScreen({
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
-        screen: { flex: 1, backgroundColor: active.bgPrimary },
-        scroll: { padding: theme.spacing.lg, gap: theme.spacing.lg },
+        screen: { flex: 1, backgroundColor: redesign.paper },
+        scroll: { padding: theme.spacing.space5, gap: theme.spacing.lg },
         progressRow: {
           gap: theme.spacing.xs,
         },
         progressBar: {
           height: 4,
           borderRadius: theme.radii.sm,
-          backgroundColor: active.bgTertiary,
+          backgroundColor: redesign.line2,
           overflow: "hidden",
         },
         progressFill: {
           height: 4,
-          backgroundColor: active.accentPrimary,
+          backgroundColor: redesign.teal,
           borderRadius: theme.radii.sm,
         },
         progressLabel: {
           fontSize: theme.typography.sizes.xs,
-          color: active.textSecondary,
+          color: redesign.ink3,
           textTransform: "uppercase",
           letterSpacing: 1,
+          ...fontStyle("body", 600, fontsLoaded),
         },
+        // Eyebrow — contrast-safe teal text.
         sectionLabel: {
-          fontSize: theme.typography.sizes.sm,
-          color: active.accentPrimary,
+          fontSize: 11,
+          color: redesign.tealDeep,
           textTransform: "uppercase",
-          letterSpacing: 1,
-          fontWeight: fw(theme.typography.weights.semibold),
+          letterSpacing: 11 * 0.15,
+          ...fontStyle("body", 600, fontsLoaded),
         },
+        // Mockup question = Bricolage display.
         question: {
           fontSize: theme.typography.sizes["2xl"],
-          fontFamily: theme.typography.fonts.serif,
-          color: active.textPrimary,
-          fontWeight: fw(theme.typography.weights.bold),
+          color: redesign.ink,
+          letterSpacing: -0.4,
           lineHeight:
             theme.typography.sizes["2xl"] *
             theme.typography.lineHeights.tight,
+          ...fontStyle("display", 700, fontsLoaded),
         },
         helperText: {
           fontSize: theme.typography.sizes.base,
-          color: active.textSecondary,
+          color: redesign.ink2,
           lineHeight:
             theme.typography.sizes.base *
             theme.typography.lineHeights.relaxed,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         inputSlot: { marginTop: theme.spacing.sm },
         errorText: {
           fontSize: theme.typography.sizes.sm,
-          color: theme.colors.conditions.light.healthRed.base,
+          color: redesign.alarm,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         footer: {
           flexDirection: "row",
@@ -153,53 +167,61 @@ export function OneItemScreen({
           gap: theme.spacing.sm,
           marginTop: theme.spacing.lg,
         },
+        // Ghost back/skip: surface card + hairline.
         backButton: {
           minHeight: 48,
           minWidth: 64,
           paddingHorizontal: theme.spacing.md,
           paddingVertical: theme.spacing.sm,
-          borderRadius: theme.radii.md,
-          backgroundColor: active.bgSecondary,
+          borderRadius: theme.radii.lg,
+          backgroundColor: redesign.surface,
+          borderColor: redesign.line,
+          borderWidth: 1,
           justifyContent: "center",
           alignItems: "center",
         },
         backLabel: {
           fontSize: theme.typography.sizes.base,
-          color: active.textPrimary,
+          color: redesign.ink,
+          ...fontStyle("body", 500, fontsLoaded),
         },
         spacer: { flex: 1 },
         skipButton: {
           minHeight: 48,
           paddingHorizontal: theme.spacing.md,
           paddingVertical: theme.spacing.sm,
-          borderRadius: theme.radii.md,
-          backgroundColor: active.bgSecondary,
+          borderRadius: theme.radii.lg,
+          backgroundColor: redesign.surface,
+          borderColor: redesign.line,
+          borderWidth: 1,
           justifyContent: "center",
           alignItems: "center",
         },
         skipLabel: {
           fontSize: theme.typography.sizes.base,
-          color: active.textSecondary,
+          color: redesign.ink2,
+          ...fontStyle("body", 500, fontsLoaded),
         },
+        // Mockup .cta: teal primary, white label.
         continueButton: {
           minHeight: 48,
           paddingHorizontal: theme.spacing.lg,
           paddingVertical: theme.spacing.md,
-          borderRadius: theme.radii.md,
-          backgroundColor: active.accentPrimary,
+          borderRadius: theme.radii.xl - 2,
+          backgroundColor: redesign.teal,
           justifyContent: "center",
           alignItems: "center",
         },
         continueDisabled: {
-          backgroundColor: active.textMuted,
+          backgroundColor: redesign.ink3,
         },
         continueLabel: {
           fontSize: theme.typography.sizes.base,
-          color: active.bgPrimary,
-          fontWeight: fw(theme.typography.weights.semibold),
+          color: redesign.surface,
+          ...fontStyle("body", 600, fontsLoaded),
         },
       }),
-    [active, theme],
+    [theme, redesign, fontsLoaded],
   );
 
   const continueDisabled = disabled || !canContinue;
@@ -275,7 +297,7 @@ export function OneItemScreen({
                 styles.continueButton,
                 continueDisabled && styles.continueDisabled,
               ]}
-              onPress={onContinue}
+              onPress={handleContinue}
               disabled={continueDisabled}
               accessibilityRole="button"
               accessibilityLabel="Continue"

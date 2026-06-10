@@ -21,7 +21,7 @@ import {
   View,
 } from "react-native";
 
-import { fw } from "@/onboarding/fontWeight";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import {
@@ -55,7 +55,8 @@ export function AutocompleteInput<E extends AutocompleteEntry>({
   disabled = false,
   maxResults = 8,
 }: AutocompleteInputProps<E>): React.ReactElement {
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
   const [query, setQuery] = React.useState<string>(value?.display ?? "");
   const [focused, setFocused] = React.useState(false);
 
@@ -117,14 +118,15 @@ export function AutocompleteInput<E extends AutocompleteEntry>({
         inputRow: { flexDirection: "row", alignItems: "center" },
         input: {
           flex: 1,
-          borderColor: focused ? active.accentPrimary : active.border,
+          borderColor: focused ? redesign.teal : redesign.line,
           borderWidth: focused ? 2 : 1,
           borderRadius: theme.radii.md,
           padding: theme.spacing.md,
           fontSize: theme.typography.sizes.base,
-          color: active.textPrimary,
-          backgroundColor: active.bgSecondary,
+          color: redesign.ink,
+          backgroundColor: redesign.surface,
           minHeight: 48,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         clearBtn: {
           marginLeft: theme.spacing.sm,
@@ -137,18 +139,19 @@ export function AutocompleteInput<E extends AutocompleteEntry>({
         },
         clearLabel: {
           fontSize: theme.typography.sizes.base,
-          color: active.textSecondary,
+          color: redesign.ink2,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         dropdown: {
-          borderColor: active.border,
+          borderColor: redesign.line,
           borderWidth: 1,
           borderRadius: theme.radii.md,
-          backgroundColor: active.bgPrimary,
+          backgroundColor: redesign.paper,
           maxHeight: 260,
         },
         item: {
           padding: theme.spacing.md,
-          borderBottomColor: active.border,
+          borderBottomColor: redesign.line,
           borderBottomWidth: 1,
           minHeight: 48,
         },
@@ -157,28 +160,30 @@ export function AutocompleteInput<E extends AutocompleteEntry>({
         },
         itemDisplay: {
           fontSize: theme.typography.sizes.base,
-          color: active.textPrimary,
-          fontWeight: fw(theme.typography.weights.medium),
+          color: redesign.ink,
+          ...fontStyle("body", 500, fontsLoaded),
         },
         otherItem: {
-          backgroundColor: active.bgSecondary,
+          backgroundColor: redesign.surface,
         },
         otherLabel: {
-          color: active.textSecondary,
+          color: redesign.ink2,
           fontSize: theme.typography.sizes.sm,
           marginTop: theme.spacing.xs,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         selectedSummary: {
           padding: theme.spacing.sm,
-          backgroundColor: active.bgTertiary,
+          backgroundColor: redesign.tealWash,
           borderRadius: theme.radii.sm,
         },
         selectedSummaryLabel: {
           fontSize: theme.typography.sizes.sm,
-          color: active.textPrimary,
+          color: redesign.ink,
+          ...fontStyle("body", 400, fontsLoaded),
         },
       }),
-    [active, focused, theme],
+    [theme, redesign, fontsLoaded, focused],
   );
 
   return (
@@ -198,7 +203,7 @@ export function AutocompleteInput<E extends AutocompleteEntry>({
           // We intentionally do NOT blur on parent re-renders; the
           // dropdown's items capture taps before blur fires.
           placeholder={placeholder ?? "Type to search"}
-          placeholderTextColor={active.textMuted}
+          placeholderTextColor={redesign.ink3}
           editable={!disabled}
           accessibilityLabel={accessibilityLabel}
           autoCorrect={false}

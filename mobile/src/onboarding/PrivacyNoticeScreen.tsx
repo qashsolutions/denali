@@ -21,10 +21,9 @@ import {
   View,
 } from "react-native";
 
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 import type { RootStackParamList } from "@/navigation/types";
-
-import { fw } from "./fontWeight";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -37,14 +36,15 @@ const POINTS: ReadonlyArray<string> = [
 
 export function PrivacyNoticeScreen(): React.ReactElement {
   const navigation = useNavigation<Nav>();
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
 
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
         screen: {
           flex: 1,
-          backgroundColor: active.bgPrimary,
+          backgroundColor: redesign.paper,
         },
         scroll: {
           padding: theme.spacing.lg,
@@ -52,53 +52,55 @@ export function PrivacyNoticeScreen(): React.ReactElement {
         },
         title: {
           fontSize: theme.typography.sizes["3xl"],
-          fontFamily: theme.typography.fonts.serif,
-          color: active.textPrimary,
-          fontWeight: fw(theme.typography.weights.bold),
+          color: redesign.ink,
+          letterSpacing: -0.5,
           marginBottom: theme.spacing.sm,
+          ...fontStyle("display", 700, fontsLoaded),
         },
         subtitle: {
           fontSize: theme.typography.sizes.base,
-          color: active.textSecondary,
+          color: redesign.ink2,
           lineHeight:
             theme.typography.sizes.base * theme.typography.lineHeights.relaxed,
           marginBottom: theme.spacing.md,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         card: {
-          backgroundColor: active.bgSecondary,
-          borderRadius: theme.radii.lg,
+          backgroundColor: redesign.surface,
+          borderRadius: redesign.rCard,
           padding: theme.spacing.lg,
-          borderColor: active.border,
+          borderColor: redesign.line,
           borderWidth: 1,
           gap: theme.spacing.md,
         },
         point: {
           fontSize: theme.typography.sizes.base,
-          color: active.textPrimary,
+          color: redesign.ink,
           lineHeight:
             theme.typography.sizes.base * theme.typography.lineHeights.relaxed,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         bullet: {
-          color: active.accentPrimary,
-          fontWeight: fw(theme.typography.weights.bold),
+          color: redesign.tealDeep,
+          ...fontStyle("body", 600, fontsLoaded),
         },
         button: {
-          backgroundColor: active.accentPrimary,
+          backgroundColor: redesign.teal,
           paddingVertical: theme.spacing.md,
           paddingHorizontal: theme.spacing.lg,
-          borderRadius: theme.radii.md,
+          borderRadius: theme.radii.xl - 2,
           alignItems: "center",
           justifyContent: "center",
           minHeight: 48,
           marginTop: theme.spacing.md,
         },
         buttonLabel: {
-          color: active.bgPrimary,
+          color: redesign.surface,
           fontSize: theme.typography.sizes.base,
-          fontWeight: fw(theme.typography.weights.semibold),
+          ...fontStyle("body", 600, fontsLoaded),
         },
       }),
-    [active, theme],
+    [theme, redesign, fontsLoaded],
   );
 
   return (

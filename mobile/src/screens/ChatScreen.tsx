@@ -22,6 +22,7 @@ import React from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -75,6 +76,9 @@ export function ChatScreen(): React.ReactElement {
   const onSend = React.useCallback(async () => {
     const content = input.trim();
     if (content.length === 0 || streaming) return;
+    // Drop the soft keyboard on send so it (and the emulator's
+    // hardware-keyboard bar) doesn't linger over the conversation.
+    Keyboard.dismiss();
     setError(null);
 
     // Snapshot the new history so we send the server-supplied context.

@@ -29,7 +29,7 @@ import {
   View,
 } from "react-native";
 
-import { fw } from "@/onboarding/fontWeight";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import {
@@ -77,7 +77,8 @@ export function SliderInput({
   accessibilityLabel,
   disabled = false,
 }: SliderInputProps): React.ReactElement {
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
 
   const safeValue = React.useMemo(
     () => clamp(snapToStep(value, min, step), min, max),
@@ -122,13 +123,14 @@ export function SliderInput({
         },
         readout: {
           fontSize: theme.typography.sizes["3xl"],
-          fontFamily: theme.typography.fonts.mono,
-          color: active.textPrimary,
-          fontWeight: fw(theme.typography.weights.semibold),
+          color: redesign.ink,
+          fontVariant: ["tabular-nums"],
+          ...fontStyle("numbers", 600, fontsLoaded),
         },
         unit: {
           fontSize: theme.typography.sizes.base,
-          color: active.textSecondary,
+          color: redesign.ink2,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         trackOuter: {
           height: THUMB_SIZE,
@@ -137,12 +139,12 @@ export function SliderInput({
         track: {
           height: TRACK_HEIGHT,
           borderRadius: theme.radii.sm,
-          backgroundColor: active.bgTertiary,
+          backgroundColor: redesign.line2,
           overflow: "hidden",
         },
         trackFill: {
           height: TRACK_HEIGHT,
-          backgroundColor: active.accentPrimary,
+          backgroundColor: redesign.teal,
           borderRadius: theme.radii.sm,
         },
         thumb: {
@@ -150,8 +152,8 @@ export function SliderInput({
           width: THUMB_SIZE,
           height: THUMB_SIZE,
           borderRadius: THUMB_SIZE / 2,
-          backgroundColor: active.accentPrimary,
-          borderColor: active.bgPrimary,
+          backgroundColor: redesign.teal,
+          borderColor: redesign.paper,
           borderWidth: 2,
         },
         hitOverlay: {
@@ -174,10 +176,11 @@ export function SliderInput({
         },
         endpointLabel: {
           fontSize: theme.typography.sizes.xs,
-          color: active.textSecondary,
+          color: redesign.ink2,
+          ...fontStyle("body", 400, fontsLoaded),
         },
       }),
-    [active, theme],
+    [theme, redesign, fontsLoaded],
   );
 
   // Thumb x-position; clamp the centerline so the thumb stays fully

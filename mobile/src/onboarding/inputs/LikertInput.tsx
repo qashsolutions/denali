@@ -16,7 +16,7 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { fw } from "@/onboarding/fontWeight";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { isValidLikertValue } from "./helpers";
@@ -51,25 +51,26 @@ export function LikertInput({
   accessibilityLabel,
   disabled = false,
 }: LikertInputProps): React.ReactElement {
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
 
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
         wrap: { gap: theme.spacing.sm },
         card: {
-          borderColor: active.border,
+          borderColor: redesign.line,
           borderWidth: 1,
-          borderRadius: theme.radii.md,
+          borderRadius: redesign.rCard,
           padding: theme.spacing.md,
-          backgroundColor: active.bgSecondary,
+          backgroundColor: redesign.surface,
           minHeight: 56,
           justifyContent: "center",
           gap: theme.spacing.xs,
         },
         cardSelected: {
-          borderColor: active.accentPrimary,
-          backgroundColor: active.bgTertiary,
+          borderColor: redesign.teal,
+          backgroundColor: redesign.tealWash,
           borderWidth: 2,
         },
         cardDisabled: {
@@ -77,15 +78,16 @@ export function LikertInput({
         },
         label: {
           fontSize: theme.typography.sizes.base,
-          color: active.textPrimary,
-          fontWeight: fw(theme.typography.weights.medium),
+          color: redesign.ink,
+          ...fontStyle("body", 500, fontsLoaded),
         },
         helper: {
           fontSize: theme.typography.sizes.sm,
-          color: active.textSecondary,
+          color: redesign.ink2,
+          ...fontStyle("body", 400, fontsLoaded),
         },
       }),
-    [active, theme],
+    [theme, redesign, fontsLoaded],
   );
 
   return (

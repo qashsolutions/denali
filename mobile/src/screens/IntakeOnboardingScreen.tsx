@@ -65,8 +65,8 @@ import {
 } from "@/onboarding/inputs";
 import { OneItemScreen } from "@/onboarding/OneItemScreen";
 import { mapToConditionCategory } from "@/onboarding/conditionMapping";
-import { fw } from "@/onboarding/fontWeight";
 import { CONDITIONS_45_PLUS, SYMPTOMS } from "@/onboarding/vocab";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Intake">;
@@ -172,7 +172,8 @@ export function IntakeOnboardingScreen(): React.ReactElement {
   const api = useApiClient();
   const dal = useDal();
   const navigation = useNavigation<Nav>();
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
 
   const [section, setSection] = React.useState<SectionId>("menu");
   const [status, setStatus] = React.useState<SectionStatus>({
@@ -391,37 +392,39 @@ export function IntakeOnboardingScreen(): React.ReactElement {
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
-        screen: { flex: 1, backgroundColor: active.bgPrimary },
+        screen: { flex: 1, backgroundColor: redesign.paper },
         scroll: { padding: theme.spacing.lg, gap: theme.spacing.lg },
         title: {
           fontSize: theme.typography.sizes["3xl"],
-          fontFamily: theme.typography.fonts.serif,
-          color: active.textPrimary,
-          fontWeight: fw(theme.typography.weights.bold),
+          color: redesign.ink,
+          letterSpacing: -0.5,
+          ...fontStyle("display", 700, fontsLoaded),
         },
         subtitle: {
           fontSize: theme.typography.sizes.base,
-          color: active.textSecondary,
+          color: redesign.ink2,
           lineHeight:
             theme.typography.sizes.base *
             theme.typography.lineHeights.relaxed,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         sectionCard: {
-          borderColor: active.border,
+          borderColor: redesign.line,
           borderWidth: 1,
-          borderRadius: theme.radii.md,
+          borderRadius: redesign.rCard,
           padding: theme.spacing.md,
-          backgroundColor: active.bgSecondary,
+          backgroundColor: redesign.surface,
           gap: theme.spacing.xs,
         },
         sectionTitle: {
           fontSize: theme.typography.sizes.lg,
-          color: active.textPrimary,
-          fontWeight: fw(theme.typography.weights.semibold),
+          color: redesign.ink,
+          ...fontStyle("body", 600, fontsLoaded),
         },
         sectionMeta: {
           fontSize: theme.typography.sizes.sm,
-          color: active.textSecondary,
+          color: redesign.ink2,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         sectionStatus: {
           fontSize: theme.typography.sizes.xs,
@@ -430,33 +433,33 @@ export function IntakeOnboardingScreen(): React.ReactElement {
           marginTop: theme.spacing.xs,
         },
         statusSaved: {
-          color: theme.colors.conditions.light.checkTeal.base,
-          fontWeight: fw(theme.typography.weights.semibold),
+          color: redesign.teal,
+          ...fontStyle("body", 600, fontsLoaded),
         },
         statusSkipped: {
-          color: active.textMuted,
+          color: redesign.ink3,
         },
         statusTodo: {
-          color: active.accentPrimary,
-          fontWeight: fw(theme.typography.weights.semibold),
+          color: redesign.tealDeep,
+          ...fontStyle("body", 600, fontsLoaded),
         },
         primaryAction: {
-          backgroundColor: active.accentPrimary,
+          backgroundColor: redesign.teal,
           paddingVertical: theme.spacing.md,
           paddingHorizontal: theme.spacing.lg,
-          borderRadius: theme.radii.md,
+          borderRadius: theme.radii.xl - 2,
           alignItems: "center",
           justifyContent: "center",
           minHeight: 48,
           marginTop: theme.spacing.md,
         },
         primaryLabel: {
-          color: active.bgPrimary,
+          color: redesign.surface,
           fontSize: theme.typography.sizes.base,
-          fontWeight: fw(theme.typography.weights.semibold),
+          ...fontStyle("body", 600, fontsLoaded),
         },
         addBtn: {
-          backgroundColor: active.bgTertiary,
+          backgroundColor: redesign.line2,
           paddingVertical: theme.spacing.sm,
           paddingHorizontal: theme.spacing.md,
           borderRadius: theme.radii.md,
@@ -465,28 +468,29 @@ export function IntakeOnboardingScreen(): React.ReactElement {
           justifyContent: "center",
         },
         addLabel: {
-          color: active.textPrimary,
+          color: redesign.ink,
           fontSize: theme.typography.sizes.sm,
-          fontWeight: fw(theme.typography.weights.medium),
+          ...fontStyle("body", 500, fontsLoaded),
         },
         entryRow: {
           padding: theme.spacing.sm,
           borderRadius: theme.radii.sm,
-          backgroundColor: active.bgTertiary,
+          backgroundColor: redesign.line2,
         },
         entryText: {
-          color: active.textPrimary,
+          color: redesign.ink,
           fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         list: { gap: theme.spacing.xs },
         submittingWrap: {
           flex: 1,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: active.bgPrimary,
+          backgroundColor: redesign.paper,
         },
       }),
-    [active, theme],
+    [theme, redesign, fontsLoaded],
   );
 
   // ─── Loading overlay ────────────────────────────────────────────────────
@@ -494,7 +498,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
   if (submitting) {
     return (
       <View style={styles.submittingWrap}>
-        <ActivityIndicator color={active.accentPrimary} />
+        <ActivityIndicator color={redesign.teal} />
         <Text style={[styles.subtitle, { marginTop: theme.spacing.sm }]}>
           Saving…
         </Text>
@@ -574,7 +578,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
           })}
 
           {errorMsg ? (
-            <Text style={{ color: theme.colors.conditions.light.healthRed.base }}>
+            <Text style={{ color: redesign.alarm }}>
               {errorMsg}
             </Text>
           ) : null}

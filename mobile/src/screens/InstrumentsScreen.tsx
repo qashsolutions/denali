@@ -43,7 +43,6 @@ import { useDal } from "@/db/DalProvider";
 import { runOnceInFlight } from "@/lib/runOnceInFlight";
 import type { RootStackParamList } from "@/navigation/types";
 import { Crisis988Modal } from "@/onboarding/Crisis988Modal";
-import { fw } from "@/onboarding/fontWeight";
 import { assembleNextResponses, LikertInput } from "@/onboarding/inputs";
 import {
   ADAM,
@@ -58,6 +57,7 @@ import {
   PHQ9_ITEM_9_INDEX,
 } from "@/onboarding/instruments";
 import { OneItemScreen } from "@/onboarding/OneItemScreen";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import {
@@ -97,7 +97,8 @@ export function InstrumentsScreen(): React.ReactElement {
   // Step 4: repeat check-in re-entry. Absent → onboarding battery,
   // byte-identical. Present → exactly one section, then back.
   const focus = route.params?.focus;
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
 
   const [sexAtBirth, setSexAtBirth] = React.useState<
     "male" | "female" | "intersex" | "unknown" | null
@@ -583,76 +584,85 @@ export function InstrumentsScreen(): React.ReactElement {
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
-        screen: { flex: 1, backgroundColor: active.bgPrimary },
-        scroll: { padding: theme.spacing.lg, gap: theme.spacing.lg },
+        screen: { flex: 1, backgroundColor: redesign.paper },
+        scroll: { padding: theme.spacing.space5, gap: theme.spacing.lg },
         title: {
           fontSize: theme.typography.sizes["3xl"],
-          fontFamily: theme.typography.fonts.serif,
-          color: active.textPrimary,
-          fontWeight: fw(theme.typography.weights.bold),
+          color: redesign.ink,
+          letterSpacing: -0.5,
+          ...fontStyle("display", 700, fontsLoaded),
         },
         subtitle: {
           fontSize: theme.typography.sizes.base,
-          color: active.textSecondary,
+          color: redesign.ink2,
           lineHeight:
             theme.typography.sizes.base *
             theme.typography.lineHeights.relaxed,
+          ...fontStyle("body", 400, fontsLoaded),
         },
+        // White r-18 surface card per menu section.
         menuCard: {
-          borderColor: active.border,
+          borderColor: redesign.line,
           borderWidth: 1,
-          borderRadius: theme.radii.md,
+          borderRadius: redesign.rCard,
           padding: theme.spacing.md,
-          backgroundColor: active.bgSecondary,
+          backgroundColor: redesign.surface,
           gap: theme.spacing.xs,
+          shadowColor: redesign.ink,
+          shadowOpacity: 0.05,
+          shadowRadius: 7,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 2,
         },
         menuTitle: {
           fontSize: theme.typography.sizes.lg,
-          color: active.textPrimary,
-          fontWeight: fw(theme.typography.weights.semibold),
+          color: redesign.ink,
+          letterSpacing: -0.18,
+          ...fontStyle("display", 600, fontsLoaded),
         },
         menuBlurb: {
           fontSize: theme.typography.sizes.sm,
-          color: active.textSecondary,
+          color: redesign.ink2,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         menuStatus: {
           fontSize: theme.typography.sizes.xs,
           textTransform: "uppercase",
           letterSpacing: 1,
           marginTop: theme.spacing.xs,
+          ...fontStyle("body", 600, fontsLoaded),
         },
         statusDone: {
-          color: theme.colors.conditions.light.checkTeal.base,
-          fontWeight: fw(theme.typography.weights.semibold),
+          color: redesign.tealDeep,
         },
         statusTap: {
-          color: active.accentPrimary,
-          fontWeight: fw(theme.typography.weights.semibold),
+          color: redesign.tealDeep,
         },
+        // Mockup .cta: teal primary, white label.
         primaryAction: {
-          backgroundColor: active.accentPrimary,
+          backgroundColor: redesign.teal,
           paddingVertical: theme.spacing.md,
           paddingHorizontal: theme.spacing.lg,
-          borderRadius: theme.radii.md,
+          borderRadius: theme.radii.xl - 2,
           alignItems: "center",
           justifyContent: "center",
           minHeight: 48,
           marginTop: theme.spacing.md,
         },
         primaryLabel: {
-          color: active.bgPrimary,
+          color: redesign.surface,
           fontSize: theme.typography.sizes.base,
-          fontWeight: fw(theme.typography.weights.semibold),
+          ...fontStyle("body", 600, fontsLoaded),
         },
         emptyWrap: {
           flex: 1,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: active.bgPrimary,
+          backgroundColor: redesign.paper,
           padding: theme.spacing.lg,
         },
       }),
-    [active, theme],
+    [theme, redesign, fontsLoaded],
   );
 
   // ─── Loading / submitting overlays ────────────────────────────────────
@@ -660,7 +670,7 @@ export function InstrumentsScreen(): React.ReactElement {
   if (profileLoading) {
     return (
       <View style={styles.emptyWrap}>
-        <ActivityIndicator color={active.accentPrimary} />
+        <ActivityIndicator color={redesign.teal} />
         <Text style={[styles.subtitle, { marginTop: theme.spacing.sm }]}>
           Loading…
         </Text>
@@ -671,7 +681,7 @@ export function InstrumentsScreen(): React.ReactElement {
   if (submitting) {
     return (
       <View style={styles.emptyWrap}>
-        <ActivityIndicator color={active.accentPrimary} />
+        <ActivityIndicator color={redesign.teal} />
         <Text style={[styles.subtitle, { marginTop: theme.spacing.sm }]}>
           Saving…
         </Text>
@@ -701,7 +711,7 @@ export function InstrumentsScreen(): React.ReactElement {
       );
     }
     return (
-      <View style={{ flex: 1, backgroundColor: active.bgPrimary }}>
+      <View style={{ flex: 1, backgroundColor: redesign.paper }}>
         <OneItemScreen
           stepIndex={itemIndex + 1}
           totalSteps={totalItems}
@@ -799,7 +809,7 @@ export function InstrumentsScreen(): React.ReactElement {
   if (focusResolution.kind !== "none") {
     return (
       <View style={styles.emptyWrap}>
-        <ActivityIndicator color={active.accentPrimary} />
+        <ActivityIndicator color={redesign.teal} />
       </View>
     );
   }
@@ -841,7 +851,7 @@ export function InstrumentsScreen(): React.ReactElement {
         })}
 
         {errorMsg ? (
-          <Text style={{ color: theme.colors.conditions.light.healthRed.base }}>
+          <Text style={{ color: redesign.alarm }}>
             {errorMsg}
           </Text>
         ) : null}

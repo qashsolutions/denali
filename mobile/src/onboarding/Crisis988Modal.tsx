@@ -33,9 +33,9 @@ import {
   View,
 } from "react-native";
 
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
-import { fw } from "./fontWeight";
 import { CRISIS_988_COPY } from "./instruments/safety";
 
 export interface Crisis988ModalProps {
@@ -48,7 +48,8 @@ export function Crisis988Modal({
   visible,
   onAcknowledge,
 }: Crisis988ModalProps): React.ReactElement {
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
 
   const openUrl = React.useCallback(async (url: string) => {
     try {
@@ -74,29 +75,32 @@ export function Crisis988Modal({
       StyleSheet.create({
         backdrop: {
           flex: 1,
-          backgroundColor: active.bgPrimary,
-          padding: theme.spacing.lg,
+          backgroundColor: redesign.paper,
+          padding: theme.spacing.space5,
           justifyContent: "center",
         },
+        // Crisis card: white surface, alarm border (the alarm token's
+        // intended use), r-18. Kept the 2px border for emphasis.
         card: {
-          backgroundColor: active.bgSecondary,
-          borderRadius: theme.radii.lg,
+          backgroundColor: redesign.surface,
+          borderRadius: redesign.rCard,
           padding: theme.spacing.xl,
           gap: theme.spacing.md,
-          borderColor: theme.colors.conditions.light.healthRed.base,
+          borderColor: redesign.alarm,
           borderWidth: 2,
         },
         title: {
           fontSize: theme.typography.sizes["2xl"],
-          fontFamily: theme.typography.fonts.serif,
-          color: active.textPrimary,
-          fontWeight: fw(theme.typography.weights.bold),
+          color: redesign.ink,
+          letterSpacing: -0.4,
+          ...fontStyle("display", 700, fontsLoaded),
         },
         body: {
           fontSize: theme.typography.sizes.base,
-          color: active.textPrimary,
+          color: redesign.ink,
           lineHeight:
             theme.typography.sizes.base * theme.typography.lineHeights.relaxed,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         actions: {
           gap: theme.spacing.sm,
@@ -105,33 +109,37 @@ export function Crisis988Modal({
         actionButton: {
           paddingVertical: theme.spacing.md,
           paddingHorizontal: theme.spacing.lg,
-          borderRadius: theme.radii.md,
+          borderRadius: theme.radii.xl - 2,
           alignItems: "center",
           justifyContent: "center",
           minHeight: 48,
         },
+        // Call = the alarm action; Text = teal secondary.
         callButton: {
-          backgroundColor: theme.colors.conditions.light.healthRed.base,
+          backgroundColor: redesign.alarm,
         },
         textButton: {
-          backgroundColor: active.accentPrimary,
+          backgroundColor: redesign.teal,
         },
+        // Acknowledge = neutral ghost.
         ackButton: {
-          backgroundColor: active.bgTertiary,
+          backgroundColor: redesign.surface,
+          borderColor: redesign.line,
+          borderWidth: 1,
           marginTop: theme.spacing.space5,
         },
         actionLabel: {
-          color: active.bgPrimary,
+          color: redesign.surface,
           fontSize: theme.typography.sizes.base,
-          fontWeight: fw(theme.typography.weights.semibold),
+          ...fontStyle("body", 600, fontsLoaded),
         },
         ackLabel: {
-          color: active.textPrimary,
+          color: redesign.ink,
           fontSize: theme.typography.sizes.base,
-          fontWeight: fw(theme.typography.weights.medium),
+          ...fontStyle("body", 500, fontsLoaded),
         },
       }),
-    [active, theme],
+    [theme, redesign, fontsLoaded],
   );
 
   return (

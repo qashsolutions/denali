@@ -13,8 +13,8 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { fw } from "@/onboarding/fontWeight";
 import { CONDITIONS_45_PLUS } from "@/onboarding/vocab";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { AutocompleteInput } from "./AutocompleteInput";
@@ -45,7 +45,8 @@ export function StructuredFamilyHistoryInput({
   onChange,
   disabled = false,
 }: StructuredFamilyHistoryInputProps): React.ReactElement {
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
 
   const handleRelation = React.useCallback(
     (relation: FamilyRelation) => {
@@ -83,41 +84,43 @@ export function StructuredFamilyHistoryInput({
         wrap: { gap: theme.spacing.md },
         label: {
           fontSize: theme.typography.sizes.sm,
-          color: active.textSecondary,
-          fontWeight: fw(theme.typography.weights.medium),
+          color: redesign.ink2,
+          ...fontStyle("body", 500, fontsLoaded),
         },
         chipRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
         chip: {
           paddingVertical: theme.spacing.sm,
           paddingHorizontal: theme.spacing.md,
           borderRadius: theme.radii.md,
-          borderColor: active.border,
+          borderColor: redesign.line,
           borderWidth: 1,
-          backgroundColor: active.bgSecondary,
+          backgroundColor: redesign.surface,
           minHeight: 44,
           justifyContent: "center",
         },
         chipSelected: {
-          borderColor: active.accentPrimary,
-          backgroundColor: active.bgTertiary,
+          borderColor: redesign.teal,
+          backgroundColor: redesign.tealWash,
           borderWidth: 2,
         },
         chipLabel: {
-          color: active.textPrimary,
+          color: redesign.ink,
           fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         ageInput: {
-          borderColor: active.border,
+          borderColor: redesign.line,
           borderWidth: 1,
           borderRadius: theme.radii.md,
           padding: theme.spacing.md,
           fontSize: theme.typography.sizes.base,
-          color: active.textPrimary,
-          backgroundColor: active.bgSecondary,
+          color: redesign.ink,
+          backgroundColor: redesign.surface,
           minHeight: 48,
+          ...fontStyle("body", 400, fontsLoaded),
         },
       }),
-    [active, theme],
+    [theme, redesign, fontsLoaded],
   );
 
   return (
@@ -161,7 +164,7 @@ export function StructuredFamilyHistoryInput({
         value={value.onsetAge != null ? String(value.onsetAge) : ""}
         onChangeText={handleAge}
         placeholder="e.g. 62"
-        placeholderTextColor={active.textMuted}
+        placeholderTextColor={redesign.ink3}
         keyboardType="number-pad"
         editable={!disabled}
         accessibilityLabel="Age at onset"
