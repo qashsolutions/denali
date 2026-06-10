@@ -57,3 +57,28 @@ export function appendAssistantDelta(
 export function clearHistory(): ChatTurn[] {
   return [];
 }
+
+/**
+ * Strip the `[SUGGESTIONS]…[/SUGGESTIONS]` protocol block from an
+ * assistant message for display.
+ *
+ * The model emits a trailing suggestions block; the web client parses it
+ * into tappable chips and the server's `done` event carries the cleaned
+ * `content`. Mobile's `done` event is deliberately minimal (no content —
+ * D9 no-persist path), so the bubble would otherwise show the raw block.
+ * Mobile has no suggestion-chip UI, so we just strip it. Mirrors the
+ * server's `cleanContent` strip in `app/src/lib/claude.ts`
+ * (extractSuggestionsAndClean) so display matches the web exactly.
+ *
+ * Applied at render time (not mutating stored history) so it also hides
+ * the block while it streams in — once the `[SUGGESTIONS` marker appears
+ * it's cut, no flash of raw markup.
+ */
+export function stripSuggestionsBlock(content: string): string {
+  return content
+    .replace(/\[SUGGESTIONS\][\s\S]*?\[\/SUGGESTIONS\]/i, "")
+    .replace(/\[SUGGESTIONS\][\s\S]*$/i, "") // unclosed block (still streaming)
+    .replace(/---\s*$/m, "") // trailing divider the block sometimes follows
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}

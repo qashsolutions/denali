@@ -15,6 +15,7 @@ import {
   appendAssistantDelta,
   appendUserTurn,
   clearHistory,
+  stripSuggestionsBlock,
   withAssistantTurn,
   type ChatTurn,
 } from "../chatHistory";
@@ -77,5 +78,36 @@ describe("appendAssistantDelta", () => {
 describe("clearHistory", () => {
   it("returns an empty array (D11 — session-scoped chat)", () => {
     expect(clearHistory()).toEqual([]);
+  });
+});
+
+describe("stripSuggestionsBlock", () => {
+  it("strips a closed [SUGGESTIONS] block and trailing divider", () => {
+    const raw =
+      "Are you asking about blood pressure?\n\n*Helps me point you the right way.*\n\n[SUGGESTIONS]\nBlood pressure help\nSomething else\n[/SUGGESTIONS]";
+    expect(stripSuggestionsBlock(raw)).toBe(
+      "Are you asking about blood pressure?\n\n*Helps me point you the right way.*",
+    );
+  });
+
+  it("strips an unclosed block (still streaming) at the end", () => {
+    const raw = "Here is the answer.\n\n[SUGGESTIONS]\nTell me more";
+    expect(stripSuggestionsBlock(raw)).toBe("Here is the answer.");
+  });
+
+  it("strips a trailing --- divider", () => {
+    expect(stripSuggestionsBlock("Answer body.\n\n---")).toBe("Answer body.");
+  });
+
+  it("leaves content without a block unchanged (trimmed)", () => {
+    expect(stripSuggestionsBlock("Just a normal reply.")).toBe(
+      "Just a normal reply.",
+    );
+  });
+
+  it("is case-insensitive on the tag", () => {
+    expect(stripSuggestionsBlock("Hi.\n[suggestions]\na\n[/suggestions]")).toBe(
+      "Hi.",
+    );
   });
 });

@@ -41,6 +41,7 @@ import {
   appendAssistantDelta,
   appendUserTurn,
   clearHistory,
+  stripSuggestionsBlock,
   type ChatTurn,
 } from "./chat/chatHistory";
 
@@ -246,10 +247,14 @@ export function ChatScreen(): React.ReactElement {
 
   const renderItem: ListRenderItem<ChatTurn> = ({ item }) => {
     const isUser = item.role === "user";
+    // Assistant turns: strip the [SUGGESTIONS] protocol block (mobile has
+    // no chip UI; the web client parses it, the mobile done-event omits
+    // the cleaned content). User turns render verbatim.
+    const text = isUser ? item.content : stripSuggestionsBlock(item.content);
     return (
       <View style={isUser ? styles.bubbleUser : styles.bubbleAssistant}>
         <Text style={isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant}>
-          {item.content}
+          {text}
         </Text>
       </View>
     );
