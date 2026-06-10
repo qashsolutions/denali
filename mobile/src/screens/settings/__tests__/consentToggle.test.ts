@@ -25,13 +25,13 @@ function makeFakeClient(): ApiClient & { apiPatch: ReturnType<typeof vi.fn> } {
 }
 
 describe("buildConsentPatchBody", () => {
-  it("produces { consent_type, granted } shape", () => {
+  it("produces { consentType, granted } shape", () => {
     expect(buildConsentPatchBody("health_data_ai", true)).toEqual({
-      consent_type: "health_data_ai",
+      consentType: "health_data_ai",
       granted: true,
     });
     expect(buildConsentPatchBody("analytics", false)).toEqual({
-      consent_type: "analytics",
+      consentType: "analytics",
       granted: false,
     });
   });
@@ -43,7 +43,7 @@ describe("applyConsentToggle", () => {
     await applyConsentToggle(client, "health_data_ai", true);
     expect(client.apiPatch).toHaveBeenCalledTimes(1);
     expect(client.apiPatch).toHaveBeenCalledWith("/api/consent", {
-      consent_type: "health_data_ai",
+      consentType: "health_data_ai",
       granted: true,
     });
   });
@@ -52,7 +52,7 @@ describe("applyConsentToggle", () => {
     const client = makeFakeClient();
     await applyConsentToggle(client, "health_data_storage", false);
     expect(client.apiPatch).toHaveBeenCalledWith("/api/consent", {
-      consent_type: "health_data_storage",
+      consentType: "health_data_storage",
       granted: false,
     });
   });
@@ -61,7 +61,7 @@ describe("applyConsentToggle", () => {
     const client = makeFakeClient();
     await applyConsentToggle(client, "analytics", true);
     expect(client.apiPatch).toHaveBeenCalledWith("/api/consent", {
-      consent_type: "analytics",
+      consentType: "analytics",
       granted: true,
     });
   });

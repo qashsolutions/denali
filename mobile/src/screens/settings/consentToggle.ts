@@ -1,11 +1,18 @@
 /**
  * consentToggle — pure helper for SettingsScreen.
  *
- * Encapsulates the `/api/consent` PUT shape so the screen layer stays
- * declarative and the toggle behavior is testable in node env. The PUT
- * body shape is dictated by `app/src/app/api/consent/route.ts` —
- * `{consent_type, granted}` per type — and this helper is the single
- * point of truth for the mobile mapping.
+ * Encapsulates the `/api/consent` write shape so the screen layer stays
+ * declarative and the toggle behavior is testable in node env. The body
+ * shape is dictated by `app/src/app/api/consent/route.ts`, which reads
+ * `{ consentType, granted }` (camelCase — same as the web client in
+ * `app/src/hooks/useConsent.ts`). This helper is the single point of
+ * truth for the mobile mapping.
+ *
+ * 2026-06-10 fix: the body key was `consent_type` (snake_case) and the
+ * verb hit a PUT-only route via PATCH — both diverged from the real
+ * route, so every save failed (405, then 400). The route now also
+ * accepts PATCH (alias for PUT); the body key is corrected to
+ * `consentType` here.
  *
  * D10 (mobile decision): three toggles surface in Settings —
  *   - health_data_ai      — enforced at chat + parse-report.
@@ -25,19 +32,20 @@ export type ConsentType =
   | "analytics";
 
 export interface ConsentPutBody {
-  consent_type: ConsentType;
+  consentType: ConsentType;
   granted: boolean;
 }
 
 /**
- * Build the PATCH body the mobile client sends to `/api/consent`.
- * Exported as a pure function so unit tests don't need a live ApiClient.
+ * Build the body the mobile client sends to `/api/consent`. Key is
+ * `consentType` (camelCase) to match the route's destructure. Exported
+ * as a pure function so unit tests don't need a live ApiClient.
  */
 export function buildConsentPatchBody(
   type: ConsentType,
   granted: boolean,
 ): ConsentPutBody {
-  return { consent_type: type, granted };
+  return { consentType: type, granted };
 }
 
 /**
@@ -54,9 +62,8 @@ export async function applyConsentToggle(
   type: ConsentType,
   granted: boolean,
 ): Promise<unknown> {
-  // The mobile ApiClient surface exposes apiPatch + apiPost but the
-  // existing /api/consent route is PUT. We use apiPatch as the closest
-  // analog; the route handler accepts both shapes via the consent_type +
-  // granted body. If apiPut is added to ApiClient later, swap here.
+  // The route accepts PATCH (alias for PUT) so the mobile ApiClient —
+  // whose frozen contract exposes apiPatch but no apiPut — can write
+  // consent with the same auth/validation/audit handler the web PUT uses.
   return client.apiPatch("/api/consent", buildConsentPatchBody(type, granted));
 }
