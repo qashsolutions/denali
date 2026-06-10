@@ -23,6 +23,7 @@ import {
   View,
 } from "react-native";
 
+import type { ConsentGetResponse } from "@/api/routeContracts";
 import { useApiClient } from "@/auth";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
@@ -35,11 +36,9 @@ import {
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-interface ConsentSnapshot {
-  health_data_ai: boolean;
-  health_data_storage: boolean;
-  analytics: boolean;
-}
+// The consent map shape comes from the network contract — see
+// src/api/routeContracts.ts. Single source of truth across mobile.
+type ConsentSnapshot = ConsentGetResponse["consent"];
 
 const TOGGLE_COPY: Record<
   ConsentType,
@@ -74,9 +73,7 @@ export function SettingsScreen(): React.ReactElement {
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.apiGet<{ consent: ConsentSnapshot }>(
-          "/api/consent",
-        );
+        const res = await api.apiGet<ConsentGetResponse>("/api/consent");
         if (cancelled) return;
         setConsent(res.consent);
       } catch (err) {

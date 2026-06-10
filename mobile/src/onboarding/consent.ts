@@ -47,15 +47,17 @@
  * `trackEvent` call from these screens, gate via `canEmitAnalytics(consent)`.
  */
 
-export interface ConsentState {
-  health_data_ai: boolean;
-  health_data_storage: boolean;
-  analytics: boolean;
-}
+import type { ConsentGetResponse } from "@/api/routeContracts";
 
-export interface ConsentApiResponse {
-  consent: ConsentState;
-}
+/**
+ * The three-boolean consent map. Aliased to the network contract's inner
+ * shape (src/api/routeContracts.ts) so there is a single source of truth —
+ * a route-side rename now breaks this and its consumers at typecheck.
+ */
+export type ConsentState = ConsentGetResponse["consent"];
+
+/** Full GET /api/consent envelope — alias of the network contract. */
+export type ConsentApiResponse = ConsentGetResponse;
 
 export const DEFAULT_CONSENT: ConsentState = {
   health_data_ai: false,

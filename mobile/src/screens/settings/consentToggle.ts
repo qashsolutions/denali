@@ -24,27 +24,25 @@
  * stays type-only / behavior-only.
  */
 
+import {
+  type ConsentType,
+  type ConsentWriteRequest,
+} from "@/api/routeContracts";
 import type { ApiClient } from "@/contracts";
 
-export type ConsentType =
-  | "health_data_ai"
-  | "health_data_storage"
-  | "analytics";
-
-export interface ConsentPutBody {
-  consentType: ConsentType;
-  granted: boolean;
-}
+// Re-export so existing consumers (SettingsScreen) keep their import path.
+export type { ConsentType };
 
 /**
- * Build the body the mobile client sends to `/api/consent`. Key is
- * `consentType` (camelCase) to match the route's destructure. Exported
- * as a pure function so unit tests don't need a live ApiClient.
+ * Build the body the mobile client sends to `/api/consent`. Shape is the
+ * `ConsentWriteRequest` contract (camelCase `consentType`) — see
+ * src/api/routeContracts.ts. Exported as a pure function so unit tests
+ * don't need a live ApiClient.
  */
 export function buildConsentPatchBody(
   type: ConsentType,
   granted: boolean,
-): ConsentPutBody {
+): ConsentWriteRequest {
   return { consentType: type, granted };
 }
 

@@ -19,27 +19,23 @@
  * Settings and try again."
  */
 
+import type { ConsentGetResponse } from "@/api/routeContracts";
 import type { ApiClient } from "@/contracts";
-
-interface ConsentResponse {
-  /**
-   * The route returns `{ consent: { health_data_ai, health_data_storage,
-   * analytics } }` (a per-type boolean map) — see
-   * app/src/app/api/consent/route.ts GET. (2026-06-10 fix: the previous
-   * shapes `{ health_data_ai }` / `{ consents: [...] }` never matched the
-   * route, so this read returned false unconditionally — Upload always
-   * showed "AI parsing is off" even with the toggle on.)
-   */
-  consent?: { health_data_ai?: boolean };
-}
 
 const CONSENT_PATH = "/api/consent";
 
+/**
+ * Reads the `ConsentGetResponse` contract (`{ consent: {…} }`) — see
+ * src/api/routeContracts.ts. `Partial` because a malformed/unknown
+ * response must fail closed to `false`. (2026-06-10: the old read parsed
+ * `{health_data_ai}`/`{consents:[]}`, which never matched the route, so
+ * it returned false unconditionally and Upload always showed "AI off".)
+ */
 export async function fetchHealthDataAiConsent(
   api: ApiClient,
 ): Promise<boolean> {
   try {
-    const res = await api.apiGet<ConsentResponse>(CONSENT_PATH);
+    const res = await api.apiGet<Partial<ConsentGetResponse>>(CONSENT_PATH);
     return res.consent?.health_data_ai === true;
   } catch {
     return false;

@@ -8,6 +8,7 @@
  * Wave 2 / mobile-upload-parse-builder.
  */
 
+import type { ParseReportRequest } from "@/api/routeContracts";
 import type { ApiClient } from "@/contracts";
 
 import type { ExtractedObservation, ParseReportResponse, ReportTypeWire } from "./types";
@@ -18,6 +19,19 @@ export interface ParseReportArgs {
   reportType: ReportTypeWire;
   extractedText: string;
   locale?: string;
+}
+
+/**
+ * Map `ParseReportArgs` → the snake_case `ParseReportRequest` wire body the
+ * route expects — see src/api/routeContracts.ts. Pure so the pinning test
+ * can assert the shape without a live ApiClient.
+ */
+export function buildParseReportBody(args: ParseReportArgs): ParseReportRequest {
+  return {
+    report_type: args.reportType,
+    extracted_text: args.extractedText,
+    ...(args.locale != null ? { locale: args.locale } : {}),
+  };
 }
 
 /**
@@ -34,11 +48,10 @@ export async function parseReport(
   api: ApiClient,
   args: ParseReportArgs,
 ): Promise<ParseReportResponse> {
-  return await api.apiPost<ParseReportResponse>(PARSE_REPORT_PATH, {
-    report_type: args.reportType,
-    extracted_text: args.extractedText,
-    locale: args.locale,
-  });
+  return await api.apiPost<ParseReportResponse>(
+    PARSE_REPORT_PATH,
+    buildParseReportBody(args),
+  );
 }
 
 export type { ExtractedObservation, ParseReportResponse, ReportTypeWire };
