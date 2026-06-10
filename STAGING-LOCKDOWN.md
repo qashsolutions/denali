@@ -23,8 +23,61 @@ The staging URL is publicly reachable on the internet (no IP restriction — acc
 | Cognito user pool `denali-staging-users` | Self-service sign-up disabled (`AllowAdminCreateUserOnly: true`) | Console → Cognito → User pools → Sign-up tab |
 | Cognito user pool `denali-staging-users` | MFA enforcement = OFF (cannot be set to Required — see Known gaps) | Console → same pool → Sign-in tab → MFA |
 | ECS task definition `denali-staging` | Env var `STAGING_EMAIL_ALLOWLIST` added (rev 58) | Console → ECS → Task definitions |
+| ECS task definition `denali-staging` | Env vars for the E2E test-OTP mode (Phase 2). Required to enable the bypass: `E2E_TEST_OTP_ENABLED=true`, `E2E_TEST_OTP_EMAILS=e2e@denali.health`, `E2E_TEST_OTP_CODE=999999`. Plus a `secrets` block entry injecting `E2E_TEST_OTP_STATIC_PASSWORD` from Secrets Manager `denali/staging/e2e-test-account-password`. NOT present on any prod task def revision; the prod deploy gate refuses any revision containing `E2E_TEST_OTP*` env keys. | Console → ECS → Task definitions |
+| Cognito user pool `denali-staging-users` | Test account `e2e@denali.health` created with a permanent password set to the value of the static-password secret. Used by the test-OTP bypass to mint real Cognito sessions via `ADMIN_USER_PASSWORD_AUTH`. The staging user pool's app client must have `ALLOW_ADMIN_USER_PASSWORD_AUTH` enabled (verify via the Cognito console → User pools → App clients). | Console → Cognito + RDS seed |
 
 These are not currently in source control. Future automation should capture them in Terraform or similar.
+
+## E2E test-OTP bypass — operating instructions
+
+The bypass lives in `app/src/lib/e2e-test-otp.ts` and is invoked from
+`app/src/app/api/auth/verify-otp/route.ts`. The five-guard stack
+(see the module docstring) is structurally unreachable in
+production. Documenting the staging-side operational requirements
+here next to the email allowlist pattern:
+
+1. **Cognito seed (one-shot, staging only)**: create the test user
+   in the staging Cognito user pool with the permanent password set
+   to the value of the static-password secret. Confirm the pool's
+   app client has `ALLOW_ADMIN_USER_PASSWORD_AUTH` enabled.
+
+   ```bash
+   aws cognito-idp admin-create-user \
+     --user-pool-id <staging-pool-id> \
+     --username e2e@denali.health \
+     --user-attributes Name=email,Value=e2e@denali.health \
+                       Name=email_verified,Value=true \
+     --message-action SUPPRESS
+   aws cognito-idp admin-set-user-password \
+     --user-pool-id <staging-pool-id> \
+     --username e2e@denali.health \
+     --password "<static-password>" --permanent
+   ```
+
+2. **Secrets Manager seed (one-shot, staging only)**: create the
+   static-password secret. The staging task def's `secrets` block
+   references this ARN under env var `E2E_TEST_OTP_STATIC_PASSWORD`.
+
+   ```bash
+   aws secretsmanager create-secret \
+     --name denali/staging/e2e-test-account-password \
+     --secret-string '<static-password>'
+   ```
+
+3. **RDS seed (one-shot, staging only)**: insert a corresponding
+   `users` + `user_verification` row in staging RDS so the
+   bypass-path DB lookup succeeds. The `users.id` must match the
+   Cognito sub from step 1.
+
+4. **Prod deploy gate**: `.github/workflows/deploy.yml` contains a
+   step `Prod task-def gate — refuse any E2E_TEST_OTP env var` that
+   inspects the rendered task def and fails the deploy if any env
+   key starts with `E2E_TEST_OTP`. Belt-and-braces alongside the
+   in-process startup assertion.
+
+5. **Removal**: to disable the bypass on staging, delete the four
+   env vars from the staging task def + redeploy. The runtime
+   helper denies at G1, the real OTP path is untouched.
 
 ## Code-side changes (develop branch)
 

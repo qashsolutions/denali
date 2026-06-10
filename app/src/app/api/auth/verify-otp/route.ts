@@ -13,6 +13,7 @@ import { query } from "@/lib/db";
 import { initiateCognitoAuth, isEmailAllowed } from "@/lib/auth-server";
 import { logAudit } from "@/lib/audit";
 import { PRICING } from "@/config";
+import { assertE2eTestBypassAllowed } from "@/lib/e2e-test-otp";
 import { normalizeEmail } from "@/lib/normalize-email";
 import { withMetrics } from "@/lib/metrics";
 import { AUTH, VALIDATION } from "@/config/messages";
@@ -79,6 +80,28 @@ async function _POST(request: NextRequest) {
     // Normalize Gmail plus addressing to match the account created in send-otp
     const email = normalizeEmail(rawEmail);
 
+    // Phase-2 — non-prod fixed-OTP test bypass.
+    //
+    // Evaluates the five-guard stack (see `app/src/lib/e2e-test-otp.ts`).
+    // Returns `{ allowed: true, staticPassword }` ONLY when all guards
+    // pass — at minimum, NODE_ENV !== "production", the request host is
+    // not in the prod allowlist, the email is on E2E_TEST_OTP_EMAILS,
+    // the code matches E2E_TEST_OTP_CODE, AND the static password env
+    // var is present. In prod, the helper returns at G2 silently AND
+    // the module-load startup assertion would have crashed the process
+    // anyway if E2E_TEST_OTP_ENABLED were set — defense in depth.
+    //
+    // When allowed: skip the DB OTP existence / expiry / match checks
+    // below, skip the OTP invalidation step, and use the static
+    // password (not `Otp.${otp}!`) with Cognito so the test account's
+    // password doesn't have to rotate on each sign-in.
+    const host = request.headers.get("host") ?? "";
+    const e2eBypass = await assertE2eTestBypassAllowed({
+      email,
+      code: otp,
+      host,
+    });
+
     // 1. Look up user + OTP from DB
     const verResult = await query<{
       user_id: string;
@@ -95,36 +118,51 @@ async function _POST(request: NextRequest) {
     );
     const ver = verResult.rows[0] ?? null;
 
-    if (!ver || !ver.otp_code) {
+    if (!ver) {
       return NextResponse.json({ error: AUTH.OTP_NOT_FOUND }, { status: 400 });
     }
 
-    // 2. Check expiry
-    if (!ver.otp_expires_at || new Date(ver.otp_expires_at) < new Date()) {
-      return NextResponse.json({ error: AUTH.OTP_EXPIRED }, { status: 400 });
+    if (!e2eBypass.allowed) {
+      // 2. Check OTP exists
+      if (!ver.otp_code) {
+        return NextResponse.json({ error: AUTH.OTP_NOT_FOUND }, { status: 400 });
+      }
+
+      // 3. Check expiry
+      if (!ver.otp_expires_at || new Date(ver.otp_expires_at) < new Date()) {
+        return NextResponse.json({ error: AUTH.OTP_EXPIRED }, { status: 400 });
+      }
+
+      // 4. Check OTP matches
+      if (ver.otp_code !== otp) {
+        return NextResponse.json({ error: AUTH.OTP_INVALID }, { status: 400 });
+      }
     }
 
-    // 3. Check OTP matches
-    if (ver.otp_code !== otp) {
-      return NextResponse.json({ error: AUTH.OTP_INVALID }, { status: 400 });
-    }
-
-    // 4. Authenticate with Cognito → get tokens
+    // 5. Authenticate with Cognito → get tokens. Real path uses the
+    //    derived OTP password; bypass path uses the static test
+    //    password injected from Secrets Manager.
+    const cognitoPassword = e2eBypass.allowed
+      ? e2eBypass.staticPassword
+      : `Otp.${otp}!`;
     let tokens;
     try {
-      tokens = await initiateCognitoAuth(email, `Otp.${otp}!`);
+      tokens = await initiateCognitoAuth(email, cognitoPassword);
     } catch (cognitoErr) {
       console.error("[verify-otp] Cognito auth failed:", cognitoErr);
       return NextResponse.json({ error: AUTH.SIGN_IN_FAILED }, { status: 400 });
     }
 
-    // 5. Invalidate OTP (clear code, mark email verified)
-    await query(
-      `UPDATE user_verification
-       SET otp_code = NULL, otp_expires_at = NULL, email_verified = true, email_verified_at = $1
-       WHERE user_id = $2`,
-      [new Date().toISOString(), ver.user_id],
-    );
+    // 6. Invalidate OTP (only on the real path — the bypass didn't
+    //    consume a real OTP, so there's nothing to clear).
+    if (!e2eBypass.allowed) {
+      await query(
+        `UPDATE user_verification
+         SET otp_code = NULL, otp_expires_at = NULL, email_verified = true, email_verified_at = $1
+         WHERE user_id = $2`,
+        [new Date().toISOString(), ver.user_id],
+      );
+    }
 
     // 6. Initialize usage record (0 appeal credits — trial has no appeal access)
     await query(
