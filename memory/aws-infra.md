@@ -56,7 +56,7 @@ No NAT Gateways. No VPC Endpoints.
 | ECS | denali-web | 0.5 vCPU, 1GB, Fargate, task :21 | desired=1, running=1 |
 | ALB | denali-alb | Application, internet-facing | active |
 | EIP | 3× | All ALB-associated | in-use |
-| Secrets | 3 | denali/prod/db, denali/prod/app, rds!db-... | active |
+| Secrets | 2 (prod) | denali/prod/app, rds!db-... (denali/prod/db deleted 2026-06-10; host/name/port are plain task-def env vars) | active |
 | CW Logs | /ecs/denali | 3-day retention, ~8KB | active |
 | S3 | denali-cloudtrail-logs-236823123138 | CloudTrail bucket | active |
 | CloudTrail | denali-audit-trail | Multi-region | active |

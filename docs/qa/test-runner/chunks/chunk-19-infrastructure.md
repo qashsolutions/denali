@@ -45,9 +45,9 @@ Then describe: `aws cognito-idp describe-user-pool --user-pool-id [ID] --query '
 **Expected**: Pool `denali-users` exists, deletion protection = ON (or `ACTIVE`).
 **Log**: Pool name, deletion protection value.
 
-### 19.P7 — Secrets Manager has 3 secrets
+### 19.P7 — Secrets Manager has the expected secrets
 **Steps**: `aws secretsmanager list-secrets --query 'SecretList[?contains(Name,`denali`)].Name'`
-**Expected**: At least 3 secrets present: `denali/prod/db`, `denali/prod/app`, and `rds!db-*` (auto-generated).
+**Expected**: `denali/prod/app`, `denali/staging/app`, and two `rds!db-*` (auto-generated, one per RDS instance). `denali/prod/db` and `denali/staging/db` must NOT be present — deleted 2026-06-10 (DB host/name/port live as plain task-def env vars; user/password come from the `rds!` secrets).
 **Log**: List of secret names found.
 
 ### 19.P8 — CloudTrail active

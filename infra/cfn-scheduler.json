@@ -11,10 +11,15 @@
         "Role": "arn:aws:iam::236823123138:role/denali-scheduler-lambda-role",
         "Timeout": 30,
         "MemorySize": 128,
-        "Description": "Scales ECS to 0 and stops RDS denali-prod",
-        "Tags": [{"Key": "Project", "Value": "Denali"}],
+        "Description": "Silences prod alarms, scales ECS to 0, stops RDS denali-prod",
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Denali"
+          }
+        ],
         "Code": {
-          "ZipFile": "import boto3\nimport json\nimport time\necs = boto3.client('ecs', region_name='us-east-1')\nrds = boto3.client('rds', region_name='us-east-1')\nCLUSTER = 'denali'\nSERVICE = 'denali-web'\nDB_INSTANCE = 'denali-prod'\ndef lambda_handler(event, context):\n    results = []\n    try:\n        ecs.update_service(cluster=CLUSTER, service=SERVICE, desiredCount=0)\n        results.append('ECS: scaled to 0')\n    except Exception as e:\n        results.append(f'ECS error: {str(e)}')\n    time.sleep(5)\n    try:\n        db = rds.describe_db_instances(DBInstanceIdentifier=DB_INSTANCE)\n        status = db['DBInstances'][0]['DBInstanceStatus']\n        if status == 'available':\n            rds.stop_db_instance(DBInstanceIdentifier=DB_INSTANCE)\n            results.append('RDS: stop initiated')\n        elif status == 'stopped':\n            results.append('RDS: already stopped')\n        else:\n            results.append(f'RDS: skipped (status={status})')\n    except Exception as e:\n        results.append(f'RDS error: {str(e)}')\n    print(json.dumps(results))\n    return {'statusCode': 200, 'body': results}\n"
+          "ZipFile": "import boto3\nimport json\nimport time\n\necs = boto3.client('ecs', region_name='us-east-1')\nrds = boto3.client('rds', region_name='us-east-1')\ncloudwatch = boto3.client('cloudwatch', region_name='us-east-1')\n\nCLUSTER = 'denali'\nSERVICE = 'denali-web'\nDB_INSTANCE = 'denali-prod'\nPROD_ALARMS = [\n    'denali-prod-healthy-hosts-below-1',\n    'denali-prod-alb-5xx-rate-high',\n]\n\n\ndef lambda_handler(event, context):\n    results = []\n\n    # Silence alarms BEFORE scaling down so the scale-to-0\n    # doesn't trigger ALARM -> SNS -> email during scheduled\n    # shutdown window.\n    try:\n        cloudwatch.disable_alarm_actions(AlarmNames=PROD_ALARMS)\n        results.append(f'Alarms: actions disabled ({len(PROD_ALARMS)})')\n    except Exception as e:\n        results.append(f'Alarm disable error: {str(e)}')\n\n    try:\n        ecs.update_service(cluster=CLUSTER, service=SERVICE, desiredCount=0)\n        results.append('ECS: scaled to 0')\n    except Exception as e:\n        results.append(f'ECS error: {str(e)}')\n\n    time.sleep(5)\n\n    try:\n        db = rds.describe_db_instances(DBInstanceIdentifier=DB_INSTANCE)\n        status = db['DBInstances'][0]['DBInstanceStatus']\n        if status == 'available':\n            rds.stop_db_instance(DBInstanceIdentifier=DB_INSTANCE)\n            results.append('RDS: stop initiated')\n        elif status == 'stopped':\n            results.append('RDS: already stopped')\n        else:\n            results.append(f'RDS: skipped (status={status})')\n    except Exception as e:\n        results.append(f'RDS error: {str(e)}')\n\n    print(json.dumps(results))\n    return {'statusCode': 200, 'body': results}\n"
         }
       }
     },
@@ -25,12 +30,17 @@
         "Runtime": "python3.12",
         "Handler": "index.lambda_handler",
         "Role": "arn:aws:iam::236823123138:role/denali-scheduler-lambda-role",
-        "Timeout": 660,
+        "Timeout": 840,
         "MemorySize": 128,
-        "Description": "Starts RDS denali-prod, polls until available, scales ECS to 1",
-        "Tags": [{"Key": "Project", "Value": "Denali"}],
+        "Description": "Starts RDS denali-prod, polls until available, scales ECS to 1, re-enables prod alarms",
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Denali"
+          }
+        ],
         "Code": {
-          "ZipFile": "import boto3\nimport json\nimport time\necs = boto3.client('ecs', region_name='us-east-1')\nrds = boto3.client('rds', region_name='us-east-1')\nCLUSTER = 'denali'\nSERVICE = 'denali-web'\nDB_INSTANCE = 'denali-prod'\nMAX_WAIT = 600\ndef lambda_handler(event, context):\n    results = []\n    try:\n        db = rds.describe_db_instances(DBInstanceIdentifier=DB_INSTANCE)\n        status = db['DBInstances'][0]['DBInstanceStatus']\n        if status == 'stopped':\n            rds.start_db_instance(DBInstanceIdentifier=DB_INSTANCE)\n            results.append('RDS: start initiated')\n        elif status == 'available':\n            results.append('RDS: already available')\n        else:\n            results.append(f'RDS: status={status}, waiting...')\n    except Exception as e:\n        results.append(f'RDS start error: {str(e)}')\n        return {'statusCode': 500, 'body': results}\n    elapsed = 0\n    while elapsed < MAX_WAIT:\n        try:\n            db = rds.describe_db_instances(DBInstanceIdentifier=DB_INSTANCE)\n            status = db['DBInstances'][0]['DBInstanceStatus']\n            if status == 'available':\n                results.append(f'RDS: available after {elapsed}s')\n                break\n        except Exception:\n            pass\n        time.sleep(15)\n        elapsed += 15\n    else:\n        results.append(f'RDS: timeout after {MAX_WAIT}s')\n    try:\n        ecs.update_service(cluster=CLUSTER, service=SERVICE, desiredCount=1)\n        results.append('ECS: scaled to 1')\n    except Exception as e:\n        results.append(f'ECS error: {str(e)}')\n    print(json.dumps(results))\n    return {'statusCode': 200, 'body': results}\n"
+          "ZipFile": "import boto3\nimport json\nimport time\n\necs = boto3.client('ecs', region_name='us-east-1')\nrds = boto3.client('rds', region_name='us-east-1')\ncloudwatch = boto3.client('cloudwatch', region_name='us-east-1')\n\nCLUSTER = 'denali'\nSERVICE = 'denali-web'\nDB_INSTANCE = 'denali-prod'\nMAX_WAIT = 600\nECS_READY_WAIT = 180\nPROD_ALARMS = [\n    'denali-prod-healthy-hosts-below-1',\n    'denali-prod-alb-5xx-rate-high',\n]\n\n\ndef lambda_handler(event, context):\n    results = []\n\n    # Start RDS first (longest-latency operation)\n    try:\n        db = rds.describe_db_instances(DBInstanceIdentifier=DB_INSTANCE)\n        status = db['DBInstances'][0]['DBInstanceStatus']\n        if status == 'stopped':\n            rds.start_db_instance(DBInstanceIdentifier=DB_INSTANCE)\n            results.append('RDS: start initiated')\n        elif status == 'available':\n            results.append('RDS: already available')\n        else:\n            results.append(f'RDS: status={status}, waiting...')\n    except Exception as e:\n        results.append(f'RDS start error: {str(e)}')\n        return {'statusCode': 500, 'body': results}\n\n    # Wait for RDS available\n    elapsed = 0\n    while elapsed < MAX_WAIT:\n        try:\n            db = rds.describe_db_instances(DBInstanceIdentifier=DB_INSTANCE)\n            status = db['DBInstances'][0]['DBInstanceStatus']\n            if status == 'available':\n                results.append(f'RDS: available after {elapsed}s')\n                break\n        except Exception:\n            pass\n        time.sleep(15)\n        elapsed += 15\n    else:\n        results.append(f'RDS: timeout after {MAX_WAIT}s')\n\n    # Scale ECS back to 1\n    try:\n        ecs.update_service(cluster=CLUSTER, service=SERVICE, desiredCount=1)\n        results.append('ECS: scaled to 1')\n    except Exception as e:\n        results.append(f'ECS error: {str(e)}')\n\n    # Poll for ECS task to reach RUNNING before re-enabling\n    # alarm actions. Prevents a transient ALARM -> email\n    # during the ~1-2 min task launch window.\n    ecs_elapsed = 0\n    ecs_ready = False\n    while ecs_elapsed < ECS_READY_WAIT:\n        try:\n            svc = ecs.describe_services(cluster=CLUSTER, services=[SERVICE])\n            running = svc['services'][0]['runningCount']\n            if running >= 1:\n                results.append(f'ECS: running={running} after {ecs_elapsed}s')\n                ecs_ready = True\n                break\n        except Exception:\n            pass\n        time.sleep(10)\n        ecs_elapsed += 10\n\n    if not ecs_ready:\n        results.append(f'ECS: running>=1 not reached within {ECS_READY_WAIT}s')\n\n    # Re-enable alarm actions. Do this regardless of whether\n    # running=1 was confirmed -- if we don't reach this line,\n    # alarms stay silent which is a bigger problem.\n    try:\n        cloudwatch.enable_alarm_actions(AlarmNames=PROD_ALARMS)\n        results.append(f'Alarms: actions enabled ({len(PROD_ALARMS)})')\n    except Exception as e:\n        results.append(f'Alarm enable error: {str(e)}')\n\n    print(json.dumps(results))\n    return {'statusCode': 200, 'body': results}\n"
         }
       }
     },
@@ -44,7 +54,12 @@
         "Timeout": 30,
         "MemorySize": 128,
         "Description": "Re-stops RDS if auto-restarted while ECS is scaled to 0",
-        "Tags": [{"Key": "Project", "Value": "Denali"}],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Denali"
+          }
+        ],
         "Code": {
           "ZipFile": "import boto3\nimport json\necs = boto3.client('ecs', region_name='us-east-1')\nrds = boto3.client('rds', region_name='us-east-1')\nCLUSTER = 'denali'\nSERVICE = 'denali-web'\nDB_INSTANCE = 'denali-prod'\ndef lambda_handler(event, context):\n    results = []\n    try:\n        svc = ecs.describe_services(cluster=CLUSTER, services=[SERVICE])\n        desired = svc['services'][0]['desiredCount']\n        if desired > 0:\n            results.append(f'ECS desired={desired} - user working, skip')\n            return {'statusCode': 200, 'body': results}\n        results.append('ECS desired=0 - checking RDS')\n    except Exception as e:\n        results.append(f'ECS check error: {str(e)}')\n        return {'statusCode': 500, 'body': results}\n    try:\n        db = rds.describe_db_instances(DBInstanceIdentifier=DB_INSTANCE)\n        status = db['DBInstances'][0]['DBInstanceStatus']\n        if status == 'available':\n            rds.stop_db_instance(DBInstanceIdentifier=DB_INSTANCE)\n            results.append('RDS: auto-restart detected, re-stopping')\n        elif status == 'stopped':\n            results.append('RDS: already stopped')\n        else:\n            results.append(f'RDS: status={status}, skip')\n    except Exception as e:\n        results.append(f'RDS error: {str(e)}')\n    print(json.dumps(results))\n    return {'statusCode': 200, 'body': results}\n"
         }
@@ -54,20 +69,40 @@
       "Type": "AWS::Events::Rule",
       "Properties": {
         "Name": "denali-shutdown-nightly",
-        "Description": "Every night 11:00pm CT (04:00 UTC, CDT pin — drifts to 10pm CST in winter)",
-        "ScheduleExpression": "cron(0 4 * * ? *)",
+        "Description": "Every night 10:00pm CT (03:00 UTC, CDT pin - drifts to 9pm CST in winter). Runs ALL days incl. weekends; no-op if already stopped.",
+        "ScheduleExpression": "cron(0 3 * * ? *)",
         "State": "ENABLED",
-        "Targets": [{"Arn": {"Fn::GetAtt": ["ShutdownFunction", "Arn"]}, "Id": "ShutdownNightly"}]
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "ShutdownFunction",
+                "Arn"
+              ]
+            },
+            "Id": "ShutdownNightly"
+          }
+        ]
       }
     },
     "StartupDaily": {
       "Type": "AWS::Events::Rule",
       "Properties": {
         "Name": "denali-startup-daily",
-        "Description": "Every day 8:00am CT (13:00 UTC, CDT pin — drifts to 7am CST in winter)",
-        "ScheduleExpression": "cron(0 13 * * ? *)",
+        "Description": "Weekdays only 8:55am CT (13:55 UTC, CDT pin - drifts to 7:55am CST in winter). 5-min head start for ~7min RDS+ECS boot; site available ~9:02am CT. Weekends OFF - manual start: aws lambda invoke --invocation-type Event --function-name denali-startup /tmp/out.json",
+        "ScheduleExpression": "cron(55 13 ? * MON-FRI *)",
         "State": "ENABLED",
-        "Targets": [{"Arn": {"Fn::GetAtt": ["StartupFunction", "Arn"]}, "Id": "StartupDaily"}]
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "StartupFunction",
+                "Arn"
+              ]
+            },
+            "Id": "StartupDaily"
+          }
+        ]
       }
     },
     "SafetyStopCron": {
@@ -77,40 +112,92 @@
         "Description": "Every 6 days re-stop RDS if ECS is 0 (handles 7-day auto-restart)",
         "ScheduleExpression": "rate(6 days)",
         "State": "ENABLED",
-        "Targets": [{"Arn": {"Fn::GetAtt": ["SafetyStopFunction", "Arn"]}, "Id": "SafetyStop"}]
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "SafetyStopFunction",
+                "Arn"
+              ]
+            },
+            "Id": "SafetyStop"
+          }
+        ]
       }
     },
     "ShutdownPermNightly": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
-        "FunctionName": {"Ref": "ShutdownFunction"},
+        "FunctionName": {
+          "Ref": "ShutdownFunction"
+        },
         "Action": "lambda:InvokeFunction",
         "Principal": "events.amazonaws.com",
-        "SourceArn": {"Fn::GetAtt": ["ShutdownNightly", "Arn"]}
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "ShutdownNightly",
+            "Arn"
+          ]
+        }
       }
     },
     "StartupPerm": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
-        "FunctionName": {"Ref": "StartupFunction"},
+        "FunctionName": {
+          "Ref": "StartupFunction"
+        },
         "Action": "lambda:InvokeFunction",
         "Principal": "events.amazonaws.com",
-        "SourceArn": {"Fn::GetAtt": ["StartupDaily", "Arn"]}
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "StartupDaily",
+            "Arn"
+          ]
+        }
       }
     },
     "SafetyStopPerm": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
-        "FunctionName": {"Ref": "SafetyStopFunction"},
+        "FunctionName": {
+          "Ref": "SafetyStopFunction"
+        },
         "Action": "lambda:InvokeFunction",
         "Principal": "events.amazonaws.com",
-        "SourceArn": {"Fn::GetAtt": ["SafetyStopCron", "Arn"]}
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "SafetyStopCron",
+            "Arn"
+          ]
+        }
       }
     }
   },
   "Outputs": {
-    "ShutdownFunctionArn": {"Value": {"Fn::GetAtt": ["ShutdownFunction", "Arn"]}},
-    "StartupFunctionArn": {"Value": {"Fn::GetAtt": ["StartupFunction", "Arn"]}},
-    "SafetyStopFunctionArn": {"Value": {"Fn::GetAtt": ["SafetyStopFunction", "Arn"]}}
+    "ShutdownFunctionArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ShutdownFunction",
+          "Arn"
+        ]
+      }
+    },
+    "StartupFunctionArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "StartupFunction",
+          "Arn"
+        ]
+      }
+    },
+    "SafetyStopFunctionArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "SafetyStopFunction",
+          "Arn"
+        ]
+      }
+    }
   }
 }

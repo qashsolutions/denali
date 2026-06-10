@@ -445,9 +445,10 @@ User requests appeal letter → check email: not verified = signup wall; verifie
 **Prod**: cluster `denali` / service `denali-web` / RDS `denali-prod` / https://denali.health  
 **Staging**: cluster `denali-staging` / service `denali-staging-web` / RDS `denali-staging` (split from prod 2026-04-23) / https://staging.denali.health
 
-- **ECR lifecycle**: prod-stable never expires; SHA tags keep last 10; untagged 1 day. Staging keeps last 10.
+- **ECR lifecycle**: prod-stable never expires; SHA tags keep last 5 (tightened from 10 on 2026-06-10); untagged 1 day. Staging keeps last 10.
 - **IAM (split 2026-04-23)**: `denali-prod-deploy-role` (refs/heads/main only), `denali-staging-deploy-role` (refs/heads/develop only).
-- **Prod alarms** → `denali-prod-alerts` SNS: `ecs-running-below-desired`, `alb-5xx-rate-high` (>5%/5min, volume gate at 20 req), `ecs-task-failed-to-start`.
+- **Prod alarms** → `denali-prod-alerts` SNS: `healthy-hosts-below-1` (ALB HealthyHostCount; replaced `ecs-running-below-desired` 2026-06-10 when Container Insights was disabled on both clusters), `alb-5xx-rate-high` (>5%/5min, volume gate at 20 req), `ecs-task-failed-to-start`.
+- **Cost schedule (2026-06-10)**: prod up 8:55am–10pm CT weekdays only (weekends off; manual start: `aws lambda invoke --invocation-type Event --function-name denali-startup /tmp/out.json`); staging up 8:55am–11pm CT every day. RDS backup windows must stay INSIDE running hours — stopped instances take no automated backups, and an overlapping window once made prod RDS silently skip its nightly stop. Schedule changes go through `infra/cfn-scheduler.json` + `deploy-scheduler.sh` (prod rules are CFN-managed; raw `put-rule` drifts the stack). Details: `docs/reference/infrastructure.md`.
 - **Protected**: `prod-stable` tag is rollback floor. Docker base + GitHub Actions both SHA-pinned.
 - **CloudWatch retention**: app log groups 30 days. Audit logs separate, 6-year HIPAA retention in RDS.
 - **Terraform IaC (staging)**: foundation in `infra/staging/`. S3 backend, `use_lockfile = true`.
