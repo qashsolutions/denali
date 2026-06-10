@@ -24,7 +24,12 @@ export type RootStackParamList = {
   PrivacyNotice: undefined;
   CohortOnboarding: undefined;
   Intake: undefined;
-  Instruments: undefined;
+  /**
+   * Onboarding battery (no params — byte-identical legacy behavior) OR a
+   * repeat check-in scoped to one domain (Step 4): `focus` renders only
+   * that domain's instrument and returns to the caller when it completes.
+   */
+  Instruments: { focus?: DomainId } | undefined;
   MainTabs: undefined;
   UploadReview: { reportId: string };
   /**

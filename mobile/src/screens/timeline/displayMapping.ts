@@ -114,7 +114,8 @@ export function getCategoryIcon(category: ObservationCategory): LucideIcon {
 // ─── observations.source → plain provenance ──────────────────────────────
 
 export const SOURCE_FRIENDLY_NAME: Readonly<Record<ObservationSource, string>> = {
-  self_reported: "You told us",
+  // 2026-06-09 operator review: was "You told us".
+  self_reported: "User input",
   uploaded_report: "From your uploaded report",
   fhir: "From your Medicare claims",
   log: "You logged it",

@@ -36,7 +36,7 @@ import {
 } from "./displayMapping";
 import { dateKeyOf, formatGroupHeader } from "./groupObservations";
 import { lookupInterpretation } from "./interpretation/lookup";
-import { makePillStyles, pillTintFor } from "./pill";
+import { makePillStyles, pillTintForBand } from "./pill";
 import type { DomainRollup } from "./rollup";
 
 export interface DomainCardProps {
@@ -77,7 +77,7 @@ export function DomainCard({
             ageYears: userAgeYears,
             kind: "instrument",
           });
-    const tint = lookup ? pillTintFor(redesign, lookup.band.bandId) : null;
+    const tint = lookup ? pillTintForBand(redesign, lookup.band) : null;
     const pillText = lookup
       ? `${lookup.band.pill}${lookup.band.provisional ? "‡" : ""}`
       : rollup.latestScore == null

@@ -24,7 +24,7 @@
  * Increment 2 adds sparklines; increment 3 adds trend statements.
  */
 
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React from "react";
 import {
@@ -95,35 +95,39 @@ export function HealthDashboardScreen(): React.ReactElement {
   const [userSexAtBirth, setUserSexAtBirth] = React.useState<SexAtBirth | null>(null);
   const [userBirthYear, setUserBirthYear] = React.useState<number | null>(null);
 
-  React.useEffect(() => {
-    if (!dal) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const user = api.getCurrentUser();
-        const list = await dal.listObservations({
-          latest_only: true,
-          limit: PAGE_SIZE,
-        });
-        if (cancelled) return;
-        const scoped = user ? list.filter((o) => o.user_id === user.userId) : list;
-        setRows(scoped);
-        const profile = await dal.getProfile();
-        if (!cancelled) {
-          setUserSexAtBirth(profile?.sex_at_birth ?? null);
-          setUserBirthYear(profile?.birth_year ?? null);
+  // Reload on every screen FOCUS (not just mount) — returning from a
+  // repeat check-in (Step 4) or the detail stack must refresh the pills.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!dal) return;
+      let cancelled = false;
+      (async () => {
+        setLoading(true);
+        try {
+          const user = api.getCurrentUser();
+          const list = await dal.listObservations({
+            latest_only: true,
+            limit: PAGE_SIZE,
+          });
+          if (cancelled) return;
+          const scoped = user ? list.filter((o) => o.user_id === user.userId) : list;
+          setRows(scoped);
+          const profile = await dal.getProfile();
+          if (!cancelled) {
+            setUserSexAtBirth(profile?.sex_at_birth ?? null);
+            setUserBirthYear(profile?.birth_year ?? null);
+          }
+        } catch (err) {
+          console.warn("[HealthDashboard] load failed", err);
+        } finally {
+          if (!cancelled) setLoading(false);
         }
-      } catch (err) {
-        console.warn("[HealthDashboard] load failed", err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [api, dal]);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [api, dal]),
+  );
 
   const userAgeYears = React.useMemo(
     () => computeAgeYears(userBirthYear),

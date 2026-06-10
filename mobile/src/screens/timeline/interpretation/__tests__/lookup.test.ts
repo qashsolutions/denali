@@ -228,8 +228,8 @@ describe("lookupInterpretation — score interpolation", () => {
 });
 
 describe("provisional gate — every shipped band is provisional until clinical review", () => {
-  it("table version is 1.2.0-provisional", () => {
-    expect(INTERPRETATION_TABLE_V1.version).toBe("1.2.0-provisional");
+  it("table version is 1.3.0-provisional", () => {
+    expect(INTERPRETATION_TABLE_V1.version).toBe("1.3.0-provisional");
   });
 
   it("no clinical reviewer is named", () => {
@@ -332,7 +332,7 @@ describe("V1.1 — age-sex-specific strategy (synthetic table for testing)", () 
   });
 
   const synthTable: InterpretationTableV1_1 = {
-    version: "1.2.0-provisional",
+    version: "1.3.0-provisional",
     lastClinicallyReviewedAt: null,
     lastClinicallyReviewedBy: null,
     instruments: {

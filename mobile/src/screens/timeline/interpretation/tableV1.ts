@@ -21,6 +21,24 @@
  *   the peer-reviewed thresholds for each screen. Cutoff edits are
  *   non-trivial and should re-cite.
  *
+ * DELTA — trend-chart config (2026-06-09, v1.3.0, Step-3 prompt):
+ *   - `scoreRange` added per chartable instrument (definitional maxima,
+ *     cited by each entry's existing provenance source): PHQ-2 0–6,
+ *     PHQ-9 0–27, GAD-7 0–21, Epworth 0–24, AUDIT-C 0–12, IPSS 0–35,
+ *     MRS 0–44. ADAM carries NO scoreRange — binary outcome, excluded
+ *     from score-over-time charts; chartability = scoreRange present.
+ *   - Optional per-band curated `tint` override (TintClass). Exactly one
+ *     override shipped: IPSS "mild" (0–7) → "ok" — AUA's own lowest-band
+ *     terminology is "Mild", and amber "watch" styling on a score of 0
+ *     misread as attention. Label text "Mild" unchanged.
+ *   - ADAM negative-band pill "Negative" → "No signs" (same jargon class
+ *     as the PHQ-2 fix). ADAM headlines/explanations still carry
+ *     "negative-screen range" phrasing — replacements PROPOSED in the
+ *     step report, not changed unilaterally.
+ *   - NOTE: the Step-3 prompt numbered this bump 1.1.1→1.2.0; 1.2.0 was
+ *     already consumed by the provenance delta below, so this ships as
+ *     1.3.0-provisional.
+ *
  * DELTA — provenance records (2026-06-09, v1.2.0, operator-approved plan):
  *   - Every InstrumentInterpretation / BiomarkerInterpretation now carries
  *     a structured `provenance` record (src/lib/provenance.ts):
@@ -87,6 +105,15 @@ export type BandId =
   | "likely-aud"
   | "positive";
 
+/**
+ * Curated tint classes (v1.3) — the four pill/band treatments from the
+ * redesign. A band's tint normally derives from its bandId (see
+ * pill.ts); `tint` overrides that mapping for the rare band whose
+ * published terminology doesn't match the default severity styling
+ * (IPSS "mild" 0–7 is the lone shipped override).
+ */
+export type TintClass = "ok" | "soft" | "watch" | "alarm";
+
 export interface InterpretationBand {
   /** Inclusive min score for this band. */
   minScore: number;
@@ -94,6 +121,12 @@ export interface InterpretationBand {
   maxScore: number;
   /** Stable id used for the pill color and telemetry. */
   bandId: BandId;
+  /**
+   * Optional curated tint override (v1.3). Absent → default
+   * bandId→tint mapping in pill.ts applies. Display-only; never
+   * changes band membership or label text.
+   */
+  tint?: TintClass;
   /** Pill text — calm palette, short noun phrase. */
   pill: string;
   /** Plain-language one-line finding headline shown in the card. */
@@ -173,6 +206,13 @@ export interface InstrumentInterpretation {
   cutoffSource: string;
   /** Structured provenance (v1.2) — see src/lib/provenance.ts lifecycle. */
   provenance: ProvenanceRecord;
+  /**
+   * Inclusive instrument score domain (v1.3) — the trend chart's Y-axis
+   * bounds. Definitional maxima from the instrument's own scoring (cited
+   * by this entry's provenance source). ABSENT for non-chartable
+   * instruments (ADAM — binary); chartability is keyed on its presence.
+   */
+  scoreRange?: { min: number; max: number };
   /** How to pick the band set for a given (score, sex, age) input. */
   strategy: RangeStrategy;
   /**
@@ -219,7 +259,7 @@ export interface BiomarkerInterpretation {
  */
 export interface InterpretationTableV1_1 {
   /** Semantic version of this table. Provisional until clinical review. */
-  version: "1.2.0-provisional";
+  version: "1.3.0-provisional";
   /** ISO date the table was clinically reviewed, or null until reviewed. */
   lastClinicallyReviewedAt: string | null;
   /** Reviewer name, or null until reviewed. */
@@ -513,6 +553,9 @@ const IPSS_BANDS: InterpretationBand[] = [
     minScore: 0,
     maxScore: 7,
     bandId: "mild",
+    // v1.3 curated override: AUA's lowest band IS named "Mild"; default
+    // mild→watch (amber) styling misread as attention on a score of 0.
+    tint: "ok",
     pill: "Mild",
     headline: "Your score of {{score}} is in the mild range.",
     explanation:
@@ -592,7 +635,10 @@ const ADAM_BANDS: InterpretationBand[] = [
     minScore: 0,
     maxScore: 0,
     bandId: "negative",
-    pill: "Negative",
+    // v1.3 delta: was "Negative" (same screening-jargon class as the
+    // PHQ-2 fix). Headline/explanation replacements proposed in the
+    // step report — not changed unilaterally.
+    pill: "No signs",
     headline: "Your answers are in the negative-screen range.",
     explanation:
       "Your answers did not match the pattern this screen looks for.",
@@ -650,7 +696,7 @@ const ADAM_SOURCE =
 // ─── Table V1 export ──────────────────────────────────────────────────────
 
 export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
-  version: "1.2.0-provisional",
+  version: "1.3.0-provisional",
   lastClinicallyReviewedAt: null,
   lastClinicallyReviewedBy: null,
   instruments: {
@@ -659,6 +705,7 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
       loincPanel: "55757-9",
       cutoffSource: PHQ2_SOURCE,
       provenance: pendingReview(PHQ2_SOURCE),
+      scoreRange: { min: 0, max: 6 },
       strategy: { kind: "uniform", bands: PHQ2_BANDS },
     },
     "PHQ-9": {
@@ -666,6 +713,7 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
       loincPanel: "44249-1",
       cutoffSource: PHQ9_SOURCE,
       provenance: pendingReview(PHQ9_SOURCE),
+      scoreRange: { min: 0, max: 27 },
       strategy: { kind: "uniform", bands: PHQ9_BANDS },
     },
     "GAD-7": {
@@ -673,6 +721,7 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
       loincPanel: "69737-5",
       cutoffSource: GAD7_SOURCE,
       provenance: pendingReview(GAD7_SOURCE),
+      scoreRange: { min: 0, max: 21 },
       strategy: { kind: "uniform", bands: GAD7_BANDS },
     },
     Epworth: {
@@ -680,6 +729,7 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
       loincPanel: "85563-1",
       cutoffSource: EPWORTH_SOURCE,
       provenance: pendingReview(EPWORTH_SOURCE),
+      scoreRange: { min: 0, max: 24 },
       strategy: { kind: "uniform", bands: EPWORTH_BANDS },
     },
     "AUDIT-C": {
@@ -687,6 +737,7 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
       loincPanel: "75624-7",
       cutoffSource: AUDIT_C_SOURCE,
       provenance: pendingReview(AUDIT_C_SOURCE),
+      scoreRange: { min: 0, max: 12 },
       strategy: {
         kind: "sex-specific",
         bandsBySex: {
@@ -700,6 +751,7 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
       loincPanel: "75636-1",
       cutoffSource: IPSS_SOURCE,
       provenance: pendingReview(IPSS_SOURCE),
+      scoreRange: { min: 0, max: 35 },
       strategy: { kind: "uniform", bands: IPSS_BANDS },
     },
     MRS: {
@@ -707,6 +759,7 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
       loincPanel: "76494-4",
       cutoffSource: MRS_SOURCE,
       provenance: pendingReview(MRS_SOURCE),
+      scoreRange: { min: 0, max: 44 },
       strategy: { kind: "uniform", bands: MRS_BANDS },
     },
     ADAM: {

@@ -64,7 +64,12 @@ function effectiveAtOf(card: TimelineCard): string {
     : card.row.effective_at;
 }
 
-function computeSessionScore(
+/**
+ * Per-session score: sum of item values (ADAM: Morley binary outcome).
+ * Exported for the trend layer (Step 3) so the chart scores sessions
+ * identically to the dashboard rollup.
+ */
+export function computeSessionScore(
   instrumentId: string,
   items: ReadonlyArray<ObservationRow>,
 ): number | null {

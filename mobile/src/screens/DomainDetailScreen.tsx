@@ -19,7 +19,12 @@
  * this domain. All theme tokens via useTheme().
  */
 
-import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ChevronLeft } from "lucide-react-native";
 import React from "react";
@@ -48,9 +53,13 @@ import {
   getDomainPrompt,
   STANDING_DISCLAIMER,
 } from "./timeline/displayMapping";
+import { checkInAvailable } from "./instrumentsFocus";
 import { groupByInstrumentSession, type TimelineCard } from "./timeline/grouping";
 import { rollupCardsByDomain } from "./timeline/rollup";
 import { TimelineCardView } from "./timeline/TimelineCardView";
+import { isChartableInstrument, type TrendRange } from "./timeline/trend/sessions";
+import { TrendChart } from "./timeline/trend/TrendChart";
+import { TrendRangeControl } from "./timeline/trend/TrendRangeControl";
 
 import type { RootStackParamList } from "@/navigation/types";
 
@@ -61,7 +70,10 @@ const PAGE_SIZE = 200;
 
 type ListItem =
   | { kind: "header"; dateKey: string }
-  | { kind: "card"; card: TimelineCard };
+  | { kind: "card"; card: TimelineCard }
+  /** Trend section (Step 3): range control + one chart per chartable
+   *  instrument, placed below the latest-session card. */
+  | { kind: "trend"; instrumentIds: string[] };
 
 function cardEffectiveAt(card: TimelineCard): string {
   return card.kind === "instrument-session"
@@ -73,6 +85,31 @@ function cardId(card: TimelineCard): string {
   return card.kind === "instrument-session"
     ? `s:${card.instrumentId}|${card.effective_at}`
     : `r:${card.row.id}`;
+}
+
+/**
+ * "Start a check-in" CTA (Step 4) — mockup frame-2 .cta treatment.
+ * Navigation chrome only (clinical pre-review Finding 4); the same
+ * button serves the trend section and the empty state.
+ */
+function StartCheckInButton({
+  onPress,
+  styles,
+}: {
+  onPress: () => void;
+  styles: { cta: object; ctaLabel: object };
+}): React.ReactElement {
+  return (
+    <Pressable
+      testID="domain_detail_start_checkin"
+      accessibilityRole="button"
+      accessibilityLabel="Start a check-in"
+      onPress={onPress}
+      style={styles.cta}
+    >
+      <Text style={styles.ctaLabel}>Start a check-in</Text>
+    </Pressable>
+  );
 }
 
 export function DomainDetailScreen(): React.ReactElement {
@@ -92,33 +129,52 @@ export function DomainDetailScreen(): React.ReactElement {
   const [rows, setRows] = React.useState<ObservationRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [userSexAtBirth, setUserSexAtBirth] = React.useState<SexAtBirth | null>(null);
+  // Shared by every chart on this screen; default 6M (Step-3 rule 11).
+  const [trendRange, setTrendRange] = React.useState<TrendRange>("6m");
+  // Cards start expanded on the detail screen; the Hide/Show toggle is
+  // live (2026-06-09 operator review — it was a no-op before).
+  const [collapsedCardIds, setCollapsedCardIds] = React.useState<
+    ReadonlySet<string>
+  >(() => new Set<string>());
+  const toggleCardExpanded = React.useCallback((id: string) => {
+    setCollapsedCardIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
-  React.useEffect(() => {
-    if (!dal) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const user = api.getCurrentUser();
-        const list = await dal.listObservations({
-          latest_only: true,
-          limit: PAGE_SIZE,
-        });
-        if (cancelled) return;
-        const scoped = user ? list.filter((o) => o.user_id === user.userId) : list;
-        setRows(scoped);
-        const profile = await dal.getProfile();
-        if (!cancelled) setUserSexAtBirth(profile?.sex_at_birth ?? null);
-      } catch (err) {
-        console.warn("[DomainDetail] load failed", err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [api, dal]);
+  // Reload on every screen FOCUS (not just mount) — returning from a
+  // repeat check-in (Step 4) must show the new session immediately.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!dal) return;
+      let cancelled = false;
+      (async () => {
+        setLoading(true);
+        try {
+          const user = api.getCurrentUser();
+          const list = await dal.listObservations({
+            latest_only: true,
+            limit: PAGE_SIZE,
+          });
+          if (cancelled) return;
+          const scoped = user ? list.filter((o) => o.user_id === user.userId) : list;
+          setRows(scoped);
+          const profile = await dal.getProfile();
+          if (!cancelled) setUserSexAtBirth(profile?.sex_at_birth ?? null);
+        } catch (err) {
+          console.warn("[DomainDetail] load failed", err);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [api, dal]),
+  );
 
   // Two-stage transform mirrors the dashboard: rows → cards → rollups.
   // Then filter to just THIS domain.
@@ -157,6 +213,26 @@ export function DomainDetailScreen(): React.ReactElement {
     for (const key of sortedKeys) {
       out.push({ kind: "header", dateKey: key });
       for (const c of buckets.get(key) ?? []) out.push({ kind: "card", card: c });
+    }
+
+    // Trend section (Step 3) — chartable instruments in this domain,
+    // ordered by most-recent session (cardsInDomain is newest-first
+    // within buckets; walk in list order for first-appearance recency).
+    if (mine.kind === "instrument-domain") {
+      const seen = new Set<string>();
+      const instrumentIds: string[] = [];
+      for (const item of out) {
+        if (item.kind !== "card" || item.card.kind !== "instrument-session") continue;
+        const id = item.card.instrumentId;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        if (isChartableInstrument(id)) instrumentIds.push(id);
+      }
+      if (instrumentIds.length > 0) {
+        // Below the latest-session card: header(0), card(1) → insert at 2.
+        const insertAt = Math.min(2, out.length);
+        out.splice(insertAt, 0, { kind: "trend", instrumentIds });
+      }
     }
     return out;
   }, [rows, userSexAtBirth, domainId]);
@@ -223,6 +299,36 @@ export function DomainDetailScreen(): React.ReactElement {
           justifyContent: "center",
           padding: theme.spacing.lg,
         },
+        // Trend section — range control sits above the per-instrument
+        // charts; charts carry their own card margins.
+        trendSection: {
+          paddingTop: theme.spacing.xs,
+          gap: theme.spacing.space3,
+        },
+        trendControlWrap: {
+          marginHorizontal: theme.spacing.space5,
+        },
+        // Mockup .cta: teal primary, white 600 label, r=14, soft teal shadow.
+        cta: {
+          marginHorizontal: theme.spacing.space5,
+          marginTop: theme.spacing.xs,
+          paddingVertical: theme.spacing.md - 1,
+          borderRadius: theme.radii.xl - 2,
+          backgroundColor: redesign.teal,
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 48,
+          shadowColor: redesign.teal,
+          shadowOpacity: 0.28,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 3,
+        },
+        ctaLabel: {
+          color: redesign.surface,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
         emptyTitle: {
           color: redesign.ink,
           fontSize: theme.typography.sizes.xl,
@@ -269,13 +375,41 @@ export function DomainDetailScreen(): React.ReactElement {
         </View>
       );
     }
+    if (item.kind === "trend") {
+      return (
+        <View style={styles.trendSection}>
+          <View style={styles.trendControlWrap}>
+            <TrendRangeControl value={trendRange} onChange={setTrendRange} />
+          </View>
+          {item.instrumentIds.map((id) => (
+            <TrendChart
+              key={id}
+              instrumentId={id}
+              range={trendRange}
+              userSexAtBirth={userSexAtBirth}
+            />
+          ))}
+          {checkInAvailable(domainId, userSexAtBirth) ? (
+            <StartCheckInButton
+              onPress={() => navigation.navigate("Instruments", { focus: domainId })}
+              styles={styles}
+            />
+          ) : null}
+        </View>
+      );
+    }
+    const id = cardId(item.card);
     return (
       <TimelineCardView
         card={item.card}
-        isExpanded={true /* details always expanded on the detail screen */}
-        onToggleExpand={() => {}}
+        isExpanded={!collapsedCardIds.has(id)}
+        onToggleExpand={() => toggleCardExpanded(id)}
         formattedDate={formatGroupHeader(dateKeyOf(cardEffectiveAt(item.card)))}
         userSexAtBirth={userSexAtBirth}
+        // The screen pins the standing disclaimer + ‡ legend once at the
+        // bottom; suppress the per-card copy of the SAME two lines
+        // (2026-06-09 operator review — no double display).
+        showDisclaimer={false}
       />
     );
   };
@@ -312,13 +446,21 @@ export function DomainDetailScreen(): React.ReactElement {
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>No data yet</Text>
           <Text style={styles.emptyBody}>{getDomainPrompt(domainId)}</Text>
+          {checkInAvailable(domainId, userSexAtBirth) ? (
+            <StartCheckInButton
+              onPress={() => navigation.navigate("Instruments", { focus: domainId })}
+              styles={styles}
+            />
+          ) : null}
         </View>
       ) : (
         <FlatList
           data={items}
-          keyExtractor={(item) =>
-            item.kind === "header" ? `h:${item.dateKey}` : cardId(item.card)
-          }
+          keyExtractor={(item) => {
+            if (item.kind === "header") return `h:${item.dateKey}`;
+            if (item.kind === "trend") return "trend";
+            return cardId(item.card);
+          }}
           renderItem={renderItem}
         />
       )}

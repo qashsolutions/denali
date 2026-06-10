@@ -52,7 +52,7 @@ import {
   lookupInterpretation,
 } from "./interpretation/lookup";
 import type { InterpretationBand } from "./interpretation/tableV1";
-import { makePillStyles, pillTintFor } from "./pill";
+import { makePillStyles, pillTintForBand } from "./pill";
 
 // ─── score computation ───────────────────────────────────────────────────
 
@@ -87,6 +87,7 @@ interface SessionCardProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   userSexAtBirth: SexAtBirth | null;
+  showDisclaimer: boolean;
 }
 
 function InstrumentSessionCard({
@@ -97,6 +98,7 @@ function InstrumentSessionCard({
   isExpanded,
   onToggleExpand,
   userSexAtBirth,
+  showDisclaimer,
 }: SessionCardProps): React.ReactElement {
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
@@ -110,7 +112,7 @@ function InstrumentSessionCard({
 
   const styles = sessionStyles(theme, redesign, fontsLoaded);
   const tint =
-    interp != null ? pillTintFor(redesign, interp.band.bandId) : null;
+    interp != null ? pillTintForBand(redesign, interp.band) : null;
   const band: InterpretationBand | null = interp?.band ?? null;
 
   return (
@@ -178,16 +180,18 @@ function InstrumentSessionCard({
         <SessionDetails items={items} userSexAtBirthKnown={userSexAtBirth != null} />
       ) : null}
 
-      <View style={styles.disclaimerRow}>
-        <Text testID="timeline_card_disclaimer" style={styles.disclaimer}>
-          {STANDING_DISCLAIMER}
-        </Text>
-        {band?.provisional ? (
-          <Text testID="timeline_card_provisional_footnote" style={styles.footnote}>
-            ‡ Interpretation pending clinical review.
+      {showDisclaimer ? (
+        <View style={styles.disclaimerRow}>
+          <Text testID="timeline_card_disclaimer" style={styles.disclaimer}>
+            {STANDING_DISCLAIMER}
           </Text>
-        ) : null}
-      </View>
+          {band?.provisional ? (
+            <Text testID="timeline_card_provisional_footnote" style={styles.footnote}>
+              ‡ Interpretation pending clinical review.
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -244,6 +248,7 @@ interface SingleCardProps {
   formattedDate: string;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  showDisclaimer: boolean;
 }
 
 function SingleRowCard({
@@ -251,6 +256,7 @@ function SingleRowCard({
   formattedDate,
   isExpanded,
   onToggleExpand,
+  showDisclaimer,
 }: SingleCardProps): React.ReactElement {
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
@@ -327,11 +333,13 @@ function SingleRowCard({
         </View>
       ) : null}
 
-      <View style={styles.disclaimerRow}>
-        <Text testID="timeline_card_disclaimer" style={styles.disclaimer}>
-          {STANDING_DISCLAIMER}
-        </Text>
-      </View>
+      {showDisclaimer ? (
+        <View style={styles.disclaimerRow}>
+          <Text testID="timeline_card_disclaimer" style={styles.disclaimer}>
+            {STANDING_DISCLAIMER}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -346,6 +354,14 @@ export interface TimelineCardViewProps {
   formattedDate: string;
   /** User's sex_at_birth — feeds AUDIT-C's sex-dependent lookup. */
   userSexAtBirth: SexAtBirth | null;
+  /**
+   * Per-card disclaimer block (standing line + ‡ legend). Default true.
+   * Screens that PIN the same two lines at screen level (DomainDetail)
+   * pass false so the text doesn't show twice (2026-06-09 operator
+   * review). Screens without a pinned strip (legacy timeline) keep the
+   * default — the every-clinical-surface disclaimer rule holds either way.
+   */
+  showDisclaimer?: boolean;
 }
 
 export function TimelineCardView({
@@ -354,6 +370,7 @@ export function TimelineCardView({
   onToggleExpand,
   formattedDate,
   userSexAtBirth,
+  showDisclaimer = true,
 }: TimelineCardViewProps): React.ReactElement {
   if (card.kind === "instrument-session") {
     return (
@@ -365,6 +382,7 @@ export function TimelineCardView({
         isExpanded={isExpanded}
         onToggleExpand={onToggleExpand}
         userSexAtBirth={userSexAtBirth}
+        showDisclaimer={showDisclaimer}
       />
     );
   }
@@ -374,6 +392,7 @@ export function TimelineCardView({
       formattedDate={formattedDate}
       isExpanded={isExpanded}
       onToggleExpand={onToggleExpand}
+      showDisclaimer={showDisclaimer}
     />
   );
 }

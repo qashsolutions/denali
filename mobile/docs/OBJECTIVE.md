@@ -83,8 +83,8 @@ dark-mode variant; drift-test source-of-truth inversion. Remaining scope:
 reskin of the non-dashboard surfaces (chat, upload, settings, onboarding)
 in later steps.
 
-### O4 — Apple-Health-style trend layer — **PLANNED** (step-2 Part D plan is
-the approved direction; implementation not started)
+### O4 — Apple-Health-style trend layer — **SHIPPED** (steps 3–4,
+operator visual pass on-device 2026-06-09)
 Per-instrument score-over-time dots+line over shaded severity bands read
 from the SAME versioned interpretation table (+ additive `scoreRange`),
 plain-language band labels, 3M/6M/Y/All range control (no Day/Week),
@@ -147,3 +147,10 @@ chat no-persist, `/api/parse-report`)*.
   (and clinical-trials / CMS candidates) not connecting; Venkata is
   checking endpoints. Terminology work proceeds via the claude.ai PubMed
   connector meanwhile.
+- 2026-06-09 — O4 status → SHIPPED, Venkata visual pass on-device (trend
+  chart with band washes/labels, dots + teal latest, delta line, range
+  control, n=1 quiet state, working collapse, single pinned disclaimer).
+  O1 advanced: repeat check-ins live via "Start a check-in" focus mode —
+  the longitudinal record can now accumulate. Residual device checks:
+  IPSS ok-tint and ADAM "No signs" pills (test-pinned; visible after an
+  IPSS/ADAM check-in).

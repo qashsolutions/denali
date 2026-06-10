@@ -19,7 +19,7 @@ import type { TextStyle, ViewStyle } from "react-native";
 import { fontStyle } from "@/theme/fonts";
 import type { useTheme } from "@/theme/useTheme";
 
-import type { BandId } from "./interpretation/tableV1";
+import type { BandId, TintClass } from "./interpretation/tableV1";
 
 type Redesign = ReturnType<typeof useTheme>["redesign"];
 type Theme = ReturnType<typeof useTheme>["theme"];
@@ -29,30 +29,68 @@ export interface PillTint {
   fg: string;
 }
 
-export function pillTintFor(redesign: Redesign, bandId: BandId): PillTint {
-  switch (bandId) {
+/** Resolve a curated tint class to its pill colors. */
+export function tintByClass(redesign: Redesign, cls: TintClass): PillTint {
+  switch (cls) {
+    case "ok":
+      return { bg: redesign.tealWash, fg: redesign.tealDeep };
+    case "soft":
+      return { bg: redesign.pillSoft, fg: redesign.ink2 };
+    case "watch":
+      return { bg: redesign.amberWash, fg: redesign.amber };
+    case "alarm":
+      return { bg: redesign.alarmWash, fg: redesign.alarm };
+  }
+}
+
+/**
+ * Default bandId → tint class. The trend chart shares this so band
+ * shading and pill colors can never disagree.
+ */
+export function tintClassForBand(band: {
+  bandId: BandId;
+  tint?: TintClass;
+}): TintClass {
+  // Curated per-band override (v1.3, table-owned) wins.
+  if (band.tint) return band.tint;
+  switch (band.bandId) {
     // ok — screen-negative / lowest-severity bands.
     case "negative":
     case "minimal":
     case "lower-risk":
-      return { bg: redesign.tealWash, fg: redesign.tealDeep };
+      return "ok";
     // soft — within-normal bands.
     case "lower-normal":
     case "higher-normal":
-      return { bg: redesign.pillSoft, fg: redesign.ink2 };
+      return "soft";
     // watch — calm attention.
     case "mild":
     case "moderate":
     case "higher-risk":
-      return { bg: redesign.amberWash, fg: redesign.amber };
+      return "watch";
     // alarm — severe screener bands (alarm tokens' only UI consumer
     // besides the crisis path).
     case "moderately-severe":
     case "severe":
     case "likely-aud":
     case "positive":
-      return { bg: redesign.alarmWash, fg: redesign.alarm };
+      return "alarm";
   }
+}
+
+/**
+ * Tint for a band: curated `tint` override wins; otherwise the default
+ * bandId→class mapping applies.
+ */
+export function pillTintForBand(
+  redesign: Redesign,
+  band: { bandId: BandId; tint?: TintClass },
+): PillTint {
+  return tintByClass(redesign, tintClassForBand(band));
+}
+
+export function pillTintFor(redesign: Redesign, bandId: BandId): PillTint {
+  return tintByClass(redesign, tintClassForBand({ bandId }));
 }
 
 /**

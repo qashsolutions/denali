@@ -85,6 +85,16 @@ case, lowercase. Maestro flows reference these IDs verbatim.
 | `instruments_${menuKey}_item${N}_option_${value}` | Menu-instrument item Likert options (GAD-7 / AUDIT-C / Epworth / IPSS / MRS / ADAM) |
 | `instruments_finish_button` | "I'm done — go to Denali" Pressable |
 
+### Domain detail — trend layer (Step 3/4)
+
+| testID | Element |
+|---|---|
+| `domain_detail_start_checkin` | "Start a check-in" CTA (repeat check-in re-entry; navigates Instruments with `focus`) |
+| `trend_chart_${instrumentId}` | Per-instrument trend chart container (e.g. `trend_chart_GAD-7`) |
+| `trend_range_3m` / `trend_range_6m` / `trend_range_y` / `trend_range_all` | Range-control segments |
+| `trend_empty_state` | n=1 quiet-state line |
+| `trend_delta` | Factual delta line under the chart |
+
 ### Crisis 988 modal
 
 | testID | Element |

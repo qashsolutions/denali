@@ -25,7 +25,7 @@
  *   - This preserves the hard rule from .claude/agents/mobile-onboarding-builder.md:
  *     "Never silently record a positive PHQ-9 item 9 without surfacing 988."
  */
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React from "react";
 import {
@@ -60,17 +60,19 @@ import {
 import { OneItemScreen } from "@/onboarding/OneItemScreen";
 import { useTheme } from "@/theme/useTheme";
 
+import {
+  finishTarget,
+  isFocusComplete,
+  resolveFocus,
+  type MenuKey,
+} from "./instrumentsFocus";
+
 type Nav = NativeStackNavigationProp<RootStackParamList, "Instruments">;
+type InstrumentsRoute = RouteProp<RootStackParamList, "Instruments">;
 
-// ─── Section identification ───────────────────────────────────────────────
-
-type MenuKey =
-  | "anxiety"
-  | "alcohol"
-  | "sleep"
-  | "urinary"
-  | "hormonalFemale"
-  | "hormonalMale";
+// ─── Section identification ──────────────────────────────────────────────
+// MenuKey lives in ./instrumentsFocus (pure helper module) so the
+// focus-mode resolution and this screen share one definition.
 
 interface MenuItem {
   key: MenuKey;
@@ -91,6 +93,10 @@ export function InstrumentsScreen(): React.ReactElement {
   const api = useApiClient();
   const dal = useDal();
   const navigation = useNavigation<Nav>();
+  const route = useRoute<InstrumentsRoute>();
+  // Step 4: repeat check-in re-entry. Absent → onboarding battery,
+  // byte-identical. Present → exactly one section, then back.
+  const focus = route.params?.focus;
   const { active, theme } = useTheme();
 
   const [sexAtBirth, setSexAtBirth] = React.useState<
@@ -527,8 +533,50 @@ export function InstrumentsScreen(): React.ReactElement {
   );
 
   const goToApp = React.useCallback(() => {
-    navigation.navigate("MainTabs");
-  }, [navigation]);
+    // Defensive: the finish button only renders in onboarding mode, but
+    // the destination is decided by the pure helper either way.
+    if (finishTarget(focus) === "back") navigation.goBack();
+    else navigation.navigate("MainTabs");
+  }, [focus, navigation]);
+
+  // ─── Focus mode (Step 4) ──────────────────────────────────────────────
+  // All decisions come from the pure helpers in ./instrumentsFocus;
+  // these effects only execute the verdicts.
+
+  const focusResolution = React.useMemo(
+    () => resolveFocus(focus, sexAtBirth),
+    [focus, sexAtBirth],
+  );
+
+  // G2 — sex-gated mismatch (or umbrella domain): defined fallback,
+  // never a blank render and never the gated instrument.
+  React.useEffect(() => {
+    if (profileLoading) return;
+    if (focus != null && focusResolution.kind === "unavailable") {
+      navigation.goBack();
+    }
+  }, [focus, focusResolution, navigation, profileLoading]);
+
+  // Auto-start the focused menu instrument (once per mount).
+  const focusStartedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (profileLoading || focusResolution.kind !== "menu") return;
+    if (focusStartedRef.current) return;
+    if (doneKeys.has(focusResolution.menuKey)) return;
+    focusStartedRef.current = true;
+    startMenuItem(focusResolution.menuKey);
+  }, [doneKeys, focusResolution, profileLoading, startMenuItem]);
+
+  // G3 — completion signals are post-persist only (moodDone flips after
+  // the mood persist resolves; doneKeys gains its key inside
+  // finishMenuItem AFTER persistInstrument resolved). goBack therefore
+  // cannot fire before the write landed.
+  React.useEffect(() => {
+    if (focus == null || profileLoading) return;
+    if (isFocusComplete(focusResolution, moodDone, doneKeys)) {
+      navigation.goBack();
+    }
+  }, [doneKeys, focus, focusResolution, moodDone, navigation, profileLoading]);
 
   // ─── Styles ───────────────────────────────────────────────────────────
 
@@ -632,8 +680,14 @@ export function InstrumentsScreen(): React.ReactElement {
   }
 
   // ─── Mood path (PHQ-2 → optional PHQ-9 expansion) ─────────────────────
+  // G1 — focus "mood" enters this FULL path (phqStep starts 0, moodDone
+  // starts false) with the item-9 → Crisis988Modal wiring untouched.
+  // Menu-focused entries never reach it (the modal mounts only here).
 
-  if (!moodDone) {
+  if (
+    (focusResolution.kind === "none" || focusResolution.kind === "mood") &&
+    !moodDone
+  ) {
     const totalItems = phqExpanded ? 9 : 2;
     const inst = phqExpanded ? PHQ9 : PHQ2;
     const itemIndex = phqStep;
@@ -708,10 +762,17 @@ export function InstrumentsScreen(): React.ReactElement {
             autoAdvance
             onBack={
               menuStepIdx === 0
-                ? () => skipMenuItem()
+                ? () =>
+                    focusResolution.kind === "menu"
+                      ? navigation.goBack()
+                      : skipMenuItem()
                 : () => setMenuStepIdx((s) => Math.max(0, s - 1))
             }
-            onSkipSection={skipMenuItem}
+            onSkipSection={
+              focusResolution.kind === "menu"
+                ? () => navigation.goBack()
+                : skipMenuItem
+            }
             skipLabel="Skip this section"
             errorMessage={errorMsg}
           >
@@ -728,6 +789,19 @@ export function InstrumentsScreen(): React.ReactElement {
         );
       }
     }
+  }
+
+  // ─── Focus-mode fallback ──────────────────────────────────────────────
+  // A focused entry never shows the onboarding menu. The frames that
+  // reach here (pre-auto-start, post-completion before goBack, the
+  // unavailable case) render a quiet spinner while the effects act.
+
+  if (focusResolution.kind !== "none") {
+    return (
+      <View style={styles.emptyWrap}>
+        <ActivityIndicator color={active.accentPrimary} />
+      </View>
+    );
   }
 
   // ─── Optional check-in: menu ──────────────────────────────────────────
