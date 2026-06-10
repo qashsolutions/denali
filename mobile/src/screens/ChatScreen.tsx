@@ -33,6 +33,7 @@ import {
 } from "react-native";
 
 import { useApiClient } from "@/auth";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import {
@@ -44,11 +45,8 @@ import {
 
 export function ChatScreen(): React.ReactElement {
   const api = useApiClient();
-  const { active, theme } = useTheme();
-  // useColorScheme via useTheme — we need the mode to pick the right
-  // bubble palette from the Wave-1-amended chat colors.
-  const isDarkMode = active === theme.colors.dark;
-  const chatPalette = isDarkMode ? theme.colors.chat.dark : theme.colors.chat.light;
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
 
   const [history, setHistory] = React.useState<ChatTurn[]>([]);
   const [input, setInput] = React.useState("");
@@ -124,37 +122,50 @@ export function ChatScreen(): React.ReactElement {
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
-        screen: { flex: 1, backgroundColor: active.bgPrimary },
+        screen: { flex: 1, backgroundColor: redesign.paper },
+        // Mockup .scr-title: Bricolage display, ink.
         title: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.serif,
+          color: redesign.ink,
           fontSize: theme.typography.sizes["2xl"],
-          paddingHorizontal: theme.spacing.lg,
-          paddingTop: theme.spacing.lg,
+          letterSpacing: -0.5,
+          paddingHorizontal: theme.spacing.space5,
+          paddingTop: theme.spacing.space5,
           paddingBottom: theme.spacing.sm,
+          ...fontStyle("display", 700, fontsLoaded),
         },
         listContent: {
           padding: theme.spacing.md,
           gap: theme.spacing.sm,
         },
+        // User bubble: teal fill, white text. Assistant: white surface
+        // card with a hairline (so it reads on paper), ink text.
         bubbleUser: {
           alignSelf: "flex-end",
-          backgroundColor: chatPalette.userBubbleFrom,
-          borderRadius: theme.radii.lg,
+          backgroundColor: redesign.teal,
+          borderRadius: redesign.rChip + 4,
           padding: theme.spacing.md,
           maxWidth: "85%",
         },
         bubbleAssistant: {
           alignSelf: "flex-start",
-          backgroundColor: chatPalette.assistantBubble,
-          borderRadius: theme.radii.lg,
+          backgroundColor: redesign.surface,
+          borderColor: redesign.line,
+          borderWidth: 1,
+          borderRadius: redesign.rChip + 4,
           padding: theme.spacing.md,
           maxWidth: "85%",
         },
-        bubbleText: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.sans,
+        bubbleTextUser: {
+          color: redesign.surface,
           fontSize: theme.typography.sizes.base,
+          lineHeight: theme.typography.sizes.base * 1.45,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        bubbleTextAssistant: {
+          color: redesign.ink,
+          fontSize: theme.typography.sizes.base,
+          lineHeight: theme.typography.sizes.base * 1.45,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         empty: {
           flex: 1,
@@ -163,37 +174,38 @@ export function ChatScreen(): React.ReactElement {
           padding: theme.spacing.lg,
         },
         emptyText: {
-          color: active.textSecondary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink2,
           fontSize: theme.typography.sizes.base,
+          lineHeight: theme.typography.sizes.base * 1.5,
           textAlign: "center",
+          ...fontStyle("body", 400, fontsLoaded),
         },
         inputBar: {
           flexDirection: "row",
           alignItems: "flex-end",
           gap: theme.spacing.sm,
           padding: theme.spacing.md,
-          borderTopColor: active.border,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          backgroundColor: active.bgPrimary,
+          borderTopColor: redesign.line,
+          borderTopWidth: 1,
+          backgroundColor: redesign.paper,
         },
         input: {
           flex: 1,
-          backgroundColor: active.bgSecondary,
-          color: active.textPrimary,
-          borderColor: active.border,
+          backgroundColor: redesign.surface,
+          color: redesign.ink,
+          borderColor: redesign.line,
           borderWidth: 1,
-          borderRadius: theme.radii.md,
+          borderRadius: theme.radii.lg,
           paddingHorizontal: theme.spacing.md,
           paddingVertical: theme.spacing.sm,
-          fontFamily: theme.typography.fonts.sans,
           fontSize: theme.typography.sizes.base,
           minHeight: 44,
           maxHeight: 120,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         sendBtn: {
-          backgroundColor: active.accentPrimary,
-          borderRadius: theme.radii.md,
+          backgroundColor: redesign.teal,
+          borderRadius: theme.radii.lg,
           paddingHorizontal: theme.spacing.md,
           minHeight: 44,
           alignItems: "center",
@@ -201,35 +213,35 @@ export function ChatScreen(): React.ReactElement {
         },
         sendBtnDisabled: { opacity: 0.5 },
         sendText: {
-          color: active.bgPrimary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.surface,
           fontSize: theme.typography.sizes.base,
-          fontWeight: "600",
+          ...fontStyle("body", 600, fontsLoaded),
         },
         errorBanner: {
-          backgroundColor: active.bgSecondary,
-          borderColor: active.error,
+          backgroundColor: redesign.surface,
+          borderColor: redesign.alarm,
           borderWidth: 1,
-          borderRadius: theme.radii.md,
+          borderRadius: theme.radii.lg,
           marginHorizontal: theme.spacing.md,
           marginBottom: theme.spacing.sm,
           padding: theme.spacing.md,
         },
         errorText: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink,
           fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 400, fontsLoaded),
         },
       }),
-    [active, chatPalette, theme],
+    [theme, redesign, fontsLoaded],
   );
 
   const renderItem: ListRenderItem<ChatTurn> = ({ item }) => {
-    const bubble =
-      item.role === "user" ? styles.bubbleUser : styles.bubbleAssistant;
+    const isUser = item.role === "user";
     return (
-      <View style={bubble}>
-        <Text style={styles.bubbleText}>{item.content}</Text>
+      <View style={isUser ? styles.bubbleUser : styles.bubbleAssistant}>
+        <Text style={isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant}>
+          {item.content}
+        </Text>
       </View>
     );
   };
@@ -267,7 +279,7 @@ export function ChatScreen(): React.ReactElement {
           multiline
           onChangeText={setInput}
           placeholder="Type a message…"
-          placeholderTextColor={active.textMuted}
+          placeholderTextColor={redesign.ink3}
           style={styles.input}
           value={input}
         />
@@ -282,7 +294,7 @@ export function ChatScreen(): React.ReactElement {
           ]}
         >
           {streaming ? (
-            <ActivityIndicator color={active.bgPrimary} />
+            <ActivityIndicator color={redesign.surface} />
           ) : (
             <Text style={styles.sendText}>Send</Text>
           )}

@@ -25,6 +25,7 @@ import {
 
 import { useApiClient } from "@/auth";
 import type { RootStackParamList } from "@/navigation/types";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import {
@@ -62,7 +63,8 @@ const TOGGLE_COPY: Record<
 export function SettingsScreen(): React.ReactElement {
   const api = useApiClient();
   const navigation = useNavigation<Nav>();
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
 
   const [consent, setConsent] = React.useState<ConsentSnapshot | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -126,54 +128,56 @@ export function SettingsScreen(): React.ReactElement {
   }, [api, navigation]);
 
   const styles = React.useMemo(
-    () =>
-      StyleSheet.create({
-        screen: { flex: 1, backgroundColor: active.bgPrimary },
+    () => {
+      // Shared white r-18 surface card (mockup .card).
+      const cardSurface = {
+        backgroundColor: redesign.surface,
+        borderColor: redesign.line,
+        borderWidth: 1,
+        borderRadius: redesign.rCard,
+        padding: theme.spacing.md,
+        gap: theme.spacing.xs,
+        shadowColor: redesign.ink,
+        shadowOpacity: 0.05,
+        shadowRadius: 7,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 2,
+      };
+      return StyleSheet.create({
+        screen: { flex: 1, backgroundColor: redesign.paper },
         content: {
-          padding: theme.spacing.lg,
-          gap: theme.spacing.md,
+          padding: theme.spacing.space5,
+          gap: theme.spacing.space3,
         },
+        // Mockup .scr-title: Bricolage display, ink.
         title: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.serif,
+          color: redesign.ink,
           fontSize: theme.typography.sizes["2xl"],
+          letterSpacing: -0.5,
+          ...fontStyle("display", 700, fontsLoaded),
         },
+        // Eyebrow: body 600, 11px, tracked, uppercase, ink-3.
         sectionLabel: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.sans,
-          fontSize: theme.typography.sizes.sm,
-          fontWeight: "600",
-          marginTop: theme.spacing.md,
+          color: redesign.ink3,
+          fontSize: 11,
+          letterSpacing: 11 * 0.15,
+          marginTop: theme.spacing.space3,
           marginBottom: theme.spacing.xs,
           textTransform: "uppercase",
-          letterSpacing: 0.5,
+          ...fontStyle("body", 600, fontsLoaded),
         },
-        accountCard: {
-          backgroundColor: active.bgSecondary,
-          borderColor: active.border,
-          borderWidth: 1,
-          borderRadius: theme.radii.lg,
-          padding: theme.spacing.md,
-          gap: theme.spacing.xs,
-        },
+        accountCard: cardSurface,
         accountValue: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink,
           fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 500, fontsLoaded),
         },
         accountLabel: {
-          color: active.textMuted,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink3,
           fontSize: theme.typography.sizes.xs,
+          ...fontStyle("body", 400, fontsLoaded),
         },
-        toggleRow: {
-          backgroundColor: active.bgSecondary,
-          borderColor: active.border,
-          borderWidth: 1,
-          borderRadius: theme.radii.lg,
-          padding: theme.spacing.md,
-          gap: theme.spacing.xs,
-        },
+        toggleRow: cardSurface,
         toggleHeader: {
           flexDirection: "row",
           justifyContent: "space-between",
@@ -181,47 +185,49 @@ export function SettingsScreen(): React.ReactElement {
           gap: theme.spacing.sm,
         },
         toggleLabel: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink,
           fontSize: theme.typography.sizes.base,
-          fontWeight: "600",
           flexShrink: 1,
+          ...fontStyle("body", 600, fontsLoaded),
         },
         toggleBody: {
-          color: active.textSecondary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink2,
           fontSize: theme.typography.sizes.sm,
+          lineHeight: theme.typography.sizes.sm * 1.45,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         inertHint: {
-          color: active.warning,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.amber,
           fontSize: theme.typography.sizes.xs,
           fontStyle: "italic",
+          ...fontStyle("body", 400, fontsLoaded),
         },
+        // Sign-out: ghost card with the alarm accent (the alarm token's
+        // calm UI use), not a filled alarm button.
         signOutBtn: {
-          backgroundColor: active.bgSecondary,
-          borderColor: active.error,
+          backgroundColor: redesign.surface,
+          borderColor: redesign.alarm,
           borderWidth: 1,
-          borderRadius: theme.radii.md,
+          borderRadius: theme.radii.xl - 2,
           paddingVertical: theme.spacing.md,
           alignItems: "center",
           marginTop: theme.spacing.md,
-          minHeight: 44,
+          minHeight: 48,
           justifyContent: "center",
         },
         signOutText: {
-          color: active.error,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.alarm,
           fontSize: theme.typography.sizes.base,
-          fontWeight: "600",
+          ...fontStyle("body", 600, fontsLoaded),
         },
         loadError: {
-          color: active.error,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.alarm,
           fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 400, fontsLoaded),
         },
-      }),
-    [active, theme],
+      });
+    },
+    [theme, redesign, fontsLoaded],
   );
 
   const user = api.getCurrentUser();
@@ -231,7 +237,7 @@ export function SettingsScreen(): React.ReactElement {
       <View
         style={[styles.screen, { alignItems: "center", justifyContent: "center" }]}
       >
-        <ActivityIndicator color={active.accentPrimary} />
+        <ActivityIndicator color={redesign.teal} />
       </View>
     );
   }
@@ -260,6 +266,8 @@ export function SettingsScreen(): React.ReactElement {
                   accessibilityLabel={copy.label}
                   onValueChange={(next) => onToggle(type, next)}
                   value={value}
+                  trackColor={{ false: redesign.line2, true: redesign.teal }}
+                  thumbColor={redesign.surface}
                 />
               </View>
               <Text style={styles.toggleBody}>{copy.body}</Text>
@@ -282,7 +290,7 @@ export function SettingsScreen(): React.ReactElement {
         ]}
       >
         {signingOut ? (
-          <ActivityIndicator color={active.error} />
+          <ActivityIndicator color={redesign.alarm} />
         ) : (
           <Text style={styles.signOutText}>Sign out</Text>
         )}

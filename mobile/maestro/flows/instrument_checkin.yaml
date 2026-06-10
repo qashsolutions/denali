@@ -1,0 +1,66 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Flow 2 — Repeat instrument check-in (Anxiety / GAD-7)
+#
+#   Dashboard → Anxiety domain card → DomainDetail → "Start a check-in"
+#   (domain_detail_start_checkin) → GAD-7 (7 items, auto-advance) →
+#   return to the Anxiety detail screen.
+#
+# GATE — DOES NOT RUN until the operator seeds the staging test-OTP env.
+# See signin_onboarding.yaml / ./README.md for the full seed checklist
+# (Cognito user, Secrets Manager password, staging task-def env vars,
+# RDS row). The mobile build must point at staging, not prod.
+#
+# Selectors are the testID / accessibilityLabel inventory in ../README.md.
+# This flow reuses signin_onboarding.yaml to reach the dashboard so it is
+# runnable on its own.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+# Sign in + complete onboarding → land on the dashboard ("Your health").
+- runFlow: signin_onboarding.yaml
+
+# ── Dashboard → Anxiety domain card ─────────────────────────────────────
+# Anxiety (GAD-7) is a unisex domain card surfaced for every cohort. For a
+# user who has only completed the PHQ-2, the card renders in its empty
+# state but keeps the dashboard_card_anxiety testID and still navigates to
+# the DomainDetail screen.
+- assertVisible:
+    id: "dashboard_card_anxiety"
+- tapOn:
+    id: "dashboard_card_anxiety"
+
+# ── DomainDetail (Anxiety) → Start a check-in ───────────────────────────
+- assertVisible:
+    id: "domain_detail_start_checkin"
+- tapOn:
+    id: "domain_detail_start_checkin"
+
+# ── GAD-7 — 7 items, all auto-advance ───────────────────────────────────
+# Focused entry (focus: "anxiety") routes straight to the GAD-7 menu
+# instrument. Answer every item; the tap on each option auto-advances.
+# Option value 1 ("Several days") is a valid, non-zero, non-extreme answer.
+- assertVisible:
+    id: "instruments_anxiety_item1_option_1"
+- tapOn:
+    id: "instruments_anxiety_item1_option_1"
+- tapOn:
+    id: "instruments_anxiety_item2_option_1"
+- tapOn:
+    id: "instruments_anxiety_item3_option_1"
+- tapOn:
+    id: "instruments_anxiety_item4_option_1"
+- tapOn:
+    id: "instruments_anxiety_item5_option_1"
+- tapOn:
+    id: "instruments_anxiety_item6_option_1"
+- tapOn:
+    id: "instruments_anxiety_item7_option_1"
+
+# ── Back on the Anxiety detail ──────────────────────────────────────────
+# A focused check-in finishes by going back (finishTarget = "back"), so we
+# land on the Anxiety DomainDetail again. The "Start a check-in" CTA is
+# back on screen — assert it to confirm we returned to the detail.
+- assertVisible:
+    id: "domain_detail_start_checkin"
+- assertVisible:
+    text: "Anxiety"

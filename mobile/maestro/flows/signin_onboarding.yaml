@@ -1,0 +1,116 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Flow 1 — Sign-in + onboarding happy path
+#
+#   SignIn (test-OTP bypass) → PrivacyNotice → CohortOnboarding
+#   (birth year / sex at birth / Medicare / gender identity) → Intake
+#   → land on MainTabs Timeline tab ("Your health").
+#
+# GATE — DOES NOT RUN until the operator seeds the staging test-OTP env.
+# This flow signs in via the staging-only E2E test-OTP bypass
+# (email e2e@denali.health, code 999999). That path is gated behind a
+# five-guard stack and is structurally unreachable in production. Before
+# this flow can pass, the operator must have completed the one-shot
+# staging seed described in STAGING-LOCKDOWN.md "E2E test-OTP bypass":
+#   1. Cognito user e2e@denali.health created with the static password.
+#   2. Secrets Manager `denali/staging/e2e-test-account-password` seeded;
+#      task def `secrets` injects E2E_TEST_OTP_STATIC_PASSWORD.
+#   3. Staging task-def env: E2E_TEST_OTP_ENABLED=true,
+#      E2E_TEST_OTP_EMAILS=e2e@denali.health, E2E_TEST_OTP_CODE=999999.
+#   4. RDS users + user_verification row whose id == the Cognito sub.
+# The mobile build must point at staging (sandbox CMS), not prod.
+#
+# Selectors are the testID / accessibilityLabel inventory in
+# ../README.md. No coordinate-based taps.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+# Cold start — clear state so we always begin at the SignIn route.
+- launchApp:
+    clearState: true
+
+# ── SignIn — test-OTP bypass ────────────────────────────────────────────
+- assertVisible:
+    id: "signin_email_input"
+- tapOn:
+    id: "signin_email_input"
+- inputText: "e2e@denali.health"
+- tapOn:
+    id: "signin_send_code_button"
+
+# OTP field appears once the (bypassed) send-code call returns.
+- assertVisible:
+    id: "signin_otp_input"
+- tapOn:
+    id: "signin_otp_input"
+- inputText: "999999"
+- tapOn:
+    id: "signin_verify_button"
+
+# ── PrivacyNotice — data-locality acknowledgement ───────────────────────
+- assertVisible:
+    id: "privacy_acknowledge_button"
+- tapOn:
+    id: "privacy_acknowledge_button"
+
+# ── CohortOnboarding — one item per screen ──────────────────────────────
+# Step 1: birth year. This step uses an explicit Continue button (it is
+# NOT auto-advance), so we type, then tap oneitem_continue_button.
+- assertVisible:
+    id: "cohort_step1_birth_year_input"
+- tapOn:
+    id: "cohort_step1_birth_year_input"
+- inputText: "1965"
+- tapOn:
+    id: "oneitem_continue_button"
+
+# Step 2: sex at birth — auto-advance (the tap itself advances).
+- assertVisible:
+    id: "cohort_step2_option_male"
+- tapOn:
+    id: "cohort_step2_option_male"
+
+# Step 3: Medicare enrollment — auto-advance.
+- assertVisible:
+    id: "cohort_step3_option_yes"
+- tapOn:
+    id: "cohort_step3_option_yes"
+
+# Step 4: gender identity (optional) — auto-advance on selection.
+- assertVisible:
+    id: "cohort_step4_option_male"
+- tapOn:
+    id: "cohort_step4_option_male"
+
+# ── Intake — every section optional; finish straight through ────────────
+- assertVisible:
+    id: "intake_finish_button"
+- tapOn:
+    id: "intake_finish_button"
+
+# ── Instruments — mood path (PHQ-2) runs first ──────────────────────────
+# Happy path: answer PHQ-2 items 1 and 2 negatively (value 0) so the flow
+# does NOT expand to PHQ-9 and does NOT trip the 988 surface — that path
+# is exercised separately in crisis_988.yaml. Both items auto-advance.
+- assertVisible:
+    id: "instruments_mood_item1_option_0"
+- tapOn:
+    id: "instruments_mood_item1_option_0"
+- assertVisible:
+    id: "instruments_mood_item2_option_0"
+- tapOn:
+    id: "instruments_mood_item2_option_0"
+
+# A negative PHQ-2 lands on the optional check-in menu. Skip the optional
+# instruments and go straight to the app.
+- assertVisible:
+    id: "instruments_finish_button"
+- tapOn:
+    id: "instruments_finish_button"
+
+# ── MainTabs — Timeline tab dashboard ───────────────────────────────────
+# The Timeline tab lands on HealthDashboardScreen, whose header reads
+# "Your health". Assert both the tab (accessibility label) and the header.
+- assertVisible:
+    text: "Your health"
+- assertVisible:
+    text: "Timeline tab"

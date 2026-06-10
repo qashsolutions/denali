@@ -85,11 +85,30 @@ case, lowercase. Maestro flows reference these IDs verbatim.
 | `instruments_${menuKey}_item${N}_option_${value}` | Menu-instrument item Likert options (GAD-7 / AUDIT-C / Epworth / IPSS / MRS / ADAM) |
 | `instruments_finish_button` | "I'm done — go to Denali" Pressable |
 
+### Onboarding shell
+
+| testID | Element |
+|---|---|
+| `oneitem_continue_button` | OneItemScreen "Continue" Pressable (cohort birth-year step; later steps auto-advance on tap) |
+
+### Health Hub dashboard (Phase-3 increment 1)
+
+| testID | Element |
+|---|---|
+| `dashboard_card_${domainId}` | Each domain card (e.g. `dashboard_card_mood`, `_anxiety`, `_sleep`, `_health_markers`) |
+| `dashboard_card_pill` | Verdict pill on an instrument-domain card |
+| `dashboard_card_sparkline` | Increment-2 mini-trend sparkline on a card (≥2 sessions) |
+| `dashboard_today_label` | Date line under the "Your health" title |
+| `dashboard_all_activity` | "See all activity (chronological)" footer entry (legacy-timeline flag) |
+| `dashboard_disclaimer` / `dashboard_provisional_footnote` | Pinned standing disclaimer + ‡ legend |
+
 ### Domain detail — trend layer (Step 3/4)
 
 | testID | Element |
 |---|---|
+| `domain_detail_back` | Back chip in the detail header |
 | `domain_detail_start_checkin` | "Start a check-in" CTA (repeat check-in re-entry; navigates Instruments with `focus`) |
+| `domain_detail_provisional_footnote` | ‡ legend in the detail's pinned disclaimer strip |
 | `trend_chart_${instrumentId}` | Per-instrument trend chart container (e.g. `trend_chart_GAD-7`) |
 | `trend_range_3m` / `trend_range_6m` / `trend_range_y` / `trend_range_all` | Range-control segments |
 | `trend_empty_state` | n=1 quiet-state line |

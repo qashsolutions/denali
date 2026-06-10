@@ -35,6 +35,7 @@ import {
 import type { LocalDataDAL } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 import {
   buildInsertsForReport,
@@ -57,7 +58,8 @@ export function UploadReviewScreen(): React.ReactElement {
   const route = useRoute<RouteProps>();
   const navigation = useNavigation<Nav>();
   const dal = useDal();
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
 
   const reportId = route.params.reportId;
 
@@ -90,26 +92,29 @@ export function UploadReviewScreen(): React.ReactElement {
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
-        screen: { flex: 1, backgroundColor: active.bgPrimary },
+        screen: { flex: 1, backgroundColor: redesign.paper },
         content: {
-          padding: theme.spacing.lg,
-          gap: theme.spacing.md,
+          padding: theme.spacing.space5,
+          gap: theme.spacing.space3,
         },
         title: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.serif,
+          color: redesign.ink,
           fontSize: theme.typography.sizes["2xl"],
+          letterSpacing: -0.5,
+          ...fontStyle("display", 700, fontsLoaded),
         },
         summary: {
-          color: active.textSecondary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink2,
           fontSize: theme.typography.sizes.base,
+          lineHeight: theme.typography.sizes.base * 1.5,
+          ...fontStyle("body", 400, fontsLoaded),
         },
+        // White r-18 surface card per row.
         row: {
-          backgroundColor: active.bgSecondary,
-          borderColor: active.border,
+          backgroundColor: redesign.surface,
+          borderColor: redesign.line,
           borderWidth: 1,
-          borderRadius: theme.radii.lg,
+          borderRadius: redesign.rCard,
           padding: theme.spacing.md,
           gap: theme.spacing.sm,
         },
@@ -124,40 +129,42 @@ export function UploadReviewScreen(): React.ReactElement {
           gap: theme.spacing.sm,
         },
         rowTitle: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink,
           fontSize: theme.typography.sizes.base,
-          fontWeight: "600",
           flexShrink: 1,
+          ...fontStyle("body", 600, fontsLoaded),
         },
+        // Confidence % — numbers role, tabular.
         rowConfidence: {
-          color: active.textMuted,
-          fontFamily: theme.typography.fonts.mono,
+          color: redesign.ink3,
           fontSize: theme.typography.sizes.xs,
+          fontVariant: ["tabular-nums"],
+          ...fontStyle("numbers", 600, fontsLoaded),
         },
         fieldLabel: {
-          color: active.textSecondary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink2,
           fontSize: theme.typography.sizes.xs,
           marginBottom: theme.spacing.xs / 2,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         input: {
-          backgroundColor: active.bgPrimary,
-          color: active.textPrimary,
-          borderColor: active.border,
+          backgroundColor: redesign.paper,
+          color: redesign.ink,
+          borderColor: redesign.line,
           borderWidth: 1,
           borderRadius: theme.radii.md,
           paddingHorizontal: theme.spacing.sm,
           paddingVertical: theme.spacing.xs,
-          fontFamily: theme.typography.fonts.sans,
           fontSize: theme.typography.sizes.base,
           minHeight: 44,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         sourceText: {
-          color: active.textMuted,
-          fontFamily: theme.typography.fonts.mono,
+          color: redesign.ink3,
           fontSize: theme.typography.sizes.xs,
           marginTop: theme.spacing.xs,
+          fontStyle: "italic",
+          ...fontStyle("body", 400, fontsLoaded),
         },
         toggleRow: {
           flexDirection: "row",
@@ -171,66 +178,72 @@ export function UploadReviewScreen(): React.ReactElement {
           justifyContent: "center",
           minHeight: 44,
           borderWidth: 1,
-          borderColor: active.border,
-          backgroundColor: active.bgPrimary,
+          borderColor: redesign.line,
+          backgroundColor: redesign.paper,
         },
         toggleActive: {
-          backgroundColor: active.accentPrimary,
-          borderColor: active.accentPrimary,
+          backgroundColor: redesign.teal,
+          borderColor: redesign.teal,
         },
         toggleText: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink,
           fontSize: theme.typography.sizes.sm,
-          fontWeight: "600",
+          ...fontStyle("body", 600, fontsLoaded),
         },
         toggleTextActive: {
-          color: active.bgPrimary,
+          color: redesign.surface,
         },
+        // Mockup .cta + .cta.ghost.
         button: {
-          backgroundColor: active.accentPrimary,
-          borderRadius: theme.radii.md,
-          paddingVertical: theme.spacing.md,
-          minHeight: 44,
+          backgroundColor: redesign.teal,
+          borderRadius: theme.radii.xl - 2,
+          paddingVertical: theme.spacing.md - 1,
+          minHeight: 48,
           alignItems: "center",
           justifyContent: "center",
+          shadowColor: redesign.teal,
+          shadowOpacity: 0.28,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 3,
         },
         buttonSecondary: {
-          backgroundColor: active.bgSecondary,
-          borderColor: active.accentPrimary,
+          backgroundColor: redesign.surface,
+          borderColor: redesign.tealWash,
           borderWidth: 1,
+          shadowOpacity: 0,
+          elevation: 0,
         },
         buttonDisabled: { opacity: 0.5 },
         buttonText: {
-          color: active.bgPrimary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.surface,
           fontSize: theme.typography.sizes.base,
-          fontWeight: "600",
+          ...fontStyle("body", 600, fontsLoaded),
         },
         buttonTextSecondary: {
-          color: active.accentPrimary,
+          color: redesign.tealDeep,
         },
         banner: {
-          backgroundColor: active.bgTertiary,
-          borderColor: active.error,
+          backgroundColor: redesign.alarmWash,
+          borderColor: redesign.alarm,
           borderWidth: 1,
-          borderRadius: theme.radii.md,
+          borderRadius: redesign.rCard,
           padding: theme.spacing.md,
         },
         bannerText: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink,
           fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         emptyState: {
-          color: active.textSecondary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink2,
           fontSize: theme.typography.sizes.base,
           textAlign: "center",
           padding: theme.spacing.lg,
+          ...fontStyle("body", 400, fontsLoaded),
         },
       }),
-    [active, theme],
+    [theme, redesign, fontsLoaded],
   );
 
   const updateRow = React.useCallback(
@@ -355,7 +368,7 @@ export function UploadReviewScreen(): React.ReactElement {
               });
             }}
             placeholder="value"
-            placeholderTextColor={active.textMuted}
+            placeholderTextColor={redesign.ink3}
             style={styles.input}
             value={
               obs.value_num != null
@@ -372,7 +385,7 @@ export function UploadReviewScreen(): React.ReactElement {
             editable={!committing && row.accepted}
             onChangeText={(text) => updateRow(idx, { unit: text || null })}
             placeholder="unit"
-            placeholderTextColor={active.textMuted}
+            placeholderTextColor={redesign.ink3}
             style={styles.input}
             value={obs.unit ?? ""}
           />
@@ -385,7 +398,7 @@ export function UploadReviewScreen(): React.ReactElement {
             editable={!committing && row.accepted}
             onChangeText={(text) => updateRow(idx, { effective_at: text })}
             placeholder="YYYY-MM-DD"
-            placeholderTextColor={active.textMuted}
+            placeholderTextColor={redesign.ink3}
             style={styles.input}
             value={obs.effective_at}
           />
@@ -475,7 +488,7 @@ export function UploadReviewScreen(): React.ReactElement {
         ]}
       >
         {committing ? (
-          <ActivityIndicator color={active.bgPrimary} />
+          <ActivityIndicator color={redesign.surface} />
         ) : (
           <Text style={styles.buttonText}>
             {rows.some((r) => r.accepted) ? "Save to my record" : "Save with no values"}

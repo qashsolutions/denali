@@ -38,6 +38,7 @@ import { useApiClient } from "@/auth";
 import type { LocalDataDAL, ReportType } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
+import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { storeBlob } from "../upload/blobStore";
@@ -76,7 +77,8 @@ export function UploadScreen(): React.ReactElement {
   const api = useApiClient();
   const dal = useDal();
   const navigation = useNavigation<Nav>();
-  const { active, theme } = useTheme();
+  const { theme, redesign } = useTheme();
+  const fontsLoaded = useFontsLoaded();
 
   const [reportType, setReportType] = React.useState<ReportType>("lab");
   const [reportName, setReportName] = React.useState<string>("");
@@ -99,105 +101,120 @@ export function UploadScreen(): React.ReactElement {
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
-        screen: { flex: 1, backgroundColor: active.bgPrimary },
+        screen: { flex: 1, backgroundColor: redesign.paper },
         content: {
-          padding: theme.spacing.lg,
-          gap: theme.spacing.md,
+          padding: theme.spacing.space5,
+          gap: theme.spacing.space3,
         },
+        // Mockup .scr-title: Bricolage display, ink.
         title: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.serif,
+          color: redesign.ink,
           fontSize: theme.typography.sizes["2xl"],
+          letterSpacing: -0.5,
+          ...fontStyle("display", 700, fontsLoaded),
         },
         subtitle: {
-          color: active.textSecondary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink2,
           fontSize: theme.typography.sizes.base,
+          lineHeight: theme.typography.sizes.base * 1.5,
+          ...fontStyle("body", 400, fontsLoaded),
         },
+        // Eyebrow.
         sectionLabel: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.sans,
-          fontSize: theme.typography.sizes.sm,
-          fontWeight: "600",
+          color: redesign.ink3,
+          fontSize: 11,
+          letterSpacing: 11 * 0.15,
           marginBottom: theme.spacing.xs,
+          textTransform: "uppercase",
+          ...fontStyle("body", 600, fontsLoaded),
         },
+        // White r-18 surface card; selected = teal border on teal-wash.
         typeCard: {
-          backgroundColor: active.bgSecondary,
-          borderColor: active.border,
+          backgroundColor: redesign.surface,
+          borderColor: redesign.line,
           borderWidth: 1,
-          borderRadius: theme.radii.lg,
+          borderRadius: redesign.rCard,
           padding: theme.spacing.md,
           marginBottom: theme.spacing.sm,
           minHeight: 44,
+          gap: theme.spacing.xs,
         },
         typeCardActive: {
-          borderColor: active.accentPrimary,
-          backgroundColor: active.bgTertiary,
+          borderColor: redesign.teal,
+          backgroundColor: redesign.tealWash,
         },
         typeLabel: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink,
           fontSize: theme.typography.sizes.base,
-          fontWeight: "600",
+          ...fontStyle("body", 600, fontsLoaded),
         },
         typeHint: {
-          color: active.textSecondary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink2,
           fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         input: {
-          backgroundColor: active.bgSecondary,
-          color: active.textPrimary,
-          borderColor: active.border,
+          backgroundColor: redesign.surface,
+          color: redesign.ink,
+          borderColor: redesign.line,
           borderWidth: 1,
-          borderRadius: theme.radii.md,
+          borderRadius: theme.radii.lg,
           paddingHorizontal: theme.spacing.md,
           paddingVertical: theme.spacing.sm,
-          fontFamily: theme.typography.fonts.sans,
           fontSize: theme.typography.sizes.base,
           minHeight: 44,
+          ...fontStyle("body", 400, fontsLoaded),
         },
+        // Mockup .cta: teal primary; .cta.ghost: surface + teal border.
         button: {
-          backgroundColor: active.accentPrimary,
-          borderRadius: theme.radii.md,
-          paddingVertical: theme.spacing.md,
-          minHeight: 44,
+          backgroundColor: redesign.teal,
+          borderRadius: theme.radii.xl - 2,
+          paddingVertical: theme.spacing.md - 1,
+          minHeight: 48,
           alignItems: "center",
           justifyContent: "center",
+          shadowColor: redesign.teal,
+          shadowOpacity: 0.28,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 3,
         },
         buttonSecondary: {
-          backgroundColor: active.bgSecondary,
-          borderColor: active.accentPrimary,
+          backgroundColor: redesign.surface,
+          borderColor: redesign.tealWash,
           borderWidth: 1,
+          shadowOpacity: 0,
+          elevation: 0,
         },
         buttonDisabled: { opacity: 0.5 },
         buttonText: {
-          color: active.bgPrimary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.surface,
           fontSize: theme.typography.sizes.base,
-          fontWeight: "600",
+          ...fontStyle("body", 600, fontsLoaded),
         },
         buttonTextSecondary: {
-          color: active.accentPrimary,
+          color: redesign.tealDeep,
         },
         banner: {
-          backgroundColor: active.bgTertiary,
-          borderColor: active.border,
+          backgroundColor: redesign.surface,
+          borderColor: redesign.line,
           borderWidth: 1,
-          borderRadius: theme.radii.md,
+          borderRadius: redesign.rCard,
           padding: theme.spacing.md,
         },
         bannerWarning: {
-          borderColor: active.warning,
+          borderColor: redesign.amber,
+          backgroundColor: redesign.amberWash,
         },
         bannerError: {
-          borderColor: active.error,
+          borderColor: redesign.alarm,
+          backgroundColor: redesign.alarmWash,
         },
         bannerText: {
-          color: active.textPrimary,
-          fontFamily: theme.typography.fonts.sans,
+          color: redesign.ink,
           fontSize: theme.typography.sizes.sm,
-          lineHeight: theme.typography.sizes.sm * theme.typography.lineHeights.normal,
+          lineHeight: theme.typography.sizes.sm * 1.5,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         spinnerRow: {
           flexDirection: "row",
@@ -205,7 +222,7 @@ export function UploadScreen(): React.ReactElement {
           gap: theme.spacing.sm,
         },
       }),
-    [active, theme],
+    [theme, redesign, fontsLoaded],
   );
 
   const busy = phase !== "idle" && phase !== "error" && phase !== "done";
@@ -387,7 +404,7 @@ export function UploadScreen(): React.ReactElement {
               : "Working…";
     return (
       <View style={[styles.banner, styles.spinnerRow]}>
-        <ActivityIndicator color={active.accentPrimary} />
+        <ActivityIndicator color={redesign.teal} />
         <Text style={styles.bannerText}>{label}</Text>
       </View>
     );
@@ -440,7 +457,7 @@ export function UploadScreen(): React.ReactElement {
           maxLength={120}
           onChangeText={setReportName}
           placeholder="e.g. May 2026 A1c"
-          placeholderTextColor={active.textMuted}
+          placeholderTextColor={redesign.ink3}
           style={styles.input}
           value={reportName}
         />
