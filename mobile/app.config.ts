@@ -1,4 +1,5 @@
 import type { ExpoConfig } from "expo/config";
+import { withAndroidManifest, type ConfigPlugin } from "expo/config-plugins";
 
 /**
  * Expo app config — Phase 1 mobile.
@@ -55,4 +56,38 @@ const config: ExpoConfig = {
   },
 };
 
-export default config;
+/**
+ * Android 11+ (API 30) package-visibility fix for the 988 crisis hand-off.
+ *
+ * Without an explicit `<queries>` entry, `Linking.canOpenURL("tel:988")` /
+ * `("sms:988")` return false on Android 11+, so the Crisis988Modal's
+ * "Call 988" / "Text 988" buttons hit their fallback ("Cannot open…")
+ * instead of launching the dialer / SMS app — i.e. the crisis hand-off is
+ * broken on every modern Android device. This plugin declares the schemes
+ * so `canOpenURL` resolves them. iOS is unaffected (tel/sms are system
+ * schemes there). The modal itself is untouched. (2026-06-11)
+ */
+const withDialerSmsQueries: ConfigPlugin = (cfg) =>
+  withAndroidManifest(cfg, (c) => {
+    const manifest = c.modResults.manifest;
+    manifest.queries ??= [];
+    const queries = (manifest.queries[0] ??= {});
+    queries.intent ??= [];
+    for (const scheme of ["tel", "sms", "smsto"]) {
+      const exists = queries.intent.some(
+        (i) =>
+          i.action?.[0]?.$?.["android:name"] ===
+            "android.intent.action.VIEW" &&
+          i.data?.[0]?.$?.["android:scheme"] === scheme,
+      );
+      if (!exists) {
+        queries.intent.push({
+          action: [{ $: { "android:name": "android.intent.action.VIEW" } }],
+          data: [{ $: { "android:scheme": scheme } }],
+        });
+      }
+    }
+    return c;
+  });
+
+export default withDialerSmsQueries(config);
