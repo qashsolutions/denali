@@ -37,6 +37,7 @@ import { useApiClient } from "@/auth";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
+import { ChatAssistantBody } from "./chat/ChatAssistantBody";
 import {
   appendAssistantDelta,
   appendUserTurn,
@@ -171,12 +172,8 @@ export function ChatScreen(): React.ReactElement {
           lineHeight: theme.typography.sizes.base * 1.45,
           ...fontStyle("body", 400, fontsLoaded),
         },
-        bubbleTextAssistant: {
-          color: redesign.ink,
-          fontSize: theme.typography.sizes.base,
-          lineHeight: theme.typography.sizes.base * 1.45,
-          ...fontStyle("body", 400, fontsLoaded),
-        },
+        // Assistant text is rendered by ChatMarkdown (which builds its own
+        // ink/size/line-height styles), so no bubbleTextAssistant here.
         empty: {
           flex: 1,
           alignItems: "center",
@@ -246,16 +243,20 @@ export function ChatScreen(): React.ReactElement {
   );
 
   const renderItem: ListRenderItem<ChatTurn> = ({ item }) => {
-    const isUser = item.role === "user";
+    if (item.role === "user") {
+      // User turns render verbatim as plain text.
+      return (
+        <View style={styles.bubbleUser}>
+          <Text style={styles.bubbleTextUser}>{item.content}</Text>
+        </View>
+      );
+    }
     // Assistant turns: strip the [SUGGESTIONS] protocol block (mobile has
-    // no chip UI; the web client parses it, the mobile done-event omits
-    // the cleaned content). User turns render verbatim.
-    const text = isUser ? item.content : stripSuggestionsBlock(item.content);
+    // no chip UI), then render markdown with a summary + collapsible
+    // details (ChatAssistantBody owns the collapse state).
     return (
-      <View style={isUser ? styles.bubbleUser : styles.bubbleAssistant}>
-        <Text style={isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant}>
-          {text}
-        </Text>
+      <View style={styles.bubbleAssistant}>
+        <ChatAssistantBody content={stripSuggestionsBlock(item.content)} />
       </View>
     );
   };
