@@ -850,9 +850,9 @@ export async function GET() {
 // `app/src/app/api/chat/__tests__/no-persist.test.ts`):
 //
 //   1. Only allowed `query()` calls on the mobile path:
-//        - SELECT users.plan          (for plan-based model routing)
 //        - SELECT consent_preferences (for health_data_ai gate)
 //        - audit_logs INSERT          (via logAudit — audit-only)
+//      No users.plan read — mobile model routing is not plan-gated (see 3).
 //      No INSERT/UPDATE/DELETE of conversations / messages / learning_*
 //      / health_reports / fhir_cache / appeal_* tables on this path.
 //
@@ -861,15 +861,42 @@ export async function GET() {
 //      prompt content, no response content. Console logging in this
 //      function MUST NOT echo body content either.
 //
-//   3. Plan-based model routing matches the web path (chat/route.ts:594-600):
-//      trial → Haiku, paid (plus/unlimited/starter) → Sonnet, null plan →
-//      treat as paid (Sonnet) to avoid silent downgrade on RDS timeout.
-//      Appeal routing (Opus) doesn't apply on mobile — appeals are
-//      Medicare-only and mobile is the 45+ non-Medicare cohort (Phase 1).
+//   3. Model: mobile chat uses Sonnet 4.6 (API_CONFIG.claude.model) for ALL
+//      mobile users, trial included — decided 2026-06-11 from a Haiku-vs-
+//      Sonnet head-to-head on real 45+ health prompts: Sonnet surfaced 988
+//      crisis resources on a distress signal where Haiku stayed silent, and
+//      kept non-Medicare scope where Haiku leaked Medicare/Part D framing.
+//      The per-token cost delta is negligible at current trial volume.
+//      Appeal routing (Opus) doesn't apply — appeals are Medicare-only and
+//      mobile is the 45+ non-Medicare cohort (Phase 1).
 //
 //   4. Conversation context is CLIENT-SUPPLIED via `body.messages`. The
 //      mobile path does NOT load conversation rows from RDS — the device
 //      is the system of record (mobile/CLAUDE.md § Invariant 1).
+/**
+ * Mobile-only response-style nudge appended to the chat system prompt.
+ *
+ * Fixes a real gap: the brevity rules in BASE_CORE_PROMPT are scoped to the
+ * clarifying-question phase, so FINAL answers on mobile ran long (observed
+ * 2026-06-11). This keeps replies short and scannable on a phone and
+ * front-loads a 1–2 sentence summary, which the mobile chat bubble shows
+ * before a collapsible "details" section. STYLE ONLY — it adds no clinical
+ * content and relaxes none of the no-medical-advice / non-Medicare-scope
+ * guardrails already carried by the base prompt. The third bullet carries
+ * an explicit safety carve-out so "stay on topic" can never suppress a
+ * crisis-resource or see-your-doctor referral (clinical-boundary review,
+ * 2026-06-11) — this protects the spontaneous 988 surfacing that the
+ * Sonnet head-to-head relied on.
+ */
+const MOBILE_CHAT_BREVITY = `## Response style (mobile app)
+
+Your answer renders in a small chat bubble on a phone. Be brief and scannable:
+- Open with a direct 1–2 sentence answer to exactly what was asked. This opening IS the summary the user sees first.
+- Then add only the few supporting points that genuinely help — a short bullet list is fine. No exhaustive lists, no walls of text.
+- Stay on the question asked; don't branch into adjacent topics unprompted. EXCEPTION: if the message hints at a safety concern, always surface the relevant resource — e.g. the 988 Suicide & Crisis Lifeline, or talking with their doctor — even when it wasn't asked. Safety asides always override brevity.
+
+This brevity applies to FINAL answers, not only to clarifying questions.`;
+
 async function handleMobileChat(
   request: NextRequest,
   body: ChatRequestBody,
@@ -916,16 +943,10 @@ async function handleMobileChat(
     );
   }
 
-  // 2. Plan read (model routing only). Mirrors `resolveModel()` in
-  //    parse-report: null plan → treat as paid (Sonnet) to avoid a silent
-  //    Haiku downgrade on RDS timeout for paying users.
-  const planResult = await query<{ plan: string | null }>(
-    `SELECT plan FROM users WHERE id = $1 LIMIT 1`,
-    [authUser.userId],
-  );
-  const userPlan = planResult.rows[0]?.plan ?? null;
-  const isTrial = userPlan != null && userPlan === "trial";
-  const modelOverride = isTrial ? API_CONFIG.claude.trialModel : undefined;
+  // 2. Model: Sonnet 4.6 for ALL mobile users (no plan read — see the
+  //    handler docblock, point 3, for the 2026-06-11 head-to-head rationale).
+  //    `undefined` → `chat()` uses API_CONFIG.claude.model (Sonnet).
+  const modelOverride: string | undefined = undefined;
 
   // 3. Build a minimal session state from the client-supplied messages.
   //    No FHIR / conditions / labs / Medicare cohort signals on mobile —
@@ -940,7 +961,11 @@ async function handleMobileChat(
 
   // 5. System prompt — use the synchronous base path (no learning context,
   //    no FHIR injection). This avoids RDS reads against learning tables.
-  const systemPrompt = buildSystemPromptForUser(triggers, sessionState);
+  //    Append the mobile brevity/summary nudge (see MOBILE_CHAT_BREVITY).
+  const systemPrompt =
+    buildSystemPromptForUser(triggers, sessionState) +
+    "\n\n---\n\n" +
+    MOBILE_CHAT_BREVITY;
 
   // 6. Tool selection. Filter out `generate_appeal_letter` because
   //    appeals are Medicare-only (mobile cohort is non-Medicare). The

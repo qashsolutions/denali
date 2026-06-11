@@ -4,11 +4,10 @@
  * Load-bearing assertions enforced here:
  *
  *   1. ZERO writes to RDS on the mobile path. `query()` spy allows only
- *      the two SELECTs (consent_preferences + users.plan). audit_logs
- *      INSERT is allowed (audit-only, no body content). The explicit
- *      forbidden-tables list catches accidental reach into
- *      conversations / messages / learning_* / health_reports /
- *      fhir_cache / diabetes_* / appeal_*.
+ *      ONE SELECT (consent_preferences). audit_logs INSERT is allowed
+ *      (audit-only, no body content). The explicit forbidden-tables list
+ *      catches accidental reach into conversations / messages /
+ *      learning_* / health_reports / fhir_cache / diabetes_* / appeal_*.
  *
  *   2. Sentinel-leak — embed PHI strings in the request body; spy on
  *      console.* / logAudit / logClaudeMetric; assert NONE leak the
@@ -22,7 +21,7 @@
  *      behavior: conversations + messages INSERTs happen, audit + rate
  *      limit + learning paths still fire, SSE shape unchanged.
  *
- *   5. Plan-based model routing parity — trial → Haiku, paid → Sonnet.
+ *   5. Model routing — mobile uses Sonnet (default) for all users; no plan read.
  *
  *   6. Consent gate on mobile — health_data_ai OFF → 403, Bedrock
  *      never called.
@@ -307,7 +306,7 @@ beforeEach(() => {
 // ── Tests ────────────────────────────────────────────────────────────────
 
 describe("POST /api/chat (mobile) — D9 gate: zero RDS writes", () => {
-  it("performs only the two allowed SELECTs (consent + plan) — no INSERTs", async () => {
+  it("performs only the one allowed SELECT (consent) — no plan read, no INSERTs", async () => {
     mockGetAuthUser.mockResolvedValue(MOCK_USER);
     setupMobileQueryHappyPath("trial");
 
@@ -318,13 +317,14 @@ describe("POST /api/chat (mobile) — D9 gate: zero RDS writes", () => {
     await drainStream(res);
 
     const sqls = mockQuery.mock.calls.map((c) => (c[0] as string).trim());
-    // Both reads must have fired.
+    // The consent read must have fired.
     expect(sqls.some((s) => /consent_preferences/i.test(s))).toBe(true);
+    // Mobile no longer reads users.plan — model is not plan-gated.
     expect(sqls.some((s) => /FROM users/i.test(s) && /plan/i.test(s))).toBe(
-      true,
+      false,
     );
-    // No other queries beyond the two reads.
-    expect(sqls.length).toBe(2);
+    // No other queries beyond the single consent read.
+    expect(sqls.length).toBe(1);
     assertNoMobileWrites();
   });
 
@@ -362,8 +362,8 @@ describe("POST /api/chat (mobile) — D9 gate: zero RDS writes", () => {
     const res = await POST(makeMobileRequest(MOBILE_BODY));
     await drainStream(res);
 
-    // Still only the two reads.
-    expect(mockQuery.mock.calls.length).toBe(2);
+    // Still only the single consent read.
+    expect(mockQuery.mock.calls.length).toBe(1);
     assertNoMobileWrites();
   });
 });
@@ -513,8 +513,13 @@ describe("POST /api/chat (mobile) — consent gate", () => {
   });
 });
 
-describe("POST /api/chat (mobile) — plan-based model routing", () => {
-  it("trial → Haiku trial model", async () => {
+describe("POST /api/chat (mobile) — model routing (always Sonnet)", () => {
+  // Decided 2026-06-11 (Haiku-vs-Sonnet head-to-head): mobile chat uses
+  // Sonnet for ALL users. `chat()` is called with modelOverride undefined,
+  // so it falls through to API_CONFIG.claude.model (Sonnet). Mobile no
+  // longer reads users.plan — the plan arg below only seeds the (now
+  // unused) plan mock and must not change the outcome.
+  it("uses Sonnet (modelOverride undefined) for a trial user", async () => {
     mockGetAuthUser.mockResolvedValue(MOCK_USER);
     setupMobileQueryHappyPath("trial");
 
@@ -524,10 +529,10 @@ describe("POST /api/chat (mobile) — plan-based model routing", () => {
 
     expect(mockChat).toHaveBeenCalledTimes(1);
     const callArgs = mockChat.mock.calls[0][0] as { modelOverride?: string };
-    expect(callArgs.modelOverride).toMatch(/haiku/i);
+    expect(callArgs.modelOverride).toBeUndefined();
   });
 
-  it("plus → Sonnet (no override means default Sonnet)", async () => {
+  it("uses Sonnet for a paid user too (plan does not affect mobile model)", async () => {
     mockGetAuthUser.mockResolvedValue(MOCK_USER);
     setupMobileQueryHappyPath("plus");
 
@@ -536,33 +541,34 @@ describe("POST /api/chat (mobile) — plan-based model routing", () => {
     await drainStream(res);
 
     const callArgs = mockChat.mock.calls[0][0] as { modelOverride?: string };
-    // Paid plans flow to default Sonnet — modelOverride is undefined and
-    // `chat()` uses API_CONFIG.claude.model (Sonnet).
     expect(callArgs.modelOverride).toBeUndefined();
   });
 
-  it("unlimited → Sonnet (no override)", async () => {
+  it("never sends a Haiku override on mobile", async () => {
     mockGetAuthUser.mockResolvedValue(MOCK_USER);
-    setupMobileQueryHappyPath("unlimited");
+    setupMobileQueryHappyPath("trial");
 
     const { POST } = await loadRoute();
     const res = await POST(makeMobileRequest(MOBILE_BODY));
     await drainStream(res);
 
     const callArgs = mockChat.mock.calls[0][0] as { modelOverride?: string };
-    expect(callArgs.modelOverride).toBeUndefined();
+    expect(callArgs.modelOverride ?? "").not.toMatch(/haiku/i);
   });
 
-  it("null plan (RDS timeout) → Sonnet (no silent Haiku downgrade)", async () => {
+  it("appends the mobile brevity nudge to the system prompt", async () => {
     mockGetAuthUser.mockResolvedValue(MOCK_USER);
-    setupMobileQueryHappyPath(null);
+    setupMobileQueryHappyPath("trial");
 
     const { POST } = await loadRoute();
-    const res = await POST(makeMobileRequest(MOBILE_BODY));
-    await drainStream(res);
+    await drainStream(await POST(makeMobileRequest(MOBILE_BODY)));
 
-    const callArgs = mockChat.mock.calls[0][0] as { modelOverride?: string };
-    expect(callArgs.modelOverride).toBeUndefined();
+    const callArgs = mockChat.mock.calls[0][0] as { systemPrompt?: string };
+    expect(callArgs.systemPrompt).toContain("Response style (mobile app)");
+    expect(callArgs.systemPrompt).toMatch(/FINAL answers/i);
+    // Safety carve-out must survive: brevity never suppresses 988 / crisis
+    // surfacing (clinical-boundary review 2026-06-11).
+    expect(callArgs.systemPrompt).toMatch(/988|safety asides/i);
   });
 });
 
