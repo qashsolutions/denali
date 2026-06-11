@@ -34,10 +34,12 @@ import {
 } from "react-native";
 
 import { useApiClient } from "@/auth";
+import { Crisis988Modal } from "@/onboarding/Crisis988Modal";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { ChatAssistantBody } from "./chat/ChatAssistantBody";
+import { detectCrisisLanguage } from "./chat/crisisDetection";
 import {
   appendAssistantDelta,
   appendUserTurn,
@@ -55,6 +57,7 @@ export function ChatScreen(): React.ReactElement {
   const [input, setInput] = React.useState("");
   const [streaming, setStreaming] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [crisisVisible, setCrisisVisible] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
 
   // Clear history when the user signs out — D11 (session-scoped chat).
@@ -78,6 +81,19 @@ export function ChatScreen(): React.ReactElement {
   const onSend = React.useCallback(async () => {
     const content = input.trim();
     if (content.length === 0 || streaming) return;
+
+    // Deterministic crisis surface: self-harm / suicidal ideation shows the
+    // 988 modal and is NOT sent to the model — the crisis resource is the
+    // response (no LLM round-trip, no chat bubble, nothing logged; Phase-1
+    // invariant 1). Mirrors the PHQ-9 item-9 path. The backend (Sonnet +
+    // prompt safety carve-out) is the secondary, model-dependent layer.
+    if (detectCrisisLanguage(content)) {
+      Keyboard.dismiss();
+      setInput("");
+      setCrisisVisible(true);
+      return;
+    }
+
     // Drop the soft keyboard on send so it (and the emulator's
     // hardware-keyboard bar) doesn't linger over the conversation.
     Keyboard.dismiss();
@@ -315,6 +331,10 @@ export function ChatScreen(): React.ReactElement {
           )}
         </Pressable>
       </View>
+      <Crisis988Modal
+        visible={crisisVisible}
+        onAcknowledge={() => setCrisisVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

@@ -1,0 +1,54 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Flow — Chat crisis path: free-text ideation → 988 modal (deterministic)
+#
+# GATE — needs an E2E test-OTP backend running NODE_ENV != production. See
+# signin_onboarding.yaml / ./README.md for setup. The bypass works ONLY in a
+# NODE_ENV != production backend (local next dev / CI), never the deployed
+# staging service. Point the mobile build's API_BASE_URL at it.
+#
+# Proves the LOAD-BEARING chat crisis surface: typing self-harm / ideation
+# language into Ask Denali shows Crisis988Modal WITHOUT sending the message
+# to the model (no chat bubble, no LLM reply — the modal is the response).
+# Asserts the call/text/acknowledge affordances are PRESENT but never taps
+# Call/Text (the tel:/sms: hand-off is out of scope and unsafe to trigger in
+# automation — same rule as crisis_988.yaml).
+#
+# The trigger below is a deliberately minimal pattern match ("self-harm"),
+# not a graphic statement — it exercises detectCrisisLanguage without putting
+# a first-person crisis narrative in the repo.
+#
+# Selectors: testID / accessibilityLabel inventory in ../README.md. No
+# coordinate-based taps.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+# Sign in + complete onboarding → land on MainTabs.
+- runFlow: signin_onboarding.yaml
+
+# Open the Ask Denali chat tab.
+- tapOn: "Chat"
+- waitForAnimationToEnd
+
+# Type free-text crisis language and send.
+- tapOn:
+    text: "Chat message"
+- inputText: "self-harm"
+- tapOn: "Send"
+- waitForAnimationToEnd
+
+# The deterministic crisis surface must appear (not a chat reply).
+- assertVisible:
+    id: "crisis988_modal"
+- assertVisible:
+    id: "crisis988_call_button"
+- assertVisible:
+    id: "crisis988_text_button"
+- assertVisible:
+    id: "crisis988_acknowledge_button"
+
+# Acknowledge dismisses it back to chat. (Call/Text are asserted present
+# above but never tapped — tel:/sms: would hand off to the dialer/SMS app.)
+- tapOn:
+    id: "crisis988_acknowledge_button"
+- assertNotVisible:
+    id: "crisis988_modal"
