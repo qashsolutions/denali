@@ -26,7 +26,7 @@ import {
   type RouteProp,
 } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { ChevronLeft } from "lucide-react-native";
+import { Check, ChevronLeft } from "lucide-react-native";
 import React from "react";
 import {
   ActivityIndicator,
@@ -87,6 +87,17 @@ function cardId(card: TimelineCard): string {
     : `r:${card.row.id}`;
 }
 
+/** Short clock time ("12:27 pm") for the "last check-in" status line. */
+function formatClockTime(iso: string): string {
+  const d = new Date(iso);
+  let h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h >= 12 ? "pm" : "am";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${m < 10 ? `0${m}` : m} ${ampm}`;
+}
+
 /**
  * "Start a check-in" CTA (Step 4) — mockup frame-2 .cta treatment.
  * Navigation chrome only (clinical pre-review Finding 4); the same
@@ -144,6 +155,15 @@ export function DomainDetailScreen(): React.ReactElement {
       return next;
     });
   }, []);
+  // One-shot "Saved" confirmation after returning from a completed check-in
+  // (status chrome only — never a clinical claim). `lastSavedShownRef` keeps
+  // it from re-firing on every focus for the same session.
+  const [showSaved, setShowSaved] = React.useState(false);
+  const lastSavedShownRef = React.useRef<string | null>(null);
+  // Today's sessions via a non-collapsed query — drives the "N× today"
+  // count. `rows` (latest_only) collapses same-day repeats, so it can't
+  // count them.
+  const [todayRows, setTodayRows] = React.useState<ObservationRow[]>([]);
 
   // Reload on every screen FOCUS (not just mount) — returning from a
   // repeat check-in (Step 4) must show the new session immediately.
@@ -164,6 +184,21 @@ export function DomainDetailScreen(): React.ReactElement {
           setRows(scoped);
           const profile = await dal.getProfile();
           if (!cancelled) setUserSexAtBirth(profile?.sex_at_birth ?? null);
+          // Today-only, non-collapsed — for the "N× today" count.
+          const todayStart = new Date();
+          todayStart.setHours(0, 0, 0, 0);
+          const todayList = await dal.listObservations({
+            latest_only: false,
+            since: todayStart.toISOString(),
+            limit: PAGE_SIZE,
+          });
+          if (!cancelled) {
+            setTodayRows(
+              user
+                ? todayList.filter((o) => o.user_id === user.userId)
+                : todayList,
+            );
+          }
         } catch (err) {
           console.warn("[DomainDetail] load failed", err);
         } finally {
@@ -236,6 +271,43 @@ export function DomainDetailScreen(): React.ReactElement {
     }
     return out;
   }, [rows, userSexAtBirth, domainId]);
+
+  // Most-recent session timestamp in this domain — drives "checked in
+  // today" + the recency window that triggers the one-shot "Saved" banner.
+  const latestAt = React.useMemo(() => {
+    let max: string | null = null;
+    for (const it of items) {
+      if (it.kind !== "card") continue;
+      const t = cardEffectiveAt(it.card);
+      if (max == null || t > max) max = t;
+    }
+    return max;
+  }, [items]);
+
+  // Count of distinct check-in sessions today for this domain (drives the
+  // "N× today" line). Same group→rollup pipeline as `items`, run over the
+  // non-collapsed today query.
+  const todayCount = React.useMemo(() => {
+    const cards = groupByInstrumentSession(todayRows);
+    const rollups = rollupCardsByDomain(cards, userSexAtBirth);
+    const mine = rollups.find((r) => r.domainId === domainId);
+    if (mine == null || mine.kind !== "instrument-domain") return 0;
+    return mine.sessions.length;
+  }, [todayRows, userSexAtBirth, domainId]);
+
+  // Show "Saved" once per distinct just-written session: a session whose
+  // effective_at is within the last 90s means we returned straight from a
+  // completed check-in. The ref guards against re-showing on later focuses.
+  React.useEffect(() => {
+    if (latestAt == null) return;
+    const ageMs = Date.now() - Date.parse(latestAt);
+    if (ageMs >= 0 && ageMs < 90_000 && lastSavedShownRef.current !== latestAt) {
+      lastSavedShownRef.current = latestAt;
+      setShowSaved(true);
+      const t = setTimeout(() => setShowSaved(false), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [latestAt]);
 
   const styles = React.useMemo(
     () =>
@@ -327,6 +399,48 @@ export function DomainDetailScreen(): React.ReactElement {
         ctaLabel: {
           color: redesign.surface,
           fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
+        ctaSecondary: {
+          marginHorizontal: theme.spacing.space5,
+          marginTop: theme.spacing.sm,
+          paddingVertical: theme.spacing.md - 1,
+          borderRadius: theme.radii.xl - 2,
+          backgroundColor: redesign.surface,
+          borderColor: redesign.line,
+          borderWidth: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 48,
+        },
+        ctaSecondaryLabel: {
+          color: redesign.tealDeep,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
+        // "Saved" pill (teal-wash chip, centered) — transient confirmation.
+        savedBanner: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: theme.spacing.xs,
+          alignSelf: "center",
+          marginTop: theme.spacing.sm,
+          paddingVertical: theme.spacing.xs,
+          paddingHorizontal: theme.spacing.md,
+          borderRadius: redesign.rChip,
+          backgroundColor: redesign.tealWash,
+        },
+        savedBannerText: {
+          color: redesign.tealDeep,
+          fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
+        // Persistent "checked in today" line once the banner fades.
+        checkedInLine: {
+          color: redesign.tealDeep,
+          fontSize: theme.typography.sizes.sm,
+          textAlign: "center",
+          marginTop: theme.spacing.sm,
           ...fontStyle("body", 600, fontsLoaded),
         },
         emptyTitle: {
@@ -436,13 +550,40 @@ export function DomainDetailScreen(): React.ReactElement {
         </View>
         <Text style={styles.headerTitle}>{friendlyName}</Text>
       </View>
-      {/* Primary action surfaced at the TOP for populated domains (was
-          buried below the chart). Empty state keeps its own centered CTA. */}
+      {/* Populated instrument domains: the saved result is the hero, so the
+          re-check-in CTA is a quiet SECONDARY action — a just-finished
+          check-in must not read as an unmet "start" prompt. A one-shot
+          "Saved" pill then a "checked in today" line confirm the write
+          landed. Status + navigation chrome only — no clinical claims. */}
       {items.length > 0 && checkInAvailable(domainId, userSexAtBirth) ? (
-        <StartCheckInButton
-          onPress={() => navigation.navigate("Instruments", { focus: domainId })}
-          styles={styles}
-        />
+        <>
+          {showSaved ? (
+            <View testID="domain_detail_saved_banner" style={styles.savedBanner}>
+              <Check color={redesign.tealDeep} size={16} />
+              <Text style={styles.savedBannerText}>Saved</Text>
+            </View>
+          ) : todayCount > 0 && latestAt != null ? (
+            <Text
+              testID="domain_detail_checked_in_today"
+              style={styles.checkedInLine}
+            >
+              {todayCount === 1
+                ? `✓ Checked in today at ${formatClockTime(latestAt)}`
+                : `✓ Checked in ${todayCount}× today · last at ${formatClockTime(latestAt)}`}
+            </Text>
+          ) : null}
+          <Pressable
+            testID="domain_detail_start_checkin"
+            accessibilityRole="button"
+            accessibilityLabel="Check in again"
+            onPress={() =>
+              navigation.navigate("Instruments", { focus: domainId })
+            }
+            style={styles.ctaSecondary}
+          >
+            <Text style={styles.ctaSecondaryLabel}>Check in again</Text>
+          </Pressable>
+        </>
       ) : null}
       {items.length === 0 ? (
         <View style={styles.center}>
@@ -454,17 +595,30 @@ export function DomainDetailScreen(): React.ReactElement {
               styles={styles}
             />
           ) : domainId === "health_markers" ? (
-            // Health markers populate from uploaded reports — surface the
-            // upload path here so the user can add without backing out.
-            <Pressable
-              testID="domain_detail_upload_cta"
-              accessibilityRole="button"
-              accessibilityLabel="Upload a report"
-              onPress={() => navigation.navigate("MainTabs", { screen: "Upload" })}
-              style={styles.cta}
-            >
-              <Text style={styles.ctaLabel}>Upload a report</Text>
-            </Pressable>
+            // Health markers: log a value by hand OR upload a report — both
+            // populate markers, without backing out to the dashboard.
+            <>
+              <Pressable
+                testID="domain_detail_log_value"
+                accessibilityRole="button"
+                accessibilityLabel="Log a value"
+                onPress={() => navigation.navigate("LogMarker")}
+                style={styles.cta}
+              >
+                <Text style={styles.ctaLabel}>Log a value</Text>
+              </Pressable>
+              <Pressable
+                testID="domain_detail_upload_cta"
+                accessibilityRole="button"
+                accessibilityLabel="Upload a report"
+                onPress={() =>
+                  navigation.navigate("MainTabs", { screen: "Upload" })
+                }
+                style={styles.ctaSecondary}
+              >
+                <Text style={styles.ctaSecondaryLabel}>Upload a report</Text>
+              </Pressable>
+            </>
           ) : null}
         </View>
       ) : (

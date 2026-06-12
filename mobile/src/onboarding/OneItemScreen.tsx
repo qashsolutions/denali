@@ -29,6 +29,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
@@ -88,6 +89,9 @@ export function OneItemScreen({
 }: OneItemScreenProps): React.ReactElement {
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
+  // Top inset so the first element clears the status-bar clock (this shell
+  // renders headerless, flush to the top).
+  const insets = useSafeAreaInsets();
 
   // Dismiss the keyboard before advancing — a focused text input (Intake
   // free-text / autocomplete) otherwise keeps the soft keyboard (and the
@@ -107,12 +111,21 @@ export function OneItemScreen({
     () =>
       StyleSheet.create({
         screen: { flex: 1, backgroundColor: redesign.paper },
-        scroll: { padding: theme.spacing.space5, gap: theme.spacing.lg },
+        scroll: {
+          padding: theme.spacing.space5,
+          paddingTop: insets.top + theme.spacing.space5,
+          gap: theme.spacing.lg,
+        },
+        // Progress now sits BELOW the options (operator review 2026-06-12):
+        // centered + clear of the status-bar clock.
         progressRow: {
           gap: theme.spacing.xs,
+          alignItems: "center",
+          marginTop: theme.spacing.md,
         },
         progressBar: {
           height: 4,
+          width: "60%",
           borderRadius: theme.radii.sm,
           backgroundColor: redesign.line2,
           overflow: "hidden",
@@ -222,7 +235,7 @@ export function OneItemScreen({
           ...fontStyle("body", 600, fontsLoaded),
         },
       }),
-    [theme, redesign, fontsLoaded],
+    [theme, redesign, fontsLoaded, insets.top],
   );
 
   const continueDisabled = disabled || !canContinue;
@@ -243,17 +256,6 @@ export function OneItemScreen({
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.progressRow}>
-          <Text style={styles.progressLabel}>
-            {stepIndex} of {totalSteps}
-          </Text>
-          <View style={styles.progressBar}>
-            <View
-              style={[styles.progressFill, { width: `${progress * 100}%` }]}
-            />
-          </View>
-        </View>
-
         {sectionLabel != null ? (
           <Text style={styles.sectionLabel}>{sectionLabel}</Text>
         ) : null}
@@ -267,6 +269,18 @@ export function OneItemScreen({
         ) : null}
 
         <View style={styles.inputSlot}>{children}</View>
+
+        {/* Progress sits AFTER the options, centered (operator review). */}
+        <View style={styles.progressRow}>
+          <Text style={styles.progressLabel}>
+            {stepIndex} of {totalSteps}
+          </Text>
+          <View style={styles.progressBar}>
+            <View
+              style={[styles.progressFill, { width: `${progress * 100}%` }]}
+            />
+          </View>
+        </View>
 
         {errorMessage ? (
           <Text style={styles.errorText}>{errorMessage}</Text>

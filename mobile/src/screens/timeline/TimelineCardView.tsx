@@ -33,6 +33,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { ObservationRow, SexAtBirth } from "@/contracts";
+import { getInstrumentById } from "@/onboarding/instruments";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
@@ -75,6 +76,27 @@ function computeInstrumentScore(
     total += r.value_num;
   }
   return total;
+}
+
+/**
+ * Response SCALE (min/max) for an instrument, read from its registry
+ * definition's responseOptions. Sizes the per-item bars (a neutral
+ * visual of the user's OWN answer — never a severity verdict). Returns
+ * null for an unknown id or a degenerate scale, in which case the bar is
+ * omitted and only the numeric value shows.
+ */
+function instrumentScale(
+  instrumentId: string,
+): { min: number; max: number } | null {
+  const inst = getInstrumentById(instrumentId);
+  if (inst == null || inst.responseOptions.length === 0) return null;
+  let min = inst.responseOptions[0].value;
+  let max = min;
+  for (const o of inst.responseOptions) {
+    if (o.value < min) min = o.value;
+    if (o.value > max) max = o.value;
+  }
+  return max > min ? { min, max } : null;
 }
 
 // ─── instrument-session sub-renderer ─────────────────────────────────────
@@ -177,7 +199,11 @@ function InstrumentSessionCard({
       </View>
 
       {isExpanded ? (
-        <SessionDetails items={items} userSexAtBirthKnown={userSexAtBirth != null} />
+        <SessionDetails
+          instrumentId={instrumentId}
+          items={items}
+          userSexAtBirthKnown={userSexAtBirth != null}
+        />
       ) : null}
 
       {showDisclaimer ? (
@@ -199,11 +225,13 @@ function InstrumentSessionCard({
 // ─── instrument-session expanded body ────────────────────────────────────
 
 interface SessionDetailsProps {
+  instrumentId: string;
   items: ReadonlyArray<ObservationRow>;
   userSexAtBirthKnown: boolean;
 }
 
 function SessionDetails({
+  instrumentId,
   items,
   userSexAtBirthKnown: _userSexAtBirthKnown,
 }: SessionDetailsProps): React.ReactElement {
@@ -213,6 +241,9 @@ function SessionDetails({
   // Derive source from the first item — all items in a session share a
   // source by construction (persistInstrument writes them uniformly).
   const firstSource = items.length > 0 ? items[0].source : null;
+  // Per-item bar scale (neutral magnitude of the user's own answer — never
+  // a severity color/verdict). Null → omit the bar, show value only.
+  const scale = instrumentScale(instrumentId);
   return (
     <View style={styles.detailsBlock}>
       {items.map((row, idx) => {
@@ -221,13 +252,28 @@ function SessionDetails({
           meta.itemText != null && meta.itemText.length > 0
             ? meta.itemText
             : row.display;
-        const value = row.value_num != null ? String(row.value_num) : "—";
+        const num = row.value_num;
+        const value = num != null ? String(num) : "—";
+        const fillPct =
+          scale != null && num != null
+            ? Math.max(
+                0,
+                Math.min(1, (num - scale.min) / (scale.max - scale.min)),
+              ) * 100
+            : null;
         return (
           <View key={row.id} style={styles.itemRow}>
             <Text style={styles.itemNumber}>{idx + 1}.</Text>
             <Text style={styles.itemLabel} numberOfLines={2}>
               {label}
             </Text>
+            {fillPct != null ? (
+              <View style={styles.itemBarTrack}>
+                <View
+                  style={[styles.itemBarFill, { width: `${fillPct}%` }]}
+                />
+              </View>
+            ) : null}
             <Text style={styles.itemValue}>{value}</Text>
           </View>
         );
@@ -522,9 +568,26 @@ function sessionStyles(
       flex: 1,
       ...fontStyle("body", 400, fontsLoaded),
     },
+    // Neutral magnitude bar for the user's own answer (NOT a severity
+    // color). Fill width = value within the instrument's response scale.
+    itemBarTrack: {
+      width: 44,
+      height: 6,
+      borderRadius: theme.radii.sm,
+      backgroundColor: redesign.line2,
+      overflow: "hidden",
+      alignSelf: "center",
+    },
+    itemBarFill: {
+      height: 6,
+      borderRadius: theme.radii.sm,
+      backgroundColor: redesign.teal,
+    },
     itemValue: {
       color: redesign.ink,
       fontSize: theme.typography.sizes.sm,
+      minWidth: 14,
+      textAlign: "right",
       fontVariant: ["tabular-nums"],
       ...fontStyle("numbers", 600, fontsLoaded),
     },

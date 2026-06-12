@@ -41,7 +41,7 @@ import { IPSS } from "./ipss";
 import { MRS } from "./mrs";
 import { PHQ2 } from "./phq2";
 import { PHQ9 } from "./phq9";
-import type { InstrumentDefinition } from "./types";
+import type { InstrumentDefinition, InstrumentId } from "./types";
 
 export {
   ADAM,
@@ -99,4 +99,29 @@ export function instrumentsFor(
   if (sexAtBirth === "male") return [...unisex, ADAM, IPSS];
   // intersex, unknown — unisex only.
   return unisex;
+}
+
+/**
+ * Look up an instrument definition by its stable id (the value stored in
+ * each observation's `metadata.instrument`). Used by the display layer to
+ * recover an instrument's response SCALE (min/max) when rendering a
+ * per-item visual — display reads the scale, never re-derives clinical
+ * wording. Returns undefined for an unknown id.
+ */
+const INSTRUMENTS_BY_ID: Readonly<Record<InstrumentId, InstrumentDefinition>> =
+  {
+    "PHQ-9": PHQ9,
+    "PHQ-2": PHQ2,
+    "GAD-7": GAD7,
+    "AUDIT-C": AUDIT_C,
+    Epworth: EPWORTH,
+    MRS,
+    ADAM,
+    IPSS,
+  };
+
+export function getInstrumentById(
+  id: string,
+): InstrumentDefinition | undefined {
+  return (INSTRUMENTS_BY_ID as Record<string, InstrumentDefinition>)[id];
 }
