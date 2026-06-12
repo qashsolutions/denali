@@ -53,6 +53,12 @@ export type RootStackParamList = {
    */
   DomainDetail: { domainId: DomainId };
   /**
+   * Manual marker entry ("Log a value"). Optional `markerKey` pre-selects a
+   * marker; absent → the marker picker. Reached from the "+ Add" sheet and
+   * the empty Health-markers detail screen.
+   */
+  LogMarker: { markerKey?: string } | undefined;
+  /**
    * Phase-3 — the ported chronological "All activity" view of every
    * observation. Gated behind `EXPO_PUBLIC_LEGACY_TIMELINE` during
    * the transition; surfaced as a de-emphasized footer entry on the

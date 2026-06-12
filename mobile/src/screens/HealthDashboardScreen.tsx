@@ -103,34 +103,53 @@ export function HealthDashboardScreen(): React.ReactElement {
   // stay enterable after onboarding. (Check-ins log from the per-card CTA;
   // uploads have their own tab.)
   const quickAddOptions = React.useMemo<QuickAddOption[]>(() => {
-    const go = (section: IntakeSection) => () => {
-      setQuickAddVisible(false);
+    const close = () => setQuickAddVisible(false);
+    const goSection = (section: IntakeSection) => () => {
+      close();
       navigation.navigate("Intake", { section });
     };
     return [
       {
+        key: "marker",
+        label: "A lab or vital value",
+        hint: "Log A1c, blood pressure, weight…",
+        onPress: () => {
+          close();
+          navigation.navigate("LogMarker");
+        },
+      },
+      {
+        key: "upload",
+        label: "Upload a report",
+        hint: "A lab result or visit summary",
+        onPress: () => {
+          close();
+          navigation.navigate("MainTabs", { screen: "Upload" });
+        },
+      },
+      {
         key: "complaint",
         label: "A symptom or concern",
         hint: "Something that's on your mind",
-        onPress: go("complaint"),
+        onPress: goSection("complaint"),
       },
       {
         key: "history",
         label: "A past diagnosis",
         hint: "A condition you've been diagnosed with",
-        onPress: go("history"),
+        onPress: goSection("history"),
       },
       {
         key: "family",
         label: "Family history",
         hint: "What runs in the family",
-        onPress: go("family"),
+        onPress: goSection("family"),
       },
       {
         key: "lifestyle",
         label: "Daily habits",
         hint: "Smoking, alcohol, activity, food, sleep",
-        onPress: go("lifestyle"),
+        onPress: goSection("lifestyle"),
       },
     ];
   }, [navigation]);
