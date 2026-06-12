@@ -389,12 +389,6 @@ export function DomainDetailScreen(): React.ReactElement {
               userSexAtBirth={userSexAtBirth}
             />
           ))}
-          {checkInAvailable(domainId, userSexAtBirth) ? (
-            <StartCheckInButton
-              onPress={() => navigation.navigate("Instruments", { focus: domainId })}
-              styles={styles}
-            />
-          ) : null}
         </View>
       );
     }
@@ -442,6 +436,14 @@ export function DomainDetailScreen(): React.ReactElement {
         </View>
         <Text style={styles.headerTitle}>{friendlyName}</Text>
       </View>
+      {/* Primary action surfaced at the TOP for populated domains (was
+          buried below the chart). Empty state keeps its own centered CTA. */}
+      {items.length > 0 && checkInAvailable(domainId, userSexAtBirth) ? (
+        <StartCheckInButton
+          onPress={() => navigation.navigate("Instruments", { focus: domainId })}
+          styles={styles}
+        />
+      ) : null}
       {items.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>No data yet</Text>
@@ -451,6 +453,18 @@ export function DomainDetailScreen(): React.ReactElement {
               onPress={() => navigation.navigate("Instruments", { focus: domainId })}
               styles={styles}
             />
+          ) : domainId === "health_markers" ? (
+            // Health markers populate from uploaded reports — surface the
+            // upload path here so the user can add without backing out.
+            <Pressable
+              testID="domain_detail_upload_cta"
+              accessibilityRole="button"
+              accessibilityLabel="Upload a report"
+              onPress={() => navigation.navigate("MainTabs", { screen: "Upload" })}
+              style={styles.cta}
+            >
+              <Text style={styles.ctaLabel}>Upload a report</Text>
+            </Pressable>
           ) : null}
         </View>
       ) : (

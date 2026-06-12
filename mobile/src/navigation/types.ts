@@ -12,7 +12,12 @@
  * `.claude/agents/mobile-app-shell.md` Pass 1, step 4.
  */
 
+import type { NavigatorScreenParams } from "@react-navigation/native";
+
 import type { DomainId } from "@/screens/timeline/domains/registry";
+
+/** The four enterable intake sections (excludes the "menu" picker). */
+export type IntakeSection = "complaint" | "history" | "family" | "lifestyle";
 
 export type RootStackParamList = {
   SignIn: undefined;
@@ -23,14 +28,22 @@ export type RootStackParamList = {
    */
   PrivacyNotice: undefined;
   CohortOnboarding: undefined;
-  Intake: undefined;
+  /**
+   * No params = onboarding flow (starts at the section menu, "Finish intake"
+   * → Instruments). `section` = standalone re-entry from the main app's
+   * "+ Add" capture flow: opens directly into that section and returns to
+   * the caller on save/skip (no menu, no Instruments hand-off).
+   */
+  Intake: { section?: IntakeSection } | undefined;
   /**
    * Onboarding battery (no params — byte-identical legacy behavior) OR a
    * repeat check-in scoped to one domain (Step 4): `focus` renders only
    * that domain's instrument and returns to the caller when it completes.
    */
   Instruments: { focus?: DomainId } | undefined;
-  MainTabs: undefined;
+  // NavigatorScreenParams lets callers deep-link a specific tab, e.g.
+  // navigate("MainTabs", { screen: "Upload" }) from a pushed stack screen.
+  MainTabs: NavigatorScreenParams<MainTabsParamList> | undefined;
   UploadReview: { reportId: string };
   /**
    * Phase-3 increment 1: per-domain detail screen reached by tapping a

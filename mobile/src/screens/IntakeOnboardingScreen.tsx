@@ -33,7 +33,7 @@
  * Local-first: writes happen at section-finish via the local DAL.
  * No network calls in this screen.
  */
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React from "react";
 import {
@@ -172,10 +172,18 @@ export function IntakeOnboardingScreen(): React.ReactElement {
   const api = useApiClient();
   const dal = useDal();
   const navigation = useNavigation<Nav>();
+  const route = useRoute<RouteProp<RootStackParamList, "Intake">>();
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
 
-  const [section, setSection] = React.useState<SectionId>("menu");
+  // Standalone re-entry (from the main app's "+ Add" flow) opens directly
+  // into a section and returns to the caller on save/skip — vs the
+  // onboarding flow, which walks the section menu and ends → Instruments.
+  const standalone = route.params?.section != null;
+
+  const [section, setSection] = React.useState<SectionId>(
+    route.params?.section ?? "menu",
+  );
   const [status, setStatus] = React.useState<SectionStatus>({
     complaint: "todo",
     history: "todo",
@@ -335,6 +343,11 @@ export function IntakeOnboardingScreen(): React.ReactElement {
         if (value == null) continue;
         const label =
           prompt.options.find((o) => o.value === value)?.label ?? String(value);
+        // Lifestyle is current-state: a re-answer SUPERSEDES the prior row
+        // (append-only correction) so re-entry updates instead of creating a
+        // duplicate. Lifestyle codes are unique (denali.lifestyle.*), so the
+        // by-code lookup is unambiguous.
+        const prior = await dal.getLatestObservation(userId, prompt.code);
         const obs: ObservationInsertInput = {
           user_id: userId,
           category: "lifestyle",
@@ -347,13 +360,51 @@ export function IntakeOnboardingScreen(): React.ReactElement {
           source: "self_reported",
           effective_at: new Date().toISOString(),
           report_id: null,
-          supersedes_id: null,
+          supersedes_id: prior?.id ?? null,
           metadata_json: null,
         };
         await dal.insertObservation(obs);
       }
     },
     [dal, userId],
+  );
+
+  // Where to go when a section is done/skipped: back to the caller in
+  // standalone mode, otherwise back to the onboarding section menu.
+  const leaveSection = React.useCallback(() => {
+    if (standalone) navigation.goBack();
+    else setSection("menu");
+  }, [standalone, navigation]);
+
+  // Reset a section's in-memory draft after it saves, so re-entering it
+  // (re-tapping a "Saved" card, or a fresh standalone visit) starts clean and
+  // can't re-persist the same entries into duplicate rows. (Cross-session
+  // re-adding the SAME condition/symptom/family entry is a separate dedup
+  // deferred to the data pass — see the persist comments.)
+  const resetSectionState = React.useCallback(
+    (id: Exclude<SectionId, "menu">) => {
+      if (id === "complaint") {
+        setComplaintSelection(null);
+        setComplaintSeverity(0);
+        setComplaintStep(1);
+      } else if (id === "history") {
+        setHistoryEntries([]);
+        setHistoryDraft(null);
+      } else if (id === "family") {
+        setFamilyEntries([]);
+        setFamilyDraft({ relation: null, selection: null, onsetAge: null });
+      } else {
+        setLifestyle({
+          smoking: null,
+          alcohol: null,
+          activity: null,
+          diet: null,
+          sleep: null,
+        });
+        setLifestyleStep(0);
+      }
+    },
+    [],
   );
 
   const finishSection = React.useCallback(
@@ -363,7 +414,8 @@ export function IntakeOnboardingScreen(): React.ReactElement {
       try {
         await persist();
         setStatus((s) => ({ ...s, [id]: "saved" }));
-        setSection("menu");
+        resetSectionState(id);
+        leaveSection();
       } catch (e) {
         setErrorMsg(
           e instanceof Error
@@ -374,14 +426,17 @@ export function IntakeOnboardingScreen(): React.ReactElement {
         setSubmitting(false);
       }
     },
-    [],
+    [leaveSection, resetSectionState],
   );
 
-  const skipSection = React.useCallback((id: Exclude<SectionId, "menu">) => {
-    setStatus((s) => ({ ...s, [id]: "skipped" }));
-    setSection("menu");
-    setErrorMsg(null);
-  }, []);
+  const skipSection = React.useCallback(
+    (id: Exclude<SectionId, "menu">) => {
+      setStatus((s) => ({ ...s, [id]: "skipped" }));
+      leaveSection();
+      setErrorMsg(null);
+    },
+    [leaveSection],
+  );
 
   const goToInstruments = React.useCallback(() => {
     navigation.navigate("Instruments");
@@ -610,7 +665,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
           helperText="Pick the closest match. Tap 'Use my own wording' if nothing fits."
           canContinue={complaintSelection != null}
           onContinue={() => setComplaintStep(2)}
-          onBack={() => setSection("menu")}
+          onBack={leaveSection}
           onSkipSection={() => skipSection("complaint")}
           errorMessage={errorMsg}
         >
@@ -645,6 +700,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
           value={complaintSeverity}
           onChange={setComplaintSeverity}
           minLabel="No impact"
+          midLabel="Moderate"
           maxLabel="Worst possible"
           accessibilityLabel="Severity"
         />
@@ -664,7 +720,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
         helperText="Add as many as apply. Tap Save when you're done — or Skip if none apply."
         canContinue={historyEntries.length > 0}
         onContinue={() => finishSection("history", persistHistory)}
-        onBack={() => setSection("menu")}
+        onBack={leaveSection}
         onSkipSection={() => skipSection("history")}
         errorMessage={errorMsg}
       >
@@ -719,7 +775,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
         helperText="Add one entry per relative + condition. Onset age is optional."
         canContinue={familyEntries.length > 0}
         onContinue={() => finishSection("family", persistFamily)}
-        onBack={() => setSection("menu")}
+        onBack={leaveSection}
         onSkipSection={() => skipSection("family")}
         errorMessage={errorMsg}
       >

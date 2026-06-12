@@ -54,6 +54,13 @@ export interface DomainCardProps {
   /** Computed from birth_year; unused for uniform screeners. */
   userAgeYears: number | null;
   onPress: () => void;
+  /**
+   * When provided (instrument domains the user can re-log), renders a
+   * "New check-in" action on the card so logging doesn't require opening
+   * the detail screen first. Tapping it captures a new entry; tapping
+   * elsewhere on the card still opens the detail.
+   */
+  onLogPress?: () => void;
 }
 
 export function DomainCard({
@@ -61,6 +68,7 @@ export function DomainCard({
   userSexAtBirth,
   userAgeYears,
   onPress,
+  onLogPress,
 }: DomainCardProps): React.ReactElement {
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
@@ -151,6 +159,18 @@ export function DomainCard({
               {formatLastCheckins(sparkScores.length)}
             </Text>
           </View>
+        ) : null}
+        {onLogPress != null ? (
+          <Pressable
+            testID={`dashboard_card_log_${rollup.domainId}`}
+            accessibilityRole="button"
+            accessibilityLabel={`New ${name} check-in`}
+            onPress={onLogPress}
+            hitSlop={8}
+            style={styles.logBtn}
+          >
+            <Text style={styles.logLabel}>New check-in</Text>
+          </Pressable>
         ) : null}
       </Pressable>
     );
@@ -285,6 +305,22 @@ function makeStyles(
       color: redesign.ink3,
       fontSize: theme.typography.sizes.xs,
       ...fontStyle("body", 400, fontsLoaded),
+    },
+    // "New check-in" chip — teal-wash, teal-deep label. Surfaces logging
+    // on populated cards (modern capture-everywhere pattern).
+    logBtn: {
+      marginTop: theme.spacing.sm,
+      alignSelf: "flex-start",
+      backgroundColor: redesign.tealWash,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: redesign.rChip,
+      minHeight: 40,
+      justifyContent: "center",
+    },
+    logLabel: {
+      color: redesign.tealDeep,
+      fontSize: theme.typography.sizes.sm,
+      ...fontStyle("body", 600, fontsLoaded),
     },
     // Mockup markers-card prompt: 13.5px, ink-2, 11 top margin.
     prompt: {

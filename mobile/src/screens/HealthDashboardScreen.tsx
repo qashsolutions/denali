@@ -26,6 +26,7 @@
 
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Plus } from "lucide-react-native";
 import React from "react";
 import {
   ActivityIndicator,
@@ -45,13 +46,15 @@ import { useDal } from "@/db/DalProvider";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
+import { checkInAvailable } from "./instrumentsFocus";
+import { QuickAddSheet, type QuickAddOption } from "./QuickAddSheet";
 import { DomainCard } from "./timeline/DomainCard";
 import { dateKeyOf, formatGroupHeader } from "./timeline/groupObservations";
 import { groupByInstrumentSession } from "./timeline/grouping";
 import { rollupCardsByDomain, type DomainRollup } from "./timeline/rollup";
 import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
 
-import type { RootStackParamList } from "@/navigation/types";
+import type { IntakeSection, RootStackParamList } from "@/navigation/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "MainTabs">;
 
@@ -94,6 +97,43 @@ export function HealthDashboardScreen(): React.ReactElement {
   const [loading, setLoading] = React.useState(true);
   const [userSexAtBirth, setUserSexAtBirth] = React.useState<SexAtBirth | null>(null);
   const [userBirthYear, setUserBirthYear] = React.useState<number | null>(null);
+  const [quickAddVisible, setQuickAddVisible] = React.useState(false);
+
+  // "+ Add" capture hub — routes to the standalone intake sections so they
+  // stay enterable after onboarding. (Check-ins log from the per-card CTA;
+  // uploads have their own tab.)
+  const quickAddOptions = React.useMemo<QuickAddOption[]>(() => {
+    const go = (section: IntakeSection) => () => {
+      setQuickAddVisible(false);
+      navigation.navigate("Intake", { section });
+    };
+    return [
+      {
+        key: "complaint",
+        label: "A symptom or concern",
+        hint: "Something that's on your mind",
+        onPress: go("complaint"),
+      },
+      {
+        key: "history",
+        label: "A past diagnosis",
+        hint: "A condition you've been diagnosed with",
+        onPress: go("history"),
+      },
+      {
+        key: "family",
+        label: "Family history",
+        hint: "What runs in the family",
+        onPress: go("family"),
+      },
+      {
+        key: "lifestyle",
+        label: "Daily habits",
+        hint: "Smoking, alcohol, activity, food, sleep",
+        onPress: go("lifestyle"),
+      },
+    ];
+  }, [navigation]);
 
   // Reload on every screen FOCUS (not just mount) — returning from a
   // repeat check-in (Step 4) or the detail stack must refresh the pills.
@@ -176,11 +216,23 @@ export function HealthDashboardScreen(): React.ReactElement {
       StyleSheet.create({
         screen: { flex: 1, backgroundColor: redesign.paper },
         header: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
           paddingHorizontal: theme.spacing.space5,
           // Stack the device's status-bar inset on top of our own spacing
           // so the title clears the system clock.
           paddingTop: insets.top + theme.spacing.md,
           paddingBottom: theme.spacing.sm,
+        },
+        headerTextBlock: { flexShrink: 1 },
+        addBtn: {
+          width: 40,
+          height: 40,
+          borderRadius: redesign.rChip,
+          backgroundColor: redesign.tealWash,
+          alignItems: "center",
+          justifyContent: "center",
         },
         // Mockup .scr-title: display 700, 30px, -.025em, ink.
         title: {
@@ -260,13 +312,24 @@ export function HealthDashboardScreen(): React.ReactElement {
       );
     }
     if (item.kind === "rollup") {
+      const r = item.rollup;
+      // Surface a per-card "New check-in" only for instrument domains the
+      // user can re-log (checkInAvailable); single/empty domains don't.
+      const canLog =
+        r.kind === "instrument-domain" &&
+        checkInAvailable(r.domainId, userSexAtBirth);
       return (
         <DomainCard
-          rollup={item.rollup}
+          rollup={r}
           userSexAtBirth={userSexAtBirth}
           userAgeYears={userAgeYears}
           onPress={() =>
-            navigation.navigate("DomainDetail", { domainId: item.rollup.domainId })
+            navigation.navigate("DomainDetail", { domainId: r.domainId })
+          }
+          onLogPress={
+            canLog
+              ? () => navigation.navigate("Instruments", { focus: r.domainId })
+              : undefined
           }
         />
       );
@@ -299,10 +362,22 @@ export function HealthDashboardScreen(): React.ReactElement {
       {/* Signature ridgeline — absolutely positioned behind the header. */}
       <Ridgeline />
       <View style={styles.header}>
-        <Text style={styles.title}>Your health</Text>
-        <Text testID="dashboard_today_label" style={styles.todayLabel}>
-          {todayLabel}
-        </Text>
+        <View style={styles.headerTextBlock}>
+          <Text style={styles.title}>Your health</Text>
+          <Text testID="dashboard_today_label" style={styles.todayLabel}>
+            {todayLabel}
+          </Text>
+        </View>
+        <Pressable
+          testID="dashboard_quick_add"
+          onPress={() => setQuickAddVisible(true)}
+          style={styles.addBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Add to your health"
+          hitSlop={8}
+        >
+          <Plus color={redesign.teal} size={24} />
+        </Pressable>
       </View>
       <FlatList
         style={{ flex: 1 }}
@@ -329,6 +404,11 @@ export function HealthDashboardScreen(): React.ReactElement {
           {PROVISIONAL_FOOTNOTE}
         </Text>
       </View>
+      <QuickAddSheet
+        visible={quickAddVisible}
+        onClose={() => setQuickAddVisible(false)}
+        options={quickAddOptions}
+      />
     </View>
   );
 }
