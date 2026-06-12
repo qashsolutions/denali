@@ -167,6 +167,7 @@ export function OneItemScreen({
           gap: theme.spacing.sm,
           marginTop: theme.spacing.lg,
         },
+        footerCentered: { justifyContent: "center" },
         // Ghost back/skip: surface card + hairline.
         backButton: {
           minHeight: 48,
@@ -226,6 +227,13 @@ export function OneItemScreen({
 
   const continueDisabled = disabled || !canContinue;
 
+  const showBack = !hideBack && onBack != null;
+  const showSkip = onSkipSection != null;
+  const showContinue = !autoAdvance && onContinue != null;
+  // When Continue is the ONLY footer action (e.g. a required single-field
+  // step with no Back/Skip), center it instead of pinning it to the right.
+  const onlyContinue = showContinue && !showBack && !showSkip;
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -264,8 +272,8 @@ export function OneItemScreen({
           <Text style={styles.errorText}>{errorMessage}</Text>
         ) : null}
 
-        <View style={styles.footer}>
-          {!hideBack && onBack != null ? (
+        <View style={[styles.footer, onlyContinue && styles.footerCentered]}>
+          {showBack ? (
             <Pressable
               testID="oneitem_back_button"
               style={styles.backButton}
@@ -277,8 +285,8 @@ export function OneItemScreen({
               <Text style={styles.backLabel}>Back</Text>
             </Pressable>
           ) : null}
-          <View style={styles.spacer} />
-          {onSkipSection != null ? (
+          {onlyContinue ? null : <View style={styles.spacer} />}
+          {showSkip ? (
             <Pressable
               testID="oneitem_skip_button"
               style={styles.skipButton}
@@ -290,7 +298,7 @@ export function OneItemScreen({
               <Text style={styles.skipLabel}>{skipLabel}</Text>
             </Pressable>
           ) : null}
-          {!autoAdvance && onContinue != null ? (
+          {showContinue ? (
             <Pressable
               testID="oneitem_continue_button"
               style={[

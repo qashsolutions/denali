@@ -54,6 +54,12 @@ export interface SliderInputProps {
   unit?: string;
   /** Optional left-endpoint label (e.g. "No impact"). */
   minLabel?: string;
+  /**
+   * Optional midpoint anchor (e.g. "Moderate"). Renders centered between
+   * the endpoints to give a subjective scale context without numeric
+   * clutter — the live readout already shows the exact value.
+   */
+  midLabel?: string;
   /** Optional right-endpoint label (e.g. "Worst possible"). */
   maxLabel?: string;
   /** Accessibility label for the whole control. */
@@ -73,6 +79,7 @@ export function SliderInput({
   onChange,
   unit,
   minLabel,
+  midLabel,
   maxLabel,
   accessibilityLabel,
   disabled = false,
@@ -172,13 +179,16 @@ export function SliderInput({
         },
         endpointRow: {
           flexDirection: "row",
-          justifyContent: "space-between",
         },
         endpointLabel: {
+          flex: 1,
           fontSize: theme.typography.sizes.xs,
           color: redesign.ink2,
           ...fontStyle("body", 400, fontsLoaded),
         },
+        labelLeft: { textAlign: "left" },
+        labelMid: { textAlign: "center" },
+        labelRight: { textAlign: "right" },
       }),
     [theme, redesign, fontsLoaded],
   );
@@ -238,10 +248,19 @@ export function SliderInput({
           ))}
         </View>
       </View>
-      {minLabel != null || maxLabel != null ? (
+      {minLabel != null || midLabel != null || maxLabel != null ? (
         <View style={styles.endpointRow}>
-          <Text style={styles.endpointLabel}>{minLabel ?? String(min)}</Text>
-          <Text style={styles.endpointLabel}>{maxLabel ?? String(max)}</Text>
+          <Text style={[styles.endpointLabel, styles.labelLeft]}>
+            {minLabel ?? String(min)}
+          </Text>
+          {midLabel != null ? (
+            <Text style={[styles.endpointLabel, styles.labelMid]}>
+              {midLabel}
+            </Text>
+          ) : null}
+          <Text style={[styles.endpointLabel, styles.labelRight]}>
+            {maxLabel ?? String(max)}
+          </Text>
         </View>
       ) : null}
     </View>
