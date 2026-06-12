@@ -73,6 +73,16 @@ export interface ApiClient {
    * supply `user_id` when calling `LocalDataDAL` write methods.
    */
   getCurrentUser(): { userId: string; email: string } | null;
+  /**
+   * Cold-launch session restore. If a stored access token exists AND the
+   * 7-day session cap (NIST 800-63B) has NOT elapsed, hydrate the signed-in
+   * user from the supplied local-profile identity and return true; the app
+   * then skips the sign-in screen for a returning user — no new OTP. If no
+   * token exists or the cap elapsed, any stale tokens are cleared and false
+   * is returned (caller routes to sign-in). Does not hit the network; token
+   * validity is proven on the first authed request (silent refresh on 401).
+   */
+  restoreSession(user: { userId: string; email: string }): Promise<boolean>;
   /** Subscribe to "tokens cleared, must re-sign-in" events. Returns unsubscribe. */
   onSignInRequired(handler: () => void): () => void;
 

@@ -78,15 +78,17 @@ vi.mock("../chatStream", () => ({
 // tokenStore — we only need `getAccessToken` for the `hasStoredAccessToken`
 // extension and to keep the import resolvable.
 const accessTokenRef = { current: null as string | null };
+const sessionIssuedAtRef = { current: null as string | null };
 vi.mock("../tokenStore", () => ({
   getAccessToken: vi.fn(async () => accessTokenRef.current),
   getRefreshToken: vi.fn(async () => null),
-  getSessionIssuedAt: vi.fn(async () => null),
+  getSessionIssuedAt: vi.fn(async () => sessionIssuedAtRef.current),
   setTokens: vi.fn(async () => undefined),
   clearTokens: vi.fn(async () => undefined),
 }));
 
 import { createApiClient } from "../ApiClientImpl";
+import { clearTokens } from "../tokenStore";
 
 beforeEach(() => {
   requestJsonSpy.mockReset();
@@ -95,6 +97,7 @@ beforeEach(() => {
   signOutSpy.mockReset();
   refreshSpy.mockReset();
   accessTokenRef.current = null;
+  sessionIssuedAtRef.current = null;
 });
 
 afterEach(() => {
@@ -120,6 +123,7 @@ describe("createApiClient — ApiClient conformance", () => {
       "signOut",
       "isAuthenticated",
       "getCurrentUser",
+      "restoreSession",
       "onSignInRequired",
       "apiGet",
       "apiPost",
@@ -141,6 +145,44 @@ describe("createApiClient — ApiClient conformance", () => {
       userId: "u-1",
       email: "ada@example.com",
     });
+  });
+});
+
+describe("ApiClientImpl — restoreSession (cold-launch, 7-day cap)", () => {
+  const user = { userId: "u-1", email: "ada@example.com" };
+
+  it("returns false + stays unauthenticated when no token is stored", async () => {
+    const client = createApiClient();
+    accessTokenRef.current = null;
+    expect(await client.restoreSession(user)).toBe(false);
+    expect(client.isAuthenticated()).toBe(false);
+  });
+
+  it("restores + hydrates currentUser for a token within the cap", async () => {
+    const client = createApiClient();
+    accessTokenRef.current = "stored.jwt.token";
+    sessionIssuedAtRef.current = String(Date.now()); // issued just now
+    expect(await client.restoreSession(user)).toBe(true);
+    expect(client.isAuthenticated()).toBe(true);
+    expect(client.getCurrentUser()).toEqual(user);
+  });
+
+  it("refuses + clears a stored token that has no session_issued_at", async () => {
+    const client = createApiClient();
+    accessTokenRef.current = "stored.jwt.token";
+    sessionIssuedAtRef.current = null; // present token, no cap anchor → untrusted
+    expect(await client.restoreSession(user)).toBe(false);
+    expect(client.isAuthenticated()).toBe(false);
+    expect(clearTokens).toHaveBeenCalled();
+  });
+
+  it("refuses + clears tokens once the 7-day cap has elapsed", async () => {
+    const client = createApiClient();
+    accessTokenRef.current = "stored.jwt.token";
+    sessionIssuedAtRef.current = String(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    expect(await client.restoreSession(user)).toBe(false);
+    expect(client.isAuthenticated()).toBe(false);
+    expect(clearTokens).toHaveBeenCalled();
   });
 });
 

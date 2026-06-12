@@ -45,9 +45,11 @@ import {
   signOut as otpSignOut,
   verifyOtp as otpVerifyOtp,
 } from "./otpClient";
+import { isSessionExpired } from "./sessionPolicy";
 import {
   clearTokens,
   getAccessToken,
+  getSessionIssuedAt,
 } from "./tokenStore";
 
 export interface CreateApiClientOptions {
@@ -142,6 +144,34 @@ class ApiClientImpl implements ApiClient {
   async hasStoredAccessToken(): Promise<boolean> {
     const token = await getAccessToken();
     return token != null;
+  }
+
+  /**
+   * Cold-launch session restore (see the ApiClient contract). Hydrates
+   * `currentUser` from the supplied local-profile identity IFF a stored
+   * access token exists AND the 7-day session cap has not elapsed. On an
+   * elapsed cap or a missing token, clears any stale tokens and returns
+   * false. No network call — token validity is proven on the first authed
+   * request, which silently refreshes on 401.
+   */
+  async restoreSession(user: {
+    userId: string;
+    email: string;
+  }): Promise<boolean> {
+    const token = await getAccessToken();
+    if (token == null) return false;
+    const issuedAt = await getSessionIssuedAt();
+    // A stored token whose 7-day cap has elapsed — OR that carries no issue
+    // timestamp at all (can't be age-bounded) — is refused and cleared,
+    // rather than granting an uncapped session. `isSessionExpired` treats
+    // null as "no session"; here a token IS present, so null means a
+    // partial/legacy write we must not trust. (HIPAA review finding M1.)
+    if (issuedAt == null || isSessionExpired(issuedAt)) {
+      await clearTokens();
+      return false;
+    }
+    this.currentUser = user;
+    return true;
   }
 
   // ── REST ──

@@ -216,6 +216,25 @@ Spec: `docs/design/phase-1-45plus.md`. Path-scoped rules: `mobile/CLAUDE.md`. Ag
 
 ---
 
+## D14 — Cold-launch session restore via additive `ApiClient.restoreSession` (2026-06-12)
+
+**Decision:** A returning user with a valid stored session now skips the sign-in screen on app launch (no new OTP). Implemented by adding one **additive** method to the frozen `ApiClient` contract — `restoreSession(user): Promise<boolean>` — plus a launch gate in `RootNavigator`.
+
+**Why:** A JS reload / cold start always landed on `SignIn` and forced re-OTP, even with non-expired tokens in SecureStore. `ApiClientProvider` never bootstrapped and `RootNavigator` was hardwired to `initialRouteName="SignIn"` — the intended launch restore (referenced in `ApiClientImpl` comments) was a Pass-2 gap. For a local-first app whose Cognito tokens + SQLCipher key live in the device keystore, a valid session must survive a restart. New sign-ins and sign-out still exercise OTP every time, so OTP coverage is unchanged.
+
+**Security:** `restoreSession` enforces the same **7-day NIST 800-63B session cap** the web middleware and mobile `httpClient` already enforce — it reads `getSessionIssuedAt()` + `isSessionExpired()` and **clears stale tokens + returns false** past the cap. No network call; token validity is still proven on the first authed request (silent refresh on 401). Restore requires BOTH a stored token AND a local profile (the identity source); either missing → SignIn.
+
+**Contract-guard process:** `.wave-0-complete` removed → additive interface edit → marker re-touched. Non-breaking (new capability; existing callers unaffected).
+
+**Encoded in code:**
+- `mobile/src/contracts/ApiClient.ts` — `restoreSession(user): Promise<boolean>` on the interface.
+- `mobile/src/auth/ApiClientImpl.ts` — impl (token + 7-day-cap check + `hydrateUser`); imports `getSessionIssuedAt`, `isSessionExpired`.
+- `mobile/src/navigation/RootNavigator.tsx` — launch gate: waits for `useDalState().ready`, reads `getProfile()`, calls `restoreSession({userId: profile.id, email})`, routes a restored user to `MainTabs`; renders a boot splash (`testID="root_boot_splash"`) while deciding.
+- `mobile/src/auth/__tests__/ApiClientImpl.test.ts` — 4 `restoreSession` cases (no token / within cap / null issued-at / elapsed cap → cleared) + conformance-array entry.
+- `mobile/src/__tests__/smoke.test.ts` — mock `ApiClient` gains `restoreSession`.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

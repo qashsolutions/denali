@@ -268,6 +268,10 @@ function makeMockApi(): {
     getCurrentUser() {
       return user;
     },
+    async restoreSession(u) {
+      user = u;
+      return true;
+    },
     onSignInRequired() {
       return () => {};
     },
@@ -349,12 +353,13 @@ function makeMockApi(): {
 // ─── Scenarios ────────────────────────────────────────────────────────────
 
 describe("Phase 1 mobile — Wave 3 integration smoke", () => {
-  it("1) boot — SignIn is the initial route per RootNavigator", async () => {
+  it("1) boot — RootNavigator defaults to SignIn, routes to MainTabs on restore", async () => {
     // RootNavigator imports react-native-screens via @react-navigation
     // which cannot resolve in a node-env vitest run. Instead, assert
-    // the structural property: the navigator source lists "SignIn" as
-    // initialRouteName. A real render-the-app smoke belongs in Detox /
-    // Maestro (Phase 2 deliverable — see header).
+    // the structural property of the cold-launch gate (D14): the initial
+    // route defaults to SignIn and a restored session switches it to
+    // MainTabs, consumed by the navigator. A real render-the-app smoke
+    // belongs in Detox / Maestro (Phase 2 deliverable — see header).
     const fs = await import("node:fs/promises");
     const nodePath = await import("node:path");
     // Vitest config resolves `@` → `mobile/src`. The smoke test runs
@@ -365,8 +370,12 @@ describe("Phase 1 mobile — Wave 3 integration smoke", () => {
       "src/navigation/RootNavigator.tsx",
     );
     const src = await fs.readFile(file, "utf8");
-    expect(src).toMatch(/initialRouteName="SignIn"/);
-    expect(src).toMatch(/MainTabs/);
+    // Default route (first launch / no valid session) is SignIn.
+    expect(src).toMatch(/useState<keyof RootStackParamList>\(\s*"SignIn"\s*\)/);
+    // Navigator consumes the dynamic initial route, not a hardcoded one.
+    expect(src).toMatch(/initialRouteName=\{initialRoute\}/);
+    // A restored session routes to MainTabs.
+    expect(src).toMatch(/setInitialRoute\("MainTabs"\)/);
   });
 
   it("2) OTP sign-in routes to PrivacyNotice (Wave 2 behavior)", async () => {
