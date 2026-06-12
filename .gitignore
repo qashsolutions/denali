@@ -77,6 +77,7 @@ npm-debug.log*
 
 # Claude Code (app-level local state — root-level .claude/* already covered above)
 app/.claude/
+mobile/.claude/
 
 # AWS Session Manager Plugin (tooling download, not source)
 sessionmanager-bundle/
