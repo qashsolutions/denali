@@ -21,6 +21,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
 import type { SexAtBirth } from "@/contracts";
@@ -54,6 +55,8 @@ export function LogMarkerScreen(): React.ReactElement {
   const route = useRoute<Route>();
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
+  // Top inset so the header clears the status-bar clock.
+  const insets = useSafeAreaInsets();
 
   const [markerKey, setMarkerKey] = React.useState<string | null>(
     route.params?.markerKey ?? null,
@@ -173,8 +176,8 @@ export function LogMarkerScreen(): React.ReactElement {
   }, [marker, dal, userId, values, units, navigation]);
 
   const styles = React.useMemo(
-    () => makeStyles(theme, redesign, fontsLoaded),
-    [theme, redesign, fontsLoaded],
+    () => makeStyles(theme, redesign, fontsLoaded, insets.top),
+    [theme, redesign, fontsLoaded, insets.top],
   );
 
   if (saving) {
@@ -340,6 +343,7 @@ function makeStyles(
   theme: ReturnType<typeof useTheme>["theme"],
   redesign: ReturnType<typeof useTheme>["redesign"],
   fontsLoaded: boolean,
+  insetTop: number,
 ) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: redesign.paper },
@@ -349,7 +353,7 @@ function makeStyles(
       alignItems: "center",
       gap: theme.spacing.sm,
       paddingHorizontal: theme.spacing.space5,
-      paddingTop: theme.spacing.space5,
+      paddingTop: insetTop + theme.spacing.md,
       paddingBottom: theme.spacing.sm,
     },
     backChevron: {

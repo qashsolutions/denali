@@ -33,6 +33,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
 import type { LocalDataDAL, ReportType } from "@/contracts";
@@ -79,6 +80,7 @@ export function UploadScreen(): React.ReactElement {
   const navigation = useNavigation<Nav>();
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
+  const insets = useSafeAreaInsets();
 
   const [reportType, setReportType] = React.useState<ReportType>("lab");
   const [reportName, setReportName] = React.useState<string>("");
@@ -110,6 +112,7 @@ export function UploadScreen(): React.ReactElement {
         screen: { flex: 1, backgroundColor: redesign.paper },
         content: {
           padding: theme.spacing.space5,
+          paddingTop: insets.top + theme.spacing.space5,
           gap: theme.spacing.space3,
         },
         // Mockup .scr-title: Bricolage display, ink.
@@ -228,7 +231,7 @@ export function UploadScreen(): React.ReactElement {
           gap: theme.spacing.sm,
         },
       }),
-    [theme, redesign, fontsLoaded],
+    [theme, redesign, fontsLoaded, insets.top],
   );
 
   const busy = phase !== "idle" && phase !== "error" && phase !== "done";

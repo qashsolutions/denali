@@ -36,6 +36,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
 import type { ObservationInsertInput } from "@/contracts";
@@ -99,6 +100,7 @@ export function InstrumentsScreen(): React.ReactElement {
   const focus = route.params?.focus;
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
+  const insets = useSafeAreaInsets();
 
   const [sexAtBirth, setSexAtBirth] = React.useState<
     "male" | "female" | "intersex" | "unknown" | null
@@ -585,7 +587,11 @@ export function InstrumentsScreen(): React.ReactElement {
     () =>
       StyleSheet.create({
         screen: { flex: 1, backgroundColor: redesign.paper },
-        scroll: { padding: theme.spacing.space5, gap: theme.spacing.lg },
+        scroll: {
+          padding: theme.spacing.space5,
+          paddingTop: insets.top + theme.spacing.space5,
+          gap: theme.spacing.lg,
+        },
         title: {
           fontSize: theme.typography.sizes["3xl"],
           color: redesign.ink,
@@ -662,7 +668,7 @@ export function InstrumentsScreen(): React.ReactElement {
           padding: theme.spacing.lg,
         },
       }),
-    [theme, redesign, fontsLoaded],
+    [theme, redesign, fontsLoaded, insets.top],
   );
 
   // ─── Loading / submitting overlays ────────────────────────────────────

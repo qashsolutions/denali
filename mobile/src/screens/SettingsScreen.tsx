@@ -22,6 +22,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { ConsentGetResponse } from "@/api/routeContracts";
 import { useApiClient } from "@/auth";
@@ -64,6 +65,7 @@ export function SettingsScreen(): React.ReactElement {
   const navigation = useNavigation<Nav>();
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
+  const insets = useSafeAreaInsets();
 
   const [consent, setConsent] = React.useState<ConsentSnapshot | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -144,6 +146,7 @@ export function SettingsScreen(): React.ReactElement {
         screen: { flex: 1, backgroundColor: redesign.paper },
         content: {
           padding: theme.spacing.space5,
+          paddingTop: insets.top + theme.spacing.space5,
           gap: theme.spacing.space3,
         },
         // Mockup .scr-title: Bricolage display, ink.
@@ -224,7 +227,7 @@ export function SettingsScreen(): React.ReactElement {
         },
       });
     },
-    [theme, redesign, fontsLoaded],
+    [theme, redesign, fontsLoaded, insets.top],
   );
 
   const user = api.getCurrentUser();

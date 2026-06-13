@@ -25,6 +25,7 @@ import {
   View,
   type ListRenderItem,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
 import type { ObservationRow, SexAtBirth } from "@/contracts";
@@ -60,6 +61,7 @@ export function TimelineScreen(): React.ReactElement {
   const dal = useDal();
   const api = useApiClient();
   const { active, theme } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [rows, setRows] = React.useState<ObservationRow[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -192,7 +194,7 @@ export function TimelineScreen(): React.ReactElement {
           fontFamily: theme.typography.fonts.serif,
           fontSize: theme.typography.sizes["2xl"],
           paddingHorizontal: theme.spacing.lg,
-          paddingTop: theme.spacing.lg,
+          paddingTop: insets.top + theme.spacing.lg,
           paddingBottom: theme.spacing.sm,
         },
         sectionHeader: {
@@ -269,7 +271,7 @@ export function TimelineScreen(): React.ReactElement {
           fontSize: theme.typography.sizes.sm,
         },
       }),
-    [active, theme],
+    [active, theme, insets.top],
   );
 
   if (!dal || loading) {

@@ -32,6 +32,7 @@ import {
   View,
   type ListRenderItem,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
 import { Crisis988Modal } from "@/onboarding/Crisis988Modal";
@@ -52,6 +53,7 @@ export function ChatScreen(): React.ReactElement {
   const api = useApiClient();
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
+  const insets = useSafeAreaInsets();
 
   const [history, setHistory] = React.useState<ChatTurn[]>([]);
   const [input, setInput] = React.useState("");
@@ -156,7 +158,7 @@ export function ChatScreen(): React.ReactElement {
           fontSize: theme.typography.sizes["2xl"],
           letterSpacing: -0.5,
           paddingHorizontal: theme.spacing.space5,
-          paddingTop: theme.spacing.space5,
+          paddingTop: insets.top + theme.spacing.space5,
           paddingBottom: theme.spacing.sm,
           ...fontStyle("display", 700, fontsLoaded),
         },
@@ -255,7 +257,7 @@ export function ChatScreen(): React.ReactElement {
           ...fontStyle("body", 400, fontsLoaded),
         },
       }),
-    [theme, redesign, fontsLoaded],
+    [theme, redesign, fontsLoaded, insets.top],
   );
 
   const renderItem: ListRenderItem<ChatTurn> = ({ item }) => {
