@@ -142,13 +142,15 @@ export function DomainDetailScreen(): React.ReactElement {
   const [userSexAtBirth, setUserSexAtBirth] = React.useState<SexAtBirth | null>(null);
   // Shared by every chart on this screen; default 6M (Step-3 rule 11).
   const [trendRange, setTrendRange] = React.useState<TrendRange>("6m");
-  // Cards start expanded on the detail screen; the Hide/Show toggle is
-  // live (2026-06-09 operator review — it was a no-op before).
-  const [collapsedCardIds, setCollapsedCardIds] = React.useState<
+  // Cards start COLLAPSED on the detail screen (operator review 2026-06-12):
+  // the trend chart is the hero at the top, and the per-session text tucks
+  // into collapsible cards below. Track the EXPANDED set (empty = all
+  // collapsed); the headline + pill still show collapsed, details on tap.
+  const [expandedCardIds, setExpandedCardIds] = React.useState<
     ReadonlySet<string>
   >(() => new Set<string>());
   const toggleCardExpanded = React.useCallback((id: string) => {
-    setCollapsedCardIds((prev) => {
+    setExpandedCardIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -261,12 +263,16 @@ export function DomainDetailScreen(): React.ReactElement {
         const id = item.card.instrumentId;
         if (seen.has(id)) continue;
         seen.add(id);
+        // PHQ-2 is the quick SCREEN that gates the full PHQ-9 check-in — not a
+        // severity-tracking instrument, so the Mood domain charts only the full
+        // check-in (operator review 2026-06-12). Scoped here, not in
+        // isChartableInstrument, to leave the dashboard sparkline untouched.
+        if (id === "PHQ-2") continue;
         if (isChartableInstrument(id)) instrumentIds.push(id);
       }
       if (instrumentIds.length > 0) {
-        // Below the latest-session card: header(0), card(1) → insert at 2.
-        const insertAt = Math.min(2, out.length);
-        out.splice(insertAt, 0, { kind: "trend", instrumentIds });
+        // The chart is the hero — pin it to the TOP, above the session history.
+        out.unshift({ kind: "trend", instrumentIds });
       }
     }
     return out;
@@ -510,7 +516,7 @@ export function DomainDetailScreen(): React.ReactElement {
     return (
       <TimelineCardView
         card={item.card}
-        isExpanded={!collapsedCardIds.has(id)}
+        isExpanded={expandedCardIds.has(id)}
         onToggleExpand={() => toggleCardExpanded(id)}
         formattedDate={formatGroupHeader(dateKeyOf(cardEffectiveAt(item.card)))}
         userSexAtBirth={userSexAtBirth}
