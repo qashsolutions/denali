@@ -4,7 +4,7 @@
  * The single implementation of the frozen `ApiClient` contract at
  * `src/contracts/ApiClient.ts`. Wraps:
  *   - tokenStore.ts        (Keychain/Keystore via expo-secure-store)
- *   - httpClient.ts        (fetch wrapper + silent refresh + 7-day cap)
+ *   - httpClient.ts        (fetch wrapper + silent refresh + 30-day cap)
  *   - otpClient.ts         (send/verify/refresh/signout)
  *   - chatStream.ts        (SSE iterable)
  *
@@ -17,7 +17,7 @@
  *     `initialUser` constructor arg (used by the provider after
  *     `getCurrentUser()` from `LocalDataDAL` on app launch).
  *   - `signInListeners` — onSignInRequired subscribers; fired when
- *     tokens are cleared by a failed refresh or by the 7-day session cap.
+ *     tokens are cleared by a failed refresh or by the 30-day session cap.
  */
 
 import type {
@@ -149,7 +149,7 @@ class ApiClientImpl implements ApiClient {
   /**
    * Cold-launch session restore (see the ApiClient contract). Hydrates
    * `currentUser` from the supplied local-profile identity IFF a stored
-   * access token exists AND the 7-day session cap has not elapsed. On an
+   * access token exists AND the 30-day session cap has not elapsed. On an
    * elapsed cap or a missing token, clears any stale tokens and returns
    * false. No network call — token validity is proven on the first authed
    * request, which silently refreshes on 401.
@@ -161,7 +161,7 @@ class ApiClientImpl implements ApiClient {
     const token = await getAccessToken();
     if (token == null) return false;
     const issuedAt = await getSessionIssuedAt();
-    // A stored token whose 7-day cap has elapsed — OR that carries no issue
+    // A stored token whose 30-day cap has elapsed — OR that carries no issue
     // timestamp at all (can't be age-bounded) — is refused and cleared,
     // rather than granting an uncapped session. `isSessionExpired` treats
     // null as "no session"; here a token IS present, so null means a

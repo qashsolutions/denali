@@ -16,6 +16,10 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
+// Web (server-side-PHI / Medicare path) keeps a 7-day session cap. The
+// MOBILE app intentionally diverges to 30 days because it is local-first and
+// gates launch behind a biometric check — do NOT "sync" the two. See
+// mobile/src/auth/sessionPolicy.ts and decision D15.
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function middleware(request: NextRequest) {

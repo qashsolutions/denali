@@ -1,10 +1,10 @@
 /**
  * sessionPolicy — unit tests.
  *
- * The 7-day NIST 800-63B cap is the cornerstone of mobile session hygiene.
- * These tests pin the boundary behavior so a future "let's bump it to 14
- * days" tweak gets surfaced as a deliberate decision (and would also need
- * to bump SEVEN_DAYS_MS in app/src/middleware.ts to stay in sync).
+ * The 30-day NIST 800-63B cap (D15) is the mobile session-hygiene anchor —
+ * deliberately longer than the web's 7-day cap because mobile is local-first
+ * and gates launch behind biometrics. These tests pin the boundary so any
+ * future tweak surfaces as a deliberate decision.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,8 +23,8 @@ describe("sessionPolicy", () => {
     vi.useRealTimers();
   });
 
-  it("exports SESSION_MAX_MS = 7 days exactly", () => {
-    expect(SESSION_MAX_MS).toBe(7 * 24 * 60 * 60 * 1000);
+  it("exports SESSION_MAX_MS = 30 days exactly", () => {
+    expect(SESSION_MAX_MS).toBe(30 * 24 * 60 * 60 * 1000);
   });
 
   it("returns false when sessionIssuedAt is null (no session, not 'expired')", () => {
@@ -48,8 +48,8 @@ describe("sessionPolicy", () => {
   });
 
   it("returns true for an obviously stale session", () => {
-    const tenDaysAgo = FIXED_NOW - 10 * 24 * 60 * 60 * 1000;
-    expect(isSessionExpired(String(tenDaysAgo))).toBe(true);
+    const fortyDaysAgo = FIXED_NOW - 40 * 24 * 60 * 60 * 1000;
+    expect(isSessionExpired(String(fortyDaysAgo))).toBe(true);
   });
 
   it("treats a corrupted (non-numeric) value as expired (fail-safe)", () => {

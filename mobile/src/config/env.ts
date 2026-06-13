@@ -32,9 +32,9 @@ export const API_BASE_URL: string =
  * value in mobile/src/auth/**; always read it from here so the per-env
  * Cognito setting is the single source of truth.
  *
- * Note: this is the absolute refresh-token lifetime, NOT the 7-day NIST
- * 800-63B session cap. The session cap is enforced separately by
- * `sessionPolicy.ts` and is unrelated to Cognito's refresh-token TTL.
+ * Note: this is the absolute refresh-token lifetime, NOT the NIST 800-63B
+ * session cap. The session cap is enforced separately by `sessionPolicy.ts`
+ * (30 days on mobile) and is unrelated to Cognito's refresh-token TTL.
  */
 export const REFRESH_TOKEN_LIFETIME_DAYS: number =
   typeof extra.refreshTokenLifetimeDays === "number" &&

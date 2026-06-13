@@ -1,19 +1,29 @@
 /**
- * sessionPolicy — 7-day NIST 800-63B session cap (mobile mirror).
+ * sessionPolicy — 30-day NIST 800-63B session cap (mobile).
  *
- * Mirrors the web's session cap at `app/src/middleware.ts:19, 38-67`:
- *   - 7 days from `session_issued_at`, then forced re-OTP.
+ * INTENTIONAL DIVERGENCE from the web (decision D15, 2026-06-12): the web
+ * `app/src/middleware.ts` keeps its 7-day cap for the server-side-PHI
+ * Medicare path. Mobile is local-first (no health data server-side; the
+ * SQLCipher key is device-bound) AND now gates app launch behind a
+ * biometric / device-credential check (`biometricGate.ts`), which gives
+ * daily presence assurance. Email OTP is a single factor (≈ AAL1, where
+ * NIST permits up to 30-day reauth); biometrics are the continuous control,
+ * so the OTP re-prompt cap is 30 days here, not 7. The 30-minute inactivity
+ * timeout (useIdleTimeout) is unchanged.
  *
- * The web enforces this in middleware on every navigation. On mobile,
- * there is no middleware — the httpClient checks `isSessionExpired` on
- * every request boundary, and the SignIn screen checks it on launch.
+ * On mobile there is no middleware — the httpClient checks `isSessionExpired`
+ * on every request boundary, and the launch gate checks it on cold start.
+ *
+ * 30 days matches the Cognito refresh-token lifetime (verified 2026-06-04),
+ * so silent refresh stays viable for the whole window.
  *
  * The constant is exported (not just the function) because callers like
  * `httpClient.ts` may want to compute "time remaining" for UX hints.
  */
 
-/** 7 days in milliseconds (matches `SEVEN_DAYS_MS` in app/src/middleware.ts). */
-export const SESSION_MAX_MS = 7 * 24 * 60 * 60 * 1000;
+/** 30 days in milliseconds. Deliberately longer than the web's 7-day cap —
+ *  see the docblock (D15: biometric launch gate + local-first posture). */
+export const SESSION_MAX_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Returns true when the stored `session_issued_at` is older than

@@ -59,7 +59,7 @@ vi.mock("../tokenStore", () => ({
 
 vi.mock("../sessionPolicy", () => ({
   isSessionExpired: vi.fn(() => false),
-  SESSION_MAX_MS: 7 * 24 * 60 * 60 * 1000,
+  SESSION_MAX_MS: 30 * 24 * 60 * 60 * 1000,
 }));
 
 import * as tokenStoreMod from "../tokenStore";

@@ -235,6 +235,32 @@ Spec: `docs/design/phase-1-45plus.md`. Path-scoped rules: `mobile/CLAUDE.md`. Ag
 
 ---
 
+## D15 — Biometric launch gate + 30-day OTP cap (2026-06-12)
+
+**Decision:** Add a biometric / device-credential gate at app launch (run after session restore) and extend the mobile OTP re-prompt cap from 7 to 30 days. The two are coupled: biometrics give daily presence assurance, which is what justifies the longer OTP interval.
+
+**Why:** Forcing email OTP every 7 days is heavy friction for the 45+ cohort and stricter than the app's auth tier requires. Email OTP is a single factor (≈ AAL1, where NIST 800-63B permits up to 30-day reauth); HIPAA "automatic logoff" is already satisfied by the 30-min idle timeout, not the absolute cap. Mobile is local-first (no server-side PHI; the SQLCipher key is device-bound), so the backend session is the less-sensitive surface. A biometric launch gate is the mobile-native, low-friction continuous control; with it in place a 30-day OTP cap is appropriate.
+
+**Behavior:**
+- On cold launch, after `restoreSession` succeeds, `runBiometricGate()` (expo-local-authentication) asks the OS to confirm the owner (Face ID / Touch ID / fingerprint, device-passcode fallback). passed | unavailable → MainTabs; failed / cancelled → LockScreen (retry or sign out). New sign-ins are NOT gated — OTP just proved the email factor.
+- "unavailable" (no enrolled biometric/credential) → proceed; never brick a user for a lock the device itself lacks.
+- The gate touches NO token and NO SQLCipher key (invariant 3) — it only asks the OS "is the owner present?".
+- OTP cap: `SESSION_MAX_MS` 7d → 30d in mobile `sessionPolicy.ts`. INTENTIONAL divergence from the web's 7-day cap (web keeps 7 for the server-PHI Medicare path). 30 days matches the Cognito refresh-token lifetime (verified 2026-06-04), so silent refresh stays viable for the whole window.
+
+**Deferred (follow-ups):** resume-after-background gating (AppState + last-active threshold); a Settings opt-out toggle for the gate.
+
+**Encoded in code:**
+- `mobile/src/auth/biometricGate.ts` (+ `__tests__/biometricGate.test.ts`) — `runBiometricGate()` / `isBiometricAvailable()`, fail-safe to "unavailable".
+- `mobile/src/screens/LockScreen.tsx` — locked-state UI (Unlock / sign in with a different email).
+- `mobile/src/navigation/RootNavigator.tsx` — launch phase machine: deciding → locked → ready.
+- `mobile/src/auth/sessionPolicy.ts` — `SESSION_MAX_MS` = 30 days (sessionPolicy / ApiClientImpl / httpClient tests bumped).
+- `mobile/app.config.ts` — expo-local-authentication plugin (injects iOS NSFaceIDUsageDescription).
+- `mobile/package.json` — expo-local-authentication ~56.0.4.
+
+**Requires a native dev rebuild** (new native module) before on-device verification.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

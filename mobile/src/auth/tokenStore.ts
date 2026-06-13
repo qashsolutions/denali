@@ -6,7 +6,7 @@
  * Stores three values in the platform Keychain (iOS) / Keystore (Android):
  *   - access_token       — Cognito JWT used for `Authorization: Bearer ...`
  *   - refresh_token      — used to mint new access tokens via /api/auth/refresh
- *   - session_issued_at  — epoch-millis string for the 7-day NIST 800-63B
+ *   - session_issued_at  — epoch-millis string for the 30-day NIST 800-63B
  *                          session cap enforced by sessionPolicy.ts
  *
  * Invariants:
@@ -28,7 +28,7 @@ import * as SecureStore from "expo-secure-store";
 const KEY_ACCESS = "access_token";
 /** SecureStore key for the Cognito refresh token. */
 const KEY_REFRESH = "refresh_token";
-/** SecureStore key for the epoch-millis string used by the 7-day session cap. */
+/** SecureStore key for the epoch-millis string used by the 30-day session cap. */
 const KEY_SESSION_ISSUED_AT = "session_issued_at";
 
 /**
@@ -104,7 +104,7 @@ export async function setTokens(bundle: PartialTokenBundle): Promise<void> {
 
 /**
  * Deletes all three values. Used on sign-out, on a hard 401 (refresh
- * failure), and when the 7-day session cap fires.
+ * failure), and when the 30-day session cap fires.
  *
  * Per-key try/catch: SecureStore raises if the key was never written. We
  * swallow because the post-condition we care about is "no tokens remain",

@@ -41,6 +41,15 @@ const config: ExpoConfig = {
       },
     ],
     "expo-secure-store",
+    [
+      // Biometric / device-credential launch gate (D15). The plugin injects
+      // the iOS NSFaceIDUsageDescription; Android needs no manifest change.
+      "expo-local-authentication",
+      {
+        faceIDPermission:
+          "Denali uses Face ID to unlock your health information on this device.",
+      },
+    ],
   ],
   extra: {
     // Default to staging until the build pipeline injects per-channel overrides.

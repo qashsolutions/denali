@@ -13,7 +13,7 @@
  *     apiPatch / apiDelete). A refactor that drops the header must fail
  *     this suite — it's the load-bearing signal that the backend's mobile
  *     branch (body-tokens, no Set-Cookie) is engaged.
- *   - 7-day session cap: when `isSessionExpired` returns true, the request
+ *   - 30-day session cap: when `isSessionExpired` returns true, the request
  *     short-circuits before `fetch` is called. Tokens cleared,
  *     onSignInRequired fires, SessionExpiredError thrown.
  *   - Timeouts: /api/chat uses CHAT_TIMEOUT_MS (330s); other paths use 30s;
@@ -66,7 +66,7 @@ vi.mock("../tokenStore", () => ({
 const isSessionExpiredMock = vi.fn((_v: string | null) => false);
 vi.mock("../sessionPolicy", () => ({
   isSessionExpired: (v: string | null) => isSessionExpiredMock(v),
-  SESSION_MAX_MS: 7 * 24 * 60 * 60 * 1000,
+  SESSION_MAX_MS: 30 * 24 * 60 * 60 * 1000,
 }));
 
 import * as tokenStoreMod from "../tokenStore";
@@ -254,7 +254,7 @@ describe("httpClient — X-Client-Type header on every method", () => {
   });
 });
 
-describe("httpClient — 7-day session cap", () => {
+describe("httpClient — 30-day session cap", () => {
   it("short-circuits before fetch when isSessionExpired returns true", async () => {
     isSessionExpiredMock.mockReturnValue(true);
     mockTokens.sessionIssuedAt = String(

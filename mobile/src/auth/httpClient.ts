@@ -14,7 +14,7 @@
  *     `useChat.ts` AbortController per the root CLAUDE.md). Caller can
  *     override via `ApiRequestOptions.timeoutMs`.
  *   - On 401, try silent refresh, retry the original request once, and
- *     if refresh fails OR the 7-day session cap has fired, clear tokens
+ *     if refresh fails OR the 30-day session cap has fired, clear tokens
  *     and fire `onSignInRequired`.
  *
  * Single-flight refresh: concurrent 401s share one in-flight refresh
@@ -81,7 +81,7 @@ async function performRefresh(): Promise<boolean> {
       const refreshToken = await getRefreshToken();
       if (!refreshToken) return false;
 
-      // Enforce 7-day cap BEFORE issuing the refresh — if the session is
+      // Enforce 30-day cap BEFORE issuing the refresh — if the session is
       // already past the cap, we must not silently extend it.
       const sessionIssuedAt = await getSessionIssuedAt();
       if (isSessionExpired(sessionIssuedAt)) return false;
@@ -153,7 +153,7 @@ export async function rawRequest(
   const timeoutMs =
     request.options?.timeoutMs ?? (isChat ? CHAT_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
 
-  // 7-day session cap — checked before EVERY request, not only on 401.
+  // 30-day session cap — checked before EVERY request, not only on 401.
   // If expired, clear and bounce immediately.
   const sessionIssuedAt = await getSessionIssuedAt();
   if (isSessionExpired(sessionIssuedAt)) {
@@ -249,7 +249,7 @@ export class HttpError extends Error {
 
 export class SessionExpiredError extends Error {
   constructor() {
-    super("Session expired (7-day NIST 800-63B cap exceeded).");
+    super("Session expired (30-day NIST 800-63B cap exceeded).");
     this.name = "SessionExpiredError";
   }
 }

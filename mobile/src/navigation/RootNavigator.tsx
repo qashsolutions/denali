@@ -12,16 +12,17 @@
  */
 
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 
-import { useApiClient } from "@/auth";
+import { runBiometricGate, useApiClient } from "@/auth";
 import { useDalState } from "@/db/DalProvider";
 import { PrivacyNoticeScreen } from "@/onboarding/PrivacyNoticeScreen";
 import { CohortOnboardingScreen } from "@/screens/CohortOnboardingScreen";
 import { DomainDetailScreen } from "@/screens/DomainDetailScreen";
 import { InstrumentsScreen } from "@/screens/InstrumentsScreen";
 import { IntakeOnboardingScreen } from "@/screens/IntakeOnboardingScreen";
+import { LockScreen } from "@/screens/LockScreen";
 import { LogMarkerScreen } from "@/screens/markers/LogMarkerScreen";
 import { SignInScreen } from "@/screens/SignInScreen";
 import { TimelineScreen } from "@/screens/TimelineScreen";
@@ -37,19 +38,24 @@ export function RootNavigator() {
   const api = useApiClient();
   const { dal, ready } = useDalState();
   const { active } = useTheme();
-  const [decided, setDecided] = useState(false);
+  // Launch phases: "deciding" (splash while we restore + gate) → "locked"
+  // (valid session held behind a failed biometric gate) → "ready" (render
+  // the navigator at `initialRoute`).
+  const [phase, setPhase] = useState<"deciding" | "locked" | "ready">(
+    "deciding",
+  );
   const [initialRoute, setInitialRoute] =
     useState<keyof RootStackParamList>("SignIn");
+  const [gateBusy, setGateBusy] = useState(false);
 
-  // Cold-launch session restore (operator review 2026-06-12): a valid stored
-  // session must survive an app restart instead of forcing re-OTP. Wait for
-  // the SQLCipher DB to finish opening, read the local profile for identity,
-  // then ask the ApiClient to restore the session — it enforces the 7-day
-  // NIST cap and clears stale tokens. A returning user lands on MainTabs;
-  // first launch / expired cap / DB-open failure falls through to SignIn.
-  // New sign-ins still go through OTP via SignInScreen.
+  // Cold-launch session restore + biometric gate (decisions D14 + D15).
+  // After the SQLCipher DB is ready, read the local profile and ask the
+  // ApiClient to restore the session (30-day NIST cap; clears stale tokens).
+  // A restored session is then held behind a device-presence check: passed
+  // or unavailable → MainTabs; failed → the locked screen. First launch /
+  // expired cap / DB-open failure → SignIn. New sign-ins still OTP.
   useEffect(() => {
-    if (!ready || decided) return;
+    if (!ready || phase !== "deciding") return;
     let cancelled = false;
     void (async () => {
       try {
@@ -60,21 +66,63 @@ export function RootNavigator() {
               userId: profile.id,
               email: profile.email,
             });
-            if (!cancelled && restored) setInitialRoute("MainTabs");
+            if (restored) {
+              const verdict = await runBiometricGate();
+              if (cancelled) return;
+              if (verdict === "failed") {
+                setPhase("locked");
+                return;
+              }
+              // passed | unavailable → enter the app.
+              setInitialRoute("MainTabs");
+            }
           }
         }
       } catch {
         // Any failure leaves the default SignIn route.
       } finally {
-        if (!cancelled) setDecided(true);
+        // Don't override a "locked" verdict set above.
+        if (!cancelled) setPhase((p) => (p === "deciding" ? "ready" : p));
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [ready, dal, api, decided]);
+  }, [ready, phase, dal, api]);
 
-  if (!ready || !decided) {
+  // Locked-screen actions: retry the gate, or abandon the session → OTP.
+  const onUnlock = useCallback(() => {
+    setGateBusy(true);
+    void (async () => {
+      try {
+        const verdict = await runBiometricGate();
+        if (verdict === "passed" || verdict === "unavailable") {
+          setInitialRoute("MainTabs");
+          setPhase("ready");
+        }
+        // failed → stay locked; the user can retry or sign out.
+      } finally {
+        setGateBusy(false);
+      }
+    })();
+  }, []);
+
+  const onSignOut = useCallback(() => {
+    setGateBusy(true);
+    void (async () => {
+      try {
+        await api.signOut();
+      } catch {
+        // Route to SignIn regardless — the session is being abandoned.
+      } finally {
+        setInitialRoute("SignIn");
+        setPhase("ready");
+        setGateBusy(false);
+      }
+    })();
+  }, [api]);
+
+  if (phase === "deciding") {
     return (
       <View
         testID="root_boot_splash"
@@ -87,6 +135,12 @@ export function RootNavigator() {
       >
         <ActivityIndicator color={active.accentPrimary} />
       </View>
+    );
+  }
+
+  if (phase === "locked") {
+    return (
+      <LockScreen onUnlock={onUnlock} onSignOut={onSignOut} busy={gateBusy} />
     );
   }
 

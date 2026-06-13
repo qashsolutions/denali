@@ -11,7 +11,7 @@
  * 401 responses trigger a silent refresh and one retry. If refresh fails,
  * tokens are cleared and the onSignInRequired listener fires.
  *
- * 7-day session cap (NIST 800-63B) is enforced locally — when exceeded,
+ * session cap (NIST 800-63B) is enforced locally — when exceeded,
  * tokens are cleared and OTP sign-in is required again.
  *
  * Consumers: every surface that calls /api/* (onboarding, upload, chat,
@@ -75,7 +75,7 @@ export interface ApiClient {
   getCurrentUser(): { userId: string; email: string } | null;
   /**
    * Cold-launch session restore. If a stored access token exists AND the
-   * 7-day session cap (NIST 800-63B) has NOT elapsed, hydrate the signed-in
+   * session cap (NIST 800-63B) has NOT elapsed, hydrate the signed-in
    * user from the supplied local-profile identity and return true; the app
    * then skips the sign-in screen for a returning user — no new OTP. If no
    * token exists or the cap elapsed, any stale tokens are cleared and false

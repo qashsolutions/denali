@@ -148,7 +148,7 @@ describe("createApiClient — ApiClient conformance", () => {
   });
 });
 
-describe("ApiClientImpl — restoreSession (cold-launch, 7-day cap)", () => {
+describe("ApiClientImpl — restoreSession (cold-launch, 30-day cap)", () => {
   const user = { userId: "u-1", email: "ada@example.com" };
 
   it("returns false + stays unauthenticated when no token is stored", async () => {
@@ -176,10 +176,10 @@ describe("ApiClientImpl — restoreSession (cold-launch, 7-day cap)", () => {
     expect(clearTokens).toHaveBeenCalled();
   });
 
-  it("refuses + clears tokens once the 7-day cap has elapsed", async () => {
+  it("refuses + clears tokens once the 30-day cap has elapsed", async () => {
     const client = createApiClient();
     accessTokenRef.current = "stored.jwt.token";
-    sessionIssuedAtRef.current = String(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    sessionIssuedAtRef.current = String(Date.now() - 31 * 24 * 60 * 60 * 1000);
     expect(await client.restoreSession(user)).toBe(false);
     expect(client.isAuthenticated()).toBe(false);
     expect(clearTokens).toHaveBeenCalled();
