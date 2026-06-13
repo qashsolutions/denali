@@ -5,7 +5,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { findMarker } from "../markerCatalog";
+import {
+  findMarker,
+  MARKER_CATALOG,
+  markersFor,
+  trackedMarkers,
+} from "../markerCatalog";
 import {
   buildMarkerObservations,
   canonicalUnit,
@@ -17,6 +22,8 @@ const weight = findMarker("weight")!;
 const glucose = findMarker("fasting_glucose")!;
 const bp = findMarker("blood_pressure")!;
 const hba1c = findMarker("hba1c")!;
+const triglycerides = findMarker("triglycerides")!;
+const waist = findMarker("waist_circumference")!;
 
 describe("toCanonical", () => {
   it("converts lb → kg", () => {
@@ -121,5 +128,85 @@ describe("buildMarkerObservations", () => {
     expect(rows[0].display).toContain("Systolic");
     expect(rows[1]).toMatchObject({ code: "8462-4", value_num: 80 });
     expect(rows[1].display).toContain("Diastolic");
+  });
+});
+
+describe("markersFor (sex_at_birth cohort gate)", () => {
+  it("offers male-only markers (testosterone, PSA) to males", () => {
+    const keys = markersFor("male").map((m) => m.key);
+    expect(keys).toContain("testosterone");
+    expect(keys).toContain("psa");
+  });
+
+  it("never offers male-only markers to females (universal ones still show)", () => {
+    const keys = markersFor("female").map((m) => m.key);
+    expect(keys).not.toContain("testosterone");
+    expect(keys).not.toContain("psa");
+    expect(keys).toContain("triglycerides");
+  });
+
+  it("excludes sex-specific markers for null/unknown/intersex (never guesses)", () => {
+    for (const sex of [null, "unknown", "intersex"] as const) {
+      const keys = markersFor(sex).map((m) => m.key);
+      expect(keys).not.toContain("testosterone");
+      expect(keys).not.toContain("psa");
+    }
+  });
+});
+
+describe("expansion conversions + integrity", () => {
+  it("triglycerides mmol/L → mg/dL (1 mmol/L ≈ 88.57 mg/dL)", () => {
+    expect(toCanonical(triglycerides.fields[0], 1, "mmol/L")).toBeCloseTo(
+      88.57,
+      1,
+    );
+  });
+
+  it("waist in → cm (10 in = 25.4 cm)", () => {
+    expect(toCanonical(waist.fields[0], 10, "in")).toBeCloseTo(25.4, 3);
+  });
+
+  it("every catalog marker is provisional + every field has a LOINC code", () => {
+    for (const m of MARKER_CATALOG) {
+      expect(m.provisional).toBe(true);
+      for (const f of m.fields) {
+        expect(f.loinc).toMatch(/^\d+-\d$/);
+      }
+    }
+  });
+});
+
+describe("trackedMarkers (behavioral 'you're tracking' surface)", () => {
+  it("surfaces markers the user has data for, most-recent first", () => {
+    const obs = [
+      { code: "4548-4", effective_at: "2026-06-01T00:00:00.000Z" }, // A1c
+      { code: "2093-3", effective_at: "2026-06-10T00:00:00.000Z" }, // total chol
+    ];
+    expect(trackedMarkers(obs, "male").map((t) => t.marker.key)).toEqual([
+      "total_cholesterol",
+      "hba1c",
+    ]);
+  });
+
+  it("uses the latest date among a marker's codes", () => {
+    const obs = [
+      { code: "4548-4", effective_at: "2026-05-01T00:00:00.000Z" },
+      { code: "4548-4", effective_at: "2026-06-05T00:00:00.000Z" },
+    ];
+    const [t] = trackedMarkers(obs, "female");
+    expect(t.marker.key).toBe("hba1c");
+    expect(t.lastLoggedAt).toBe("2026-06-05T00:00:00.000Z");
+  });
+
+  it("respects the sex gate — a female never tracks a male-only marker", () => {
+    const obs = [{ code: "2857-1", effective_at: "2026-06-01T00:00:00.000Z" }]; // PSA
+    expect(trackedMarkers(obs, "female")).toHaveLength(0);
+    expect(trackedMarkers(obs, "male").map((t) => t.marker.key)).toEqual([
+      "psa",
+    ]);
+  });
+
+  it("returns [] when the user has logged nothing", () => {
+    expect(trackedMarkers([], "male")).toHaveLength(0);
   });
 });

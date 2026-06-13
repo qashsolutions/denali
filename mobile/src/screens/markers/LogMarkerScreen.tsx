@@ -23,14 +23,18 @@ import {
 } from "react-native";
 
 import { useApiClient } from "@/auth";
+import type { SexAtBirth } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
+import { dateKeyOf, formatGroupHeader } from "../timeline/groupObservations";
 import {
   findMarker,
-  MARKER_CATALOG,
+  MARKER_GROUP_ORDER,
+  markersFor,
+  trackedMarkers,
   type MarkerDef,
 } from "./markerCatalog";
 import {
@@ -59,6 +63,11 @@ export function LogMarkerScreen(): React.ReactElement {
   const [units, setUnits] = React.useState<string[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
+  const [sexAtBirth, setSexAtBirth] = React.useState<SexAtBirth | null>(null);
+  // The user's logged/uploaded values (code + date) → drives "You're tracking".
+  const [obs, setObs] = React.useState<
+    ReadonlyArray<{ code: string; effective_at: string }>
+  >([]);
 
   const userId = api.getCurrentUser()?.userId ?? null;
 
@@ -68,6 +77,59 @@ export function LogMarkerScreen(): React.ReactElement {
     setUnits(m.fields.map((f) => canonicalUnit(f).unit));
     setError(null);
   }, []);
+
+  // Load sex_at_birth (cohort gate) + the user's logged/uploaded values
+  // (for "You're tracking"). Non-blocking; both default to empty.
+  React.useEffect(() => {
+    if (dal == null) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const profile = await dal.getProfile();
+        if (!cancelled) setSexAtBirth(profile?.sex_at_birth ?? null);
+        const user = api.getCurrentUser();
+        const rows = await dal.listObservations({
+          latest_only: true,
+          limit: 500,
+        });
+        if (cancelled) return;
+        const scoped = user
+          ? rows.filter((r) => r.user_id === user.userId)
+          : rows;
+        setObs(
+          scoped.map((r) => ({ code: r.code, effective_at: r.effective_at })),
+        );
+      } catch {
+        if (!cancelled) setSexAtBirth(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dal, api]);
+
+  // "You're tracking" — markers the user already has data for (behavioral,
+  // most-recent first; NOT a clinical relevance claim).
+  const tracked = React.useMemo(
+    () => trackedMarkers(obs, sexAtBirth),
+    [obs, sexAtBirth],
+  );
+  const trackedKeys = React.useMemo(
+    () => new Set(tracked.map((t) => t.marker.key)),
+    [tracked],
+  );
+  // Remaining cohort-relevant markers, grouped (tracked ones surfaced above,
+  // so excluded here — surfaced, never hidden).
+  const groupedMarkers = React.useMemo(
+    () =>
+      MARKER_GROUP_ORDER.map((group) => ({
+        group,
+        markers: markersFor(sexAtBirth).filter(
+          (m) => m.group === group && !trackedKeys.has(m.key),
+        ),
+      })).filter((g) => g.markers.length > 0),
+    [sexAtBirth, trackedKeys],
+  );
 
   const onSave = React.useCallback(async () => {
     if (marker == null || dal == null || userId == null) {
@@ -147,17 +209,42 @@ export function LogMarkerScreen(): React.ReactElement {
         {marker == null ? (
           <>
             <Text style={styles.prompt}>What did you measure?</Text>
-            {MARKER_CATALOG.map((m) => (
-              <Pressable
-                key={m.key}
-                testID={`log_marker_pick_${m.key}`}
-                style={styles.markerRow}
-                onPress={() => selectMarker(m)}
-                accessibilityRole="button"
-                accessibilityLabel={m.display}
-              >
-                <Text style={styles.markerName}>{m.display}</Text>
-              </Pressable>
+            {tracked.length > 0 ? (
+              <View style={styles.group}>
+                <Text style={styles.groupHeader}>You&apos;re tracking</Text>
+                {tracked.map(({ marker: m, lastLoggedAt }) => (
+                  <Pressable
+                    key={m.key}
+                    testID={`log_marker_pick_${m.key}`}
+                    style={styles.markerRow}
+                    onPress={() => selectMarker(m)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${m.display}, last logged ${formatGroupHeader(dateKeyOf(lastLoggedAt))}`}
+                  >
+                    <Text style={styles.markerName}>{m.display}</Text>
+                    <Text style={styles.markerMeta}>
+                      Last logged {formatGroupHeader(dateKeyOf(lastLoggedAt))}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+            {groupedMarkers.map(({ group, markers }) => (
+              <View key={group} style={styles.group}>
+                <Text style={styles.groupHeader}>{group}</Text>
+                {markers.map((m) => (
+                  <Pressable
+                    key={m.key}
+                    testID={`log_marker_pick_${m.key}`}
+                    style={styles.markerRow}
+                    onPress={() => selectMarker(m)}
+                    accessibilityRole="button"
+                    accessibilityLabel={m.display}
+                  >
+                    <Text style={styles.markerName}>{m.display}</Text>
+                  </Pressable>
+                ))}
+              </View>
             ))}
           </>
         ) : (
@@ -287,6 +374,15 @@ function makeStyles(
       color: redesign.ink2,
       ...fontStyle("body", 400, fontsLoaded),
     },
+    group: { gap: theme.spacing.sm },
+    groupHeader: {
+      fontSize: 11,
+      letterSpacing: 11 * 0.12,
+      textTransform: "uppercase",
+      color: redesign.ink3,
+      marginTop: theme.spacing.xs,
+      ...fontStyle("body", 600, fontsLoaded),
+    },
     markerRow: {
       backgroundColor: redesign.surface,
       borderColor: redesign.line,
@@ -301,6 +397,12 @@ function makeStyles(
       fontSize: theme.typography.sizes.lg,
       color: redesign.ink,
       ...fontStyle("body", 600, fontsLoaded),
+    },
+    markerMeta: {
+      fontSize: theme.typography.sizes.xs,
+      color: redesign.ink3,
+      marginTop: 2,
+      ...fontStyle("body", 400, fontsLoaded),
     },
     fieldBlock: { gap: theme.spacing.xs },
     fieldLabel: {
