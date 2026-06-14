@@ -21,7 +21,7 @@ Spec: @docs/design/phase-1-45plus.md (read it before implementing).
 3. **Login ≠ encryption key.** The SQLCipher key is generated on-device, stored in Keychain/Keystore, never transmitted, never derived from any Cognito/server secret.
 4. **Append-only time-series.** `UNIQUE(user_id, code, effective_at)` + `ON CONFLICT DO NOTHING`; corrections add a superseding row, never UPDATE/DELETE values.
 5. **Transient analysis only.** Decrypt → send over TLS → infer → return → store on-device. Nothing persisted server-side. Bedrock invocation logging must be OFF (manual AWS check).
-6. **No longitudinal model and no cloud backup in Phase 1.**
+6. **No longitudinal model in Phase 1.** **Cloud backup is permitted only as zero-knowledge backup** — superseded the original "no cloud backup" clause 2026-06-14 (Venkata-ratified; decision D16). The server stores client-side-encrypted ciphertext it cannot decrypt; the decryption key is generated on-device and never leaves the user's devices/keychain. Invariant 1's spirit — no *readable* server-side health data — is preserved. See `docs/design/zk-backup-v1.md` §8.
 
 ---
 

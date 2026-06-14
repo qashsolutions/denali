@@ -261,6 +261,51 @@ Spec: `docs/design/phase-1-45plus.md`. Path-scoped rules: `mobile/CLAUDE.md`. Ag
 
 ---
 
+## D16 — Zero-knowledge backup (2026-06-14)
+
+**Decision:** Add an opt-in, zero-knowledge cloud backup of the on-device health
+record. **Supersedes the "no cloud backup" half of Invariant 6** (Venkata
+ratified 2026-06-14). The server stores only client-side-encrypted ciphertext it
+cannot decrypt; the recovery key is generated on-device and never leaves the
+user's devices/keychain. Full design + threat model: `docs/design/zk-backup-v1.md`.
+
+**Why:** device loss = total loss of the multi-year record today (the SQLCipher
+key is device-only — invariant 3). For an app whose value is the longitudinal
+record, that's the biggest UX risk. ZK backup fixes device-loss + migration
+without making the server a custodian of *readable* PHI, preserving invariant 1's
+spirit.
+
+**Key decisions (Venkata):**
+- **Recovery model:** on-device recovery key (256-bit, CSPRNG, never derived
+  from login — invariant 3), recovered via **device keychain (iCloud / Google
+  Password Manager) + a printable recovery kit**. The server can never hold,
+  derive, or email the key. Server-generated / emailed codes were explicitly
+  rejected (would break ZK; an 8-digit code is also only ~26 bits).
+- **Recovery-kit rendering:** **BIP39** mnemonic (checksum + mature tooling).
+- **Backup trigger:** **manual + automatic** (a "Back up now" action plus a
+  scheduled auto-backup, e.g. Wi-Fi + charging).
+- **Crypto:** envelope — RK → HKDF-SHA256 KEK → wraps a per-backup DEK →
+  AES-256-GCM over the payload, manifest bound as AEAD AAD. Primitives from
+  @noble (audited, pure-JS, Hermes-safe; chosen via an AEAD spike, RFC-5869
+  verified). No hand-rolled crypto.
+- **Storage:** v1 stores ciphertext in RDS (`backup_blobs`, BAA-covered,
+  `WHERE user_id = $1`), S3 as the scale path. Chat + report file blobs excluded.
+
+**Staged build (each its own reviewed step):** crypto core (shipped, `ba899e8`)
+→ export/import (shipped, `8503781`) → wire codec → server (`backup_blobs` +
+`PUT/GET/DELETE /api/backup`) under hipaa-security-reviewer +
+mobile-privacy-invariant-guard + a ciphertext-only guard test → recovery UX
+(keychain + BIP39 kit + Settings opt-in) → flag-gated, opt-in, staging-first.
+
+**Encoded in code (so far):**
+- `mobile/src/backup/{cryptoProvider,envelope,manifest,payload,backupService}.ts`
+  + tests — on-device crypto core + export/import (no server; gated green).
+- `docs/design/zk-backup-v1.md` — full design + threat model + §8 supersession.
+- Invariant 6 reworded in `mobile/CLAUDE.md`; non-goals updated in
+  `mobile/docs/OBJECTIVE.md` §4.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

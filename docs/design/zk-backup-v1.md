@@ -1,13 +1,14 @@
 # Zero-Knowledge Backup — Design v1 (mobile, Phase 1.5)
 
-> **Status:** DRAFT — pending Venkata approval. No code until this doc is
-> accepted. Authored 2026-06-14 per the operator's go-ahead to add a
-> "robust, prod-ready" backup that does **not** weaken the privacy promise.
+> **Status:** RATIFIED 2026-06-14 (Venkata). §8 supersession applied to
+> `mobile/CLAUDE.md` + `OBJECTIVE.md`; recorded as decision D16. Shipped so
+> far: crypto core (`ba899e8`), export/import (`8503781`). Building: wire codec
+> → server (`/api/backup`) under HIPAA + privacy-guard review → recovery UX.
 >
-> **Recovery model (operator-decided):** on-device recovery key + **device
-> keychain (iCloud Keychain / Google Password Manager) with a downloadable
-> recovery kit** as the UX. The server can never hold, derive, or email the
-> key.
+> **Decisions (Venkata, 2026-06-14):** recovery model = on-device recovery key
+> + **device keychain (iCloud / Google Password Manager) + downloadable kit**
+> (server can never hold/derive/email the key); kit rendering = **BIP39
+> mnemonic**; backup trigger = **manual + automatic**.
 
 ---
 

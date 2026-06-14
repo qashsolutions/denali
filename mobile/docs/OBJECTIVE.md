@@ -131,11 +131,14 @@ backend (NODE_ENV ≠ production).
 ## 4. Non-goals (Phase 1 — verbatim from the spec)
 
 Longitudinal prediction/trend models *(the O4 trend layer displays stored
-scores; it predicts nothing)*; zero-knowledge cloud backup, sync,
-multi-device; population cohort; any server-side persistence of health data
-(including chat); Blue Button / FHIR / Medicare path; web app changes
+scores; it predicts nothing)*; backup **sync** / multi-device *(single-device
+zero-knowledge backup is now IN-SCOPE — D16, 2026-06-14)*; population cohort;
+any server-side persistence of **readable** health data *(chat is never
+persisted at all; zero-knowledge backup stores only ciphertext the server
+cannot decrypt)*; Blue Button / FHIR / Medicare path; web app changes
 *(except the named additive mobile branches: verify-otp/refresh token-in-body,
-chat no-persist, `/api/parse-report`)*.
+chat no-persist, `/api/parse-report`, and the net-new `/api/backup` ciphertext
+store)*.
 
 ## 5. Changelog
 
@@ -157,3 +160,8 @@ chat no-persist, `/api/parse-report`)*.
   the longitudinal record can now accumulate. Residual device checks:
   IPSS ok-tint and ADAM "No signs" pills (test-pinned; visible after an
   IPSS/ADAM check-in).
+- 2026-06-14 — **Invariant 6 superseded** (Venkata ratified): single-device
+  zero-knowledge backup moves from non-goal to in-scope. The server stores only
+  client-side-encrypted ciphertext it cannot decrypt; the recovery key is
+  on-device only (keychain + BIP39 kit). Sync / multi-device remain non-goals.
+  Design: `docs/design/zk-backup-v1.md`; decision D16.
