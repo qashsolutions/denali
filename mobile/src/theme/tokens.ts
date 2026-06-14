@@ -9,9 +9,15 @@
  * these values still match. Non-color tokens (spacing, radii) still
  * mirror app/src/app/globals.css.
  *
- * The mockup defines a single (light) appearance. Until a dark variant
- * is designed, BOTH light and dark palettes resolve to the redesign
- * values so the visual review matches the spec on any OS scheme.
+ * The mockup defines the light appearance. A companion DARK appearance
+ * ("Alpine night") was derived from it on 2026-06-14: the same cool /
+ * glacier-teal identity inverted for low-light — deep slate-navy paper,
+ * near-white cool ink, brightened glacier teal. The severity tokens
+ * (sage / amber / alarm washes + their text colors) keep their semantic
+ * hue separation and pass WCAG AA for pill text and disclaimer copy
+ * (asserted in src/theme/__tests__/tokens.test.ts). Selection is driven by
+ * the Settings Light / Dark / System control over `useColorScheme()` —
+ * see src/theme/ThemeMode.tsx + useTheme.ts.
  *
  * ────────────────────────────────────────────────────────────────────────
  * STYLING APPROACH: typed StyleSheet via useTheme() hook.
@@ -52,9 +58,9 @@
  * Colors come from the redesign mockup's :root block
  * (docs/design/denali-redesign-mockups.html) — see the `redesign` export
  * below for the full named vocabulary. The mobile app adopts the redesign
- * first; the web app migrates later. useColorScheme() still drives
- * light/dark selection in src/theme/useTheme.ts, but both modes currently
- * resolve to the same redesign palette (no dark variant designed yet).
+ * first; the web app migrates later. The dark companion (`redesignDark`)
+ * is derived from this light vocabulary, key-for-key. `useTheme.ts` selects
+ * between them per the resolved scheme (Settings override → OS scheme).
  *
  * ────────────────────────────────────────────────────────────────────────
  * WAVE-1 POST-AUDIT AMENDMENT (added 2026-06-04 during the controlled thaw)
@@ -133,6 +139,65 @@ export const redesign = {
 } as const;
 
 /**
+ * Widened shape shared by the light (`redesign`) + dark (`redesignDark`)
+ * vocabularies: color tokens are `string`, the two radii are `number`. The
+ * `as const` light object is assignable to this (narrow → widened); the dark
+ * object is typed against it so the two can never drift in key set.
+ */
+export type RedesignPalette = {
+  [K in keyof typeof redesign]: (typeof redesign)[K] extends number
+    ? number
+    : string;
+};
+
+/**
+ * Alpine-night dark palette — the dark companion to `redesign`, derived
+ * 2026-06-14. Same key set + identity (cool paper, glacier teal), inverted
+ * for low-light. Radii (rCard / rChip) are appearance-independent and carry
+ * the light values unchanged. Contrast for the clinical surfaces (disclaimer
+ * copy, severity pill text) is WCAG-AA-verified in tokens.test.ts.
+ */
+export const redesignDark: RedesignPalette = {
+  /** Deep slate-navy — screen background (cool, not pure black). */
+  paper: "#0E1822",
+  /** Cards — lifted one step from paper. */
+  surface: "#17252F",
+  /** Near-white cool — primary text. */
+  ink: "#EAF1F6",
+  /** Secondary text. */
+  ink2: "#A7B7C3",
+  /** Tertiary / captions / disclaimer (AA on paper, 5.3:1). */
+  ink3: "#7E8E9B",
+  /** Hairlines. */
+  line: "#283945",
+  /** Softer hairline / neutral tertiary fill. */
+  line2: "#1E2D38",
+  /** Glacier teal — the single accent, brightened for dark. */
+  teal: "#19A89F",
+  /** Contrast-safe teal for any teal-colored TEXT (light teal on dark). */
+  tealDeep: "#46CFC6",
+  /** Soft active / pill background. */
+  tealWash: "#103A36",
+  /** Calm secondary data line (e.g. diastolic). */
+  blue: "#6FAAC2",
+  /** Reserved attention (calm). */
+  amber: "#D8A341",
+  /** Calm reference band / watch-pill background. */
+  amberWash: "#3A2C12",
+  /** Calm "typical range" band. */
+  sageWash: "#16301F",
+  /** Alarm red — severe screener bands + crisis-path UI ONLY. */
+  alarm: "#E96458",
+  /** Light alarm wash — severe band / pill background. */
+  alarmWash: "#3C1C17",
+  /** Neutral pill background. */
+  pillSoft: "#20303A",
+  /** Radii are appearance-independent. */
+  rCard: redesign.rCard,
+  rChip: redesign.rChip,
+};
+
+/**
  * The redesign mockup ships a single light appearance. Both ThemeColors
  * palettes resolve to it (dark variant deferred — see file header).
  *
@@ -168,7 +233,35 @@ const redesignColors: ThemeColors = {
   error: redesign.alarm,
 };
 
-const darkColors: ThemeColors = redesignColors;
+/**
+ * Dark ThemeColors — the same key→token mapping as `redesignColors`, read
+ * off the `redesignDark` vocabulary. error → alarm, success → teal, etc.
+ */
+const redesignDarkColors: ThemeColors = {
+  // Backgrounds
+  bgPrimary: redesignDark.paper,
+  bgSecondary: redesignDark.surface,
+  bgTertiary: redesignDark.line2,
+
+  // Text
+  textPrimary: redesignDark.ink,
+  textSecondary: redesignDark.ink2,
+  textMuted: redesignDark.ink3,
+
+  // Accents
+  accentPrimary: redesignDark.teal,
+  accentSecondary: redesignDark.tealDeep,
+
+  // Structural
+  border: redesignDark.line,
+
+  // Semantic
+  success: redesignDark.teal,
+  warning: redesignDark.amber,
+  error: redesignDark.alarm,
+};
+
+const darkColors: ThemeColors = redesignDarkColors;
 const lightColors: ThemeColors = redesignColors;
 
 /**
@@ -181,7 +274,13 @@ const redesignChat: ThemeChatColors = {
   assistantBubble: redesign.surface,
 };
 
-const darkChat: ThemeChatColors = redesignChat;
+const redesignDarkChat: ThemeChatColors = {
+  userBubbleFrom: redesignDark.teal,
+  userBubbleTo: redesignDark.tealDeep,
+  assistantBubble: redesignDark.surface,
+};
+
+const darkChat: ThemeChatColors = redesignDarkChat;
 const lightChat: ThemeChatColors = redesignChat;
 
 /**

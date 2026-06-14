@@ -35,11 +35,11 @@ import {
 } from "@expo-google-fonts/inter-tight";
 import { useFonts } from "expo-font";
 import React, { createContext, useContext } from "react";
-import { View, type TextStyle } from "react-native";
+import { useColorScheme, View, type TextStyle } from "react-native";
 
 import { fw } from "@/onboarding/fontWeight";
 
-import { redesign } from "./tokens";
+import { redesign, redesignDark } from "./tokens";
 
 /**
  * Registration keys — these strings ARE the fontFamily values used across
@@ -112,11 +112,17 @@ export interface FontProviderProps {
  */
 export function FontProvider({ children }: FontProviderProps): React.ReactElement {
   const [loaded, error] = useFonts(FONT_ASSETS);
+  // Splash runs before the ThemeMode provider/context is available, so the
+  // OS scheme is the right (and only) signal here — a Light/Dark override
+  // takes over once the app mounts.
+  const scheme = useColorScheme();
 
   if (!loaded && !error) {
     // Paper-colored placeholder, not app content — avoids a flash of
-    // system-font UI before the faces register.
-    return <View style={{ flex: 1, backgroundColor: redesign.paper }} />;
+    // system-font UI before the faces register. Follows the OS scheme so a
+    // dark device doesn't flash a light panel on cold start.
+    const paper = (scheme === "dark" ? redesignDark : redesign).paper;
+    return <View style={{ flex: 1, backgroundColor: paper }} />;
   }
 
   return (

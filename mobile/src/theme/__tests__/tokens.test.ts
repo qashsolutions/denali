@@ -10,9 +10,9 @@
  *      the mockup byte-for-byte (paper / surface / ink / ink-2 / ink-3 /
  *      line / line-2 / teal / teal-deep / teal-wash / blue / amber /
  *      amber-wash / sage-wash, plus the --r card radius).
- *   2. The ThemeColors mapping resolves onto those values, and BOTH
- *      light and dark palettes carry the redesign (single appearance
- *      until a dark variant is designed).
+ *   2. The light ThemeColors mapping resolves onto those values; the dark
+ *      palette is the distinct Alpine-night variant (asserted below for
+ *      key-set parity + WCAG-AA contrast on the clinical surfaces).
  *   3. Chat bubble colors are rethemed to the teal accent.
  *
  * Non-color tokens (brand purple, spacing intermediates) still mirror
@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { redesign, tokens } from "../tokens";
+import { redesign, redesignDark, tokens } from "../tokens";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +38,21 @@ const GLOBALS_CSS = resolve(__dirname, "../../../../app/src/app/globals.css");
 
 const mockup = readFileSync(MOCKUP_HTML, "utf8");
 const css = readFileSync(GLOBALS_CSS, "utf8");
+
+/** Relative luminance of a #rrggbb hex per WCAG 2.x. */
+function luminance(hex: string): number {
+  const channels = [1, 3, 5]
+    .map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+/** WCAG contrast ratio between two #rrggbb hexes (1..21). */
+function contrast(a: string, b: string): number {
+  const la = luminance(a);
+  const lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
 
 /**
  * Extracts the body of the FIRST CSS block matching `selectorRegex` from
@@ -144,12 +159,64 @@ describe("ThemeColors mapping — resolves onto the redesign palette", () => {
     });
   }
 
-  it("dark palette equals light palette (single appearance until a dark variant is designed)", () => {
-    expect(tokens.colors.dark).toEqual(tokens.colors.light);
+  it("dark palette is a DISTINCT appearance (no longer equal to light)", () => {
+    expect(tokens.colors.dark).not.toEqual(tokens.colors.light);
+    // ...and is genuinely dark: background darker than text (inverted).
+    expect(luminance(tokens.colors.dark.bgPrimary)).toBeLessThan(
+      luminance(tokens.colors.dark.textPrimary),
+    );
   });
 
   it("accentSecondary is the contrast-safe teal for TEXT (teal-deep)", () => {
     expect(tokens.colors.light.accentSecondary).toBe(redesign.tealDeep);
+  });
+});
+
+describe("Alpine-night dark palette — derived from the light vocabulary", () => {
+  it("has the same key set as the light redesign vocabulary", () => {
+    expect(Object.keys(redesignDark).sort()).toEqual(
+      Object.keys(redesign).sort(),
+    );
+  });
+
+  it("carries the light radii unchanged (appearance-independent)", () => {
+    expect(redesignDark.rCard).toBe(redesign.rCard);
+    expect(redesignDark.rChip).toBe(redesign.rChip);
+  });
+
+  it("maps dark ThemeColors onto the dark vocabulary (error → alarm, etc.)", () => {
+    expect(tokens.colors.dark.bgPrimary).toBe(redesignDark.paper);
+    expect(tokens.colors.dark.textPrimary).toBe(redesignDark.ink);
+    expect(tokens.colors.dark.error).toBe(redesignDark.alarm);
+    expect(tokens.colors.dark.warning).toBe(redesignDark.amber);
+    expect(tokens.colors.dark.success).toBe(redesignDark.teal);
+  });
+
+  // Clinical-surface legibility: the disclaimer copy and every severity pill
+  // must clear WCAG AA (4.5:1) in dark, or a band could read wrong at night.
+  const CLINICAL_PAIRS: ReadonlyArray<readonly [string, string, string]> = [
+    ["disclaimer (ink3 on paper)", redesignDark.ink3, redesignDark.paper],
+    ["body (ink on paper)", redesignDark.ink, redesignDark.paper],
+    ["ok pill (tealDeep on tealWash)", redesignDark.tealDeep, redesignDark.tealWash],
+    ["watch pill (amber on amberWash)", redesignDark.amber, redesignDark.amberWash],
+    ["severe pill (alarm on alarmWash)", redesignDark.alarm, redesignDark.alarmWash],
+    // Crisis-988 "Call 988" button: surface-colored label on the alarm fill.
+    // The crisis surface must stay legible in dark — flagged by clinical review.
+    ["crisis 988 button (surface on alarm)", redesignDark.surface, redesignDark.alarm],
+  ];
+  for (const [name, fg, bg] of CLINICAL_PAIRS) {
+    it(`${name} clears WCAG AA (>= 4.5:1)`, () => {
+      expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+
+  it("keeps the three severity washes distinct (no two identical)", () => {
+    const washes = [
+      redesignDark.sageWash,
+      redesignDark.amberWash,
+      redesignDark.alarmWash,
+    ];
+    expect(new Set(washes).size).toBe(3);
   });
 });
 
@@ -161,8 +228,10 @@ describe("chat colors — rethemed to the teal accent", () => {
   it("assistant bubble sits on the card surface", () => {
     expect(tokens.colors.chat.light.assistantBubble).toBe(redesign.surface);
   });
-  it("dark chat equals light chat", () => {
-    expect(tokens.colors.chat.dark).toEqual(tokens.colors.chat.light);
+  it("dark chat uses the dark teal vocabulary", () => {
+    expect(tokens.colors.chat.dark.userBubbleFrom).toBe(redesignDark.teal);
+    expect(tokens.colors.chat.dark.userBubbleTo).toBe(redesignDark.tealDeep);
+    expect(tokens.colors.chat.dark.assistantBubble).toBe(redesignDark.surface);
   });
 });
 

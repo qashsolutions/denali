@@ -8,7 +8,11 @@
  * call `useDal()`, `useTheme()`, `useApi()` against the frozen contracts.
  */
 
-import { NavigationContainer } from "@react-navigation/native";
+import {
+  DarkTheme,
+  DefaultTheme,
+  NavigationContainer,
+} from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -16,6 +20,36 @@ import { ApiClientProvider } from "@/auth";
 import { DalProvider } from "@/db/DalProvider";
 import { RootNavigator } from "@/navigation/RootNavigator";
 import { FontProvider } from "@/theme/fonts";
+import { ThemeModeProvider } from "@/theme/ThemeMode";
+import { useTheme } from "@/theme/useTheme";
+
+/**
+ * Bridges the resolved theme scheme into React Navigation's container theme so
+ * the inter-screen background (and safe-area edges) match the active palette —
+ * otherwise dark mode flashes the library's default white between transitions.
+ * Lives below ThemeModeProvider so useTheme() resolves the override.
+ */
+function NavRoot(): React.ReactElement {
+  const { scheme, active } = useTheme();
+  const base = scheme === "dark" ? DarkTheme : DefaultTheme;
+  const navTheme = {
+    ...base,
+    colors: {
+      ...base.colors,
+      background: active.bgPrimary,
+      card: active.bgSecondary,
+      text: active.textPrimary,
+      border: active.border,
+      primary: active.accentPrimary,
+    },
+  };
+  return (
+    <NavigationContainer theme={navTheme}>
+      <StatusBar style="auto" />
+      <RootNavigator />
+    </NavigationContainer>
+  );
+}
 
 export default function App() {
   // SafeAreaProvider wraps everything so screens that consume
@@ -27,18 +61,20 @@ export default function App() {
   // Grotesque) via expo-font before the first content render; on load
   // error it renders anyway with the OS system-font floor (see
   // src/theme/fonts.tsx).
+  // ThemeModeProvider sits above everything that calls useTheme() so the
+  // Light/Dark/System choice resolves app-wide; StatusBar style="auto" already
+  // flips the status-bar text to match the active scheme.
   return (
     <SafeAreaProvider>
-      <FontProvider>
-        <ApiClientProvider>
-          <DalProvider>
-            <NavigationContainer>
-              <StatusBar style="auto" />
-              <RootNavigator />
-            </NavigationContainer>
-          </DalProvider>
-        </ApiClientProvider>
-      </FontProvider>
+      <ThemeModeProvider>
+        <FontProvider>
+          <ApiClientProvider>
+            <DalProvider>
+              <NavRoot />
+            </DalProvider>
+          </ApiClientProvider>
+        </FontProvider>
+      </ThemeModeProvider>
     </SafeAreaProvider>
   );
 }

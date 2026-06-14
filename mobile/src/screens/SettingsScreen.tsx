@@ -28,6 +28,7 @@ import type { ConsentGetResponse } from "@/api/routeContracts";
 import { useApiClient } from "@/auth";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
+import { useThemeMode, type ThemeMode } from "@/theme/ThemeMode";
 import { useTheme } from "@/theme/useTheme";
 
 import {
@@ -60,12 +61,21 @@ const TOGGLE_COPY: Record<
   },
 };
 
+// Appearance control — "System" first so the default reads as "follow my
+// device". Stored locally (see ThemeMode.tsx); no server round-trip.
+const THEME_MODE_OPTIONS: ReadonlyArray<{ mode: ThemeMode; label: string }> = [
+  { mode: "system", label: "System" },
+  { mode: "light", label: "Light" },
+  { mode: "dark", label: "Dark" },
+];
+
 export function SettingsScreen(): React.ReactElement {
   const api = useApiClient();
   const navigation = useNavigation<Nav>();
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
   const insets = useSafeAreaInsets();
+  const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
 
   const [consent, setConsent] = React.useState<ConsentSnapshot | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -225,6 +235,36 @@ export function SettingsScreen(): React.ReactElement {
           fontSize: theme.typography.sizes.sm,
           ...fontStyle("body", 400, fontsLoaded),
         },
+        // Appearance segmented control — pill-track of three equal segments,
+        // the active one tinted teal-wash with teal-deep text.
+        segmentRow: {
+          flexDirection: "row",
+          backgroundColor: redesign.surface,
+          borderColor: redesign.line,
+          borderWidth: 1,
+          borderRadius: redesign.rChip,
+          padding: theme.spacing.xs,
+          gap: theme.spacing.xs,
+        },
+        segment: {
+          flex: 1,
+          minHeight: 44,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: redesign.rChip - 2,
+        },
+        segmentSelected: {
+          backgroundColor: redesign.tealWash,
+        },
+        segmentText: {
+          color: redesign.ink2,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 500, fontsLoaded),
+        },
+        segmentTextSelected: {
+          color: redesign.tealDeep,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
       });
     },
     [theme, redesign, fontsLoaded, insets.top],
@@ -250,6 +290,37 @@ export function SettingsScreen(): React.ReactElement {
       <View style={styles.accountCard}>
         <Text style={styles.accountLabel}>Signed in as</Text>
         <Text style={styles.accountValue}>{user?.email ?? "Unknown"}</Text>
+      </View>
+
+      <Text style={styles.sectionLabel}>Appearance</Text>
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel="Appearance"
+        style={styles.segmentRow}
+      >
+        {THEME_MODE_OPTIONS.map((opt) => {
+          const selected = themeMode === opt.mode;
+          return (
+            <Pressable
+              key={opt.mode}
+              testID={`settings_theme_${opt.mode}`}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`${opt.label} appearance`}
+              onPress={() => setThemeMode(opt.mode)}
+              style={[styles.segment, selected && styles.segmentSelected]}
+            >
+              <Text
+                style={[
+                  styles.segmentText,
+                  selected && styles.segmentTextSelected,
+                ]}
+              >
+                {opt.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       <Text style={styles.sectionLabel}>Privacy & Data</Text>
