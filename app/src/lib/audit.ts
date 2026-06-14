@@ -38,7 +38,10 @@ export type AuditAction =
   | "BIRTH_YEAR_REMINDER_DISABLED"
   | "BIRTH_YEAR_REMINDER_ENABLED"
   | "PARSE_REPORT_INVOKED"
-  | "CHAT_INVOKED_MOBILE";
+  | "CHAT_INVOKED_MOBILE"
+  | "BACKUP_UPLOADED"
+  | "BACKUP_DOWNLOADED"
+  | "BACKUP_DELETED";
 
 type ResourceType =
   | "ehr_connection"
@@ -53,7 +56,8 @@ type ResourceType =
   | "topic_preferences"
   | "policy_notification"
   | "identity"
-  | "health_report";
+  | "health_report"
+  | "backup";
 
 // Actions with a dedup window (ms). Same user+action within this window → skip insert.
 // Only high-frequency, low-value actions belong here. Sensitive actions (appeals, consent, etc.)

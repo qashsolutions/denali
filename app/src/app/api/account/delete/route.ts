@@ -77,6 +77,10 @@ async function _DELETE(request: NextRequest) {
       await q(`DELETE FROM fhir_cache WHERE user_id = $1`, [userId]);
       await q(`DELETE FROM ehr_connections WHERE user_id = $1`, [userId]);
 
+      // 0b. Zero-knowledge backup ciphertext (D16). FK is ON DELETE CASCADE,
+      // but delete explicitly so the GDPR cascade is complete + auditable.
+      await q(`DELETE FROM backup_blobs WHERE user_id = $1`, [userId]);
+
       // 1. Diabetes data
       await q(`DELETE FROM diabetes_snapshots WHERE user_id = $1`, [userId]);
       await q(`DELETE FROM diabetes_log WHERE user_id = $1`, [userId]);

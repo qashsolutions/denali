@@ -17,8 +17,6 @@ export interface BackupManifest {
     conditions: number;
     profile: number;
   };
-  /** Lowercase-hex SHA-256 of the plaintext payload (defense-in-depth). */
-  contentHash: string;
   /** ISO-8601 creation time, supplied by the caller (kept out of pure code). */
   createdAtIso: string;
 }
@@ -35,7 +33,6 @@ export function manifestAad(m: BackupManifest): Uint8Array {
     m.recordCounts.observations,
     m.recordCounts.conditions,
     m.recordCounts.profile,
-    m.contentHash,
     m.createdAtIso,
   ]);
   return new TextEncoder().encode(canonical);

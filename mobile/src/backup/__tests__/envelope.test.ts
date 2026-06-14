@@ -55,11 +55,10 @@ describe("sealBackup / openBackup envelope", () => {
     expect(hex(opened)).toBe(hex(PAYLOAD));
   });
 
-  it("stamps schemaVersion + content hash, and carries the caller meta", () => {
+  it("stamps schemaVersion and carries the caller meta", () => {
     const rk = rng(32);
     const sealed = sealBackup(crypto, rk, PAYLOAD, META);
     expect(sealed.manifest.schemaVersion).toBe(BACKUP_SCHEMA_VERSION);
-    expect(sealed.manifest.contentHash).toBe(hex(crypto.sha256(PAYLOAD)));
     expect(sealed.manifest.appDataVersion).toBe(3);
     expect(sealed.manifest.recordCounts.observations).toBe(412);
     expect(sealed.manifest.createdAtIso).toBe("2026-06-14T10:00:00.000Z");

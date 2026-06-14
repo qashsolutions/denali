@@ -53,27 +53,20 @@ export class BackupDecryptError extends Error {
   }
 }
 
-function toHex(bytes: Uint8Array): string {
-  let out = "";
-  for (const b of bytes) out += b.toString(16).padStart(2, "0");
-  return out;
-}
-
 /**
- * Seal a plaintext payload into an uploadable SealedBackup. The manifest's
- * `contentHash` is computed here; `schemaVersion` is stamped here. The caller
- * supplies the rest of the manifest (counts, app-data version, timestamp).
+ * Seal a plaintext payload into an uploadable SealedBackup. `schemaVersion` is
+ * stamped here; the caller supplies the rest of the manifest (counts, app-data
+ * version, timestamp).
  */
 export function sealBackup(
   crypto: BackupCrypto,
   recoveryKey: Uint8Array,
   payload: Uint8Array,
-  meta: Omit<BackupManifest, "schemaVersion" | "contentHash">,
+  meta: Omit<BackupManifest, "schemaVersion">,
 ): SealedBackup {
   const manifest: BackupManifest = {
     ...meta,
     schemaVersion: BACKUP_SCHEMA_VERSION,
-    contentHash: toHex(crypto.sha256(payload)),
   };
 
   const kekSalt = crypto.randomBytes(KEY_BYTES);
@@ -141,9 +134,9 @@ export function openBackup(
     );
   }
 
-  if (toHex(crypto.sha256(payload)) !== sealed.manifest.contentHash) {
-    throw new BackupDecryptError("Backup content hash mismatch.");
-  }
-
+  // No separate content-hash check: the AES-GCM auth tag already guarantees the
+  // payload decrypted authentically (a wrong key or tampered blob throws above).
+  // A plaintext hash is redundant and was removed so the server never holds a
+  // plaintext fingerprint (ZK review, 2026-06-14).
   return payload;
 }
