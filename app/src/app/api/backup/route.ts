@@ -201,5 +201,8 @@ async function _DELETE(request: NextRequest) {
 }
 
 export const PUT = withMetrics(_PUT, "/api/backup");
+// POST is the mobile-callable alias for PUT: the mobile ApiClient verb set is
+// GET/POST/PATCH/DELETE (no PUT), mirroring the consent route's PATCH alias.
+export const POST = withMetrics(_PUT, "/api/backup");
 export const GET = withMetrics(_GET, "/api/backup");
 export const DELETE = withMetrics(_DELETE, "/api/backup");

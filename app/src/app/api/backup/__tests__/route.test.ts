@@ -25,7 +25,7 @@ vi.mock("@/lib/audit", () => ({
 }));
 
 import { NextRequest } from "next/server";
-import { GET, PUT, DELETE } from "../route";
+import { GET, PUT, POST, DELETE } from "../route";
 import { AUTH } from "@/config/messages";
 
 function makeRequest(method: string, body?: unknown): NextRequest {
@@ -120,6 +120,26 @@ describe("PUT /api/backup", () => {
     mockTxQ.mockRejectedValueOnce(new Error("db down"));
     const res = await PUT(makeRequest("PUT", VALID_WIRE));
     expect(res.status).toBe(500);
+  });
+});
+
+describe("POST /api/backup (mobile alias for PUT)", () => {
+  it("is wired (the mobile ApiClient sends POST, not PUT)", () => {
+    expect(typeof POST).toBe("function");
+  });
+
+  it("stores identically to PUT (same auth + validation + insert path)", async () => {
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+    const res = await POST(makeRequest("POST", VALID_WIRE));
+    expect(res.status).toBe(200);
+    const sqls = mockTxQ.mock.calls.map((c) => String(c[0]));
+    expect(sqls[1]).toContain("INSERT INTO backup_blobs");
+  });
+
+  it("still enforces auth (401 when unauthenticated)", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const res = await POST(makeRequest("POST", VALID_WIRE));
+    expect(res.status).toBe(401);
   });
 });
 
