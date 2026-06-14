@@ -25,7 +25,7 @@ const hex = (u8: Uint8Array) => Buffer.from(u8).toString("hex");
 
 const META: Omit<BackupManifest, "schemaVersion" | "contentHash"> = {
   appDataVersion: 3,
-  recordCounts: { observations: 412, sessions: 19, profile: 1 },
+  recordCounts: { observations: 412, conditions: 19, profile: 1 },
   createdAtIso: "2026-06-14T10:00:00.000Z",
 };
 

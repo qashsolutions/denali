@@ -14,7 +14,7 @@ export interface BackupManifest {
   /** Coarse counts for restore UX + integrity sanity — not the data itself. */
   recordCounts: {
     observations: number;
-    sessions: number;
+    conditions: number;
     profile: number;
   };
   /** Lowercase-hex SHA-256 of the plaintext payload (defense-in-depth). */
@@ -33,7 +33,7 @@ export function manifestAad(m: BackupManifest): Uint8Array {
     m.schemaVersion,
     m.appDataVersion,
     m.recordCounts.observations,
-    m.recordCounts.sessions,
+    m.recordCounts.conditions,
     m.recordCounts.profile,
     m.contentHash,
     m.createdAtIso,
