@@ -164,11 +164,19 @@ Two of the load-bearing invariants are hard-gated by hooks. They run regardless 
 
 Tracked here until resolved; each is a deliberate deferral, not an oversight.
 
-- **Dark-mode variant deferred.** The redesign mockup
-  (`docs/design/denali-redesign-mockups.html`) defines a single light
-  appearance; both light and dark palettes in `src/theme/tokens.ts`
-  currently resolve to it. `useColorScheme()` plumbing is intact — when a
-  dark palette is designed, populate `darkColors` and the split resumes.
+- **Dark-mode variant — ✅ SHIPPED (2026-06-14, decision D17).** A dark companion
+  palette (`redesignDark`, "Alpine night") + a 3-way Light/Dark/System control in
+  Settings. `useTheme()` switches both `active` and the `redesign` vocabulary by
+  resolved scheme. No longer deferred.
+- **Motion + Reanimated — now IN (decision D18).** Tiers 1–4 of the motion layer
+  shipped: haptics (`expo-haptics`), skeletons, micro-interactions
+  (`Animated`/native-driver), and gestures via
+  **react-native-reanimated@4 + react-native-worklets + react-native-gesture-handler**.
+  The earlier caution ("Reanimated's New-Arch story on RN 0.85 not validated",
+  `tokens.ts` header) is **lifted** — verified on-device. Reanimated needs a
+  native rebuild + the `react-native-worklets/plugin` babel plugin (last) + a
+  Metro cache clear. All motion honors OS Reduce Motion; clinical surfaces (bands,
+  scores, 988 path) stay motion/haptic-silent.
 - **Token-drift test source-of-truth inversion.** While the redesign is in
   flux, `src/theme/__tests__/tokens.test.ts` treats the mockup HTML as the
   color source of truth and asserts `tokens.ts` matches it. Once the

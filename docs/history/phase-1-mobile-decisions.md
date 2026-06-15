@@ -297,12 +297,82 @@ spirit.
 mobile-privacy-invariant-guard + a ciphertext-only guard test → recovery UX
 (keychain + BIP39 kit + Settings opt-in) → flag-gated, opt-in, staging-first.
 
-**Encoded in code (so far):**
-- `mobile/src/backup/{cryptoProvider,envelope,manifest,payload,backupService}.ts`
-  + tests — on-device crypto core + export/import (no server; gated green).
+**Shipped — all stages (2026-06-14):**
+- On-device: `mobile/src/backup/*` — crypto core → export/import → wire codec →
+  mobile client (`remoteBackup`) → recovery UX (`recoveryKey` BIP39 via
+  @scure/bip39; `recoveryKeyStore` via expo-secure-store; `backupController`;
+  `ui/{RecoveryKitModal,BackupSettingsCard}`; `RestoreBackupScreen`).
+- Server: `app/src/app/api/backup/route.ts` (PUT/POST/GET/DELETE) +
+  `scripts/migrate-backup-blobs-2026-06-14.sql` + account-delete cascade.
+  Reviews: hipaa-security + mobile-privacy-invariant + db-migration-guard — PASS.
+- Crypto deps: @noble/ciphers + @noble/hashes (AES-GCM/HKDF, pure-JS). Android
+  `allowBackup=false` so Google auto-backup can't leak the secure-store keys.
+- **Staging RDS migration APPLIED 2026-06-14** via ECS exec (RDS is private —
+  ran through the container's own pg). **Prod migration + flag flip still pending.**
+- **Rollout:** UI flag-gated by `EXPO_PUBLIC_BACKUP_ENABLED` (off by default) —
+  opt-in, staging-first.
 - `docs/design/zk-backup-v1.md` — full design + threat model + §8 supersession.
-- Invariant 6 reworded in `mobile/CLAUDE.md`; non-goals updated in
+  Invariant 6 reworded in `mobile/CLAUDE.md`; non-goals updated in
   `mobile/docs/OBJECTIVE.md` §4.
+
+---
+
+## D17 — Dark mode ("Alpine night") (2026-06-14)
+
+**Decision:** Resolve the deferred dark-mode variant. A dark companion palette
+(`redesignDark`) was derived from the light "Alpine clarity" tokens — same
+cool / glacier-teal identity inverted for low-light. A 3-way **Light / Dark /
+System** control in Settings (persisted in expo-secure-store) selects it.
+
+**Why:** dark mode is table-stakes comfort/accessibility (eye strain, low-light,
+light-sensitivity) for the 45+ audience; the `useColorScheme()` plumbing was
+already intact — only the palette + control were missing.
+
+**Key points:**
+- `useTheme()` switches BOTH the active ThemeColors AND the richer `redesign`
+  vocabulary by resolved scheme, so every wash/teal/ink consumer flips.
+- Severity-band washes keep semantic hue separation and pass WCAG AA for pill
+  text + disclaimer copy in dark (asserted in `tokens.test.ts`).
+  clinical-boundary review PASS.
+- Trend-chart bands were also brightened (chart-only `band*` tokens, light +
+  dark) for legibility — separate clinical-boundary review PASS.
+- Nav-theme bridge (no white flash between screens) + scheme-aware font splash.
+
+**Encoded in code:** `mobile/src/theme/{tokens,useTheme,ThemeMode,themeScheme,
+fonts}`; `SettingsScreen` (Appearance control); `timeline/trend/TrendChart`.
+
+---
+
+## D18 — Motion design system, tiers 1–4 (2026-06-14)
+
+**Decision:** Add a tasteful, calm motion + haptics layer across the app, and
+**lift the prior Reanimated caution** — Reanimated 4 is now verified + in use.
+
+**Why:** the app had zero intentional motion. For a 45+ clinical app the goal is
+calm, purposeful micro-motion + tactile feedback that reinforces trust, not
+spectacle. Every animation is native-driver + honors OS Reduce Motion; clinical
+surfaces (severity bands, scores, the 988/crisis path) are deliberately left
+silent — clinical-boundary reviews PASS.
+
+**Tiers (ROI order):**
+- **T1 Haptics** — `expo-haptics` via a defensive wrapper (`src/feedback/haptics.ts`):
+  selection ticks on neutral controls, success on completed actions. Mood / PHQ /
+  988 handlers stay silent by design.
+- **T2 Skeletons** — `src/components/Skeleton.tsx` (Animated pulse) replaces bare
+  ActivityIndicator loading states.
+- **T3 Micro-interactions** — `PressableScale` (press-scale) + `FadeInView`
+  (entrance); `src/theme/motion.ts` tokens; `src/a11y/useReducedMotion.ts` gate.
+- **T4 Gestures** — **react-native-reanimated@4.3.1 + react-native-worklets@0.8.3
+  + react-native-gesture-handler@2.31.1** (Reanimated 4 is New-Arch-only; the
+  app is on New Arch). Drag-to-dismiss QuickAdd sheet + pull-to-refresh. Babel
+  `react-native-worklets/plugin` (last) + `GestureHandlerRootView` at the root.
+
+**Engineering note (supersedes the old caution):** the `tokens.ts` rationale that
+"Reanimated's New-Arch story on RN 0.85 is not broadly validated" is now LIFTED —
+Reanimated 4 builds, links, and runs cleanly on Expo 56 / RN 0.85 / New Arch
+(`libreanimated.so` + `libworklets.so` load ok; verified on-device 2026-06-14).
+The NativeWind-vs-typed-StyleSheet decision is unchanged. Reanimated requires a
+native rebuild + the worklets babel plugin + a Metro cache clear.
 
 ---
 

@@ -78,10 +78,12 @@ system-font floor · Ridgeline signature · dashboard "Your health" frame ·
 detail-screen reskin with shared pill construction · drift test pinned to
 the mockup. **Approved supersession:** the original Phase-1 instruction to
 mirror web `globals.css` tokens is superseded — mobile leads the redesign;
-the web migrates later. Deferred (tracked in `mobile/CLAUDE.md`):
-dark-mode variant; drift-test source-of-truth inversion. Remaining scope:
-reskin of the non-dashboard surfaces (chat, upload, settings, onboarding)
-in later steps.
+the web migrates later. **Dark mode SHIPPED** (2026-06-14, decision D17 —
+"Alpine night" `redesignDark` + 3-way Light/Dark/System control); the only
+remaining deferral here is the drift-test source-of-truth inversion. A
+**calm motion + haptics layer** (tiers 1–4, decision D18) was also added across
+the surfaces. Remaining scope: reskin of the non-dashboard surfaces (chat,
+upload, settings, onboarding) in later steps.
 
 ### O4 — Apple-Health-style trend layer — **SHIPPED** (steps 3–4,
 operator visual pass on-device 2026-06-09)
@@ -165,3 +167,12 @@ store)*.
   client-side-encrypted ciphertext it cannot decrypt; the recovery key is
   on-device only (keychain + BIP39 kit). Sync / multi-device remain non-goals.
   Design: `docs/design/zk-backup-v1.md`; decision D16.
+- 2026-06-14 — **ZK backup shipped (all stages)** + staging RDS migration applied;
+  flag-gated (`EXPO_PUBLIC_BACKUP_ENABLED`), opt-in, staging-first. Prod migration
+  + flag flip pending. (D16)
+- 2026-06-14 — **O3 dark mode SHIPPED** ("Alpine night" + 3-way Light/Dark/System
+  control); trend-chart severity bands brightened for legibility. (D17)
+- 2026-06-14 — **Motion + haptics layer added** (tiers 1–4: haptics, skeletons,
+  micro-interactions, gesture surfaces). Reanimated 4 + worklets +
+  gesture-handler verified on RN 0.85 / New Arch; the prior Reanimated caution is
+  lifted. All motion reduce-motion-aware; clinical surfaces stay silent. (D18)

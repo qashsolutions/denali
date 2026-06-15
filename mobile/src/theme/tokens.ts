@@ -37,6 +37,13 @@
  *     RN 0.85 is not broadly validated as of work date 2026-06-04.
  *     NativeWind v5 (5.0.0-preview.4) is preview-only with no stability
  *     guarantee.
+ *
+ *     AMENDMENT (2026-06-14, decision D18): the Reanimated New-Arch caution
+ *     above is LIFTED — react-native-reanimated@4 + react-native-worklets ARE
+ *     now installed and verified on-device (Tier-4 gestures). This does NOT
+ *     reopen the NativeWind decision: the typed-StyleSheet theme remains the
+ *     source of truth; Reanimated is used directly for motion, not via
+ *     NativeWind's css-interop.
  *   • The frozen contract at src/contracts/Theme.ts was designed for a
  *     useTheme() hook ("a useTheme(): Theme hook returning colors,
  *     typography, spacing, etc."). The typed StyleSheet path is the
