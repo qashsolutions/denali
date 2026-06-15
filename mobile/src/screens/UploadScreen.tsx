@@ -36,8 +36,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
+import { PressableScale } from "@/components/PressableScale";
 import type { LocalDataDAL, ReportType } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
+import { hapticSelection } from "@/feedback/haptics";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
@@ -444,7 +446,10 @@ export function UploadScreen(): React.ReactElement {
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
               disabled={busy}
-              onPress={() => setReportType(opt.value)}
+              onPress={() => {
+                hapticSelection();
+                setReportType(opt.value);
+              }}
               style={({ pressed }) => [
                 styles.typeCard,
                 isActive && styles.typeCardActive,
@@ -475,32 +480,33 @@ export function UploadScreen(): React.ReactElement {
       {renderProgress()}
       {renderError()}
 
-      <Pressable
+      <PressableScale
+        haptic
         accessibilityRole="button"
         disabled={busy || consentReady !== true}
         onPress={() => runPipeline("pdf")}
-        style={({ pressed }) => [
+        style={[
           styles.button,
-          (busy || consentReady !== true || pressed) && styles.buttonDisabled,
+          (busy || consentReady !== true) && styles.buttonDisabled,
         ]}
       >
         <Text style={styles.buttonText}>Pick a PDF</Text>
-      </Pressable>
+      </PressableScale>
 
-      <Pressable
+      <PressableScale
         accessibilityRole="button"
         disabled={busy || consentReady !== true}
         onPress={() => runPipeline("image")}
-        style={({ pressed }) => [
+        style={[
           styles.button,
           styles.buttonSecondary,
-          (busy || consentReady !== true || pressed) && styles.buttonDisabled,
+          (busy || consentReady !== true) && styles.buttonDisabled,
         ]}
       >
         <Text style={[styles.buttonText, styles.buttonTextSecondary]}>
           Pick a photo
         </Text>
-      </Pressable>
+      </PressableScale>
     </ScrollView>
   );
 }

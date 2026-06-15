@@ -32,6 +32,7 @@ import {
   View,
 } from "react-native";
 
+import { PressableScale } from "@/components/PressableScale";
 import type { LocalDataDAL } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
@@ -478,13 +479,14 @@ export function UploadReviewScreen(): React.ReactElement {
         rows.map((r, idx) => renderRow(r, idx))
       )}
 
-      <Pressable
+      <PressableScale
+        haptic
         accessibilityRole="button"
         disabled={committing || !reportLoaded}
         onPress={onConfirm}
-        style={({ pressed }) => [
+        style={[
           styles.button,
-          (committing || !reportLoaded || pressed) && styles.buttonDisabled,
+          (committing || !reportLoaded) && styles.buttonDisabled,
         ]}
       >
         {committing ? (
@@ -494,7 +496,7 @@ export function UploadReviewScreen(): React.ReactElement {
             {rows.some((r) => r.accepted) ? "Save to my record" : "Save with no values"}
           </Text>
         )}
-      </Pressable>
+      </PressableScale>
 
       <Pressable
         accessibilityRole="button"

@@ -24,8 +24,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
+import { PressableScale } from "@/components/PressableScale";
 import type { SexAtBirth } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
+import { hapticSelection } from "@/feedback/haptics";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
@@ -75,6 +77,7 @@ export function LogMarkerScreen(): React.ReactElement {
   const userId = api.getCurrentUser()?.userId ?? null;
 
   const selectMarker = React.useCallback((m: MarkerDef) => {
+    hapticSelection();
     setMarkerKey(m.key);
     setValues(m.fields.map(() => ""));
     setUnits(m.fields.map((f) => canonicalUnit(f).unit));
@@ -285,13 +288,14 @@ export function LogMarkerScreen(): React.ReactElement {
                           <Pressable
                             key={u.unit}
                             testID={`log_marker_unit_${i}_${u.unit}`}
-                            onPress={() =>
+                            onPress={() => {
+                              hapticSelection();
                               setUnits((prev) => {
                                 const next = [...prev];
                                 next[i] = u.unit;
                                 return next;
-                              })
-                            }
+                              });
+                            }}
                             style={[
                               styles.unitChip,
                               active && styles.unitChipActive,
@@ -323,15 +327,16 @@ export function LogMarkerScreen(): React.ReactElement {
               <Text style={styles.error}>{error}</Text>
             ) : null}
 
-            <Pressable
+            <PressableScale
               testID="log_marker_save"
+              haptic
               style={styles.saveBtn}
               onPress={onSave}
               accessibilityRole="button"
               accessibilityLabel="Save"
             >
               <Text style={styles.saveLabel}>Save</Text>
-            </Pressable>
+            </PressableScale>
           </>
         )}
       </ScrollView>

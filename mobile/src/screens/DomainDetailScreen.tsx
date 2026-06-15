@@ -29,7 +29,6 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Check, ChevronLeft } from "lucide-react-native";
 import React from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -40,9 +39,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
+import { FadeInView } from "@/components/FadeInView";
+import { PressableScale } from "@/components/PressableScale";
 import { Ridgeline } from "@/components/Ridgeline";
+import { Skeleton } from "@/components/Skeleton";
 import type { ObservationRow, SexAtBirth } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
+import { hapticSelection } from "@/feedback/haptics";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
@@ -129,7 +132,7 @@ export function DomainDetailScreen(): React.ReactElement {
   const { domainId } = route.params;
   const dal = useDal();
   const api = useApiClient();
-  const { active, theme, redesign } = useTheme();
+  const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
   // Safe-area top inset keeps the custom header below the status bar.
   // Without this, the back arrow sits underneath the system clock and
@@ -142,6 +145,12 @@ export function DomainDetailScreen(): React.ReactElement {
   const [userSexAtBirth, setUserSexAtBirth] = React.useState<SexAtBirth | null>(null);
   // Shared by every chart on this screen; default 6M (Step-3 rule 11).
   const [trendRange, setTrendRange] = React.useState<TrendRange>("6m");
+  // Light tick when the user picks a different range (navigation chrome — the
+  // range control is not clinical content; the charts it scopes are untouched).
+  const onTrendRangeChange = React.useCallback((next: TrendRange) => {
+    hapticSelection();
+    setTrendRange(next);
+  }, []);
   // Cards start COLLAPSED on the detail screen (operator review 2026-06-12):
   // the trend chart is the hero at the top, and the per-session text tucks
   // into collapsible cards below. Track the EXPANDED set (empty = all
@@ -499,7 +508,7 @@ export function DomainDetailScreen(): React.ReactElement {
       return (
         <View style={styles.trendSection}>
           <View style={styles.trendControlWrap}>
-            <TrendRangeControl value={trendRange} onChange={setTrendRange} />
+            <TrendRangeControl value={trendRange} onChange={onTrendRangeChange} />
           </View>
           {item.instrumentIds.map((id) => (
             <TrendChart
@@ -529,9 +538,27 @@ export function DomainDetailScreen(): React.ReactElement {
   };
 
   if (loading) {
+    // Content-shaped skeletons (header chip + title, then a few cards) read as
+    // "loading your history" far better than a centered spinner.
     return (
-      <View style={[styles.screen, styles.center]}>
-        <ActivityIndicator color={active.accentPrimary} />
+      <View style={styles.screen}>
+        <Ridgeline blueOpacity={0.13} tealOpacity={0.15} />
+        <View style={styles.header}>
+          <Skeleton width={44} height={44} radius={redesign.rChip} />
+          <Skeleton width={30} height={30} radius={redesign.rChip - 1} />
+          <Skeleton width={150} height={24} radius={8} />
+        </View>
+        <View
+          style={{
+            paddingHorizontal: theme.spacing.space5,
+            gap: theme.spacing.space3,
+            marginTop: theme.spacing.md,
+          }}
+        >
+          <Skeleton height={140} radius={redesign.rCard} />
+          <Skeleton height={92} radius={redesign.rCard} />
+          <Skeleton height={92} radius={redesign.rCard} />
+        </View>
       </View>
     );
   }
@@ -578,8 +605,9 @@ export function DomainDetailScreen(): React.ReactElement {
                 : `✓ Checked in ${todayCount}× today · last at ${formatClockTime(latestAt)}`}
             </Text>
           ) : null}
-          <Pressable
+          <PressableScale
             testID="domain_detail_start_checkin"
+            haptic
             accessibilityRole="button"
             accessibilityLabel="Check in again"
             onPress={() =>
@@ -588,7 +616,7 @@ export function DomainDetailScreen(): React.ReactElement {
             style={styles.ctaSecondary}
           >
             <Text style={styles.ctaSecondaryLabel}>Check in again</Text>
-          </Pressable>
+          </PressableScale>
         </>
       ) : null}
       {items.length === 0 ? (
@@ -628,15 +656,18 @@ export function DomainDetailScreen(): React.ReactElement {
           ) : null}
         </View>
       ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(item) => {
-            if (item.kind === "header") return `h:${item.dateKey}`;
-            if (item.kind === "trend") return "trend";
-            return cardId(item.card);
-          }}
-          renderItem={renderItem}
-        />
+        <FadeInView style={{ flex: 1 }}>
+          <FlatList
+            style={{ flex: 1 }}
+            data={items}
+            keyExtractor={(item) => {
+              if (item.kind === "header") return `h:${item.dateKey}`;
+              if (item.kind === "trend") return "trend";
+              return cardId(item.card);
+            }}
+            renderItem={renderItem}
+          />
+        </FadeInView>
       )}
       <View style={styles.disclaimerStrip}>
         <Text style={styles.disclaimerText}>{STANDING_DISCLAIMER}</Text>

@@ -31,6 +31,7 @@ import {
 } from "react-native";
 
 import { useApiClient } from "@/auth";
+import { PressableScale } from "@/components/PressableScale";
 import type { RootStackParamList } from "@/navigation/types";
 import { useTheme } from "@/theme/useTheme";
 
@@ -207,15 +208,16 @@ export function SignInScreen(): React.ReactElement {
               textContentType="emailAddress"
               value={email}
             />
-            <Pressable
+            <PressableScale
               testID="signin_send_code_button"
+              haptic
               accessibilityRole="button"
               accessibilityLabel="Send code"
               disabled={submitting || !emailValid}
               onPress={onSendOtp}
-              style={({ pressed }) => [
+              style={[
                 styles.button,
-                (submitting || !emailValid || pressed) && styles.buttonDisabled,
+                (submitting || !emailValid) && styles.buttonDisabled,
               ]}
             >
               {submitting ? (
@@ -223,7 +225,7 @@ export function SignInScreen(): React.ReactElement {
               ) : (
                 <Text style={styles.buttonText}>Send code</Text>
               )}
-            </Pressable>
+            </PressableScale>
           </>
         ) : (
           <>
@@ -245,15 +247,16 @@ export function SignInScreen(): React.ReactElement {
               textContentType="oneTimeCode"
               value={otp}
             />
-            <Pressable
+            <PressableScale
               testID="signin_verify_button"
+              haptic
               accessibilityRole="button"
               accessibilityLabel="Verify code"
               disabled={submitting || !otpValid}
               onPress={onVerifyOtp}
-              style={({ pressed }) => [
+              style={[
                 styles.button,
-                (submitting || !otpValid || pressed) && styles.buttonDisabled,
+                (submitting || !otpValid) && styles.buttonDisabled,
               ]}
             >
               {submitting ? (
@@ -261,7 +264,7 @@ export function SignInScreen(): React.ReactElement {
               ) : (
                 <Text style={styles.buttonText}>Verify code</Text>
               )}
-            </Pressable>
+            </PressableScale>
             <Pressable
               testID="signin_use_different_email_button"
               accessibilityRole="button"

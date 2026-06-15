@@ -41,7 +41,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApiClient } from "@/auth";
 import type { ObservationInsertInput } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
-import { hapticSuccess } from "@/feedback/haptics";
+import { hapticSelection, hapticSuccess } from "@/feedback/haptics";
 import { runOnceInFlight } from "@/lib/runOnceInFlight";
 import type { RootStackParamList } from "@/navigation/types";
 import { Crisis988Modal } from "@/onboarding/Crisis988Modal";
@@ -514,6 +514,10 @@ export function InstrumentsScreen(): React.ReactElement {
 
   const onMenuSelectResponse = React.useCallback(
     (key: MenuKey, inst: InstrumentDefinition, value: number) => {
+      // Light tick on each optional check-in answer. Scoped to the menu
+      // instruments ONLY — the mood (PHQ-2/PHQ-9) + 988 path is deliberately
+      // left silent and calm.
+      hapticSelection();
       const idx = menuStepIdx;
       // Compute the next-responses snapshot LOCALLY so the last-item
       // persist gets the just-set value. Closure-captured menuResponses
@@ -841,7 +845,10 @@ export function InstrumentsScreen(): React.ReactElement {
               key={m.key}
               testID={`instruments_menu_${m.key}`}
               style={styles.menuCard}
-              onPress={() => startMenuItem(m.key)}
+              onPress={() => {
+                hapticSelection();
+                startMenuItem(m.key);
+              }}
               accessibilityRole="button"
               accessibilityLabel={m.title}
             >

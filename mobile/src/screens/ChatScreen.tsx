@@ -25,7 +25,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -35,6 +34,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
+import { PressableScale } from "@/components/PressableScale";
 import { Crisis988Modal } from "@/onboarding/Crisis988Modal";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
@@ -316,14 +316,14 @@ export function ChatScreen(): React.ReactElement {
           style={styles.input}
           value={input}
         />
-        <Pressable
+        <PressableScale
+          haptic
           accessibilityRole="button"
           disabled={streaming || input.trim().length === 0}
           onPress={onSend}
-          style={({ pressed }) => [
+          style={[
             styles.sendBtn,
-            (streaming || input.trim().length === 0 || pressed) &&
-              styles.sendBtnDisabled,
+            (streaming || input.trim().length === 0) && styles.sendBtnDisabled,
           ]}
         >
           {streaming ? (
@@ -331,7 +331,7 @@ export function ChatScreen(): React.ReactElement {
           ) : (
             <Text style={styles.sendText}>Send</Text>
           )}
-        </Pressable>
+        </PressableScale>
       </View>
       <Crisis988Modal
         visible={crisisVisible}

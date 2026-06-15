@@ -46,11 +46,13 @@ import {
 } from "react-native";
 
 import { useApiClient } from "@/auth";
+import { PressableScale } from "@/components/PressableScale";
 import type {
   ConditionInsertInput,
   ObservationInsertInput,
 } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
+import { hapticSelection } from "@/feedback/haptics";
 import type { RootStackParamList } from "@/navigation/types";
 import {
   assembleNextKeyedAnswers,
@@ -606,7 +608,10 @@ export function IntakeOnboardingScreen(): React.ReactElement {
                 key={id}
                 testID={`intake_section_${id}`}
                 style={styles.sectionCard}
-                onPress={() => setSection(id)}
+                onPress={() => {
+                  hapticSelection();
+                  setSection(id);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={title}
               >
@@ -638,15 +643,16 @@ export function IntakeOnboardingScreen(): React.ReactElement {
             </Text>
           ) : null}
 
-          <Pressable
+          <PressableScale
             testID="intake_finish_button"
+            haptic
             style={styles.primaryAction}
             onPress={goToInstruments}
             accessibilityRole="button"
             accessibilityLabel="Finish intake and continue"
           >
             <Text style={styles.primaryLabel}>Finish intake</Text>
-          </Pressable>
+          </PressableScale>
         </ScrollView>
       </View>
     );
@@ -843,6 +849,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
         options={prompt.options}
         value={lifestyle[prompt.key]}
         onChange={(v) => {
+          hapticSelection();
           // Compute the next-lifestyle snapshot LOCALLY so the last-tap
           // persist gets the just-set value. Passing this explicit map to
           // persistLifestyle eliminates the stale-closure class (closure-

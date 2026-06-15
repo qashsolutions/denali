@@ -27,6 +27,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ConsentGetResponse } from "@/api/routeContracts";
 import { useApiClient } from "@/auth";
 import { BackupSettingsCard } from "@/backup/ui/BackupSettingsCard";
+import { PressableScale } from "@/components/PressableScale";
+import { Skeleton } from "@/components/Skeleton";
+import { hapticSelection } from "@/feedback/haptics";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useThemeMode, type ThemeMode } from "@/theme/ThemeMode";
@@ -280,12 +283,32 @@ export function SettingsScreen(): React.ReactElement {
   const user = api.getCurrentUser();
 
   if (consent == null && loadError == null) {
+    // Content-shaped skeletons (title + account card + a couple of setting
+    // cards) read as "loading your settings" better than a centered spinner.
     return (
-      <View
-        style={[styles.screen, { alignItems: "center", justifyContent: "center" }]}
-      >
-        <ActivityIndicator color={redesign.teal} />
-      </View>
+      <ScrollView contentContainerStyle={styles.content} style={styles.screen}>
+        <Skeleton width={130} height={28} radius={8} />
+        <Skeleton
+          height={68}
+          radius={redesign.rCard}
+          style={{ marginTop: theme.spacing.space3 }}
+        />
+        <Skeleton
+          height={48}
+          radius={redesign.rChip}
+          style={{ marginTop: theme.spacing.space3 }}
+        />
+        <Skeleton
+          height={96}
+          radius={redesign.rCard}
+          style={{ marginTop: theme.spacing.space3 }}
+        />
+        <Skeleton
+          height={96}
+          radius={redesign.rCard}
+          style={{ marginTop: theme.spacing.space3 }}
+        />
+      </ScrollView>
     );
   }
 
@@ -314,7 +337,10 @@ export function SettingsScreen(): React.ReactElement {
               accessibilityRole="radio"
               accessibilityState={{ selected }}
               accessibilityLabel={`${opt.label} appearance`}
-              onPress={() => setThemeMode(opt.mode)}
+              onPress={() => {
+                hapticSelection();
+                setThemeMode(opt.mode);
+              }}
               style={[styles.segment, selected && styles.segmentSelected]}
             >
               <Text
@@ -344,7 +370,10 @@ export function SettingsScreen(): React.ReactElement {
                 <Text style={styles.toggleLabel}>{copy.label}</Text>
                 <Switch
                   accessibilityLabel={copy.label}
-                  onValueChange={(next) => onToggle(type, next)}
+                  onValueChange={(next) => {
+                    hapticSelection();
+                    onToggle(type, next);
+                  }}
                   value={value}
                   trackColor={{ false: redesign.line2, true: redesign.teal }}
                   thumbColor={redesign.surface}
@@ -369,21 +398,18 @@ export function SettingsScreen(): React.ReactElement {
         />
       )}
 
-      <Pressable
+      <PressableScale
         accessibilityRole="button"
         disabled={signingOut}
         onPress={onSignOut}
-        style={({ pressed }) => [
-          styles.signOutBtn,
-          (signingOut || pressed) && { opacity: 0.5 },
-        ]}
+        style={[styles.signOutBtn, signingOut && { opacity: 0.5 }]}
       >
         {signingOut ? (
           <ActivityIndicator color={redesign.alarm} />
         ) : (
           <Text style={styles.signOutText}>Sign out</Text>
         )}
-      </Pressable>
+      </PressableScale>
     </ScrollView>
   );
 }

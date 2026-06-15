@@ -31,6 +31,7 @@ import { ActivityIndicator, StyleSheet, Text, TextInput, View } from "react-nati
 import { useApiClient } from "@/auth";
 import type { GenderIdentity, SexAtBirth } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
+import { hapticSelection } from "@/feedback/haptics";
 import type { RootStackParamList } from "@/navigation/types";
 import { LikertInput } from "@/onboarding/inputs";
 import { OneItemScreen } from "@/onboarding/OneItemScreen";
@@ -157,10 +158,12 @@ export function CohortOnboardingScreen(): React.ReactElement {
   // forward; the closures here only call stable setState dispatchers, so
   // `[]` deps are correct (no captured state).
   const handleSexChange = React.useCallback((v: number) => {
+    hapticSelection();
     setSexLikert(v);
     setStepIndex((i) => Math.min(i + 1, TOTAL_STEPS));
   }, []);
   const handleMedicareChange = React.useCallback((v: number) => {
+    hapticSelection();
     setMedicareLikert(v);
     setStepIndex((i) => Math.min(i + 1, TOTAL_STEPS));
   }, []);
@@ -174,6 +177,7 @@ export function CohortOnboardingScreen(): React.ReactElement {
   // stale-closure dead-end).
   const handleGenderChange = React.useCallback(
     (v: number) => {
+      hapticSelection();
       setGenderLikert(v);
       if (submitting) return;
       const newGid =
