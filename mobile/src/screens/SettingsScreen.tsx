@@ -82,10 +82,20 @@ const THEME_MODE_OPTIONS: ReadonlyArray<{ mode: ThemeMode; label: string }> = [
 export function SettingsScreen(): React.ReactElement {
   const api = useApiClient();
   const navigation = useNavigation<Nav>();
-  const { theme, redesign } = useTheme();
+  const { theme, redesign, scheme } = useTheme();
   const fontsLoaded = useFontsLoaded();
   const insets = useSafeAreaInsets();
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
+
+  // Switch colors are mode-aware. In dark mode the naive choices collapse:
+  // `surface` thumb == card background (invisible) and a `line2` off-track sits
+  // ~3% off `surface`, so an OFF toggle disappears. Dark mode therefore uses a
+  // near-white (`ink`) thumb that reads on both the OFF track and the teal ON
+  // track, plus the more visible `line` hairline for the off-track. Light mode
+  // is unchanged — its white thumb is defined by Android's elevation shadow.
+  const dark = scheme === "dark";
+  const switchThumb = dark ? redesign.ink : redesign.surface;
+  const switchOffTrack = dark ? redesign.line : redesign.line2;
 
   const [consent, setConsent] = React.useState<ConsentSnapshot | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -375,8 +385,8 @@ export function SettingsScreen(): React.ReactElement {
                     onToggle(type, next);
                   }}
                   value={value}
-                  trackColor={{ false: redesign.line2, true: redesign.teal }}
-                  thumbColor={redesign.surface}
+                  trackColor={{ false: switchOffTrack, true: redesign.teal }}
+                  thumbColor={switchThumb}
                 />
               </View>
               <Text style={styles.toggleBody}>{copy.body}</Text>
