@@ -12,9 +12,11 @@
 import { CommonActions, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React from "react";
+import { Lock } from "lucide-react-native";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,7 +27,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { ConsentGetResponse } from "@/api/routeContracts";
-import { useApiClient } from "@/auth";
+import { isBiometricAvailable, useApiClient } from "@/auth";
 import { BackupSettingsCard } from "@/backup/ui/BackupSettingsCard";
 import { PressableScale } from "@/components/PressableScale";
 import { Skeleton } from "@/components/Skeleton";
@@ -100,6 +102,21 @@ export function SettingsScreen(): React.ReactElement {
   const [consent, setConsent] = React.useState<ConsentSnapshot | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [signingOut, setSigningOut] = React.useState(false);
+  // App-lock status is read-only: it reflects whether the DEVICE has a
+  // biometric/credential enrolled, which is what the always-on launch gate
+  // (biometricGate.ts, decision D15) keys off. null = still checking; we
+  // render the row only once resolved so we never flash a wrong state.
+  const [lockEnrolled, setLockEnrolled] = React.useState<boolean | null>(null);
+  // App-lock status copy. Platform-correct wording (Face ID / Touch ID on iOS,
+  // fingerprint / face unlock on Android) — the launch gate uses whichever the
+  // device offers, with the device passcode/PIN as fallback.
+  const lockStatusCopy = lockEnrolled
+    ? Platform.OS === "ios"
+      ? "On — Denali unlocks with Face ID, Touch ID, or your device passcode."
+      : "On — Denali unlocks with your fingerprint, face unlock, or device PIN."
+    : Platform.OS === "ios"
+      ? "Off — set up Face ID or a passcode in your device settings to lock Denali."
+      : "Off — set up a fingerprint or screen lock in your device settings to lock Denali.";
 
   React.useEffect(() => {
     let cancelled = false;
@@ -118,6 +135,16 @@ export function SettingsScreen(): React.ReactElement {
       cancelled = true;
     };
   }, [api]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void isBiometricAvailable().then((ok) => {
+      if (!cancelled) setLockEnrolled(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onToggle = React.useCallback(
     async (type: ConsentType, next: boolean) => {
@@ -208,6 +235,7 @@ export function SettingsScreen(): React.ReactElement {
           ...fontStyle("body", 400, fontsLoaded),
         },
         toggleRow: cardSurface,
+        lockCard: cardSurface,
         toggleHeader: {
           flexDirection: "row",
           justifyContent: "space-between",
@@ -367,6 +395,23 @@ export function SettingsScreen(): React.ReactElement {
       </View>
 
       <Text style={styles.sectionLabel}>Privacy & Data</Text>
+      {lockEnrolled !== null && (
+        <View
+          style={styles.lockCard}
+          accessibilityLabel={`App lock. ${lockStatusCopy}`}
+        >
+          <View style={styles.toggleHeader}>
+            <Text style={styles.toggleLabel}>App lock</Text>
+            <Lock
+              color={lockEnrolled ? redesign.tealDeep : redesign.ink3}
+              size={20}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
+          </View>
+          <Text style={styles.toggleBody}>{lockStatusCopy}</Text>
+        </View>
+      )}
       {loadError != null && <Text style={styles.loadError}>{loadError}</Text>}
       {consent != null &&
         (Object.keys(TOGGLE_COPY) as ConsentType[])

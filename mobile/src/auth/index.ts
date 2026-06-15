@@ -16,5 +16,5 @@ export {
   SessionExpiredError,
 } from "./ApiClientImpl";
 export { ApiClientProvider, useApiClient } from "./ApiClientProvider";
-export { runBiometricGate } from "./biometricGate";
+export { isBiometricAvailable, runBiometricGate } from "./biometricGate";
 export type { BiometricVerdict } from "./biometricGate";
