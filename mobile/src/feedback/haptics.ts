@@ -12,6 +12,7 @@
 import * as Haptics from "expo-haptics";
 
 let enabled = true;
+let reduceMotion = false;
 
 /** Mute/unmute all haptics (e.g. from a Settings toggle). */
 export function setHapticsEnabled(value: boolean): void {
@@ -22,8 +23,18 @@ export function isHapticsEnabled(): boolean {
   return enabled;
 }
 
+/**
+ * Suppress haptics when the OS "Reduce Motion" setting is on — vibration can
+ * disorient vestibular-sensitive users, the same rationale that gates our
+ * animations (useReducedMotion). Driven from the React tree (App's NavRoot)
+ * so this module stays free of react-native imports and node-test-safe.
+ */
+export function setHapticsReduceMotion(value: boolean): void {
+  reduceMotion = value;
+}
+
 function safe(run: () => Promise<unknown>): void {
-  if (!enabled) return;
+  if (!enabled || reduceMotion) return;
   try {
     void run().catch(() => {});
   } catch {

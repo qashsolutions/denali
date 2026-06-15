@@ -20,6 +20,7 @@
 
 import React from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   FlatList,
   Keyboard,
@@ -41,6 +42,7 @@ import { useTheme } from "@/theme/useTheme";
 
 import { ChatAssistantBody } from "./chat/ChatAssistantBody";
 import { detectCrisisLanguage } from "./chat/crisisDetection";
+import { plainSummaryForSpeech } from "./chat/markdown";
 import {
   appendAssistantDelta,
   appendUserTurn,
@@ -123,10 +125,21 @@ export function ChatScreen(): React.ReactElement {
         { signal: controller.signal },
       );
 
+      // Accumulate the streamed reply so we can announce it once on completion
+      // (TalkBack/VoiceOver) — the live delta loop is silent to screen readers
+      // otherwise. Announcing on `done` (not per-delta) avoids speech spam.
+      let assistantText = "";
       for await (const event of stream) {
         if (event.type === "delta") {
+          assistantText += event.text;
           setHistory((h) => appendAssistantDelta(h, event.text));
         } else if (event.type === "done") {
+          const spoken = plainSummaryForSpeech(
+            stripSuggestionsBlock(assistantText),
+          );
+          if (spoken.length > 0) {
+            AccessibilityInfo.announceForAccessibility(spoken);
+          }
           break;
         } else if (event.type === "error") {
           // D11: render a generic message — no PHI from the error body.

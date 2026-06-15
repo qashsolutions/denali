@@ -17,8 +17,12 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { useEffect } from "react";
+
+import { useReducedMotion } from "@/a11y/useReducedMotion";
 import { ApiClientProvider } from "@/auth";
 import { DalProvider } from "@/db/DalProvider";
+import { setHapticsReduceMotion } from "@/feedback/haptics";
 import { RootNavigator } from "@/navigation/RootNavigator";
 import { FontProvider } from "@/theme/fonts";
 import { ThemeModeProvider } from "@/theme/ThemeMode";
@@ -32,6 +36,15 @@ import { useTheme } from "@/theme/useTheme";
  */
 function NavRoot(): React.ReactElement {
   const { scheme, active } = useTheme();
+
+  // Mirror the OS "Reduce Motion" setting into the haptics module so all
+  // confirmation haptics fall silent for vestibular-sensitive users, matching
+  // how animations gate. One sync point — NavRoot is always mounted.
+  const reduceMotion = useReducedMotion();
+  useEffect(() => {
+    setHapticsReduceMotion(reduceMotion);
+  }, [reduceMotion]);
+
   const base = scheme === "dark" ? DarkTheme : DefaultTheme;
   const navTheme = {
     ...base,

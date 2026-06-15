@@ -40,7 +40,9 @@ export function ChatAssistantBody({
         toggle: {
           marginTop: theme.spacing.sm,
           alignSelf: "flex-start",
-          minHeight: 32,
+          // 44px min touch target (WCAG 2.5.5 / iOS HIG) — matters for the
+          // 45+ audience. hitSlop below adds margin without bloating layout.
+          minHeight: 44,
           justifyContent: "center",
         },
         toggleText: {

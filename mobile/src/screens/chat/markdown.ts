@@ -149,3 +149,24 @@ export function splitSummaryDetails(content: string): {
   const details = normalized.slice(match.index + match[0].length).trim();
   return { summary, details };
 }
+
+/**
+ * Plain-text version of the summary block, for `announceForAccessibility`.
+ * Strips the markdown markers (`**`, `*`, `` ` ``, headings, bullets, link
+ * syntax) that screen readers would otherwise read aloud as punctuation. We
+ * announce only the summary — it mirrors what the bubble shows before the
+ * "Show details" toggle is expanded.
+ */
+export function plainSummaryForSpeech(content: string): string {
+  const { summary } = splitSummaryDetails(content);
+  return summary
+    .replace(/```[\s\S]*?```/g, " ") // fenced code blocks
+    .replace(/`([^`]+)`/g, "$1") // inline code
+    .replace(/\*\*([^*]+)\*\*/g, "$1") // bold
+    .replace(/\*([^*]+)\*/g, "$1") // italic
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // [label](url) → label
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "") // ATX headings
+    .replace(/^\s*[-*+]\s+/gm, "") // bullet markers
+    .replace(/\s+/g, " ")
+    .trim();
+}

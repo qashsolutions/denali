@@ -266,8 +266,9 @@ export function HealthDashboardScreen(): React.ReactElement {
         },
         headerTextBlock: { flexShrink: 1 },
         addBtn: {
-          width: 40,
-          height: 40,
+          // 44px min touch target (WCAG 2.5.5 / iOS HIG).
+          width: 44,
+          height: 44,
           borderRadius: redesign.rChip,
           backgroundColor: redesign.tealWash,
           alignItems: "center",

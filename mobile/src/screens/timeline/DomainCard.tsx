@@ -314,7 +314,8 @@ function makeStyles(
       backgroundColor: redesign.tealWash,
       paddingHorizontal: theme.spacing.md,
       borderRadius: redesign.rChip,
-      minHeight: 40,
+      // 44px min touch target (WCAG 2.5.5 / iOS HIG).
+      minHeight: 44,
       justifyContent: "center",
     },
     logLabel: {
