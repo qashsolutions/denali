@@ -29,7 +29,6 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Plus } from "lucide-react-native";
 import React from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -40,7 +39,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
+import { FadeInView } from "@/components/FadeInView";
+import { PressableScale } from "@/components/PressableScale";
 import { Ridgeline } from "@/components/Ridgeline";
+import { Skeleton } from "@/components/Skeleton";
 import type { ObservationRow, SexAtBirth } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
@@ -87,7 +89,7 @@ export function HealthDashboardScreen(): React.ReactElement {
   const navigation = useNavigation<Nav>();
   const dal = useDal();
   const api = useApiClient();
-  const { active, theme, redesign } = useTheme();
+  const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
   // Safe-area insets keep the header below the status bar and the sticky
   // disclaimer footer above any home-indicator / gesture bar.
@@ -369,9 +371,33 @@ export function HealthDashboardScreen(): React.ReactElement {
   };
 
   if (loading) {
+    // Skeleton placeholders (title + a few cards) read as "loading your health"
+    // far better than a centered spinner.
     return (
-      <View style={[styles.screen, styles.center]}>
-        <ActivityIndicator color={active.accentPrimary} />
+      <View style={styles.screen}>
+        <Ridgeline />
+        <View style={styles.header}>
+          <View style={styles.headerTextBlock}>
+            <Skeleton width={170} height={28} radius={8} />
+            <Skeleton
+              width={110}
+              height={13}
+              radius={6}
+              style={{ marginTop: theme.spacing.xs }}
+            />
+          </View>
+        </View>
+        <View
+          style={{
+            paddingHorizontal: theme.spacing.space5,
+            gap: theme.spacing.space3,
+            marginTop: theme.spacing.md,
+          }}
+        >
+          <Skeleton height={92} radius={redesign.rCard} />
+          <Skeleton height={92} radius={redesign.rCard} />
+          <Skeleton height={92} radius={redesign.rCard} />
+        </View>
       </View>
     );
   }
@@ -387,8 +413,9 @@ export function HealthDashboardScreen(): React.ReactElement {
             {todayLabel}
           </Text>
         </View>
-        <Pressable
+        <PressableScale
           testID="dashboard_quick_add"
+          haptic
           onPress={() => setQuickAddVisible(true)}
           style={styles.addBtn}
           accessibilityRole="button"
@@ -396,18 +423,20 @@ export function HealthDashboardScreen(): React.ReactElement {
           hitSlop={8}
         >
           <Plus color={redesign.teal} size={24} />
-        </Pressable>
+        </PressableScale>
       </View>
-      <FlatList
-        style={{ flex: 1 }}
-        data={items}
-        keyExtractor={(item) => {
-          if (item.kind === "section-header") return `s:${item.title}`;
-          if (item.kind === "rollup") return `r:${item.rollup.domainId}`;
-          return "footer:legacy";
-        }}
-        renderItem={renderItem}
-      />
+      <FadeInView style={{ flex: 1 }}>
+        <FlatList
+          style={{ flex: 1 }}
+          data={items}
+          keyExtractor={(item) => {
+            if (item.kind === "section-header") return `s:${item.title}`;
+            if (item.kind === "rollup") return `r:${item.rollup.domainId}`;
+            return "footer:legacy";
+          }}
+          renderItem={renderItem}
+        />
+      </FadeInView>
       {/*
        * Sticky disclaimer block — rendered OUTSIDE the FlatList so it
        * stays pinned at the bottom while the card list scrolls. Two

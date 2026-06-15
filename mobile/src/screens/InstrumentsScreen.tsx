@@ -41,6 +41,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApiClient } from "@/auth";
 import type { ObservationInsertInput } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
+import { hapticSuccess } from "@/feedback/haptics";
 import { runOnceInFlight } from "@/lib/runOnceInFlight";
 import type { RootStackParamList } from "@/navigation/types";
 import { Crisis988Modal } from "@/onboarding/Crisis988Modal";
@@ -267,6 +268,8 @@ export function InstrumentsScreen(): React.ReactElement {
         };
         await dal.insertObservation(summary);
       }
+      // Tactile "saved" confirmation once the check-in is persisted.
+      hapticSuccess();
     },
     [api, dal],
   );

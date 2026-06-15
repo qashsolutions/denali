@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { restoreFromPhrase } from "@/backup/backupController";
 import { InvalidRecoveryPhraseError } from "@/backup/recoveryKey";
 import { useBackupDeps } from "@/backup/useBackupDeps";
+import { hapticSuccess, hapticWarning } from "@/feedback/haptics";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
@@ -45,12 +46,14 @@ export function RestoreBackupScreen(): React.ReactElement {
         setError("No backup was found for your account.");
         return;
       }
+      hapticSuccess();
       Alert.alert(
         "Restore complete",
         `Imported ${result.observationsInserted} record${result.observationsInserted === 1 ? "" : "s"} onto this device.`,
       );
       navigation.goBack();
     } catch (err) {
+      hapticWarning();
       if (err instanceof InvalidRecoveryPhraseError) {
         setError("That recovery phrase isn't valid. Check the words and try again.");
       } else {

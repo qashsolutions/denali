@@ -22,6 +22,7 @@ import {
 } from "@/backup/backupController";
 import { recoveryKeyToPhrase } from "@/backup/recoveryKey";
 import { useBackupDeps } from "@/backup/useBackupDeps";
+import { hapticSuccess } from "@/feedback/haptics";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
@@ -78,6 +79,7 @@ export function BackupSettingsCard({
     setBusy(true);
     try {
       const { phrase } = await enableBackup(deps);
+      hapticSuccess();
       setKitIsSetup(true);
       setKitPhrase(phrase);
     } catch (err) {
@@ -103,6 +105,7 @@ export function BackupSettingsCard({
     setBusy(true);
     try {
       await backupNow(deps);
+      hapticSuccess();
       Alert.alert("Backed up", "Your latest health record is safely backed up.");
     } catch (err) {
       setError("Backup failed. Please try again when you're online.");
