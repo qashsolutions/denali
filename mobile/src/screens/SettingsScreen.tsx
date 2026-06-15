@@ -62,6 +62,12 @@ const TOGGLE_COPY: Record<
   },
 };
 
+// ZK backup UI is flag-gated (off by default): it stays hidden until the
+// backup_blobs migration is applied + the flow is verified on-device, so it
+// can't surface a /api/backup that 500s pre-migration. Opt-in + staging-first
+// per docs/design/zk-backup-v1.md §9. Flip EXPO_PUBLIC_BACKUP_ENABLED=true to show.
+const BACKUP_FEATURE_ENABLED = process.env.EXPO_PUBLIC_BACKUP_ENABLED === "true";
+
 // Appearance control — "System" first so the default reads as "follow my
 // device". Stored locally (see ThemeMode.tsx); no server round-trip.
 const THEME_MODE_OPTIONS: ReadonlyArray<{ mode: ThemeMode; label: string }> = [
@@ -354,7 +360,7 @@ export function SettingsScreen(): React.ReactElement {
           );
         })}
 
-      {consent != null && (
+      {consent != null && BACKUP_FEATURE_ENABLED && (
         <BackupSettingsCard
           storageConsent={consent.health_data_storage}
           onStorageConsentChange={(granted) =>
