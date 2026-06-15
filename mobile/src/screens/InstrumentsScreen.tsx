@@ -39,6 +39,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
+import { Skeleton } from "@/components/Skeleton";
 import type { ObservationInsertInput } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import { hapticSelection, hapticSuccess } from "@/feedback/haptics";
@@ -681,13 +682,18 @@ export function InstrumentsScreen(): React.ReactElement {
   // ─── Loading / submitting overlays ────────────────────────────────────
 
   if (profileLoading) {
+    // Content-shaped skeletons (title + prompt + a couple of cards) read as
+    // "loading your check-in" better than a bare centered spinner, and match
+    // the SettingsScreen loading pattern. Skeleton hides itself from screen
+    // readers; the `scroll` style supplies the padding + gap. `submitting`
+    // below stays a spinner — that's action feedback, not content loading.
     return (
-      <View style={styles.emptyWrap}>
-        <ActivityIndicator color={redesign.teal} />
-        <Text style={[styles.subtitle, { marginTop: theme.spacing.sm }]}>
-          Loading…
-        </Text>
-      </View>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.scroll}>
+        <Skeleton width={200} height={32} radius={8} />
+        <Skeleton width="70%" height={18} radius={6} />
+        <Skeleton height={96} radius={redesign.rCard} />
+        <Skeleton height={96} radius={redesign.rCard} />
+      </ScrollView>
     );
   }
 

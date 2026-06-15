@@ -33,7 +33,7 @@ import { PressableScale } from "@/components/PressableScale";
 import { Skeleton } from "@/components/Skeleton";
 import { hapticSelection } from "@/feedback/haptics";
 import type { RootStackParamList } from "@/navigation/types";
-import { fontStyle, useFontsLoaded } from "@/theme/fonts";
+import { fontStyle, MAX_FONT_SCALE, useFontsLoaded } from "@/theme/fonts";
 import { useThemeMode, type ThemeMode } from "@/theme/ThemeMode";
 import { useTheme } from "@/theme/useTheme";
 
@@ -382,6 +382,7 @@ export function SettingsScreen(): React.ReactElement {
               style={[styles.segment, selected && styles.segmentSelected]}
             >
               <Text
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
                 style={[
                   styles.segmentText,
                   selected && styles.segmentTextSelected,

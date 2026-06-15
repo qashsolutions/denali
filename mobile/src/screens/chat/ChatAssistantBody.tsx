@@ -15,7 +15,7 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { fontStyle, useFontsLoaded } from "@/theme/fonts";
+import { fontStyle, MAX_FONT_SCALE, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { ChatMarkdown } from "./ChatMarkdown";
@@ -74,7 +74,10 @@ export function ChatAssistantBody({
           hitSlop={8}
           style={styles.toggle}
         >
-          <Text style={styles.toggleText}>
+          <Text
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+            style={styles.toggleText}
+          >
             {expanded ? "Hide details" : "Show details"}
           </Text>
         </Pressable>

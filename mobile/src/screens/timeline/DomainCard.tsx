@@ -25,7 +25,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { SexAtBirth } from "@/contracts";
-import { fontStyle, useFontsLoaded } from "@/theme/fonts";
+import { fontStyle, MAX_FONT_SCALE, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import {
@@ -134,6 +134,7 @@ export function DomainCard({
             ]}
           >
             <Text
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
               style={[
                 styles.pillText,
                 { color: tint ? tint.fg : redesign.ink2 },
@@ -169,7 +170,12 @@ export function DomainCard({
             hitSlop={8}
             style={styles.logBtn}
           >
-            <Text style={styles.logLabel}>New check-in</Text>
+            <Text
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              style={styles.logLabel}
+            >
+              New check-in
+            </Text>
           </Pressable>
         ) : null}
       </Pressable>

@@ -55,6 +55,18 @@ export const FONT_ASSETS = {
   "Bricolage-Bold": BricolageGrotesque_700Bold,
 } as const;
 
+/**
+ * Max OS font-scale multiplier for FIXED-GEOMETRY CHROME ONLY — segmented
+ * controls, chips, and the severity pills whose containers can't grow
+ * sideways. At extreme OS text sizes those single-line labels overflow/clip.
+ *
+ * Deliberately NOT applied to body/content text: low-vision and 45+ users set
+ * large system fonts on purpose, and content lives in flexible-height
+ * containers that wrap. Capping content would hurt the very audience we serve.
+ * 1.6 still enlarges chrome labels noticeably while keeping the layout intact.
+ */
+export const MAX_FONT_SCALE = 1.6;
+
 export type FontRole = "display" | "numbers" | "body";
 export type FontRoleWeight = 400 | 500 | 600 | 700;
 

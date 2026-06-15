@@ -34,7 +34,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { ObservationRow, SexAtBirth } from "@/contracts";
 import { getInstrumentById } from "@/onboarding/instruments";
-import { fontStyle, useFontsLoaded } from "@/theme/fonts";
+import { fontStyle, MAX_FONT_SCALE, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import {
@@ -173,7 +173,10 @@ function InstrumentSessionCard({
             testID="timeline_card_pill"
             style={[styles.pill, { backgroundColor: tint.bg }]}
           >
-            <Text style={[styles.pillText, { color: tint.fg }]}>
+            <Text
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              style={[styles.pillText, { color: tint.fg }]}
+            >
               {band.pill}
             </Text>
           </View>
@@ -341,7 +344,10 @@ function SingleRowCard({
           testID="timeline_card_pill"
           style={[styles.pill, { backgroundColor: redesign.pillSoft }]}
         >
-          <Text style={[styles.pillText, { color: redesign.ink2 }]}>
+          <Text
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+            style={[styles.pillText, { color: redesign.ink2 }]}
+          >
             {getCategoryName(row.category)}
           </Text>
         </View>
