@@ -1,21 +1,27 @@
 /**
- * QuickAddSheet — the "+ Add" capture hub (bottom sheet).
+ * QuickAddSheet — the "+ Add" capture hub (bottom sheet), now DRAG-TO-DISMISS.
  *
  * Surfaces the four intake sections (symptom · condition · family history ·
- * daily habits) as a low-friction sheet reachable from the Health tab, so
- * they stay enterable AFTER onboarding — not just during it. Each option
- * routes to IntakeOnboardingScreen via its standalone `section` param
- * (see navigation/types.ts). Built on RN's Modal — no new dependency.
+ * daily habits) as a low-friction sheet reachable from the Health tab. Each
+ * option routes to IntakeOnboardingScreen via its standalone `section` param.
  *
- * The scrim is a sibling `redesign.ink` layer at low opacity (not a
- * hardcoded rgba), so the sheet itself renders at full opacity above it.
- * Check-ins are logged from the per-card "New check-in" affordance and the
- * detail screen, so they're intentionally not duplicated here; Upload has
- * its own tab.
+ * Tier-4 gesture surface: the sheet rides a Reanimated `translateY` and a
+ * gesture-handler `Pan` — drag it down to dismiss (snap-back if you don't pull
+ * far/fast enough). Entrance stays the Modal's native slide; the scrim is a
+ * `redesign.ink` layer at low opacity. Reanimated honors the OS reduce-motion
+ * setting for the snap-back spring automatically.
  */
 import React from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 
+import { hapticSelection } from "@/feedback/haptics";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
@@ -25,6 +31,10 @@ export interface QuickAddOption {
   hint?: string;
   onPress: () => void;
 }
+
+// Drag this far (px) or flick this fast (px/s) to dismiss.
+const DISMISS_DISTANCE = 110;
+const DISMISS_VELOCITY = 800;
 
 export function QuickAddSheet({
   visible,
@@ -37,6 +47,40 @@ export function QuickAddSheet({
 }): React.ReactElement {
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
+  const translateY = useSharedValue(0);
+
+  // Reset the drag offset whenever we close so the next open starts at rest.
+  const close = React.useCallback(() => {
+    translateY.value = 0;
+    onClose();
+  }, [onClose, translateY]);
+
+  const closeByDrag = React.useCallback(() => {
+    hapticSelection();
+    close();
+  }, [close]);
+
+  const pan = React.useMemo(
+    () =>
+      Gesture.Pan()
+        .onUpdate((e) => {
+          // Only allow dragging DOWN; clamp upward pulls to 0.
+          translateY.value = Math.max(0, e.translationY);
+        })
+        .onEnd((e) => {
+          if (e.translationY > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY) {
+            runOnJS(closeByDrag)();
+          } else {
+            translateY.value = withSpring(0, { damping: 18, stiffness: 220 });
+          }
+        }),
+    [translateY, closeByDrag],
+  );
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
   const styles = React.useMemo(
     () => makeStyles(theme, redesign, fontsLoaded),
     [theme, redesign, fontsLoaded],
@@ -47,45 +91,50 @@ export function QuickAddSheet({
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={onClose}
+      onRequestClose={close}
     >
       <View style={styles.container}>
         <Pressable
           style={styles.backdrop}
-          onPress={onClose}
+          onPress={close}
           accessibilityRole="button"
           accessibilityLabel="Close"
         />
-        <View style={styles.sheet} testID="quickadd_sheet">
-          <View style={styles.handle} />
-          <Text style={styles.title} accessibilityRole="header">
-            Add to your health
-          </Text>
-          {options.map((o) => (
-            <Pressable
-              key={o.key}
-              testID={`quickadd_${o.key}`}
-              style={styles.option}
-              onPress={o.onPress}
-              accessibilityRole="button"
-              accessibilityLabel={o.label}
-            >
-              <Text style={styles.optionLabel}>{o.label}</Text>
-              {o.hint != null ? (
-                <Text style={styles.optionHint}>{o.hint}</Text>
-              ) : null}
-            </Pressable>
-          ))}
-          <Pressable
-            testID="quickadd_cancel"
-            style={styles.cancel}
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
+        <GestureDetector gesture={pan}>
+          <Animated.View
+            style={[styles.sheet, sheetStyle]}
+            testID="quickadd_sheet"
           >
-            <Text style={styles.cancelLabel}>Cancel</Text>
-          </Pressable>
-        </View>
+            <View style={styles.handle} />
+            <Text style={styles.title} accessibilityRole="header">
+              Add to your health
+            </Text>
+            {options.map((o) => (
+              <Pressable
+                key={o.key}
+                testID={`quickadd_${o.key}`}
+                style={styles.option}
+                onPress={o.onPress}
+                accessibilityRole="button"
+                accessibilityLabel={o.label}
+              >
+                <Text style={styles.optionLabel}>{o.label}</Text>
+                {o.hint != null ? (
+                  <Text style={styles.optionHint}>{o.hint}</Text>
+                ) : null}
+              </Pressable>
+            ))}
+            <Pressable
+              testID="quickadd_cancel"
+              style={styles.cancel}
+              onPress={close}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
+              <Text style={styles.cancelLabel}>Cancel</Text>
+            </Pressable>
+          </Animated.View>
+        </GestureDetector>
       </View>
     </Modal>
   );

@@ -31,6 +31,7 @@ import React from "react";
 import {
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -43,6 +44,7 @@ import { FadeInView } from "@/components/FadeInView";
 import { PressableScale } from "@/components/PressableScale";
 import { Ridgeline } from "@/components/Ridgeline";
 import { Skeleton } from "@/components/Skeleton";
+import { hapticSelection } from "@/feedback/haptics";
 import type { ObservationRow, SexAtBirth } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
@@ -97,6 +99,7 @@ export function HealthDashboardScreen(): React.ReactElement {
 
   const [rows, setRows] = React.useState<ObservationRow[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
   const [userSexAtBirth, setUserSexAtBirth] = React.useState<SexAtBirth | null>(null);
   const [userBirthYear, setUserBirthYear] = React.useState<number | null>(null);
   const [quickAddVisible, setQuickAddVisible] = React.useState(false);
@@ -156,28 +159,30 @@ export function HealthDashboardScreen(): React.ReactElement {
     ];
   }, [navigation]);
 
+  // Core load — shared by the focus effect + pull-to-refresh.
+  const loadData = React.useCallback(async () => {
+    if (!dal) return;
+    const user = api.getCurrentUser();
+    const list = await dal.listObservations({
+      latest_only: true,
+      limit: PAGE_SIZE,
+    });
+    const scoped = user ? list.filter((o) => o.user_id === user.userId) : list;
+    setRows(scoped);
+    const profile = await dal.getProfile();
+    setUserSexAtBirth(profile?.sex_at_birth ?? null);
+    setUserBirthYear(profile?.birth_year ?? null);
+  }, [api, dal]);
+
   // Reload on every screen FOCUS (not just mount) — returning from a
   // repeat check-in (Step 4) or the detail stack must refresh the pills.
   useFocusEffect(
     React.useCallback(() => {
-      if (!dal) return;
       let cancelled = false;
       (async () => {
         setLoading(true);
         try {
-          const user = api.getCurrentUser();
-          const list = await dal.listObservations({
-            latest_only: true,
-            limit: PAGE_SIZE,
-          });
-          if (cancelled) return;
-          const scoped = user ? list.filter((o) => o.user_id === user.userId) : list;
-          setRows(scoped);
-          const profile = await dal.getProfile();
-          if (!cancelled) {
-            setUserSexAtBirth(profile?.sex_at_birth ?? null);
-            setUserBirthYear(profile?.birth_year ?? null);
-          }
+          await loadData();
         } catch (err) {
           console.warn("[HealthDashboard] load failed", err);
         } finally {
@@ -187,8 +192,21 @@ export function HealthDashboardScreen(): React.ReactElement {
       return () => {
         cancelled = true;
       };
-    }, [api, dal]),
+    }, [loadData]),
   );
+
+  // Pull-to-refresh — keeps the content visible (no skeleton) + a light tick.
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadData();
+      hapticSelection();
+    } catch (err) {
+      console.warn("[HealthDashboard] refresh failed", err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadData]);
 
   const userAgeYears = React.useMemo(
     () => computeAgeYears(userBirthYear),
@@ -435,6 +453,14 @@ export function HealthDashboardScreen(): React.ReactElement {
             return "footer:legacy";
           }}
           renderItem={renderItem}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={redesign.teal}
+              colors={[redesign.teal]}
+            />
+          }
         />
       </FadeInView>
       {/*

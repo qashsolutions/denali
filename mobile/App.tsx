@@ -14,6 +14,7 @@ import {
   NavigationContainer,
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ApiClientProvider } from "@/auth";
@@ -65,16 +66,18 @@ export default function App() {
   // Light/Dark/System choice resolves app-wide; StatusBar style="auto" already
   // flips the status-bar text to match the active scheme.
   return (
-    <SafeAreaProvider>
-      <ThemeModeProvider>
-        <FontProvider>
-          <ApiClientProvider>
-            <DalProvider>
-              <NavRoot />
-            </DalProvider>
-          </ApiClientProvider>
-        </FontProvider>
-      </ThemeModeProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ThemeModeProvider>
+          <FontProvider>
+            <ApiClientProvider>
+              <DalProvider>
+                <NavRoot />
+              </DalProvider>
+            </ApiClientProvider>
+          </FontProvider>
+        </ThemeModeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
