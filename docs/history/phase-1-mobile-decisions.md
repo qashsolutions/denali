@@ -376,6 +376,88 @@ native rebuild + the worklets babel plugin + a Metro cache clear.
 
 ---
 
+## D19 — Settings "App lock" status row; gate stays always-on (2026-06-15)
+
+**Decision:** Surface the D15 biometric launch gate in Settings as a READ-ONLY
+status row (under Privacy & Data), reflecting device capability via
+`isBiometricAvailable()` — enrolled → "On — unlocks with Face ID / Touch ID /
+passcode" (iOS) or fingerprint / face unlock / PIN (Android); not enrolled →
+"Off — set up … in your device settings to lock Denali" (a nudge). **NOT an
+enable/disable toggle.**
+
+**Why:** the gate is load-bearing — `sessionPolicy.ts` stretches the OTP
+re-prompt cap to 30 days *because* the gate gives daily presence assurance. A
+user-facing "turn off Face ID" toggle would create a 30-day single-factor
+session with no continuous presence control — a NIST 800-63B regression. To
+safely allow "off" you'd have to drop the cap back to 7 days when disabled and
+track per-user policy. Out of scope.
+
+**Rule for future sessions:** do not add a biometric enable/disable toggle
+without revisiting the 30-day cap (D15). The row is informational only and never
+touches the gate, tokens, or the SQLCipher key. `isBiometricAvailable` is now
+exported from the `@/auth` barrel.
+
+**Encoded in code:** `SettingsScreen` (App lock card); `src/auth/biometricGate.ts`
+(`isBiometricAvailable`); `src/auth/index.ts` (barrel export).
+
+---
+
+## D20 — Accessibility hardening pass (external review-driven) (2026-06-15)
+
+**Decision:** Act on five accessibility findings from an external read-only code
+review (45+ audience). Shipped:
+
+1. **Dark-mode consent toggles fixed.** The OFF `Switch` collapsed into the card
+   (thumb == `surface`; track ~3% off `surface`). Switch colors are now
+   mode-aware: dark uses a near-white `ink` thumb + the `line` hairline
+   off-track; light is unchanged. (Bug fix.)
+2. **Haptics honor Reduce Motion (extends D18).** `haptics.ts` gains
+   `setHapticsReduceMotion` + a gate in `safe()`; `App.tsx` `NavRoot` mirrors
+   `useReducedMotion()` into it. Previously haptics fired regardless of the OS
+   setting; now all confirmation haptics fall silent under Reduce Motion, like
+   animations. `haptics.ts` stays free of react-native imports (node-test-safe).
+3. **44px touch targets.** Chat "Show details" toggle (32→44), dashboard "+"
+   (40→44), DomainCard "New check-in" chip (40→44) — WCAG 2.5.5 / iOS HIG.
+4. **Streaming chat announced to screen readers.** `ChatScreen` announces the
+   markdown-stripped summary once on `done` (not per-delta, to avoid speech
+   spam) via `AccessibilityInfo.announceForAccessibility` — cross-platform. New
+   pure helper `plainSummaryForSpeech` in `chat/markdown.ts`.
+5. **InstrumentsScreen skeleton.** `profileLoading` shows content-shaped
+   skeletons (matching `SettingsScreen`) instead of a spinner; `submitting`
+   ("Saving…") stays a spinner — action feedback, not content load.
+
+**Font-scale cap — policy (load-bearing):** `MAX_FONT_SCALE = 1.6`
+(`theme/fonts.tsx`) is applied ONLY to fixed-geometry, non-wrapping CHROME — the
+appearance segmented control, the chip/toggle labels, and the timeline severity
+pills — where extreme OS text sizes overflow single-line labels. It is
+DELIBERATELY NOT global: low-vision / 45+ users set large system fonts on
+purpose, and content wraps in flexible-height containers, so capping body text
+would hurt the audience. (A global cap is also impractical — React 19 dropped
+`Text.defaultProps`.) **Future sessions: never add a global font cap; never
+strip the chrome caps.**
+
+**Why:** these were the gaps between the codebase and "unambiguously
+best-in-class for older adults" — font-scale clipping, haptic gating, and
+screen-reader announcement. The foundations (contrast-tested tokens,
+reduce-motion plumbing, semantic roles) were already in place; this completes
+them.
+
+**Clinical note:** the pill font-cap touches the clinical timeline surface;
+`clinical-boundary-reviewer` ran on the diff and returned PASS (pure
+layout-geometry — no string, band, ‡ mark, disclaimer, provenance, or crisis
+path touched).
+
+**Reviewer correction (relayed):** the review's InstrumentsScreen evidence
+("renders UI while `sexAtBirth` null") was imprecise — the screen gates with a
+spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
+
+**Encoded in code:** `src/feedback/haptics.ts`, `App.tsx` (`NavRoot`);
+`src/theme/fonts.tsx` (`MAX_FONT_SCALE`); `SettingsScreen`, `ChatScreen`,
+`chat/{ChatAssistantBody,markdown}`, `InstrumentsScreen`,
+`timeline/{DomainCard,TimelineCardView}`.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

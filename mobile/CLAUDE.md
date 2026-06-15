@@ -69,6 +69,12 @@ Information-layer rules (load-bearing for HIPAA + clinical safety):
 - **Clinical key is `sex_at_birth`, not `gender_identity`.** All analysis branches on `sex_at_birth`. `gender_identity` is a respect/display field — never an analysis key. Gender-affirming hormone therapy is a clinical-reviewer-note concern carried on the affected entries (`clinicalReviewerNotes`); never auto-applied at render.
 - **Age + sex condition analysis where evidence supports it.** Labs / vitals / fitness use age+sex reference ranges via the `age-sex-specific` strategy. Symptom screeners (PHQ-2 / PHQ-9, GAD-7, Epworth) stay UNIFORM — they have validated adult bands; adjusting them invents clinical content. AUDIT-C is sex-specific per Bradley 2007. **NEVER apply an age-specific range when `ageYears` is null** — return null + a `gentleNudge` instead.
 
+### Accessibility & app-lock — don't-undo rules (2026-06-15, D19/D20)
+
+- **Font-scale cap is CHROME-ONLY, never global.** `MAX_FONT_SCALE` (`src/theme/fonts.tsx`) caps OS font scaling on fixed-geometry, non-wrapping labels only — segmented controls, chips, severity pills. Body/content text scales freely (low-vision / 45+ users set large fonts on purpose; content wraps). Never add a global cap; never strip the chrome caps. (React 19 dropped `Text.defaultProps`, so a global cap isn't clean anyway.)
+- **Haptics honor Reduce Motion.** `src/feedback/haptics.ts` gates on a `reduceMotion` flag synced from `useReducedMotion()` in `App.tsx` `NavRoot`. Keep `haptics.ts` free of `react-native` imports so it stays node-test-safe.
+- **Biometric app-lock is always-on; NO enable/disable toggle.** The Settings "App lock" row is READ-ONLY (reflects device enrollment via `isBiometricAvailable`). A disable toggle would regress the 30-day OTP cap (`src/auth/sessionPolicy.ts`) that the always-on gate justifies — don't add one without revisiting the cap (D15).
+
 ### Repo hygiene — `mobile/` is its own project root
 
 `mobile/` has its own `package.json`, `node_modules`, `eslint.config.js`, `vitest.config.ts`, `tsconfig.json`. Tooling must be invoked from `mobile/` cwd:

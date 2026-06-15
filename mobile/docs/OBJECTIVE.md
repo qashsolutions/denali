@@ -176,3 +176,16 @@ store)*.
   micro-interactions, gesture surfaces). Reanimated 4 + worklets +
   gesture-handler verified on RN 0.85 / New Arch; the prior Reanimated caution is
   lifted. All motion reduce-motion-aware; clinical surfaces stay silent. (D18)
+- 2026-06-15 — **Settings "App lock" status row** added (D19): read-only
+  surfacing of the D15 biometric gate (Face ID / Touch ID / fingerprint /
+  passcode), reflecting device enrollment. No enable/disable toggle — disabling
+  would regress the 30-day OTP cap that the always-on gate justifies.
+- 2026-06-15 — **Accessibility hardening pass** (external review-driven, D20):
+  dark-mode consent toggles fixed (OFF Switch was invisible); haptics now honor
+  Reduce Motion (extends D18); three touch targets bumped to 44px; streaming
+  chat announced to screen readers (announce-on-completion); InstrumentsScreen
+  profile-load uses content skeletons; chrome-only font-scale cap
+  (`MAX_FONT_SCALE` = 1.6 — segmented control, chips, severity pills only, never
+  global). Advances O3 (settings/chat/instrument surface polish); exercised O6
+  (clinical-boundary-reviewer PASS on the pill diff). tsc + 853 unit tests green;
+  verified on-device (emulator).
