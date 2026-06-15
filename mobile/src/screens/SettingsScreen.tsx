@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { ConsentGetResponse } from "@/api/routeContracts";
 import { useApiClient } from "@/auth";
+import { BackupSettingsCard } from "@/backup/ui/BackupSettingsCard";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useThemeMode, type ThemeMode } from "@/theme/ThemeMode";
@@ -326,7 +327,9 @@ export function SettingsScreen(): React.ReactElement {
       <Text style={styles.sectionLabel}>Privacy & Data</Text>
       {loadError != null && <Text style={styles.loadError}>{loadError}</Text>}
       {consent != null &&
-        (Object.keys(TOGGLE_COPY) as ConsentType[]).map((type) => {
+        (Object.keys(TOGGLE_COPY) as ConsentType[])
+          .filter((type) => type !== "health_data_storage")
+          .map((type) => {
           const copy = TOGGLE_COPY[type];
           const value = consent[type];
           return (
@@ -350,6 +353,15 @@ export function SettingsScreen(): React.ReactElement {
             </View>
           );
         })}
+
+      {consent != null && (
+        <BackupSettingsCard
+          storageConsent={consent.health_data_storage}
+          onStorageConsentChange={(granted) =>
+            onToggle("health_data_storage", granted)
+          }
+        />
+      )}
 
       <Pressable
         accessibilityRole="button"

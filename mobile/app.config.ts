@@ -24,6 +24,12 @@ const config: ExpoConfig = {
   },
   android: {
     package: "health.denali.mobile",
+    // ZK invariant: never let Google auto-backup exfiltrate the on-device
+    // secrets. expo-secure-store maps to EncryptedSharedPreferences on Android,
+    // which (unlike iOS ThisDeviceOnly) could otherwise be swept into Google
+    // Account backup — leaking the SQLCipher key AND the backup recovery key
+    // off-device, defeating zero-knowledge. (D16 privacy review, 2026-06-14.)
+    allowBackup: false,
   },
   // Plugins:
   //   expo-sqlite with useSQLCipher: true compiles the native module against

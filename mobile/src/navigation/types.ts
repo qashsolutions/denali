@@ -65,6 +65,12 @@ export type RootStackParamList = {
    * dashboard.
    */
   LegacyTimeline: undefined;
+  /**
+   * Restore the on-device health record from the BIP39 recovery phrase
+   * (zero-knowledge backup, D16). Reached from the Settings backup card on a
+   * device that has no local recovery key.
+   */
+  RestoreBackup: undefined;
 };
 
 export type MainTabsParamList = {

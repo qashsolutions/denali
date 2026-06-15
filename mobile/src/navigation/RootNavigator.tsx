@@ -24,6 +24,7 @@ import { InstrumentsScreen } from "@/screens/InstrumentsScreen";
 import { IntakeOnboardingScreen } from "@/screens/IntakeOnboardingScreen";
 import { LockScreen } from "@/screens/LockScreen";
 import { LogMarkerScreen } from "@/screens/markers/LogMarkerScreen";
+import { RestoreBackupScreen } from "@/screens/RestoreBackupScreen";
 import { SignInScreen } from "@/screens/SignInScreen";
 import { TimelineScreen } from "@/screens/TimelineScreen";
 import { UploadReviewScreen } from "@/screens/UploadReviewScreen";
@@ -182,6 +183,7 @@ export function RootNavigator() {
        * stack entry while the new dashboard occupies the Timeline tab.
        */}
       <Stack.Screen name="LegacyTimeline" component={TimelineScreen} />
+      <Stack.Screen name="RestoreBackup" component={RestoreBackupScreen} />
     </Stack.Navigator>
   );
 }
