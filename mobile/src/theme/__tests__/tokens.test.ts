@@ -203,6 +203,12 @@ describe("Alpine-night dark palette — derived from the light vocabulary", () =
     // Crisis-988 "Call 988" button: surface-colored label on the alarm fill.
     // The crisis surface must stay legible in dark — flagged by clinical review.
     ["crisis 988 button (surface on alarm)", redesignDark.surface, redesignDark.alarm],
+    // Trend-chart band labels (ink) on each severity band fill — a band label
+    // unreadable on its fill could let "severe" read as "minimal".
+    ["band label (ink on bandOk)", redesignDark.ink, redesignDark.bandOk],
+    ["band label (ink on bandSoft)", redesignDark.ink, redesignDark.bandSoft],
+    ["band label (ink on bandWatch)", redesignDark.ink, redesignDark.bandWatch],
+    ["band label (ink on bandAlarm)", redesignDark.ink, redesignDark.bandAlarm],
   ];
   for (const [name, fg, bg] of CLINICAL_PAIRS) {
     it(`${name} clears WCAG AA (>= 4.5:1)`, () => {
@@ -217,6 +223,13 @@ describe("Alpine-night dark palette — derived from the light vocabulary", () =
       redesignDark.alarmWash,
     ];
     expect(new Set(washes).size).toBe(3);
+  });
+
+  it("keeps the four trend-chart band fills distinct (light + dark)", () => {
+    const light = [redesign.bandOk, redesign.bandSoft, redesign.bandWatch, redesign.bandAlarm];
+    const dark = [redesignDark.bandOk, redesignDark.bandSoft, redesignDark.bandWatch, redesignDark.bandAlarm];
+    expect(new Set(light).size).toBe(4);
+    expect(new Set(dark).size).toBe(4);
   });
 });
 

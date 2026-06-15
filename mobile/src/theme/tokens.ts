@@ -132,6 +132,16 @@ export const redesign = {
   alarmWash: "#F8E9E5",
   /** Neutral pill background (mockup .pill-soft). */
   pillSoft: "#EEF2F5",
+  /**
+   * Trend-chart severity band fills — brighter + more saturated than the *Wash
+   * pill tints so large band areas read as DISTINCT at a glance (the washes are
+   * tuned for small pills and go nearly invisible across a chart). Same
+   * green / neutral / amber / red severity semantics as the pills; chart-only.
+   */
+  bandOk: "#D4EBDC",
+  bandSoft: "#E6ECF1",
+  bandWatch: "#F7E2AE",
+  bandAlarm: "#F7CFC6",
   /** Card corner radius (mockup --r: 18px). */
   rCard: 18,
   /** Icon-chip corner radius (mockup .cicon border-radius: 10px). */
@@ -192,6 +202,11 @@ export const redesignDark: RedesignPalette = {
   alarmWash: "#3C1C17",
   /** Neutral pill background. */
   pillSoft: "#20303A",
+  /** Trend-chart severity band fills (dark) — see the light bandOk note. */
+  bandOk: "#1C3D29",
+  bandSoft: "#283845",
+  bandWatch: "#4A3814",
+  bandAlarm: "#4D241D",
   /** Radii are appearance-independent. */
   rCard: redesign.rCard,
   rChip: redesign.rChip,

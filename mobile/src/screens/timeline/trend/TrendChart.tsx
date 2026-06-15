@@ -212,16 +212,17 @@ function ChartSvg({
   const xOf = (i: number) =>
     PAD_LEFT + (n === 1 ? plotW / 2 : (i * plotW) / (n - 1));
 
-  // Chart wash per tint class — sage carries the calm "typical range"
-  // role from the mockup; the rest reuse their pill washes.
+  // Chart band fill per tint class — the brighter band tokens (NOT the pale
+  // pill washes) so large band areas read as clearly distinct at a glance.
+  // Same green / neutral / amber / red severity semantics as the pills.
   const washFor = (cls: ReturnType<typeof tintClassForBand>): string =>
     cls === "ok"
-      ? redesign.sageWash
+      ? redesign.bandOk
       : cls === "soft"
-        ? redesign.pillSoft
+        ? redesign.bandSoft
         : cls === "watch"
-          ? redesign.amberWash
-          : redesign.alarmWash;
+          ? redesign.bandWatch
+          : redesign.bandAlarm;
 
   const bands = chartBandsFor(instrumentId, userSexAtBirth).map((band) => {
     const topVal = Math.min(band.maxScore, scoreRange.max) + 0.5;
@@ -255,10 +256,10 @@ function ChartSvg({
           width={width}
           height={b.h}
           fill={b.fill}
-          opacity={0.55}
         />
       ))}
-      {/* Light gridlines at band boundaries. */}
+      {/* Separator hairline at each band boundary (stronger than line2 so the
+          bands read as cleanly divided). */}
       {bands.map((b) =>
         b.boundary != null ? (
           <Line
@@ -267,7 +268,7 @@ function ChartSvg({
             y1={b.boundary}
             x2={width}
             y2={b.boundary}
-            stroke={redesign.line2}
+            stroke={redesign.line}
             strokeWidth={1}
           />
         ) : null,
@@ -280,7 +281,7 @@ function ChartSvg({
             x={6}
             y={b.y + Math.min(b.h / 2 + 3.5, 12)}
             fontSize={9}
-            fill={redesign.ink3}
+            fill={redesign.ink}
             {...(labelFont ? { fontFamily: labelFont } : {})}
           >
             {b.label}
