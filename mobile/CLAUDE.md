@@ -75,6 +75,12 @@ Information-layer rules (load-bearing for HIPAA + clinical safety):
 - **Haptics honor Reduce Motion.** `src/feedback/haptics.ts` gates on a `reduceMotion` flag synced from `useReducedMotion()` in `App.tsx` `NavRoot`. Keep `haptics.ts` free of `react-native` imports so it stays node-test-safe.
 - **Biometric app-lock is always-on; NO enable/disable toggle.** The Settings "App lock" row is READ-ONLY (reflects device enrollment via `isBiometricAvailable`). A disable toggle would regress the 30-day OTP cap (`src/auth/sessionPolicy.ts`) that the always-on gate justifies — don't add one without revisiting the cap (D15).
 
+### Reminders & marker capture — don't-undo rules (2026-06-15, D21)
+
+- **Reminders are LOCAL-only, no PHI in the payload.** `src/notifications/*` uses `expo-notifications` DATE triggers only — never push tokens, a server, or network. A push/server reminder would violate invariant 1. Notification title/body stay generic nudges ("Check in with Denali") — never a marker name, score, or value (lock-screen leakage). Keep `cadenceHelpers.ts` node-safe (no `react-native` import).
+- **Bone density is a UNIVERSAL marker, not sex-gated.** Men get osteoporosis/DEXA too; the women's relevance is delivered via reviewer-gated interpretation + the preventive cadence layer, not by hiding the capture field. Only biologically sex-exclusive markers (PSA, testosterone) carry a `cohort` gate.
+- **New markers need NLM-verified LOINC + `provisional: true`; interpretation stays reviewer-gated.** BMI shows the value only (no WHO category); the bone-density T-score shows no band (no osteopenia/osteoporosis). Never invent a category/band/range in code.
+
 ### Repo hygiene — `mobile/` is its own project root
 
 `mobile/` has its own `package.json`, `node_modules`, `eslint.config.js`, `vitest.config.ts`, `tsconfig.json`. Tooling must be invoked from `mobile/` cwd:

@@ -130,6 +130,18 @@ and the `.mcp.json` connectors exist and each has been exercised on at
 least one real step; Maestro flows run in CI against an E2E test-OTP
 backend (NODE_ENV ≠ production).
 
+### O7 — Re-engagement layer (local, privacy-preserving) — **Increment 1 SHIPPED** (Venkata-ratified 2026-06-15)
+Local on-device reminders that pull the user back without weakening any
+invariant: `expo-notifications` LOCAL scheduling only (no push tokens, no
+server, nothing transmitted), no PHI in any notification payload,
+opt-in/off-by-default, cadence computed on-device from the user's own log
+history, quiet hours. Converts the app from pull-only to habit-forming — the
+single biggest retention lever, and the only one not gated on a clinician or an
+external API. **Done when:** a user can opt in, receive locally-scheduled gentle
+nudges keyed to their own logging cadence, and opt out (cancels all) with zero
+data leaving the device. Increment 1 (idle + monthly nudge + Settings toggle)
+shipped; future increments: per-instrument cadence, user-tunable frequency.
+
 ## 4. Non-goals (Phase 1 — verbatim from the spec)
 
 Longitudinal prediction/trend models *(the O4 trend layer displays stored
@@ -180,6 +192,14 @@ store)*.
   surfacing of the D15 biometric gate (Face ID / Touch ID / fingerprint /
   passcode), reflecting device enrollment. No enable/disable toggle — disabling
   would regress the 30-day OTP cap that the always-on gate justifies.
+- 2026-06-15 — **Marker expansion + local reminders** (D21). O2/O5 capture:
+  height (8302-2) + BMI value (number only) + bone-density DXA-hip T-score
+  (38264-8, new universal "Bone health" group, signed/negative entry) — all
+  provisional, NLM-verified; interpretation (BMI category, T-score bands)
+  deferred to the reviewer. **New O7 (Venkata-ratified):** local, privacy-
+  preserving check-in reminders (expo-notifications local-only, no push/server/
+  PHI, opt-in). Gates green (927 tests); clinical-boundary + privacy-invariant +
+  acceptance-auditor all PASS; verified on-device (native rebuild).
 - 2026-06-15 — **Accessibility hardening pass** (external review-driven, D20):
   dark-mode consent toggles fixed (OFF Switch was invisible); haptics now honor
   Reduce Motion (extends D18); three touch targets bumped to 44px; streaming

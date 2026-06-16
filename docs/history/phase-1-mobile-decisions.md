@@ -458,6 +458,25 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D21 — Marker expansion (height, BMI, bone density) + local reminders / O7 (2026-06-15)
+
+**Decision:** Two operator-approved additions — capture coverage + a re-engagement layer — built in parallel by `mobile-local-data-modeler` + `mobile-app-shell`.
+
+**Marker capture (O2/O5 surface; all `provisional: true`, LOINC NLM-verified 2026-06-15):**
+- **Height** (8302-2) in the Body group — universal; enables BMI.
+- **Bone density (DXA hip T-score)** (38264-8) in a NEW universal **"Bone health"** group. Deliberately **NOT sex-gated**: men get osteoporosis/DEXA too, so hiding a value a man already has would be wrong; women's relevance is delivered via reviewer-gated interpretation + the preventive cadence layer, per `docs/design/biomarkers-longitudinal-v1.md` §3. Required **signed-number entry** (T-scores are negative): a `signed?: boolean` field flag read by `LogMarkerScreen` (numbers-and-punctuation keyboard, "-1.5" placeholder); unsigned fields still reject negatives (unit-tested).
+- **BMI** — derived (kg/m²) from latest height + weight, displayed as a **NUMBER ONLY**. WHO BMI categories and WHO T-score bands (osteopenia/osteoporosis) are interpretation — reviewer-gated, deferred, NOT added. Estradiol / FSH / hemoglobin were considered but **held as reviewer proposals** (clinical-SET expansions, never CC-invented).
+
+**Local reminders (new scope O7 — Venkata-ratified 2026-06-15):** `expo-notifications` **LOCAL scheduling only** (DATE triggers). NO push tokens, NO server, NO network — nothing leaves the device (invariant 1). NO PHI in any notification title/body — generic nudges only. Opt-in, OFF by default, persisted in `expo-secure-store`; cadence (idle nudge + monthly) computed on-device from the last local log date; quiet-hours clamp. "Check-in reminders" toggle in a new Settings "Reminders" section.
+
+**Verification:** tsc 0, eslint 0 errors, 927 unit tests green. `clinical-boundary-reviewer` PASS (one WARN fixed: a bone-density entryHint that asserted normalcy → reworded to data-quality only). `mobile-privacy-invariant-guard` PASS on all six invariants. `acceptance-auditor`: REPORT MAY SHIP (9/9). On-device (emulator, native rebuild for the new native module): Reminders toggle ON → OS channel created + a local `RTC_WAKEUP` alarm scheduled; bone-density entry accepts a negative T-score (−2.3); Height + Bone-health groups render. On-device caught + fixed a `sound: "default"` channel bug (a sound string is read as a missing custom-sound file → omit it / use `true`).
+
+**Future-session rules:** reminders stay **LOCAL-only + no-PHI-in-payload** (a push/server reminder would violate invariant 1); **bone density stays universal** (not sex-gated); new markers need NLM-verified LOINC + `provisional: true`; interpretation (BMI category, T-score bands) is reviewer-gated — never invented in code.
+
+**Encoded in code:** `src/screens/markers/{markerCatalog,bmi,LogMarkerScreen}`, `src/screens/timeline/{DomainCard,displayMapping}`, `src/notifications/{scheduler,cadenceHelpers,useReminders}`, `SettingsScreen`, `app.config.ts`.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).
