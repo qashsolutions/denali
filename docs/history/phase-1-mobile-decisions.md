@@ -651,6 +651,20 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D33 — Onboarding confirmation: year-of-birth + sex-at-birth are permanent (2026-06-16)
+
+**Decision:** Pairs with D32 (those two fields are locked in Settings). At sign-up the user must now **explicitly confirm** year of birth + sex at birth are correct and acknowledge they can't be changed later — they're clinical interpretation keys, so an after-the-fact change would re-interpret all existing results (the operator's framing: "to change, they'd have to start over and lose their data").
+
+- **New step 5 (confirm).** `CohortOnboardingScreen` goes 4 → 5 steps. Gender selection (and Skip) now ADVANCE to the confirm step instead of submitting; `confirmAndSubmit` writes the profile only after the user taps Continue on the confirm screen. The confirm screen (a `OneItemScreen`) shows a summary of the two permanent fields + the warning copy; Back returns to fix them. Gender + Medicare are NOT part of the gate (editable later, D32).
+- **Closure-safe.** Gender handlers reduced to stable `setState` dispatchers (`[]` deps); `confirmAndSubmit` takes live state via deps + `decideCohortSubmission` (unchanged). No new submit path — just deferred behind the acknowledgement.
+- **Maestro flows updated.** `signin_onboarding.yaml` + `crisis_988.yaml` add the `cohort_confirm_summary` assertion + the confirm `oneitem_continue_button` tap between gender and Intake.
+
+**Verification:** tsc 0, eslint 0 errors, **1096 tests** (cohort/decision tests unchanged + green). On-device confirm-step check is deferred to the next FRESH onboarding (re-triggering it requires clearing state, since the current account is already onboarded) — covered by the test-OTP CI sweep, or a deliberate re-onboard.
+
+**Encoded in code:** `src/screens/CohortOnboardingScreen.tsx` (step 5 + `confirmAndSubmit` + gender handlers advance), `maestro/flows/{signin_onboarding,crisis_988}.yaml`.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

@@ -35,6 +35,7 @@ import { hapticSelection } from "@/feedback/haptics";
 import type { RootStackParamList } from "@/navigation/types";
 import { LikertInput } from "@/onboarding/inputs";
 import { OneItemScreen } from "@/onboarding/OneItemScreen";
+import { sexAtBirthLabel } from "@/screens/demographicsDisplay";
 import {
   type CohortPayload,
   decideCohortSubmission,
@@ -78,7 +79,10 @@ const GENDER_OPTIONS: ReadonlyArray<{
   { value: 6, label: "Prefer not to say", gid: "prefer-not-to-say", testID: "cohort_step4_option_prefer_not_to_say" },
 ];
 
-const TOTAL_STEPS = 4;
+// 5 steps: birth year → sex → Medicare → gender → CONFIRM (D33). The confirm
+// step makes the user acknowledge that year-of-birth + sex-at-birth are
+// permanent (clinical interpretation keys) before the profile is written.
+const TOTAL_STEPS = 5;
 
 export function CohortOnboardingScreen(): React.ReactElement {
   const api = useApiClient();
@@ -108,6 +112,10 @@ export function CohortOnboardingScreen(): React.ReactElement {
     sexLikert != null ? SEX_TO_API[sexLikert] ?? null : null;
   const isOnMedicare: boolean | null =
     medicareLikert == null ? null : medicareLikert === 1;
+  const genderIdentity: GenderIdentity | null =
+    genderLikert == null
+      ? null
+      : (GENDER_OPTIONS.find((g) => g.value === genderLikert)?.gid ?? null);
 
   // Submit the cohort with an EXPLICIT payload. Takes the payload as an
   // arg (not from closure) so the auto-advance path can pass the just-
@@ -175,46 +183,35 @@ export function CohortOnboardingScreen(): React.ReactElement {
   // Deps include every captured value so the eslint rule passes naturally
   // (no suppression — that's exactly the silence that hid the original
   // stale-closure dead-end).
-  const handleGenderChange = React.useCallback(
-    (v: number) => {
-      hapticSelection();
-      setGenderLikert(v);
-      if (submitting) return;
-      const newGid =
-        GENDER_OPTIONS.find((g) => g.value === v)?.gid ?? null;
-      const decision = decideCohortSubmission({
-        birthYear,
-        sexAtBirth,
-        isOnMedicare,
-        genderIdentity: newGid,
-        currentYear,
-      });
-      if (decision.kind === "missing") {
-        setErrorMsg(missingCohortFieldMessage(decision.field));
-        return;
-      }
-      void submitCohort(decision.payload);
-    },
-    [
-      birthYear,
-      currentYear,
-      isOnMedicare,
-      sexAtBirth,
-      submitCohort,
-      submitting,
-    ],
-  );
+  // Gender selection (and Skip) advance to the CONFIRM step (D33) — they no
+  // longer submit. The actual write happens at confirmAndSubmit after the user
+  // acknowledges that year-of-birth + sex-at-birth are permanent. Only stable
+  // setState dispatchers are captured, so `[]` deps are correct.
+  const handleGenderChange = React.useCallback((v: number) => {
+    hapticSelection();
+    setGenderLikert(v);
+    setErrorMsg(null);
+    setStepIndex((i) => Math.min(i + 1, TOTAL_STEPS));
+  }, []);
 
-  // Skip the gender question. Submits with gender_identity=null →
-  // buildCohortPayload omits the key → server PATCH leaves the column
-  // untouched. Distinct from "Prefer not to say", which IS stored.
+  // Skip the gender question → gender_identity stays null (buildCohortPayload
+  // omits the key; distinct from "Prefer not to say", which IS stored). Still
+  // routes through the confirm step.
   const handleSkipGender = React.useCallback(() => {
+    setGenderLikert(null);
+    setErrorMsg(null);
+    setStepIndex((i) => Math.min(i + 1, TOTAL_STEPS));
+  }, []);
+
+  // Final step — the user has acknowledged permanence; build the decision from
+  // live state and write the profile. Takes state via deps (closure-safe).
+  const confirmAndSubmit = React.useCallback(() => {
     if (submitting) return;
     const decision = decideCohortSubmission({
       birthYear,
       sexAtBirth,
       isOnMedicare,
-      genderIdentity: null,
+      genderIdentity,
       currentYear,
     });
     if (decision.kind === "missing") {
@@ -222,7 +219,15 @@ export function CohortOnboardingScreen(): React.ReactElement {
       return;
     }
     void submitCohort(decision.payload);
-  }, [birthYear, currentYear, isOnMedicare, sexAtBirth, submitCohort, submitting]);
+  }, [
+    birthYear,
+    currentYear,
+    genderIdentity,
+    isOnMedicare,
+    sexAtBirth,
+    submitCohort,
+    submitting,
+  ]);
 
   const goBack = React.useCallback(() => {
     setErrorMsg(null);
@@ -264,6 +269,31 @@ export function CohortOnboardingScreen(): React.ReactElement {
           fontSize: theme.typography.sizes.sm,
           color: redesign.ink2,
           ...fontStyle("body", 500, fontsLoaded),
+        },
+        // Confirm-step summary of the permanent fields (D33).
+        confirmCard: {
+          backgroundColor: redesign.surface,
+          borderColor: redesign.line,
+          borderWidth: 1,
+          borderRadius: theme.radii.md,
+          padding: theme.spacing.md,
+          gap: theme.spacing.sm,
+        },
+        confirmRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: theme.spacing.md,
+        },
+        confirmLabel: {
+          fontSize: theme.typography.sizes.sm,
+          color: redesign.ink3,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        confirmValue: {
+          fontSize: theme.typography.sizes.lg,
+          color: redesign.ink,
+          ...fontStyle("body", 600, fontsLoaded),
         },
       }),
     [theme, redesign, fontsLoaded],
@@ -357,7 +387,6 @@ export function CohortOnboardingScreen(): React.ReactElement {
       );
 
     case 4:
-    default:
       return (
         <OneItemScreen
           stepIndex={4}
@@ -377,6 +406,40 @@ export function CohortOnboardingScreen(): React.ReactElement {
             onChange={handleGenderChange}
             accessibilityLabel="Gender identity"
           />
+        </OneItemScreen>
+      );
+
+    case 5:
+    default:
+      // Confirm — year of birth + sex at birth are permanent (D33). The user
+      // must acknowledge before the profile is written. Gender + Medicare stay
+      // editable in Settings, so they're not part of this gate.
+      return (
+        <OneItemScreen
+          stepIndex={5}
+          totalSteps={TOTAL_STEPS}
+          sectionLabel="About you"
+          question="Please confirm"
+          helperText="Your year of birth and sex at birth guide how we interpret your results, so they can’t be changed after this step — changing them later means starting over and losing your data. Gender identity and Medicare can be updated anytime in Settings."
+          canContinue={!submitting}
+          onContinue={confirmAndSubmit}
+          onBack={goBack}
+          errorMessage={errorMsg}
+        >
+          <View testID="cohort_confirm_summary" style={styles.confirmCard}>
+            <View style={styles.confirmRow}>
+              <Text style={styles.confirmLabel}>Year of birth</Text>
+              <Text testID="cohort_confirm_birth_year" style={styles.confirmValue}>
+                {birthYear ?? "—"}
+              </Text>
+            </View>
+            <View style={styles.confirmRow}>
+              <Text style={styles.confirmLabel}>Sex at birth</Text>
+              <Text testID="cohort_confirm_sex" style={styles.confirmValue}>
+                {sexAtBirthLabel(sexAtBirth)}
+              </Text>
+            </View>
+          </View>
         </OneItemScreen>
       );
   }

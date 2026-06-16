@@ -243,6 +243,12 @@ store)*.
   birth are permanent** (locked + lock icon — clinical interpretation keys,
   confirmed permanent at sign-up [D33]). tsc/eslint/1096 tests; on-device
   verified (gender round-trips; locked fields stay locked).
+- 2026-06-16 — **Onboarding confirm step** (D33): cohort onboarding now ends
+  with a step-5 confirmation of year-of-birth + sex-at-birth, acknowledging
+  they can't be changed (the consent gate that justifies locking them in
+  Settings). 4→5 steps; gender/Skip advance to confirm; confirmAndSubmit writes
+  the profile. Maestro signin_onboarding/crisis_988 updated. tsc/eslint/1096
+  tests; on-device confirm-step check deferred to the next fresh onboarding.
 - 2026-06-16 — **E2E (Maestro) on a real signed-in session**: onboarding flow +
   the load-bearing 988 crisis surface (positive PHQ-9 item 9 → modal; item 9 = 0
   → no modal) + repeat check-in + consolidation drill-downs (instruments AND

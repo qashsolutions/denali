@@ -79,6 +79,13 @@ appId: health.denali.mobile
 - tapOn:
     id: "cohort_step4_option_male"
 
+# Step 5: confirm — year of birth + sex at birth are permanent (D33). The
+# Continue button writes the profile and moves on to Intake.
+- assertVisible:
+    id: "cohort_confirm_summary"
+- tapOn:
+    id: "oneitem_continue_button"
+
 # ── Intake — every section optional; finish straight through ────────────
 - assertVisible:
     id: "intake_finish_button"

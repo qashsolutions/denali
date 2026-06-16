@@ -72,6 +72,12 @@ appId: health.denali.mobile
 - tapOn:
     id: "cohort_step4_option_male"
 
+# Step 5: confirm permanent details (D33) → Continue writes the profile.
+- assertVisible:
+    id: "cohort_confirm_summary"
+- tapOn:
+    id: "oneitem_continue_button"
+
 # ── Intake — finish straight through ────────────────────────────────────
 - assertVisible:
     id: "intake_finish_button"
