@@ -8,11 +8,32 @@ import { describe, expect, it } from "vitest";
 import {
   formatBmiTrendDelta,
   formatLastCheckins,
+  formatMarkerTrendDelta,
   formatTrendAccessibilityLabel,
   formatTrendDelta,
   TREND_EMPTY_STATE,
   TREND_STRINGS_PROVENANCE,
 } from "../trendStrings";
+
+describe("generic marker delta (D28)", () => {
+  it("moved fills the approved template with the marker name + value labels", () => {
+    expect(
+      formatMarkerTrendDelta("Weight", "78 kg", "80 kg", "June 13, 2026"),
+    ).toBe("Your Weight moved from 78 kg to 80 kg since June 13, 2026.");
+  });
+
+  it("equal display labels read as unchanged (matches what the card shows)", () => {
+    expect(
+      formatMarkerTrendDelta("Weight", "80 kg", "80 kg", "June 13, 2026"),
+    ).toBe("Your Weight is unchanged since June 13, 2026.");
+  });
+
+  it("is factual/navigational — no advice or comparison verbs", () => {
+    const s = formatMarkerTrendDelta("HDL cholesterol", "50 mg/dL", "58 mg/dL", "May 1, 2026");
+    expect(s).not.toMatch(/should|recommend|get tested|normal|high|low|risk/i);
+    expect(s).toContain("HDL cholesterol");
+  });
+});
 
 describe("trend strings — versioned templates", () => {
   it("n=1 quiet state copy is pinned", () => {

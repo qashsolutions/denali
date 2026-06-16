@@ -101,6 +101,43 @@ export function formatBmiTrendDelta(
     .replace("{{date}}", previousDateLabel);
 }
 
+// ─── Generic marker delta strings ─────────────────────────────────────────────
+//
+// For raw markers (weight, waist, labs) on the per-marker history screen.
+// Same versioning rules: factual/navigational, no interpretation verb, no
+// population comparison, no advice phrasing. The from/to are PRE-FORMATTED
+// value+unit labels ("78 kg") built by the caller via formatMarkerValue — this
+// only words the sentence. "Unchanged" is decided by the DISPLAYED labels being
+// equal, so the copy always matches what the user sees on the card.
+
+const MARKER_DELTA_MOVED =
+  "Your {{marker}} moved from {{from}} to {{to}} since {{date}}.";
+const MARKER_DELTA_UNCHANGED = "Your {{marker}} is unchanged since {{date}}.";
+
+/**
+ * Fill the generic marker delta template. `markerName` is the plain-language
+ * name as shown on the card (e.g. "Weight"); `fromLabel`/`toLabel` are the
+ * already-formatted value+unit strings (e.g. "78 kg"). Comparison semantics
+ * (latest vs immediately previous reading, full history) live in the caller.
+ */
+export function formatMarkerTrendDelta(
+  markerName: string,
+  fromLabel: string,
+  toLabel: string,
+  previousDateLabel: string,
+): string {
+  if (fromLabel === toLabel) {
+    return MARKER_DELTA_UNCHANGED.replace("{{marker}}", markerName).replace(
+      "{{date}}",
+      previousDateLabel,
+    );
+  }
+  return MARKER_DELTA_MOVED.replace("{{marker}}", markerName)
+    .replace("{{from}}", fromLabel)
+    .replace("{{to}}", toLabel)
+    .replace("{{date}}", previousDateLabel);
+}
+
 // ─── Accessibility ────────────────────────────────────────────────────────────
 
 const A11Y_TEMPLATE =

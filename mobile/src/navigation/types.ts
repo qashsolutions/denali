@@ -53,6 +53,14 @@ export type RootStackParamList = {
    */
   DomainDetail: { domainId: DomainId };
   /**
+   * Phase-3 (D28): per-MARKER history drill-down reached by tapping a
+   * "Latest readings" card on the Health-markers DomainDetail. `code` is the
+   * LOINC code of the marker. Renders that marker's trend chart + all
+   * readings; this is where the full reading history (collapsed to latest on
+   * the domain screen, D27) is surfaced.
+   */
+  MarkerDetail: { code: string };
+  /**
    * Manual marker entry ("Log a value"). Optional `markerKey` pre-selects a
    * marker; absent → the marker picker. Reached from the "+ Add" sheet and
    * the empty Health-markers detail screen.

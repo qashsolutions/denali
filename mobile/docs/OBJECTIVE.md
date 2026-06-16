@@ -214,6 +214,21 @@ store)*.
   O4 (graphical longitudinal view) into the markers domain. acceptance-auditor
   MAY SHIP; on-device verified (BMI line inside plot; Mood chart pixel-identical);
   1044 tests.
+- 2026-06-16 — **Per-marker history drill-down** (D28): tapping a "Latest
+  readings" card opens a per-marker screen (MarkerDetail) with that marker's
+  trend chart + every reading (date/value/source) — surfacing the history D27
+  collapsed AND giving every marker a chart. Raw markers (weight, waist) chart
+  BAND-LESS (plain line + value gridlines, no invented severity); banded markers
+  reuse the table bands. TrendChartSvg gained an optional yRefs prop (banded
+  charts omit it → byte-identical). Advances O4. On-device verified; 1071 tests.
+- 2026-06-16 — **BMI class-III split** (D29): the single "Obesity range" band
+  (≥30) split into Obesity (30.0–39.9) + Severe obesity (≥40.0) per WHO TRS 894
+  classes — WHO-accurate, flags the highest-risk threshold. Provisional, ‡,
+  clinical-boundary reviewed. On-device verified (5-band chart renders clean).
+- 2026-06-16 — **Flaky test fixed**: `backup/recoveryKey.test.ts` was
+  non-deterministic (random mnemonic + last-word swap had a ~0.34% valid-checksum
+  collision). Pinned to the official BIP39 all-0xff vector with a deterministic
+  swap; production crypto verified correct + untouched. Suite is now clean.
 - 2026-06-16 — **Markers detail consolidation** (D27): the Health-markers detail
   now shows ONE card per marker (the latest reading) under a "Latest readings"
   label instead of a card-per-entry wall — the trend chart carries the full

@@ -577,6 +577,37 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D28 — Per-marker history drill-down + generic/band-less marker chart (2026-06-16)
+
+**Decision:** Follow-up to D27 (latest-only marker cards). D27 hid the older readings of non-charted markers; operator approved a drill-down (chosen over inline-expander / stacked-charts via a previewed decision) where tapping a "Latest readings" card opens a per-marker history screen. This both gives every marker its own chart (the open "weight chart" follow-up) AND surfaces the hidden history (the open "show all readings" follow-up) in one robust capability.
+
+- **Generic per-marker chart, band-aware.** `MarkerTrendChart` plots one LOINC code's stored readings, reusing the shared `TrendChartSvg`. Bands come from `INTERPRETATION_TABLE_V1.biomarkers[code]` when present (BMI, bone-density); otherwise the chart is **band-less** — a plain factual line with value gridlines, the clinically honest default for a raw value (weight, waist) that has **no validated cutoffs** (never an invented band).
+- **Band-less support is additive + regression-safe.** `TrendChartSvg` gained an OPTIONAL `yRefs` prop (dashed value gridlines + left labels). Banded charts (instruments, BMI) omit it → `(yRefs ?? []).map` is empty → their render is **byte-identical** (re-verified on-device: Mood chart pixel-identical). `layoutBandScores([])` already returns `[]`, so band-less needed no band-path change.
+- **Axis math is a pure, pinned helper.** `deriveMarkerChartModel` (`markerChartModel.ts`, unit-tested) computes the data-aware axis (the BMI "line outside the chart" bug class, D26): band-less → data extent; banded → union with the bands' finite bounds so every band shows and an out-of-band value is never clipped. `yRefValues` = data min/max for band-less, null for banded.
+- **Drill-down navigation.** New `MarkerDetail: { code }` route. `TimelineCardView`/`SingleRowCard` gained an OPTIONAL `onPress` — when set the whole card navigates with a "View history ›" cue instead of the inline expander; absent → byte-identical expand behavior (every existing caller unchanged). `DomainDetailScreen` passes it ONLY for `health_markers` single cards.
+- **MarkerDetailScreen.** Header + range control + `MarkerTrendChart` + "All readings" (every reading: date + value+unit via `formatMarkerValue` + source) + standing disclaimer/‡. Read-only (loads via DAL, filters to user + code); storage/export untouched. This is where D27's collapsed history lives.
+- **Clinical strings versioned.** New `formatMarkerTrendDelta` in `trendStrings.ts` — factual ("Your Weight moved from 36.3 kg to 80 kg since …"), no advice/comparison verb, "unchanged" decided by the displayed labels matching the card.
+
+**Verification:** tsc 0, eslint 0 errors, 1071 tests (markerChartModel + generic-delta pins). On-device (clean relaunch, fresh bundle): tap Weight → band-less weight chart (line inside plot, 80/36.3 kg gridlines) + "ALL READINGS" (both entries dated+sourced); Mood instrument chart pixel-identical. Adversarial workflow (clinical-boundary / acceptance / privacy / regression) run on the diff.
+
+**Encoded in code:** `src/screens/MarkerDetailScreen.tsx`, `src/screens/timeline/trend/{MarkerTrendChart,markerChartModel}.ts(x)` (+ tests), `src/screens/timeline/trend/TrendChart.tsx` (`yRefs`), `src/screens/timeline/TimelineCardView.tsx` (`onPress`), `src/screens/DomainDetailScreen.tsx`, `src/navigation/{types,RootNavigator}.tsx`, `src/screens/timeline/interpretation/trendStrings.ts`.
+
+---
+
+## D29 — BMI obesity split: WHO class III (severe obesity ≥40) (2026-06-16)
+
+**Decision:** The single "Obesity range" band (≥30) collapsed WHO's three obesity classes into one. WHO TRS 894 defines obese class I (30.0–34.9), II (35.0–39.9), **III ≥40.0**. Split the band into **Obesity (30.0–39.9)** + new **Severe obesity (≥40.0)** so the chart is WHO-accurate and flags the Class-III / highest-risk threshold instead of hiding it inside "obesity."
+
+- `tableV1.ts`: `obesity` band `maxScore` → 39.9 (explanation "30.0 to 39.9 … classes I and II"); new `severe-obesity` band ≥40.0 (pill "Severe obesity", explanation "40.0 or higher … class III"), `provisional: true`. `BMI_SOURCE` updated to cite the class breakdown. New `"severe-obesity"` `BandId`.
+- `pill.ts`: `severe-obesity` → `"watch"` tint, consistent with the documented "WHO out-of-range bands stay calm (watch), reviewer may escalate via per-band `tint` before sign-off" rule.
+- **No ‡ cleared.** Every BMI band stays `provisional: true`; `lastClinicallyReviewedBy` still null. CC never clears the ‡ (mobile/CLAUDE.md). Bands remain contiguous for 1-dp values (39.9 / 40.0).
+
+**Verification:** tsc 0 (exhaustive `BandId`/pill switch), 1071 tests incl. lookup pins (BMI 35→obesity, 42→severe-obesity, boundary 39.9/40.0, provisional + WHO pill, age/sex-uniform). On-device: BMI chart renders the 5-band set cleanly (obesity 30–39.9; severe-obesity a thin top sliver when no data approaches 40). clinical-boundary-reviewer run on the diff.
+
+**Encoded in code:** `src/screens/timeline/interpretation/tableV1.ts` (BMI bands + `BandId`), `src/screens/timeline/pill.ts` (tint).
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

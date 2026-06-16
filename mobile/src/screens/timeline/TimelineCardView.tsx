@@ -26,6 +26,7 @@
 
 import {
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   type LucideIcon,
 } from "lucide-react-native";
@@ -299,6 +300,13 @@ interface SingleCardProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   showDisclaimer: boolean;
+  /**
+   * When provided, the WHOLE card navigates (drill-down) on press and the
+   * footer shows a "View history ›" affordance instead of the inline
+   * "Show details" expander — the destination screen carries the detail.
+   * Absent (default) → the card keeps its byte-identical expand behavior.
+   */
+  onPress?: () => void;
 }
 
 function SingleRowCard({
@@ -307,6 +315,7 @@ function SingleRowCard({
   isExpanded,
   onToggleExpand,
   showDisclaimer,
+  onPress,
 }: SingleCardProps): React.ReactElement {
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
@@ -325,8 +334,18 @@ function SingleRowCard({
         : formatMarkerValue(row.code, row.value_num)
       : row.value_text;
 
+  const navigable = onPress != null;
+  const Container: React.ElementType = navigable ? Pressable : View;
+  const containerProps = navigable
+    ? {
+        onPress,
+        accessibilityRole: "button" as const,
+        accessibilityLabel: `${display.name}${value ? `, ${value}` : ""}. View history.`,
+      }
+    : {};
+
   return (
-    <View testID="timeline_card" style={styles.card}>
+    <Container testID="timeline_card" style={styles.card} {...containerProps}>
       <View style={styles.headerRow}>
         <View style={styles.iconChip}>
           <Icon color={redesign.teal} size={18} />
@@ -352,25 +371,34 @@ function SingleRowCard({
             {getCategoryName(row.category)}
           </Text>
         </View>
-        <Pressable
-          testID="timeline_card_details_toggle"
-          onPress={onToggleExpand}
-          accessibilityRole="button"
-          accessibilityLabel={isExpanded ? "Hide details" : "Show details"}
-          style={styles.detailsButton}
-        >
-          <Text style={styles.detailsText}>
-            {isExpanded ? "Hide details" : "Show details"}
-          </Text>
-          {isExpanded ? (
-            <ChevronUp color={redesign.tealDeep} size={16} />
-          ) : (
-            <ChevronDown color={redesign.tealDeep} size={16} />
-          )}
-        </Pressable>
+        {navigable ? (
+          // Drill-down affordance — the card itself is the touch target, so
+          // this is a non-interactive visual cue (no nested Pressable).
+          <View style={styles.detailsButton} pointerEvents="none">
+            <Text style={styles.detailsText}>View history</Text>
+            <ChevronRight color={redesign.tealDeep} size={16} />
+          </View>
+        ) : (
+          <Pressable
+            testID="timeline_card_details_toggle"
+            onPress={onToggleExpand}
+            accessibilityRole="button"
+            accessibilityLabel={isExpanded ? "Hide details" : "Show details"}
+            style={styles.detailsButton}
+          >
+            <Text style={styles.detailsText}>
+              {isExpanded ? "Hide details" : "Show details"}
+            </Text>
+            {isExpanded ? (
+              <ChevronUp color={redesign.tealDeep} size={16} />
+            ) : (
+              <ChevronDown color={redesign.tealDeep} size={16} />
+            )}
+          </Pressable>
+        )}
       </View>
 
-      {isExpanded ? (
+      {!navigable && isExpanded ? (
         <View style={styles.detailsBlock}>
           <Text style={styles.provenance}>
             Source: {getSourceName(row.source)}
@@ -393,7 +421,7 @@ function SingleRowCard({
           </Text>
         </View>
       ) : null}
-    </View>
+    </Container>
   );
 }
 
@@ -415,6 +443,12 @@ export interface TimelineCardViewProps {
    * default — the every-clinical-surface disclaimer rule holds either way.
    */
   showDisclaimer?: boolean;
+  /**
+   * Single-row only: when provided, the card navigates (drill-down) on press
+   * with a "View history ›" cue instead of the inline expander. Ignored for
+   * instrument-session cards. Absent → byte-identical expand behavior.
+   */
+  onPress?: () => void;
 }
 
 export function TimelineCardView({
@@ -424,6 +458,7 @@ export function TimelineCardView({
   formattedDate,
   userSexAtBirth,
   showDisclaimer = true,
+  onPress,
 }: TimelineCardViewProps): React.ReactElement {
   if (card.kind === "instrument-session") {
     return (
@@ -446,6 +481,7 @@ export function TimelineCardView({
       isExpanded={isExpanded}
       onToggleExpand={onToggleExpand}
       showDisclaimer={showDisclaimer}
+      onPress={onPress}
     />
   );
 }

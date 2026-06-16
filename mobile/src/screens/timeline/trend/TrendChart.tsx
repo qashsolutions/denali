@@ -217,6 +217,14 @@ export interface TrendChartSvgProps {
   bands: ReadonlyArray<InterpretationBand>;
   redesign: ReturnType<typeof useTheme>["redesign"];
   fontsLoaded: boolean;
+  /**
+   * Optional Y-axis value references — a faint dashed gridline + left-edge
+   * value label at each given score. Used by BAND-LESS marker charts (weight,
+   * raw labs) to anchor the line to real values, since they have no severity
+   * bands to convey position. Banded charts (instruments, BMI) OMIT this →
+   * the render path below is empty and those charts are byte-identical.
+   */
+  yRefs?: ReadonlyArray<{ value: number; label: string }>;
 }
 
 export function TrendChartSvg({
@@ -226,6 +234,7 @@ export function TrendChartSvg({
   scoreRange,
   redesign,
   fontsLoaded,
+  yRefs,
 }: TrendChartSvgProps): React.ReactElement {
   // Y-axis: HALF-STEP-PADDED domain (lo = min-0.5, hi = max+0.5) — the exact
   // padding the instrument chart has always used, so integer bands tile and
@@ -315,6 +324,32 @@ export function TrendChartSvg({
           </SvgText>
         ) : null,
       )}
+      {/* Y-axis value references (band-less marker charts only) — dashed
+          gridline at each value. Behind the score line. */}
+      {(yRefs ?? []).map((ref) => (
+        <Line
+          key={`yref-line-${ref.value}`}
+          x1={0}
+          y1={yOf(ref.value)}
+          x2={width}
+          y2={yOf(ref.value)}
+          stroke={redesign.line}
+          strokeWidth={1}
+          strokeDasharray="3 3"
+        />
+      ))}
+      {(yRefs ?? []).map((ref) => (
+        <SvgText
+          key={`yref-label-${ref.value}`}
+          x={6}
+          y={yOf(ref.value) - 4}
+          fontSize={9}
+          fill={redesign.ink3}
+          {...(labelFont ? { fontFamily: labelFont } : {})}
+        >
+          {ref.label}
+        </SvgText>
+      ))}
       {/* Score line + dots; latest dot solid teal (mockup treatment). */}
       <Polyline
         points={svgPoints}

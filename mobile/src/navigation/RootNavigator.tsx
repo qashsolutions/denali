@@ -24,6 +24,7 @@ import { InstrumentsScreen } from "@/screens/InstrumentsScreen";
 import { IntakeOnboardingScreen } from "@/screens/IntakeOnboardingScreen";
 import { LockScreen } from "@/screens/LockScreen";
 import { LogMarkerScreen } from "@/screens/markers/LogMarkerScreen";
+import { MarkerDetailScreen } from "@/screens/MarkerDetailScreen";
 import { RestoreBackupScreen } from "@/screens/RestoreBackupScreen";
 import { SignInScreen } from "@/screens/SignInScreen";
 import { TimelineScreen } from "@/screens/TimelineScreen";
@@ -175,6 +176,8 @@ export function RootNavigator() {
        * headerless. Chart lands in increment 2.
        */}
       <Stack.Screen name="DomainDetail" component={DomainDetailScreen} />
+      {/* D28: per-marker history drill-down (tap a Latest-readings card). */}
+      <Stack.Screen name="MarkerDetail" component={MarkerDetailScreen} />
       <Stack.Screen name="LogMarker" component={LogMarkerScreen} />
       {/*
        * The legacy chronological feed remains reachable via a footer entry

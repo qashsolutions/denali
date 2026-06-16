@@ -586,6 +586,17 @@ export function DomainDetailScreen(): React.ReactElement {
       );
     }
     const id = cardId(item.card);
+    // On the markers screen, a single-row card drills down to the per-marker
+    // history (chart + all readings) instead of expanding inline (D28). The
+    // full reading history collapsed away by D27 lives on that screen.
+    const markerCode =
+      domainId === "health_markers" && item.card.kind === "single"
+        ? item.card.row.code
+        : null;
+    const markerDrillDown =
+      markerCode != null
+        ? () => navigation.navigate("MarkerDetail", { code: markerCode })
+        : undefined;
     return (
       <TimelineCardView
         card={item.card}
@@ -597,6 +608,7 @@ export function DomainDetailScreen(): React.ReactElement {
         // bottom; suppress the per-card copy of the SAME two lines
         // (2026-06-09 operator review — no double display).
         showDisclaimer={false}
+        onPress={markerDrillDown}
       />
     );
   };
