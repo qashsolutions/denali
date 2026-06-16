@@ -236,13 +236,13 @@ store)*.
   Chart computed from ALL sessions (charts PHQ-9 even when the latest is PHQ-2).
   Advances O4. tsc/eslint/1076 tests; on-device + Maestro (consolidation.yaml,
   new) verified the full drill-down on instruments AND markers.
-- 2026-06-16 — **Settings "Your details"** (D31): read-only section showing
-  the profile demographics (year of birth + derived age, sex at birth, gender
-  identity, Medicare), greyed — they were missing from Settings. Display-only;
-  storage untouched. Confirmed editing is SAFE (local upsertProfile, no sign-out,
-  no data loss) — in-place editing is a deferred follow-up with a clinical guard
-  for sex_at_birth/birth_year (they re-interpret existing results). tsc/eslint/
-  1095 tests; on-device verified.
+- 2026-06-16 — **Settings "Your details"** (D31/D32): a new section showing the
+  profile demographics. Year of birth + derived age, sex at birth, gender
+  identity, Medicare. **Gender identity + Medicare are editable in-place**
+  (local upsertProfile, no sign-out, no data loss); **year of birth + sex at
+  birth are permanent** (locked + lock icon — clinical interpretation keys,
+  confirmed permanent at sign-up [D33]). tsc/eslint/1096 tests; on-device
+  verified (gender round-trips; locked fields stay locked).
 - 2026-06-16 — **E2E (Maestro) on a real signed-in session**: onboarding flow +
   the load-bearing 988 crisis surface (positive PHQ-9 item 9 → modal; item 9 = 0
   → no modal) + repeat check-in + consolidation drill-downs (instruments AND

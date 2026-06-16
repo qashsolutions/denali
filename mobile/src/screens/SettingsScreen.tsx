@@ -12,7 +12,7 @@
 import { CommonActions, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React from "react";
-import { Lock } from "lucide-react-native";
+import { Check, ChevronDown, ChevronUp, Lock } from "lucide-react-native";
 import {
   ActivityIndicator,
   Alert,
@@ -31,11 +31,12 @@ import { isBiometricAvailable, useApiClient } from "@/auth";
 import { BackupSettingsCard } from "@/backup/ui/BackupSettingsCard";
 import { PressableScale } from "@/components/PressableScale";
 import { Skeleton } from "@/components/Skeleton";
-import type { ProfileRow } from "@/contracts";
+import type { GenderIdentity, ProfileRow } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import { hapticSelection } from "@/feedback/haptics";
 import {
   birthYearLabel,
+  GENDER_IDENTITY_VALUES,
   genderIdentityLabel,
   medicareLabel,
   sexAtBirthLabel,
@@ -122,6 +123,36 @@ export function SettingsScreen(): React.ReactElement {
   // the LOCAL profile (set during onboarding); never written here.
   const dal = useDal();
   const [profile, setProfile] = React.useState<ProfileRow | null>(null);
+  // Which editable demographic row is expanded (gender / Medicare only —
+  // year-of-birth + sex-at-birth are permanent, set at sign-up, D32).
+  const [editingField, setEditingField] = React.useState<
+    "gender" | "medicare" | null
+  >(null);
+
+  // Persist an editable demographic locally (no sign-out; the encrypted DB
+  // keeps everything). upsertProfile merges by id, so other fields are kept.
+  const onEditDemographic = React.useCallback(
+    async (
+      patch:
+        | { gender_identity: GenderIdentity }
+        | { is_on_medicare: boolean },
+    ) => {
+      if (!dal || !profile) return;
+      setEditingField(null);
+      hapticSelection();
+      try {
+        const updated = await dal.upsertProfile({
+          id: profile.id,
+          email: profile.email,
+          ...patch,
+        });
+        setProfile(updated);
+      } catch (err) {
+        console.warn("[Settings] demographic update failed", err);
+      }
+    },
+    [dal, profile],
+  );
   // App-lock status is read-only: it reflects whether the DEVICE has a
   // biometric/credential enrolled, which is what the always-on launch gate
   // (biometricGate.ts, decision D15) keys off. null = still checking; we
@@ -284,8 +315,53 @@ export function SettingsScreen(): React.ReactElement {
         detailNote: {
           color: redesign.ink3,
           fontSize: theme.typography.sizes.xs,
+          lineHeight: theme.typography.sizes.xs * 1.45,
           marginTop: theme.spacing.xs,
           ...fontStyle("body", 400, fontsLoaded),
+        },
+        // Label + lock icon (permanent fields).
+        detailLabelWrap: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: theme.spacing.xs,
+        },
+        // Editable value + chevron on the right.
+        detailEditRight: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: theme.spacing.xs,
+          flexShrink: 1,
+        },
+        // Editable values read in full ink (look active vs greyed read-only).
+        detailValueEditable: {
+          color: redesign.ink,
+          fontSize: theme.typography.sizes.base,
+          flexShrink: 1,
+          textAlign: "right",
+          ...fontStyle("body", 500, fontsLoaded),
+        },
+        // Inline picker shown when an editable row is expanded.
+        optionList: {
+          borderTopColor: redesign.line,
+          borderTopWidth: 1,
+          marginTop: theme.spacing.xs,
+          paddingTop: theme.spacing.xs,
+        },
+        optionRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingVertical: theme.spacing.sm,
+          minHeight: 44,
+        },
+        optionLabel: {
+          color: redesign.ink2,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        optionLabelSelected: {
+          color: redesign.ink,
+          ...fontStyle("body", 600, fontsLoaded),
         },
         toggleRow: cardSurface,
         remindersRow: cardSurface,
@@ -423,39 +499,136 @@ export function SettingsScreen(): React.ReactElement {
         <Text style={styles.accountValue}>{user?.email ?? "Unknown"}</Text>
       </View>
 
-      {/* Read-only demographics from sign-up (D31). Greyed because they're
-          set during onboarding; values are display-only and guide results. */}
+      {/* "Your details" (D31/D32). Year-of-birth + sex-at-birth are PERMANENT
+          (clinical interpretation keys, confirmed at sign-up) → locked/greyed.
+          Gender identity + Medicare are editable in-place (local upsertProfile,
+          no sign-out, no data loss). */}
       <Text style={styles.sectionLabel}>Your details</Text>
-      <View
-        testID="settings_your_details"
-        accessibilityLabel="Your details — set during sign-up, read-only"
-        style={styles.accountCard}
-      >
+      <View testID="settings_your_details" style={styles.accountCard}>
+        {/* Permanent — locked. */}
         <View style={styles.detailRow}>
-          <Text style={styles.accountLabel}>Year of birth</Text>
+          <View style={styles.detailLabelWrap}>
+            <Text style={styles.accountLabel}>Year of birth</Text>
+            <Lock color={redesign.ink3} size={12} />
+          </View>
           <Text style={styles.detailValue}>
             {birthYearLabel(profile?.birth_year ?? null, currentYear)}
           </Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={styles.accountLabel}>Sex at birth</Text>
+          <View style={styles.detailLabelWrap}>
+            <Text style={styles.accountLabel}>Sex at birth</Text>
+            <Lock color={redesign.ink3} size={12} />
+          </View>
           <Text style={styles.detailValue}>
             {sexAtBirthLabel(profile?.sex_at_birth ?? null)}
           </Text>
         </View>
-        <View style={styles.detailRow}>
+
+        {/* Editable — gender identity (display-only field). */}
+        <PressableScale
+          testID="settings_edit_gender"
+          accessibilityRole="button"
+          accessibilityLabel={`Gender identity: ${genderIdentityLabel(profile?.gender_identity ?? null)}. Tap to change.`}
+          onPress={() =>
+            setEditingField((f) => (f === "gender" ? null : "gender"))
+          }
+          style={styles.detailRow}
+        >
           <Text style={styles.accountLabel}>Gender identity</Text>
-          <Text style={styles.detailValue}>
-            {genderIdentityLabel(profile?.gender_identity ?? null)}
-          </Text>
-        </View>
-        <View style={styles.detailRow}>
+          <View style={styles.detailEditRight}>
+            <Text style={styles.detailValueEditable}>
+              {genderIdentityLabel(profile?.gender_identity ?? null)}
+            </Text>
+            {editingField === "gender" ? (
+              <ChevronUp color={redesign.tealDeep} size={16} />
+            ) : (
+              <ChevronDown color={redesign.tealDeep} size={16} />
+            )}
+          </View>
+        </PressableScale>
+        {editingField === "gender" ? (
+          <View style={styles.optionList}>
+            {GENDER_IDENTITY_VALUES.map((g) => {
+              const selected = profile?.gender_identity === g;
+              return (
+                <PressableScale
+                  key={g}
+                  testID={`settings_gender_option_${g}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={genderIdentityLabel(g)}
+                  onPress={() => onEditDemographic({ gender_identity: g })}
+                  style={styles.optionRow}
+                >
+                  <Text
+                    style={[
+                      styles.optionLabel,
+                      selected && styles.optionLabelSelected,
+                    ]}
+                  >
+                    {genderIdentityLabel(g)}
+                  </Text>
+                  {selected ? <Check color={redesign.teal} size={16} /> : null}
+                </PressableScale>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* Editable — Medicare enrollment (cohort gating, not a clinical key). */}
+        <PressableScale
+          testID="settings_edit_medicare"
+          accessibilityRole="button"
+          accessibilityLabel={`Medicare: ${medicareLabel(profile?.is_on_medicare ?? null)}. Tap to change.`}
+          onPress={() =>
+            setEditingField((f) => (f === "medicare" ? null : "medicare"))
+          }
+          style={styles.detailRow}
+        >
           <Text style={styles.accountLabel}>Medicare</Text>
-          <Text style={styles.detailValue}>
-            {medicareLabel(profile?.is_on_medicare ?? null)}
-          </Text>
-        </View>
-        <Text style={styles.detailNote}>Set during sign-up.</Text>
+          <View style={styles.detailEditRight}>
+            <Text style={styles.detailValueEditable}>
+              {medicareLabel(profile?.is_on_medicare ?? null)}
+            </Text>
+            {editingField === "medicare" ? (
+              <ChevronUp color={redesign.tealDeep} size={16} />
+            ) : (
+              <ChevronDown color={redesign.tealDeep} size={16} />
+            )}
+          </View>
+        </PressableScale>
+        {editingField === "medicare" ? (
+          <View style={styles.optionList}>
+            {[true, false].map((b) => {
+              const selected = profile?.is_on_medicare === b;
+              return (
+                <PressableScale
+                  key={b ? "yes" : "no"}
+                  testID={`settings_medicare_option_${b ? "yes" : "no"}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={b ? "Yes" : "No"}
+                  onPress={() => onEditDemographic({ is_on_medicare: b })}
+                  style={styles.optionRow}
+                >
+                  <Text
+                    style={[
+                      styles.optionLabel,
+                      selected && styles.optionLabelSelected,
+                    ]}
+                  >
+                    {b ? "Yes" : "No"}
+                  </Text>
+                  {selected ? <Check color={redesign.teal} size={16} /> : null}
+                </PressableScale>
+              );
+            })}
+          </View>
+        ) : null}
+
+        <Text style={styles.detailNote}>
+          Year of birth and sex at birth are set at sign-up and can&rsquo;t be
+          changed. Gender identity and Medicare can be updated anytime.
+        </Text>
       </View>
 
       <Text style={styles.sectionLabel}>Appearance</Text>

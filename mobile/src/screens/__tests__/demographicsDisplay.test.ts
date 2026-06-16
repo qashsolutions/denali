@@ -7,11 +7,22 @@ import { describe, expect, it } from "vitest";
 import {
   ageFromBirthYear,
   birthYearLabel,
+  GENDER_IDENTITY_VALUES,
   genderIdentityLabel,
   medicareLabel,
   NOT_SET_LABEL,
   sexAtBirthLabel,
 } from "../demographicsDisplay";
+
+describe("GENDER_IDENTITY_VALUES (Settings editable picker)", () => {
+  it("lists all 7 gender options, each with a non-placeholder label", () => {
+    expect(GENDER_IDENTITY_VALUES).toHaveLength(7);
+    expect(new Set(GENDER_IDENTITY_VALUES).size).toBe(7); // no dupes
+    for (const v of GENDER_IDENTITY_VALUES) {
+      expect(genderIdentityLabel(v)).not.toBe(NOT_SET_LABEL);
+    }
+  });
+});
 
 describe("sexAtBirthLabel", () => {
   it.each([

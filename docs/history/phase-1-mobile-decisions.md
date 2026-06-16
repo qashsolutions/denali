@@ -637,6 +637,20 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D32 — Settings demographics: editable gender + Medicare; permanent year + sex (2026-06-16)
+
+**Decision:** Operator's rule for the D31 "Your details" section: **gender identity + Medicare are editable** in Settings; **year of birth + sex at birth are permanent** (locked) because they're clinical interpretation keys — changing them would re-interpret all existing results. Permanence is communicated at sign-up (the confirmation is D33).
+
+- **Editable (in-place, local):** Gender identity (a tap-to-expand inline picker of the 7 options) and Medicare (Yes/No). On select → `upsertProfile({ id, email, ...patch })` (merges by id) + local state update. No sign-out, no data loss. Gender identity is display-only (non-clinical); Medicare drives cohort gating, not clinical interpretation — both safe to change.
+- **Locked:** Year of birth + sex at birth render greyed with a lock icon and no edit affordance. Section note: "Year of birth and sex at birth are set at sign-up and can't be changed. Gender identity and Medicare can be updated anytime."
+- The editable values render in full `ink` (look active) vs the locked fields' greyed `ink2`; a chevron signals the picker.
+
+**Verification:** tsc 0, eslint 0 errors, **1096 tests** (`GENDER_IDENTITY_VALUES` completeness pin added). On-device: gender round-trips Male→Female→Male (persists via `upsertProfile`); year/sex stay locked (lock icon, no picker); Medicare uses the same verified path.
+
+**Encoded in code:** `src/screens/demographicsDisplay.ts` (`GENDER_IDENTITY_VALUES`), `src/screens/SettingsScreen.tsx` (editable rows + inline pickers + `onEditDemographic`).
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

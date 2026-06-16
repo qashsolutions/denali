@@ -30,6 +30,21 @@ const GENDER_IDENTITY_LABEL: Record<GenderIdentity, string> = {
 /** Placeholder for a demographic the user hasn't provided. */
 export const NOT_SET_LABEL = "Not set";
 
+/**
+ * Gender identity options in display order — the EDITABLE picker in Settings
+ * (D32) maps over these. Order mirrors the cohort-onboarding GENDER_OPTIONS.
+ * Gender identity is display-only (non-clinical), so it is freely editable.
+ */
+export const GENDER_IDENTITY_VALUES: ReadonlyArray<GenderIdentity> = [
+  "male",
+  "female",
+  "non-binary",
+  "transgender-male",
+  "transgender-female",
+  "other",
+  "prefer-not-to-say",
+];
+
 export function sexAtBirthLabel(value: SexAtBirth | null): string {
   if (value == null) return NOT_SET_LABEL;
   return SEX_AT_BIRTH_LABEL[value] ?? value;
