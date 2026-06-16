@@ -265,7 +265,7 @@ describe("provisional gate — every shipped band is provisional until clinical 
 // positional back-compat path is exercised by every test above.
 
 describe("V1.1 — object-form signature + kind: 'biomarker' path", () => {
-  it("kind: 'biomarker' on an empty biomarkers map returns null", () => {
+  it("kind: 'biomarker' for a LOINC not in the biomarkers map returns null", () => {
     const r = lookupInterpretation({
       key: "4548-4",
       score: 5.6,
@@ -444,9 +444,22 @@ describe("V1.1 — age-sex-specific strategy (synthetic table for testing)", () 
   });
 });
 
-describe("V1.1 — empty biomarkers map shape", () => {
-  it("INTERPRETATION_TABLE_V1.biomarkers is empty in increment 1", () => {
-    expect(Object.keys(INTERPRETATION_TABLE_V1.biomarkers)).toEqual([]);
+describe("biomarkers map — WHO bands (provisional, sign-off pending)", () => {
+  it("ships exactly the two WHO biomarker entries (BMI + bone-density)", () => {
+    expect(Object.keys(INTERPRETATION_TABLE_V1.biomarkers).sort()).toEqual([
+      "38264-8",
+      "39156-5",
+    ]);
+  });
+
+  it("every WHO band is provisional, and the table is not yet clinically reviewed", () => {
+    for (const entry of Object.values(INTERPRETATION_TABLE_V1.biomarkers)) {
+      expect(entry.provenance.review_status).toBe("pending_clinical_review");
+      for (const band of flattenStrategyBands(entry.strategy)) {
+        expect(band.provisional).toBe(true);
+      }
+    }
+    expect(INTERPRETATION_TABLE_V1.lastClinicallyReviewedBy).toBeNull();
   });
 });
 
@@ -493,5 +506,63 @@ describe("computeAdamOutcome — Morley 2000 binary rule", () => {
     expect(outcome).toBe(1);
     const r = lookupInterpretation("ADAM", outcome!, "male");
     expect(r?.band.bandId).toBe("positive");
+  });
+});
+
+describe("WHO biomarker bands (kind: biomarker)", () => {
+  const bmi = (v: number) =>
+    lookupInterpretation({
+      key: "39156-5",
+      score: v,
+      sexAtBirth: null,
+      ageYears: null,
+      kind: "biomarker",
+    });
+  const tscore = (v: number) =>
+    lookupInterpretation({
+      key: "38264-8",
+      score: v,
+      sexAtBirth: null,
+      ageYears: null,
+      kind: "biomarker",
+    });
+
+  it("BMI maps WHO cut-offs at the boundaries (1-decimal)", () => {
+    expect(bmi(18.4)?.band.bandId).toBe("underweight");
+    expect(bmi(18.5)?.band.bandId).toBe("healthy-weight");
+    expect(bmi(24.9)?.band.bandId).toBe("healthy-weight");
+    expect(bmi(25.0)?.band.bandId).toBe("overweight");
+    expect(bmi(29.9)?.band.bandId).toBe("overweight");
+    expect(bmi(30.0)?.band.bandId).toBe("obesity");
+  });
+
+  it("BMI band is provisional and interpolates the value", () => {
+    const r = bmi(24.2);
+    expect(r?.band.provisional).toBe(true);
+    expect(r?.band.headline).toContain("24.2");
+  });
+
+  it("T-score maps WHO 1994 categories at the boundaries", () => {
+    expect(tscore(-1.0)?.band.bandId).toBe("bone-normal");
+    expect(tscore(-1.1)?.band.bandId).toBe("bone-low");
+    expect(tscore(-2.4)?.band.bandId).toBe("bone-low");
+    expect(tscore(-2.5)?.band.bandId).toBe("osteoporosis");
+    expect(tscore(0.5)?.band.bandId).toBe("bone-normal");
+  });
+
+  it("an off-decimal gap value returns null (no wrong band)", () => {
+    expect(tscore(-2.45)).toBeNull();
+  });
+
+  it("BMI is NOT looked up as an instrument (wrong subspace → null)", () => {
+    expect(
+      lookupInterpretation({
+        key: "39156-5",
+        score: 24.2,
+        sexAtBirth: null,
+        ageYears: null,
+        kind: "instrument",
+      }),
+    ).toBeNull();
   });
 });

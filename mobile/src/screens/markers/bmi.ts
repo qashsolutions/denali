@@ -8,9 +8,10 @@
  *
  * CLINICAL BOUNDARY (load-bearing, mobile/CLAUDE.md § Display + clinical
  * boundary):
- *   - Returns the numeric BMI value ONLY. No category label
- *     (underweight / normal / overweight / obese), no band, no verdict.
- *     WHO BMI categories are interpretation content — reviewer-gated, deferred.
+ *   - Returns the numeric BMI value ONLY — this helper NEVER classifies.
+ *     The WHO category is a separate, versioned interpretation-table lookup
+ *     (`tableV1.ts` biomarkers["39156-5"], kind "biomarker"), rendered behind
+ *     ‡ and provisional until a named clinician signs off (D23).
  *   - "derived" source signals to every consumer that this value was computed,
  *     not directly measured.
  *   - Returns null (not a guess) when either height or weight is missing.

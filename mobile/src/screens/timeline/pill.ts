@@ -54,19 +54,28 @@ export function tintClassForBand(band: {
   // Curated per-band override (v1.3, table-owned) wins.
   if (band.tint) return band.tint;
   switch (band.bandId) {
-    // ok — screen-negative / lowest-severity bands.
+    // ok — screen-negative / lowest-severity / in-range bands.
     case "negative":
     case "minimal":
     case "lower-risk":
+    case "healthy-weight":
+    case "bone-normal":
       return "ok";
     // soft — within-normal bands.
     case "lower-normal":
     case "higher-normal":
       return "soft";
-    // watch — calm attention.
+    // watch — calm attention. WHO biomarker out-of-range bands stay "watch"
+    // (calm), not "alarm" — clinical surfaces stay calm; the reviewer may
+    // escalate via the table's per-band `tint` override before sign-off.
     case "mild":
     case "moderate":
     case "higher-risk":
+    case "underweight":
+    case "overweight":
+    case "obesity":
+    case "bone-low":
+    case "osteoporosis":
       return "watch";
     // alarm — severe screener bands (alarm tokens' only UI consumer
     // besides the crisis path).

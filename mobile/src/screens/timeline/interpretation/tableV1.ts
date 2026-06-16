@@ -103,7 +103,15 @@ export type BandId =
   | "lower-risk"
   | "higher-risk"
   | "likely-aud"
-  | "positive";
+  | "positive"
+  // WHO biomarker bands (v1.3, provisional) — BMI + bone-density T-score.
+  | "underweight"
+  | "healthy-weight"
+  | "overweight"
+  | "obesity"
+  | "osteoporosis"
+  | "bone-low"
+  | "bone-normal";
 
 /**
  * Curated tint classes (v1.3) — the four pill/band treatments from the
@@ -695,6 +703,92 @@ const ADAM_SOURCE =
 
 // ─── Table V1 export ──────────────────────────────────────────────────────
 
+// ─── WHO biomarker bands (v1.3, PROVISIONAL — clinical sign-off pending) ───
+// These are the only biomarker interpretation entries. Bands are contiguous
+// for ONE-DECIMAL values (deriveBmi rounds to 1 dp; T-scores are reported to
+// 1 dp); an off-decimal value falls between bands → lookup returns null → the
+// renderer shows the raw number with NO band (never a wrong band).
+
+const BMI_SOURCE =
+  "World Health Organization (2000) — Obesity: Preventing and Managing the Global Epidemic. WHO Technical Report Series 894 (adult BMI classification: underweight <18.5 / normal 18.5–24.9 / overweight 25.0–29.9 / obese ≥30).";
+const BMI_BANDS: InterpretationBand[] = [
+  {
+    minScore: Number.NEGATIVE_INFINITY,
+    maxScore: 18.4,
+    bandId: "underweight",
+    pill: "Underweight",
+    headline: "A BMI of {{score}} is in the underweight range.",
+    explanation:
+      "The World Health Organization classifies a BMI below 18.5 as underweight. Talking with your doctor could help.",
+    provisional: true,
+  },
+  {
+    minScore: 18.5,
+    maxScore: 24.9,
+    bandId: "healthy-weight",
+    pill: "Healthy range",
+    headline: "A BMI of {{score}} is in the healthy weight range.",
+    explanation:
+      "The World Health Organization classifies a BMI of 18.5 to 24.9 as the healthy weight range.",
+    provisional: true,
+  },
+  {
+    minScore: 25.0,
+    maxScore: 29.9,
+    bandId: "overweight",
+    pill: "Overweight",
+    headline: "A BMI of {{score}} is in the overweight range.",
+    explanation:
+      "The World Health Organization classifies a BMI of 25.0 to 29.9 as overweight. Talking with your doctor could help.",
+    provisional: true,
+  },
+  {
+    minScore: 30.0,
+    maxScore: Number.POSITIVE_INFINITY,
+    bandId: "obesity",
+    pill: "Obesity range",
+    headline: "A BMI of {{score}} is in the obesity range.",
+    explanation:
+      "The World Health Organization classifies a BMI of 30.0 or higher as obesity. Talking with your doctor could help.",
+    provisional: true,
+  },
+];
+
+const BONE_DENSITY_SOURCE =
+  "World Health Organization — Assessment of fracture risk and its application to screening for postmenopausal osteoporosis (WHO Technical Report Series 843, 1994).";
+const BONE_DENSITY_BANDS: InterpretationBand[] = [
+  {
+    minScore: Number.NEGATIVE_INFINITY,
+    maxScore: -2.5,
+    bandId: "osteoporosis",
+    pill: "Osteoporosis range",
+    headline: "A hip T-score of {{score}} is in the osteoporosis range.",
+    explanation:
+      "The World Health Organization defines a T-score of -2.5 or lower as osteoporosis. Talking with your doctor could help.",
+    provisional: true,
+  },
+  {
+    minScore: -2.4,
+    maxScore: -1.1,
+    bandId: "bone-low",
+    pill: "Low bone mass",
+    headline: "A hip T-score of {{score}} is in the low bone mass range.",
+    explanation:
+      "The World Health Organization defines a T-score between -1.0 and -2.5 as low bone mass (osteopenia). Talking with your doctor could help.",
+    provisional: true,
+  },
+  {
+    minScore: -1.0,
+    maxScore: Number.POSITIVE_INFINITY,
+    bandId: "bone-normal",
+    pill: "Normal range",
+    headline: "A hip T-score of {{score}} is in the normal range.",
+    explanation:
+      "The World Health Organization defines a T-score of -1.0 or higher as normal bone density.",
+    provisional: true,
+  },
+];
+
 export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
   version: "1.3.0-provisional",
   lastClinicallyReviewedAt: null,
@@ -776,7 +870,34 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
    * `mobile/src/screens/timeline/biomarkers/` for the curated-panel
    * registry shape this complements.
    */
-  biomarkers: {},
+  biomarkers: {
+    // BMI (derived value) — WHO adult classification. PROVISIONAL.
+    "39156-5": {
+      loinc: "39156-5",
+      friendlyName: "Body mass index",
+      unit: "kg/m²",
+      rangeSource: BMI_SOURCE,
+      provenance: pendingReview(BMI_SOURCE),
+      strategy: { kind: "uniform", bands: BMI_BANDS },
+      clinicalReviewerNotes: [
+        "WHO also publishes lower cut-offs for adults of South/East-Asian descent (overweight ≥23, obesity ≥27.5) — decide whether to offer a population-specific variant before clearing provisional.",
+        "Obesity sub-classes (I 30–34.9, II 35–39.9, III ≥40) are collapsed into one band; split if desired.",
+      ],
+    },
+    // Bone-density hip T-score — WHO 1994 categories. PROVISIONAL.
+    "38264-8": {
+      loinc: "38264-8",
+      friendlyName: "Bone density (DXA hip T-score)",
+      unit: "T-score",
+      rangeSource: BONE_DENSITY_SOURCE,
+      provenance: pendingReview(BONE_DENSITY_SOURCE),
+      strategy: { kind: "uniform", bands: BONE_DENSITY_BANDS },
+      clinicalReviewerNotes: [
+        "WHO T-score criteria are validated for postmenopausal women and men aged ≥50; younger adults use Z-scores. Consider an age/sex gate before clearing provisional.",
+        "Band boundaries assume T-scores reported to one decimal place; off-decimal values fall between bands and render as the raw value.",
+      ],
+    },
+  },
 };
 
 /** Type guard for the sex-fallback path used by the AUDIT-C lookup. */

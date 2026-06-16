@@ -34,7 +34,7 @@ import {
   getDomainName,
   getDomainPrompt,
 } from "./displayMapping";
-import { deriveBmi, deriveBmiTrend } from "../markers/bmi";
+import { deriveBmi, deriveBmiTrend, LOINC_BMI } from "../markers/bmi";
 import type { TimelineCard } from "./grouping";
 import { dateKeyOf, formatGroupHeader } from "./groupObservations";
 import { lookupInterpretation } from "./interpretation/lookup";
@@ -196,9 +196,9 @@ export function DomainCard({
       formatGroupHeader(dateKeyOf(latest.effective_at)),
     );
     // Derived BMI — shown only on the health_markers card when both
-    // height and weight observations are present. NUMBER ONLY, no
-    // category label (WHO bands are reviewer-gated — deferred).
-    // Trend direction (if ≥2 BMI points): plain arrow, no verdict.
+    // height and weight observations are present. The WHO category pill
+    // comes from the versioned interpretation table (provisional → ‡, D23);
+    // it is never synthesized here. Trend direction (≥2 points): plain arrow.
     const bmiResult =
       rollup.domainId === "health_markers"
         ? deriveBmi(rollup.rows)
@@ -216,6 +216,18 @@ export function DomainCard({
       else if (curr < prev) trendArrow = "↓";
       else trendArrow = "→";
     }
+    // WHO BMI category (provisional → ‡). Versioned table, never render-time.
+    const bmiBand =
+      bmiResult != null
+        ? lookupInterpretation({
+            key: LOINC_BMI,
+            score: bmiResult.bmi,
+            sexAtBirth: userSexAtBirth,
+            ageYears: userAgeYears,
+            kind: "biomarker",
+          })
+        : null;
+    const bmiTint = bmiBand ? pillTintForBand(redesign, bmiBand.band) : null;
     return (
       <Pressable
         testID={`dashboard_card_${rollup.domainId}`}
@@ -233,12 +245,26 @@ export function DomainCard({
           </Text>
           <View style={styles.spacer} />
           {bmiResult != null ? (
-            <Text
-              testID="dashboard_card_bmi_value"
-              style={styles.bmiValue}
-            >
-              BMI {bmiResult.bmi.toFixed(1)}{trendArrow != null ? ` ${trendArrow}` : ""}
-            </Text>
+            <View style={styles.bmiCluster}>
+              {bmiBand != null && bmiTint != null ? (
+                <View
+                  testID="dashboard_card_bmi_pill"
+                  style={[styles.pill, { backgroundColor: bmiTint.bg }]}
+                >
+                  <Text
+                    maxFontSizeMultiplier={MAX_FONT_SCALE}
+                    style={[styles.pillText, { color: bmiTint.fg }]}
+                  >
+                    {bmiBand.band.pill}
+                    {bmiBand.band.provisional ? "‡" : ""}
+                  </Text>
+                </View>
+              ) : null}
+              <Text testID="dashboard_card_bmi_value" style={styles.bmiValue}>
+                BMI {bmiResult.bmi.toFixed(1)}
+                {trendArrow != null ? ` ${trendArrow}` : ""}
+              </Text>
+            </View>
           ) : null}
           {chevron}
         </View>
@@ -375,6 +401,12 @@ function makeStyles(
       fontSize: theme.typography.sizes.sm,
       fontVariant: ["tabular-nums"] as const,
       ...fontStyle("numbers", 500, fontsLoaded),
+    },
+    bmiCluster: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xs,
+      flexShrink: 1,
     },
   });
 }
