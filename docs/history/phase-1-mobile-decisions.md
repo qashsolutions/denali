@@ -497,6 +497,40 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D23 — WHO BMI + bone-density T-score interpretation bands (2026-06-15)
+
+**Decision:** Supersede D21's "value only" deferral — ship WHO-sourced interpretation bands for BMI and the bone-density hip T-score, **provisional, behind ‡**, pending a named clinician's sign-off. Operator-approved (use WHO where it fits).
+
+**What landed (in the versioned `tableV1.ts` `biomarkers` map — the first biomarker interpretation entries):**
+- **BMI (LOINC 39156-5)** — WHO adult classification: underweight `<18.5` / healthy `18.5–24.9` / overweight `25.0–29.9` / obesity `≥30`. Uniform strategy. Cited to WHO TRS 894.
+- **Bone-density hip T-score (LOINC 38264-8)** — WHO 1994: osteoporosis `≤-2.5` / low bone mass `-2.5…-1.0` / normal `≥-1.0`. Cited to WHO TRS 843. A `clinicalReviewerNote` flags that WHO T-score criteria are validated for postmenopausal women + men ≥50 (younger uses Z-scores) — the reviewer decides an age/sex gate before clearing ‡.
+- Bands are contiguous for **1-decimal** values (BMI rounds to 1 dp; T-scores reported to 1 dp); an off-decimal value falls between bands → renders raw (no wrong band). New `BandId`s + calm "watch" tints (osteoporosis stays "watch", not "alarm" — clinical surfaces stay calm; reviewer escalates via the per-band `tint` override).
+- **Display:** the dashboard health-markers card renders the BMI category pill + `‡`. (T-score band content + lookup are in place + tested; its per-marker detail display is the next small step.)
+
+**Governance (load-bearing):** every band ships `provisional: true`; the entry provenance is `pending_clinical_review`; `lastClinicallyReviewedBy` stays `null`. **CC never clears the ‡** — a named clinician flips provisional→reviewed. This decision lifts only the *deferral* (the bands may now be authored + displayed provisionally), not the sign-off requirement.
+
+**Verification:** tsc 0, eslint 0 errors, 946 unit tests (incl. boundary tests for every WHO cut-off). clinical-boundary-reviewer **verified all WHO cut-off values are correct** and PASSed string sourcing / register / provisional mechanics; its lone BLOCKER was this very governance update (the CLAUDE.md D21 rule + stale comments), now resolved here.
+
+**Encoded in code:** `src/screens/timeline/interpretation/tableV1.ts` (bands + biomarkers map), `src/screens/timeline/pill.ts` (BandId tints), `src/screens/timeline/DomainCard.tsx` (BMI pill).
+
+---
+
+## D24 — Marker-entry guardrails + feet/inches height input (2026-06-16)
+
+**Decision:** Harden the manual marker-entry surface — operator-flagged on-device: a 555 cm height was only *soft-warned* ("looks unusual — double-check it") with Save still enabled, and cm/total-inches is not how a US 45+ user enters height.
+
+**Guardrails (all markers):** validation is now **LIVE** (per keystroke) via pure helpers (`validateField`, `deriveCanSave` in `markerEntry.ts`); the **Save button is DISABLED** (dimmed + no haptic/press-scale) whenever any field is empty, non-numeric, or outside the field's physical `plausible` range; the error states the **valid range in the active unit** ("Enter a value between 50 and 250 cm."). The `plausible` bound is the hard gate — implausible values cannot be saved. `PressableScale` gained `disabled`-awareness so a blocked CTA never feels tappable.
+
+**Feet/inches:** height offers a two-field **`[ft] [in]` input as the DEFAULT** (cm secondary), converting `cm = (feet*12 + inches)*2.54` (`feetInchesToCm`, unit-tested; 5′9″ = 175.26 cm), inches bounded 0–11, stored canonical cm. **Only height changed**: `defaultUnitForField` makes the entry default the ft/in composite for height and the **canonical** unit for everything else (weight→kg, labs→mg/dL).
+
+**Process:** built by an orchestrated implement→adversarial-verify workflow (5 verifier lenses — conversion math / block logic / edge cases / regression / privacy, all PASS — + completeness critic). **On-device caught two issues the verifiers missed:** (1) the disabled Save still buzzed/animated (`PressableScale` not `disabled`-aware) — FIXED; (2) weight silently defaulted to **lb** after the default-unit change (stored pounds-as-kg → BMI 11.8) — FIXED (canonical default for non-ft/in fields, + regression test). `onSave` now re-validates with the same `validateField` as the gate (no weaker fallback); `rangeErrorMessage` carries a rounded 12 in into the next foot.
+
+**Verification:** tsc 0, eslint 0, 1024 tests pass (the lone failure is a **pre-existing flaky** `backup/recoveryKey` BIP39-checksum test — unrelated; passes 5/5 on re-run). On-device: ft/in default + two-field input; 9 ft blocked with "between 1 ft 8 in and 8 ft 2 in" + disabled Save; 5 ft 9 in enables Save + saves; weight defaults to kg; dashboard shows **BMI 26.0 / "Overweight‡"** (also confirms D23's pill).
+
+**Encoded in code:** `src/screens/markers/{LogMarkerScreen,markerEntry,markerCatalog}`, `src/components/PressableScale`.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

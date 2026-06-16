@@ -192,6 +192,19 @@ store)*.
   surfacing of the D15 biometric gate (Face ID / Touch ID / fingerprint /
   passcode), reflecting device enrollment. No enable/disable toggle — disabling
   would regress the 30-day OTP cap that the always-on gate justifies.
+- 2026-06-16 — **Marker-entry guardrails + feet/inches** (D24): live validation +
+  disabled Save (no press feedback) + clear "valid range" copy hard-block
+  implausible values (e.g. 555 cm / 9 ft); height gains a feet/inches two-field
+  DEFAULT input (cm secondary, cm = (ft*12+in)*2.54); weight default stays kg
+  (a default-unit regression that stored lb-as-kg was caught on-device + fixed).
+  Advances O1 (capture surface). On-device verified; 1024 tests (one unrelated
+  flaky backup test).
+- 2026-06-15 — **WHO interpretation bands** (D23): BMI categories + bone-density
+  hip T-score bands added to the versioned `tableV1` biomarkers map (provisional,
+  ‡, WHO-cited — TRS 894 / TRS 843), wired to the dashboard BMI value (renders
+  "Overweight‡" etc.). Supersedes D21's "value only" deferral; the recommendation
+  set + ‡-clearance stay clinician-gated. Advances O2/O5. clinical-boundary +
+  acceptance-auditor PASS; on-device confirmed.
 - 2026-06-15 — **"Due for…" preventive card scaffold** (D22): the USPSTF engine
   now drives a dashboard card (sex/age-filtered, hidden until recs land);
   lastDone resolves from local observations (additive `observationCodes` link);
