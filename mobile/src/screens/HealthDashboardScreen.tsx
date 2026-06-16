@@ -47,6 +47,13 @@ import { Skeleton } from "@/components/Skeleton";
 import { hapticSelection } from "@/feedback/haptics";
 import type { ObservationRow, SexAtBirth } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
+import { DueForCard } from "@/preventive/DueForCard";
+import {
+  deriveLastDoneByRecId,
+  dueScreenings,
+  PREVENTIVE_RECOMMENDATIONS,
+  type DueScreening,
+} from "@/preventive/uspstf";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
@@ -67,6 +74,7 @@ const PAGE_SIZE = 200;
 type ListItem =
   | { kind: "section-header"; title: string }
   | { kind: "rollup"; rollup: DomainRollup }
+  | { kind: "due-for"; due: ReadonlyArray<DueScreening> }
   | { kind: "footer-legacy-timeline" };
 
 const PROVISIONAL_FOOTNOTE = "‡ Interpretation pending clinical review.";
@@ -228,6 +236,20 @@ export function HealthDashboardScreen(): React.ReactElement {
     ];
 
     const out: ListItem[] = [];
+    // "Due for…" preventive layer — sex/age-filtered, hidden when nothing is
+    // due. PREVENTIVE_RECOMMENDATIONS ships empty (reviewer/USPSTF-gated), so
+    // `due` is [] today and no card renders; the wiring lights up when the set
+    // lands. lastDone resolves from LOCAL observations only (no PHI leaves).
+    const due = dueScreenings({
+      sexAtBirth: userSexAtBirth,
+      ageYears: userAgeYears,
+      lastDoneByRecId: deriveLastDoneByRecId(rows, PREVENTIVE_RECOMMENDATIONS),
+      now: new Date(),
+    });
+    if (due.length > 0) {
+      out.push({ kind: "section-header", title: "Due for" });
+      out.push({ kind: "due-for", due });
+    }
     if (checksOrdered.length > 0) {
       out.push({ kind: "section-header", title: "Your checks" });
       for (const r of checksOrdered) out.push({ kind: "rollup", rollup: r });
@@ -240,7 +262,7 @@ export function HealthDashboardScreen(): React.ReactElement {
       out.push({ kind: "footer-legacy-timeline" });
     }
     return out;
-  }, [rows, userSexAtBirth]);
+  }, [rows, userSexAtBirth, userAgeYears]);
 
   // Today's date — formatted via the shared `formatGroupHeader` helper so
   // the locale handling matches the per-day section headers used on the
@@ -374,6 +396,9 @@ export function HealthDashboardScreen(): React.ReactElement {
         />
       );
     }
+    if (item.kind === "due-for") {
+      return <DueForCard items={item.due} />;
+    }
     return (
       <Pressable
         testID="dashboard_all_activity"
@@ -451,6 +476,7 @@ export function HealthDashboardScreen(): React.ReactElement {
           keyExtractor={(item) => {
             if (item.kind === "section-header") return `s:${item.title}`;
             if (item.kind === "rollup") return `r:${item.rollup.domainId}`;
+            if (item.kind === "due-for") return "due-for";
             return "footer:legacy";
           }}
           renderItem={renderItem}

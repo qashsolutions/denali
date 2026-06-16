@@ -45,6 +45,20 @@ export interface PreventiveRecommendation {
   cadenceMonths: number | null;
   /** Provenance — USPSTF topic + grade + retrieval date once integrated. */
   source: string;
+  /**
+   * True until a NAMED clinical reviewer signs off this rec's title / summary /
+   * cadence. The "Due for…" card surfaces a ‡ while provisional; CC never
+   * clears it. REQUIRED (not optional) so no rec can be merged into
+   * PREVENTIVE_RECOMMENDATIONS without the governance marker.
+   */
+  provisional: boolean;
+  /**
+   * LOINC/marker codes whose observation date counts as "this screening was
+   * done" (e.g. a logged mammogram or DEXA date). Lets `lastDone` resolve from
+   * LOCAL observations. Optional — a rec without it never auto-resolves a
+   * lastDone (treated as never done = due) until the rec set carries the link.
+   */
+  observationCodes?: ReadonlyArray<string>;
 }
 
 /**
@@ -105,6 +119,37 @@ export function dueScreenings(args: {
         out.push({ rec, lastDone });
       }
     }
+  }
+  return out;
+}
+
+/**
+ * Pure: build the `lastDoneByRecId` map for `dueScreenings` from LOCAL
+ * observations. For each recommendation that declares `observationCodes`,
+ * records the most recent matching observation's `effective_at`. Recs without
+ * `observationCodes`, or with no matching observation, are omitted (so the
+ * engine treats them as never done = due).
+ *
+ * Reads the local observation list only — no PHI leaves the device.
+ */
+export function deriveLastDoneByRecId(
+  observations: ReadonlyArray<{ code: string; effective_at: string }>,
+  recommendations: ReadonlyArray<PreventiveRecommendation>,
+): Record<string, string> {
+  const latestByCode = new Map<string, string>();
+  for (const o of observations) {
+    const prev = latestByCode.get(o.code);
+    if (prev == null || o.effective_at > prev) latestByCode.set(o.code, o.effective_at);
+  }
+  const out: Record<string, string> = {};
+  for (const rec of recommendations) {
+    if (rec.observationCodes == null) continue;
+    let latest: string | null = null;
+    for (const code of rec.observationCodes) {
+      const t = latestByCode.get(code);
+      if (t != null && (latest == null || t > latest)) latest = t;
+    }
+    if (latest != null) out[rec.id] = latest;
   }
   return out;
 }
