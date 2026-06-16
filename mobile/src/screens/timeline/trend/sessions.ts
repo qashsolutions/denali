@@ -141,3 +141,49 @@ export function deltaPair(
     latest: allSessions[allSessions.length - 1],
   };
 }
+
+/** A band's vertical extent in SCORE space for the chart (before pixel mapping). */
+export interface BandScoreSpan {
+  band: InterpretationBand;
+  /** Top of the band in score space (higher score → higher on the chart). */
+  top: number;
+  /** Bottom of the band in score space. */
+  bottom: number;
+  /** Score of the hairline boundary BELOW this band; null for the lowest band. */
+  boundary: number | null;
+}
+
+/**
+ * Lay out chart bands in SCORE space (before pixel mapping). Bands fill the
+ * HALF-STEP-PADDED domain [scoreRange.min - 0.5, scoreRange.max + 0.5];
+ * interior boundaries are the MIDPOINT between adjacent (sorted, range-clamped)
+ * bands. For integer-inclusive instrument bands this is IDENTICAL to the
+ * legacy ±0.5 tiling — e.g. bands [0,4][5,9] → boundary 4.5, padded edges
+ * -0.5 / 9.5 — so instrument charts render pixel-for-pixel as before. For
+ * decimal bands (BMI: 18.4/18.5, 24.9/25.0, 29.9/30.0) it tiles with no gap or
+ * overlap. Pure + unit-tested; the renderer maps these scores through yOf().
+ */
+export function layoutBandScores(
+  bands: ReadonlyArray<InterpretationBand>,
+  scoreRange: { min: number; max: number },
+): BandScoreSpan[] {
+  const lo = scoreRange.min - 0.5;
+  const hi = scoreRange.max + 0.5;
+  const sorted = [...bands]
+    .sort((a, b) => a.minScore - b.minScore)
+    .map((b) => ({
+      band: b,
+      minScore: Math.max(b.minScore, scoreRange.min),
+      maxScore: Math.min(b.maxScore, scoreRange.max),
+    }));
+  const boundaries: number[] = [];
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    boundaries.push((sorted[i].maxScore + sorted[i + 1].minScore) / 2);
+  }
+  return sorted.map((s, idx) => ({
+    band: s.band,
+    top: idx === sorted.length - 1 ? hi : boundaries[idx],
+    bottom: idx === 0 ? lo : boundaries[idx - 1],
+    boundary: idx > 0 ? boundaries[idx - 1] : null,
+  }));
+}

@@ -20,6 +20,11 @@
  * trend-strings module or the interpretation table; band shading uses
  * the same tint classes as the pills (tintClassForBand) so chart and
  * pill can never disagree. The chart explains; it never recommends.
+ *
+ * TrendChartSvg is exported so BmiTrendChart (and any future derived-
+ * value chart) can reuse the renderer without the instrument coupling.
+ * The renderer takes resolved bands + points + scoreRange directly —
+ * it has no knowledge of instruments, LOINC codes, or sex.
  */
 
 import React from "react";
@@ -40,6 +45,7 @@ import { getInstrumentName } from "../displayMapping";
 import { dateKeyOf, formatGroupHeader } from "../groupObservations";
 import { lookupInterpretation } from "../interpretation/lookup";
 import { INTERPRETATION_TABLE_V1 } from "../interpretation/tableV1";
+import type { InterpretationBand } from "../interpretation/tableV1";
 import {
   formatTrendAccessibilityLabel,
   formatTrendDelta,
@@ -49,6 +55,7 @@ import { tintClassForBand } from "../pill";
 import {
   chartBandsFor,
   deltaPair,
+  layoutBandScores,
   type ScoredSession,
   type TrendRange,
 } from "./sessions";
@@ -154,6 +161,8 @@ export function TrendChart({
     deltaText,
   );
 
+  const bands = chartBandsFor(instrumentId, userSexAtBirth);
+
   return (
     <View
       testID={`trend_chart_${instrumentId}`}
@@ -164,11 +173,10 @@ export function TrendChart({
     >
       <Text style={styles.instrumentName}>{name}</Text>
       {width > 0 ? (
-        <ChartSvg
+        <TrendChartSvg
           width={width - theme.spacing.md * 2}
-          sessions={ranged}
-          instrumentId={instrumentId}
-          userSexAtBirth={userSexAtBirth}
+          points={ranged}
+          bands={bands}
           scoreRange={scoreRange}
           redesign={redesign}
           fontsLoaded={fontsLoaded}
@@ -183,38 +191,60 @@ export function TrendChart({
   );
 }
 
-interface ChartSvgProps {
+/**
+ * Props for the generalized SVG renderer. Accepts resolved bands and
+ * points directly — no instrument id, no sex, no DAL coupling.
+ *
+ * Band tiling uses MIDPOINT-BETWEEN-ADJACENT-BANDS so it works for
+ * both integer (instrument) and decimal (BMI, T-score) bands:
+ *
+ *   boundary between band[i] and band[i+1]
+ *     = (band[i].maxScore + band[i+1].minScore) / 2
+ *
+ * Proof of equivalence for integer instrument bands (e.g. PHQ bands
+ * [0,4] / [5,9]):
+ *   midpoint = (4 + 5) / 2 = 4.5  ≡  4 + 0.5  ✓  (same as old ±0.5)
+ *
+ * The highest band's top is clamped to scoreRange.max; the lowest
+ * band's bottom is clamped to scoreRange.min. ±Infinity band bounds
+ * are clamped to the scoreRange before any arithmetic.
+ */
+export interface TrendChartSvgProps {
   width: number;
-  sessions: ScoredSession[];
-  instrumentId: string;
-  userSexAtBirth: SexAtBirth | null;
+  /** Chronological points to plot. */
+  points: ReadonlyArray<{ score: number; effective_at: string }>;
   scoreRange: { min: number; max: number };
+  bands: ReadonlyArray<InterpretationBand>;
   redesign: ReturnType<typeof useTheme>["redesign"];
   fontsLoaded: boolean;
 }
 
-function ChartSvg({
+export function TrendChartSvg({
   width,
-  sessions,
-  instrumentId,
-  userSexAtBirth,
+  points,
+  bands: rawBands,
   scoreRange,
   redesign,
   fontsLoaded,
-}: ChartSvgProps): React.ReactElement {
-  // Half-step domain so integer-inclusive bands tile without gaps.
+}: TrendChartSvgProps): React.ReactElement {
+  // Y-axis: HALF-STEP-PADDED domain (lo = min-0.5, hi = max+0.5) — the exact
+  // padding the instrument chart has always used, so integer bands tile and
+  // the extreme dots keep breathing room (a score at the floor/ceiling is NOT
+  // flush on the plot edge). Midpoint boundaries (above) handle decimal bands
+  // (BMI) without the integer-only ±0.5 assumption. For integer instrument
+  // bands this reproduces the original geometry pixel-for-pixel.
   const lo = scoreRange.min - 0.5;
   const hi = scoreRange.max + 0.5;
   const plotW = Math.max(width - PAD_LEFT - PAD_RIGHT, 1);
   const yOf = (v: number) =>
     PAD_TOP + (1 - (v - lo) / (hi - lo)) * PLOT_HEIGHT;
-  const n = sessions.length;
+
+  const n = points.length;
   const xOf = (i: number) =>
     PAD_LEFT + (n === 1 ? plotW / 2 : (i * plotW) / (n - 1));
 
   // Chart band fill per tint class — the brighter band tokens (NOT the pale
   // pill washes) so large band areas read as clearly distinct at a glance.
-  // Same green / neutral / amber / red severity semantics as the pills.
   const washFor = (cls: ReturnType<typeof tintClassForBand>): string =>
     cls === "ok"
       ? redesign.bandOk
@@ -224,22 +254,19 @@ function ChartSvg({
           ? redesign.bandWatch
           : redesign.bandAlarm;
 
-  const bands = chartBandsFor(instrumentId, userSexAtBirth).map((band) => {
-    const topVal = Math.min(band.maxScore, scoreRange.max) + 0.5;
-    const bottomVal = Math.max(band.minScore, scoreRange.min) - 0.5;
-    const y = yOf(topVal);
-    const h = yOf(bottomVal) - y;
-    return {
-      key: band.bandId,
-      label: band.pill,
-      y,
-      h,
-      fill: washFor(tintClassForBand(band)),
-      boundary: band.minScore > scoreRange.min ? yOf(band.minScore - 0.5) : null,
-    };
-  });
+  // Band rects from the shared, unit-tested SCORE-space layout (midpoint
+  // tiling over the padded domain — identical to the legacy ±0.5 for integer
+  // instrument bands, correct for decimal BMI bands).
+  const renderedBands = layoutBandScores(rawBands, scoreRange).map((span) => ({
+    key: span.band.bandId,
+    label: span.band.pill,
+    y: yOf(span.top),
+    h: yOf(span.bottom) - yOf(span.top),
+    fill: washFor(tintClassForBand(span.band)),
+    boundary: span.boundary != null ? yOf(span.boundary) : null,
+  }));
 
-  const points = sessions
+  const svgPoints = points
     .map((s, i) => `${xOf(i)},${yOf(s.score)}`)
     .join(" ");
   const ticks = tickIndices(n);
@@ -247,8 +274,8 @@ function ChartSvg({
 
   return (
     <Svg width={width} height={SVG_HEIGHT}>
-      {/* Severity band backgrounds, clamped to scoreRange. */}
-      {bands.map((b) => (
+      {/* Severity band backgrounds. */}
+      {renderedBands.map((b) => (
         <Rect
           key={`band-${b.key}`}
           x={0}
@@ -260,7 +287,7 @@ function ChartSvg({
       ))}
       {/* Separator hairline at each band boundary (stronger than line2 so the
           bands read as cleanly divided). */}
-      {bands.map((b) =>
+      {renderedBands.map((b) =>
         b.boundary != null ? (
           <Line
             key={`grid-${b.key}`}
@@ -274,7 +301,7 @@ function ChartSvg({
         ) : null,
       )}
       {/* Plain-language band labels at the left edge (tall bands only). */}
-      {bands.map((b) =>
+      {renderedBands.map((b) =>
         b.h >= MIN_LABEL_BAND_PX ? (
           <SvgText
             key={`label-${b.key}`}
@@ -290,14 +317,14 @@ function ChartSvg({
       )}
       {/* Score line + dots; latest dot solid teal (mockup treatment). */}
       <Polyline
-        points={points}
+        points={svgPoints}
         fill="none"
         stroke={redesign.teal}
         strokeWidth={2.4}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {sessions.map((s, i) =>
+      {points.map((s, i) =>
         i < n - 1 ? (
           <Circle
             key={`dot-${s.effective_at}`}
@@ -329,7 +356,7 @@ function ChartSvg({
           textAnchor={i === n - 1 ? "end" : "middle"}
           {...(labelFont ? { fontFamily: labelFont } : {})}
         >
-          {monthLabel(sessions[i].effective_at, i === n - 1)}
+          {monthLabel(points[i].effective_at, i === n - 1)}
         </SvgText>
       ))}
     </Svg>

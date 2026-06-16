@@ -19,10 +19,12 @@ import {
   computeScoredSessions,
   deltaPair,
   isChartableInstrument,
+  layoutBandScores,
   rangeStartIso,
   TREND_QUERY_LIMIT,
   TREND_RANGES,
 } from "../sessions";
+import type { InterpretationBand } from "../../interpretation/tableV1";
 
 const NOW = new Date("2026-06-09T12:00:00.000Z");
 
@@ -179,5 +181,82 @@ describe("deltaPair — latest vs immediately previous, range-independent", () =
       previous: { effective_at: "2026-03-01", score: 6 },
       latest: { effective_at: "2026-06-01", score: 4 },
     });
+  });
+});
+
+describe("layoutBandScores — chart band geometry (SCORE space)", () => {
+  const band = (
+    minScore: number,
+    maxScore: number,
+    id: string,
+  ): InterpretationBand => ({
+    minScore,
+    maxScore,
+    bandId: id as InterpretationBand["bandId"],
+    pill: id,
+    headline: "",
+    explanation: "",
+    provisional: true,
+  });
+
+  it("integer instrument bands tile IDENTICALLY to the legacy ±0.5 (no regression)", () => {
+    // PHQ-9-style bands over scoreRange {0,27}: padded edges -0.5/27.5,
+    // boundaries at the .5 midpoints — exactly the legacy geometry.
+    const spans = layoutBandScores(
+      [
+        band(0, 4, "minimal"),
+        band(5, 9, "mild"),
+        band(10, 14, "moderate"),
+        band(15, 19, "moderately-severe"),
+        band(20, 27, "severe"),
+      ],
+      { min: 0, max: 27 },
+    );
+    expect(spans.length).toBe(5);
+    // Lowest band fills to the padded bottom; first interior boundary at 4.5.
+    expect(spans[0].bottom).toBe(-0.5);
+    expect(spans[0].top).toBe(4.5);
+    expect(spans[0].boundary).toBeNull();
+    expect(spans[1].boundary).toBe(4.5);
+    // Highest band fills to the padded top.
+    expect(spans[4].top).toBe(27.5);
+    expect(spans[4].bottom).toBe(19.5);
+    expect(spans[4].boundary).toBe(19.5);
+  });
+
+  it("decimal BMI bands tile at midpoints with no gap/overlap; ±Infinity clamps to the axis", () => {
+    const spans = layoutBandScores(
+      [
+        band(Number.NEGATIVE_INFINITY, 18.4, "underweight"),
+        band(18.5, 24.9, "healthy-weight"),
+        band(25.0, 29.9, "overweight"),
+        band(30.0, Number.POSITIVE_INFINITY, "obesity"),
+      ],
+      { min: 15, max: 40 },
+    );
+    expect(spans.map((s) => s.band.bandId)).toEqual([
+      "underweight",
+      "healthy-weight",
+      "overweight",
+      "obesity",
+    ]);
+    // Padded edges clamp the ±Infinity extremes.
+    expect(spans[0].bottom).toBe(14.5);
+    expect(spans[3].top).toBe(40.5);
+    // Midpoint boundaries — contiguous, no gap/overlap.
+    expect(spans[1].boundary).toBeCloseTo(18.45, 2);
+    expect(spans[2].boundary).toBeCloseTo(24.95, 2);
+    expect(spans[3].boundary).toBeCloseTo(29.95, 2);
+    // Each band's bottom equals the band-below's top (contiguous tiling).
+    expect(spans[1].bottom).toBeCloseTo(spans[0].top, 6);
+    expect(spans[2].bottom).toBeCloseTo(spans[1].top, 6);
+  });
+
+  it("sorts unsorted input by minScore before tiling", () => {
+    const spans = layoutBandScores(
+      [band(5, 9, "mild"), band(0, 4, "minimal")],
+      { min: 0, max: 9 },
+    );
+    expect(spans.map((s) => s.band.bandId)).toEqual(["minimal", "mild"]);
   });
 });

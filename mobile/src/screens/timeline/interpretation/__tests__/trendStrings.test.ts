@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatBmiTrendDelta,
   formatLastCheckins,
   formatTrendAccessibilityLabel,
   formatTrendDelta,
@@ -71,5 +72,50 @@ describe("trend strings — versioned templates", () => {
     expect(formatLastCheckins(5)).toBe("Last 5 check-ins");
     expect(formatLastCheckins(2)).toBe("Last 2 check-ins");
     expect(formatLastCheckins(1)).toBe("Last check-in");
+  });
+});
+
+describe("BMI delta strings — versioned templates", () => {
+  it("moved delta fills the approved BMI template", () => {
+    expect(formatBmiTrendDelta(27.3, 25.1, "April 1, 2026")).toBe(
+      "Your BMI moved from 27.3 to 25.1 since April 1, 2026.",
+    );
+  });
+
+  it("unchanged delta fills the BMI unchanged template", () => {
+    expect(formatBmiTrendDelta(24.0, 24.0, "April 1, 2026")).toBe(
+      "Your BMI is unchanged since April 1, 2026.",
+    );
+  });
+
+  it("rounds both values to 1 dp", () => {
+    // 27.349... rounds to 27.3; 25.051... rounds to 25.1
+    expect(formatBmiTrendDelta(27.349, 25.051, "March 1, 2026")).toBe(
+      "Your BMI moved from 27.3 to 25.1 since March 1, 2026.",
+    );
+  });
+
+  it("treats values as unchanged when they round to the same 1dp string", () => {
+    // 24.04 and 24.02 both round to 24.0 — unchanged copy
+    expect(formatBmiTrendDelta(24.04, 24.02, "March 1, 2026")).toBe(
+      "Your BMI is unchanged since March 1, 2026.",
+    );
+  });
+
+  it("whole-number BMI values format with .0 suffix", () => {
+    expect(formatBmiTrendDelta(25, 22, "February 1, 2026")).toBe(
+      "Your BMI moved from 25.0 to 22.0 since February 1, 2026.",
+    );
+  });
+
+  it("no advice phrasing or population comparisons in BMI delta output", () => {
+    const samples = [
+      formatBmiTrendDelta(27.3, 25.1, "April 1, 2026"),
+      formatBmiTrendDelta(24.0, 24.0, "April 1, 2026"),
+    ];
+    for (const s of samples) {
+      expect(s).not.toMatch(/should|need to|must|recommend|get tested/i);
+      expect(s).not.toMatch(/average|typical for people|% of|than others/i);
+    }
   });
 });

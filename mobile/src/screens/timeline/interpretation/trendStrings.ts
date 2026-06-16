@@ -64,6 +64,45 @@ export function formatTrendDelta(
     .replace("{{date}}", previousDateLabel);
 }
 
+// ─── BMI delta strings ───────────────────────────────────────────────────────
+//
+// Same versioning rules as instrument deltas: factual/navigational,
+// no interpretation verb, no population comparison, no advice phrasing.
+// BMI values rounded to 1 dp in the string (display only — value_num
+// keeps full precision in the DAL).
+
+const BMI_DELTA_MOVED =
+  "Your BMI moved from {{from}} to {{to}} since {{date}}.";
+const BMI_DELTA_UNCHANGED = "Your BMI is unchanged since {{date}}.";
+
+/**
+ * Fill the BMI delta template from derived values. Comparison semantics
+ * (latest vs immediately previous point, full history) live in
+ * BmiTrendChart; this only words it.
+ *
+ * Both values are rounded to 1 dp in the output — display chrome, not
+ * stored precision. The rounding matches the display convention in
+ * bmi.ts (deriveBmiTrend rounds each point to 1 dp at derivation time,
+ * so the round here is a no-op for most callers; it guards edge cases
+ * where a caller passes a raw float).
+ */
+export function formatBmiTrendDelta(
+  previousBmi: number,
+  latestBmi: number,
+  previousDateLabel: string,
+): string {
+  const from = previousBmi.toFixed(1);
+  const to = latestBmi.toFixed(1);
+  if (from === to) {
+    return BMI_DELTA_UNCHANGED.replace("{{date}}", previousDateLabel);
+  }
+  return BMI_DELTA_MOVED.replace("{{from}}", from)
+    .replace("{{to}}", to)
+    .replace("{{date}}", previousDateLabel);
+}
+
+// ─── Accessibility ────────────────────────────────────────────────────────────
+
 const A11Y_TEMPLATE =
   "{{instrument}} trend chart. Latest score {{score}}, {{band}}.";
 

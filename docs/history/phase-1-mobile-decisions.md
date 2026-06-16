@@ -544,6 +544,24 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D26 — BMI trend chart + generalized band-line renderer (2026-06-16)
+
+**Decision:** Operator asked whether the Health-markers detail should be a graphical trend (like the Mood chart) rather than a wall of value cards, and whether BMI bands segregate by age/gender. Answer recorded: **adult BMI is uniform** — WHO defines no validated age/sex-specific adult BMI standard (pediatric BMI-for-age is the only age/sex BMI, out of scope). So the BMI chart reuses the same uniform-band line chart as the instruments, with no cohort branching.
+
+**Renderer generalized (no regression).** `ChartSvg` → exported **`TrendChartSvg({ width, points, scoreRange, bands, redesign, fontsLoaded })`** — band set is now a prop, not instrument-derived. The instrument `TrendChart` resolves `chartBandsFor(instrumentId, sex)` and passes it; geometry is unchanged. Band tiling moved into a pure, unit-tested **`layoutBandScores(bands, scoreRange)`** (`sessions.ts`): bands fill the **half-step-padded** domain `[min-0.5, max+0.5]` with interior boundaries at adjacent-band **midpoints**. For integer instrument bands this is **identical** to the legacy ±0.5 tiling (PHQ-9 `[0,4][5,9]…` → edges -0.5/27.5, boundaries 4.5/9.5/… — pinned by a regression test); for decimal BMI bands (18.4/18.5, 24.9/25.0, 29.9/30.0) it tiles with no gap/overlap.
+
+**BMI chart.** `BmiTrendChart.tsx`: `deriveBmiTrend(rows)` (DERIVED BMI, score = bmi) → range-filtered via the same `rangeStartIso` UTC math → `TrendChartSvg`. Bands from `INTERPRETATION_TABLE_V1.biomarkers["39156-5"]` (WHO, uniform, **provisional**, ‡ via the standing disclaimer — D23). Delta from the versioned `formatBmiTrendDelta` (1 dp). n<2 → quiet state. Wired in `DomainDetailScreen` ABOVE the value cards, only for the `health_markers` single-domain with ≥1 BMI point; instrument `trend` item untouched.
+
+**Line-inside-the-plot fix (operator-reported).** The fixed `[15, 40]` axis clipped any BMI outside it (e.g. a stale 11.8 from the lb-as-kg bug, or severe obesity >40) OUTSIDE the chart. Axis is now **data-aware**: `scoreRange` = union of the WHO band range `[15,40]` and the plotted data min/max (±1-unit margin) — every band still shows AND no dot ever renders outside the plot. The axis is **display chrome only** — defined in `BmiTrendChart.tsx`, never added to the clinical interpretation table.
+
+**Process:** built by an implement→adversarial-verify workflow. The #1 verifier caught a real **instrument-chart geometry regression** the generalization introduced (the half-step Y-padding was dropped) — FIXED by restoring `lo=min-0.5/hi=max+0.5` and pinning it with the `layoutBandScores` integer-band test. Final acceptance-auditor: **REPORT MAY SHIP** (R1–R6 all PASS, clinical invariants intact). On-device: BMI line sits INSIDE the plot (11.8 dot in Underweight, rising to 26.0 in Overweight); the Mood/instrument chart renders **pixel-identical** to before (no regression).
+
+**Verification:** tsc 0, eslint 0 errors, **1044 tests** pass.
+
+**Encoded in code:** `src/screens/timeline/trend/{TrendChart,BmiTrendChart,sessions}.ts(x)`, `src/screens/timeline/interpretation/trendStrings.ts` (`formatBmiTrendDelta`), `src/screens/DomainDetailScreen.tsx`.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

@@ -204,6 +204,16 @@ store)*.
   (a default-unit regression that stored lb-as-kg was caught on-device + fixed).
   Advances O1 (capture surface). On-device verified; 1024 tests (one unrelated
   flaky backup test).
+- 2026-06-16 — **BMI trend chart** (D26): the Health-markers detail now shows a
+  graphical BMI-over-time chart (WHO bands, uniform — adult BMI has no age/sex
+  standard) above the value cards, reusing a generalized `TrendChartSvg` shared
+  with the instrument charts. Band tiling extracted to a pure, unit-tested
+  `layoutBandScores` (integer instrument bands tile IDENTICALLY to before — no
+  regression, pinned). Axis is data-aware so an out-of-range BMI never renders
+  outside the plot (operator-reported "line outside the chart" — fixed). Advances
+  O4 (graphical longitudinal view) into the markers domain. acceptance-auditor
+  MAY SHIP; on-device verified (BMI line inside plot; Mood chart pixel-identical);
+  1044 tests.
 - 2026-06-15 — **WHO interpretation bands** (D23): BMI categories + bone-density
   hip T-score bands added to the versioned `tableV1` biomarkers map (provisional,
   ‡, WHO-cited — TRS 894 / TRS 843), wired to the dashboard BMI value (renders

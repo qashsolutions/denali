@@ -60,9 +60,11 @@ import { checkInAvailable } from "./instrumentsFocus";
 import { groupByInstrumentSession, type TimelineCard } from "./timeline/grouping";
 import { rollupCardsByDomain } from "./timeline/rollup";
 import { TimelineCardView } from "./timeline/TimelineCardView";
+import { BmiTrendChart } from "./timeline/trend/BmiTrendChart";
 import { isChartableInstrument, type TrendRange } from "./timeline/trend/sessions";
 import { TrendChart } from "./timeline/trend/TrendChart";
 import { TrendRangeControl } from "./timeline/trend/TrendRangeControl";
+import { deriveBmiTrend } from "./markers/bmi";
 
 import type { RootStackParamList } from "@/navigation/types";
 
@@ -76,7 +78,9 @@ type ListItem =
   | { kind: "card"; card: TimelineCard }
   /** Trend section (Step 3): range control + one chart per chartable
    *  instrument, placed below the latest-session card. */
-  | { kind: "trend"; instrumentIds: string[] };
+  | { kind: "trend"; instrumentIds: string[] }
+  /** BMI trend section: range control + BmiTrendChart for health_markers. */
+  | { kind: "bmi-trend"; rows: ObservationRow[] };
 
 function cardEffectiveAt(card: TimelineCard): string {
   return card.kind === "instrument-session"
@@ -284,6 +288,21 @@ export function DomainDetailScreen(): React.ReactElement {
         out.unshift({ kind: "trend", instrumentIds });
       }
     }
+
+    // BMI trend section — health_markers single-domain only.
+    // Pin above the value cards if ≥1 BMI point is computable from the rows
+    // (deriveBmiTrend returns [] when there is no height+weight pair, so this
+    // guard is the only gate needed — the chart itself handles n<2 quietly).
+    if (mine.kind === "single-domain" && domainId === "health_markers") {
+      const bmiPoints = deriveBmiTrend(mine.rows);
+      if (bmiPoints.length >= 1) {
+        // Pass the raw rows (not the points) so BmiTrendChart can re-derive
+        // full history and apply its own range filter reactively as trendRange
+        // changes without re-running the useMemo.
+        out.unshift({ kind: "bmi-trend", rows: [...mine.rows] });
+      }
+    }
+
     return out;
   }, [rows, userSexAtBirth, domainId]);
 
@@ -521,6 +540,16 @@ export function DomainDetailScreen(): React.ReactElement {
         </View>
       );
     }
+    if (item.kind === "bmi-trend") {
+      return (
+        <View style={styles.trendSection}>
+          <View style={styles.trendControlWrap}>
+            <TrendRangeControl value={trendRange} onChange={onTrendRangeChange} />
+          </View>
+          <BmiTrendChart rows={item.rows} range={trendRange} />
+        </View>
+      );
+    }
     const id = cardId(item.card);
     return (
       <TimelineCardView
@@ -663,6 +692,7 @@ export function DomainDetailScreen(): React.ReactElement {
             keyExtractor={(item) => {
               if (item.kind === "header") return `h:${item.dateKey}`;
               if (item.kind === "trend") return "trend";
+              if (item.kind === "bmi-trend") return "bmi-trend";
               return cardId(item.card);
             }}
             renderItem={renderItem}
