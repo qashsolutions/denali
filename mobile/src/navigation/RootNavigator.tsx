@@ -20,6 +20,7 @@ import { useDalState } from "@/db/DalProvider";
 import { PrivacyNoticeScreen } from "@/onboarding/PrivacyNoticeScreen";
 import { CohortOnboardingScreen } from "@/screens/CohortOnboardingScreen";
 import { DomainDetailScreen } from "@/screens/DomainDetailScreen";
+import { InstrumentHistoryScreen } from "@/screens/InstrumentHistoryScreen";
 import { InstrumentsScreen } from "@/screens/InstrumentsScreen";
 import { IntakeOnboardingScreen } from "@/screens/IntakeOnboardingScreen";
 import { LockScreen } from "@/screens/LockScreen";
@@ -178,6 +179,11 @@ export function RootNavigator() {
       <Stack.Screen name="DomainDetail" component={DomainDetailScreen} />
       {/* D28: per-marker history drill-down (tap a Latest-readings card). */}
       <Stack.Screen name="MarkerDetail" component={MarkerDetailScreen} />
+      {/* D30: per-instrument check-in history (tap the Latest-check-in card). */}
+      <Stack.Screen
+        name="InstrumentHistory"
+        component={InstrumentHistoryScreen}
+      />
       <Stack.Screen name="LogMarker" component={LogMarkerScreen} />
       {/*
        * The legacy chronological feed remains reachable via a footer entry

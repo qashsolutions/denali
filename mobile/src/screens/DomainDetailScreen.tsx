@@ -58,10 +58,11 @@ import {
 } from "./timeline/displayMapping";
 import { checkInAvailable } from "./instrumentsFocus";
 import { groupByInstrumentSession, type TimelineCard } from "./timeline/grouping";
+import { instrumentDomainView } from "./timeline/instrumentDomainView";
 import { rollupCardsByDomain } from "./timeline/rollup";
 import { TimelineCardView } from "./timeline/TimelineCardView";
 import { BmiTrendChart } from "./timeline/trend/BmiTrendChart";
-import { isChartableInstrument, type TrendRange } from "./timeline/trend/sessions";
+import { type TrendRange } from "./timeline/trend/sessions";
 import { TrendChart } from "./timeline/trend/TrendChart";
 import { TrendRangeControl } from "./timeline/trend/TrendRangeControl";
 import { deriveBmiTrend } from "./markers/bmi";
@@ -78,7 +79,9 @@ type ListItem =
   | { kind: "header"; dateKey: string }
   /** Plain section label (non-date) — e.g. "Latest readings" for markers. */
   | { kind: "label"; text: string }
-  | { kind: "card"; card: TimelineCard }
+  /** A card; `navigableHistory` marks the latest instrument check-in card as
+   *  a drill-down to the full check-in history (D30). */
+  | { kind: "card"; card: TimelineCard; navigableHistory?: boolean }
   /** Trend section (Step 3): range control + one chart per chartable
    *  instrument, placed below the latest-session card. */
   | { kind: "trend"; instrumentIds: string[] }
@@ -237,16 +240,16 @@ export function DomainDetailScreen(): React.ReactElement {
     const mine = rollups.find((r) => r.domainId === domainId);
     if (mine == null || mine.kind === "empty-domain") return [];
 
-    // Health markers consolidate to ONE card per marker (latest reading) under
-    // a single "Latest readings" label — the trend chart carries the full
-    // history, so a card-per-entry wall is redundant (D27). Date-bucketing is
-    // dropped here on purpose: each marker's latest reading has its own date
-    // (shown on the card), so buckets would fragment to one card each. Every
-    // OTHER domain keeps the date-bucketed, all-entries view — health_history
-    // diagnoses are distinct facts, not a "latest value", and instrument
-    // sessions are each meaningful.
+    // CONSOLIDATION (D27 markers, D30 instruments): the trend chart carries the
+    // full history as dots, so the body shows only the LATEST entry as a card,
+    // not a card-per-entry wall. The past lives in a drill-down.
+    //   - health_markers: one card per marker (latest reading) → MarkerDetail.
+    //   - instrument domains: the single latest check-in card → InstrumentHistory.
+    //   - health_history: diagnoses are distinct facts (not a "latest value"),
+    //     so it KEEPS the date-bucketed, all-entries list.
     const isMarkers =
       mine.kind === "single-domain" && domainId === "health_markers";
+    const isInstrument = mine.kind === "instrument-domain";
     const out: ListItem[] = [];
 
     if (isMarkers) {
@@ -259,19 +262,30 @@ export function DomainDetailScreen(): React.ReactElement {
           out.push({ kind: "card", card: { kind: "single", row } });
         }
       }
-    } else {
-      // Flatten the rollup back to TimelineCard[] for date-bucketing.
-      const cardsInDomain: TimelineCard[] = [];
-      if (mine.kind === "instrument-domain") {
-        cardsInDomain.push(...mine.sessions);
-      } else {
-        // single-domain (e.g. health_history) — wrap each row as a card.
-        for (const row of mine.rows) {
-          cardsInDomain.push({ kind: "single", row });
-        }
+    } else if (isInstrument) {
+      // The chart (every check-in as a dot) is the hero; show ONLY the latest
+      // check-in card. >1 session ⇒ the card drills down to InstrumentHistory.
+      // Pure helper keeps the "chart from ALL sessions, latest is the gate-aware
+      // most-recent" logic testable (instrumentDomainView).
+      const view = instrumentDomainView(mine.sessions);
+      if (view.latest != null) {
+        out.push({ kind: "label", text: "Latest check-in" });
+        out.push({
+          kind: "card",
+          card: view.latest,
+          navigableHistory: view.hasHistory,
+        });
       }
-
-      // Bucket by date for section headers.
+      if (view.chartableInstrumentIds.length > 0) {
+        // The chart is the hero — pin it to the TOP, above the latest card.
+        out.unshift({ kind: "trend", instrumentIds: view.chartableInstrumentIds });
+      }
+    } else {
+      // single-domain (e.g. health_history) — date-bucketed, all entries.
+      const cardsInDomain: TimelineCard[] = [];
+      for (const row of mine.rows) {
+        cardsInDomain.push({ kind: "single", row });
+      }
       const buckets = new Map<string, TimelineCard[]>();
       for (const card of cardsInDomain) {
         const key = dateKeyOf(cardEffectiveAt(card));
@@ -290,30 +304,6 @@ export function DomainDetailScreen(): React.ReactElement {
         for (const c of buckets.get(key) ?? []) {
           out.push({ kind: "card", card: c });
         }
-      }
-    }
-
-    // Trend section (Step 3) — chartable instruments in this domain,
-    // ordered by most-recent session (cardsInDomain is newest-first
-    // within buckets; walk in list order for first-appearance recency).
-    if (mine.kind === "instrument-domain") {
-      const seen = new Set<string>();
-      const instrumentIds: string[] = [];
-      for (const item of out) {
-        if (item.kind !== "card" || item.card.kind !== "instrument-session") continue;
-        const id = item.card.instrumentId;
-        if (seen.has(id)) continue;
-        seen.add(id);
-        // PHQ-2 is the quick SCREEN that gates the full PHQ-9 check-in — not a
-        // severity-tracking instrument, so the Mood domain charts only the full
-        // check-in (operator review 2026-06-12). Scoped here, not in
-        // isChartableInstrument, to leave the dashboard sparkline untouched.
-        if (id === "PHQ-2") continue;
-        if (isChartableInstrument(id)) instrumentIds.push(id);
-      }
-      if (instrumentIds.length > 0) {
-        // The chart is the hero — pin it to the TOP, above the session history.
-        out.unshift({ kind: "trend", instrumentIds });
       }
     }
 
@@ -586,15 +576,17 @@ export function DomainDetailScreen(): React.ReactElement {
       );
     }
     const id = cardId(item.card);
-    // On the markers screen, a single-row card drills down to the per-marker
-    // history (chart + all readings) instead of expanding inline (D28). The
-    // full reading history collapsed away by D27 lives on that screen.
+    // Drill-down on press (D28 markers / D30 instruments): the latest card on a
+    // consolidated screen opens the full history instead of expanding inline.
+    //   - markers single card → MarkerDetail (that marker's chart + readings)
+    //   - latest instrument card (navigableHistory) → InstrumentHistory
     const markerCode =
       domainId === "health_markers" && item.card.kind === "single"
         ? item.card.row.code
         : null;
-    const markerDrillDown =
-      markerCode != null
+    const onCardPress = item.navigableHistory
+      ? () => navigation.navigate("InstrumentHistory", { domainId })
+      : markerCode != null
         ? () => navigation.navigate("MarkerDetail", { code: markerCode })
         : undefined;
     return (
@@ -608,7 +600,7 @@ export function DomainDetailScreen(): React.ReactElement {
         // bottom; suppress the per-card copy of the SAME two lines
         // (2026-06-09 operator review — no double display).
         showDisclaimer={false}
-        onPress={markerDrillDown}
+        onPress={onCardPress}
       />
     );
   };

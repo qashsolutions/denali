@@ -608,6 +608,21 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D30 — Instrument domain detail consolidation + check-in history drill-down (2026-06-16)
+
+**Decision:** Operator asked whether the consolidation (D27/D28) held across ALL cards. Audit (code + on-device) found it did NOT: instrument domain details (Mood, Anxiety, Sleep, Alcohol, Urinary, Menopause, Hormonal) still rendered **every check-in as a card** (date-bucketed) on top of the trend chart's dots — the same wall-of-cards redundancy D27 removed for markers (D27 had scoped itself to `health_markers`). Aligned instruments to the markers pattern.
+
+- **Latest-card + chart + drill-down.** The instrument detail now shows the trend chart (every check-in as a dot) + a single **"Latest check-in"** card; the full date-bucketed session list moved to a new **`InstrumentHistory`** screen, reached by tapping the card ("View past check-ins ›"). Mirrors markers → `MarkerDetail` (D28). `health_history` still lists every diagnosis (distinct facts, not a "latest value") — unchanged.
+- **Load-bearing: chart from ALL sessions, not the rendered card.** The chartable-instrument set is computed from every session, not the (now single) latest card — so a Mood domain whose LATEST session is the non-chartable PHQ-2 gate still charts PHQ-9. Pinned by `instrumentDomainView` (pure helper) + its test. PHQ-2 stays gate-only (never charted, per 2026-06-12).
+- **Navigable card is additive.** `InstrumentSessionCard` (and `SingleRowCard`, D28) take an OPTIONAL `onPress`: when set the whole card navigates with a "View …›" cue and no inline expander; absent → byte-identical expand behavior. `InstrumentHistory`'s cards omit `onPress` → expandable (per-item breakdown preserved there). Single-session domains pass no drill-down (`hasHistory` false).
+- **No clinical-content change.** Reuses `TimelineCardView`'s existing rendering; no new bands/strings/pills/disclaimers/‡/988. Read-only; storage/export untouched.
+
+**Verification:** tsc 0, eslint 0 errors, **1076 tests** (5 new `instrumentDomainView` pins incl. the latest-PHQ-2-still-charts-PHQ-9 invariant). On-device: Mood detail → chart + one "Latest check-in" card + "View past check-ins" → `InstrumentHistory` (all sessions, expandable); chart renders PHQ-9 despite the latest being PHQ-2. **Maestro** `consolidation.yaml` (new): full drill-down path on both instruments + markers — all assertions pass.
+
+**Encoded in code:** `src/screens/timeline/instrumentDomainView.ts` (+ test), `src/screens/InstrumentHistoryScreen.tsx`, `src/screens/DomainDetailScreen.tsx`, `src/screens/timeline/TimelineCardView.tsx` (`onPress` on `InstrumentSessionCard`), `src/navigation/{types,RootNavigator}.tsx`, `mobile/maestro/flows/consolidation.yaml`.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

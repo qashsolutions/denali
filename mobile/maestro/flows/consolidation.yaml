@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Flow 6 — Card consolidation + history drill-downs (D27 / D28 / D30)
+#
+#   Verifies the "latest card + chart dots, past in a drill-down" pattern is
+#   live on BOTH consolidated surfaces:
+#     - Instrument domain (Mood): chart (PHQ-9) + a single "Latest check-in"
+#       card → "View past check-ins" → InstrumentHistory ("All check-ins").
+#       Load-bearing: the chart renders from ALL sessions, so PHQ-9 charts even
+#       when the latest session is the non-chartable PHQ-2 gate.
+#     - Health markers: "Latest readings" (one card per marker) → a marker card
+#       → MarkerDetail ("All readings").
+#
+# SETUP — unlike the test-OTP flows, this runs against the ALREADY-AUTHENTICATED
+# app with its existing local data (launchApp reuses the session; clearState
+# false). It asserts structure, not generated data, so it needs the emulator to
+# already hold ≥2 Mood check-ins (incl. a PHQ-9) and ≥1 health marker. Section
+# labels render uppercase (textTransform) — matched as they appear in the tree.
+#
+# Selectors: testID / accessibilityLabel inventory in ../README.md.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+- launchApp:
+    clearState: false
+- assertVisible: "Your health"
+
+# ── Instrument consolidation (Mood) ─────────────────────────────────────
+- tapOn:
+    id: "dashboard_card_mood"
+- assertVisible: "LATEST CHECK-IN"
+# Chart renders from ALL sessions (PHQ-9), independent of the latest card.
+- assertVisible:
+    id: "trend_chart_PHQ-9"
+- assertVisible: "View past check-ins"
+
+# Drill down to the full check-in history.
+- tapOn: "View past check-ins"
+- assertVisible: "ALL CHECK-INS"
+- assertVisible:
+    id: "instrument_history_back"
+# Per-session detail is still expandable inside the history.
+- assertVisible: "Show details"
+- tapOn:
+    id: "instrument_history_back"
+- assertVisible: "LATEST CHECK-IN"
+- tapOn:
+    id: "domain_detail_back"
+- assertVisible: "Your health"
+
+# ── Marker consolidation (Health markers) ───────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_health_markers"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_health_markers"
+- assertVisible: "LATEST READINGS"
+- assertVisible: "View history"
+
+# Drill down to the per-marker history (chart + all readings).
+- tapOn: "Weight"
+- assertVisible: "ALL READINGS"
+- assertVisible:
+    id: "marker_detail_back"
+- tapOn:
+    id: "marker_detail_back"
+- assertVisible: "LATEST READINGS"

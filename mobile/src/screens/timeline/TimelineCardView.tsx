@@ -112,6 +112,13 @@ interface SessionCardProps {
   onToggleExpand: () => void;
   userSexAtBirth: SexAtBirth | null;
   showDisclaimer: boolean;
+  /**
+   * When provided, the WHOLE card navigates (drill-down to check-in history)
+   * on press and the footer shows a "View past check-ins ›" cue instead of the
+   * inline "Show details" expander (D30). Absent → byte-identical expand
+   * behavior (every existing caller unchanged).
+   */
+  onPress?: () => void;
 }
 
 function InstrumentSessionCard({
@@ -123,6 +130,7 @@ function InstrumentSessionCard({
   onToggleExpand,
   userSexAtBirth,
   showDisclaimer,
+  onPress,
 }: SessionCardProps): React.ReactElement {
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
@@ -139,8 +147,18 @@ function InstrumentSessionCard({
     interp != null ? pillTintForBand(redesign, interp.band) : null;
   const band: InterpretationBand | null = interp?.band ?? null;
 
+  const navigable = onPress != null;
+  const Container: React.ElementType = navigable ? Pressable : View;
+  const containerProps = navigable
+    ? {
+        onPress,
+        accessibilityRole: "button" as const,
+        accessibilityLabel: `${friendlyName}, ${band?.pill ?? "check-in"}. View past check-ins.`,
+      }
+    : {};
+
   return (
-    <View testID="timeline_card" style={styles.card}>
+    <Container testID="timeline_card" style={styles.card} {...containerProps}>
       <View style={styles.headerRow}>
         <View style={styles.iconChip}>
           <Icon color={redesign.teal} size={18} />
@@ -185,25 +203,34 @@ function InstrumentSessionCard({
         ) : (
           <View />
         )}
-        <Pressable
-          testID="timeline_card_details_toggle"
-          onPress={onToggleExpand}
-          accessibilityRole="button"
-          accessibilityLabel={isExpanded ? "Hide details" : "Show details"}
-          style={styles.detailsButton}
-        >
-          <Text style={styles.detailsText}>
-            {isExpanded ? "Hide details" : "Show details"}
-          </Text>
-          {isExpanded ? (
-            <ChevronUp color={redesign.tealDeep} size={16} />
-          ) : (
-            <ChevronDown color={redesign.tealDeep} size={16} />
-          )}
-        </Pressable>
+        {navigable ? (
+          // Drill-down affordance — the card itself is the touch target, so
+          // this is a non-interactive visual cue (no nested Pressable).
+          <View style={styles.detailsButton} pointerEvents="none">
+            <Text style={styles.detailsText}>View past check-ins</Text>
+            <ChevronRight color={redesign.tealDeep} size={16} />
+          </View>
+        ) : (
+          <Pressable
+            testID="timeline_card_details_toggle"
+            onPress={onToggleExpand}
+            accessibilityRole="button"
+            accessibilityLabel={isExpanded ? "Hide details" : "Show details"}
+            style={styles.detailsButton}
+          >
+            <Text style={styles.detailsText}>
+              {isExpanded ? "Hide details" : "Show details"}
+            </Text>
+            {isExpanded ? (
+              <ChevronUp color={redesign.tealDeep} size={16} />
+            ) : (
+              <ChevronDown color={redesign.tealDeep} size={16} />
+            )}
+          </Pressable>
+        )}
       </View>
 
-      {isExpanded ? (
+      {!navigable && isExpanded ? (
         <SessionDetails
           instrumentId={instrumentId}
           items={items}
@@ -223,7 +250,7 @@ function InstrumentSessionCard({
           ) : null}
         </View>
       ) : null}
-    </View>
+    </Container>
   );
 }
 
@@ -444,9 +471,10 @@ export interface TimelineCardViewProps {
    */
   showDisclaimer?: boolean;
   /**
-   * Single-row only: when provided, the card navigates (drill-down) on press
-   * with a "View history ›" cue instead of the inline expander. Ignored for
-   * instrument-session cards. Absent → byte-identical expand behavior.
+   * When provided, the card navigates (drill-down) on press with a "View …›"
+   * cue instead of the inline expander — single-row cards → "View history"
+   * (D28), instrument-session cards → "View past check-ins" (D30). Absent →
+   * byte-identical expand behavior.
    */
   onPress?: () => void;
 }
@@ -471,6 +499,7 @@ export function TimelineCardView({
         onToggleExpand={onToggleExpand}
         userSexAtBirth={userSexAtBirth}
         showDisclaimer={showDisclaimer}
+        onPress={onPress}
       />
     );
   }

@@ -229,6 +229,13 @@ store)*.
   non-deterministic (random mnemonic + last-word swap had a ~0.34% valid-checksum
   collision). Pinned to the official BIP39 all-0xff vector with a deterministic
   swap; production crypto verified correct + untouched. Suite is now clean.
+- 2026-06-16 — **Instrument consolidation** (D30): instrument domain details
+  (Mood, Anxiety, …) now show the trend chart + a single "Latest check-in" card,
+  with the full session list in a new InstrumentHistory drill-down — closing the
+  D27/D28 consolidation gap (instruments had still shown a card per check-in).
+  Chart computed from ALL sessions (charts PHQ-9 even when the latest is PHQ-2).
+  Advances O4. tsc/eslint/1076 tests; on-device + Maestro (consolidation.yaml,
+  new) verified the full drill-down on instruments AND markers.
 - 2026-06-16 — **Markers detail consolidation** (D27): the Health-markers detail
   now shows ONE card per marker (the latest reading) under a "Latest readings"
   label instead of a card-per-entry wall — the trend chart carries the full

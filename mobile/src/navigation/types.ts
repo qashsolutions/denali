@@ -61,6 +61,13 @@ export type RootStackParamList = {
    */
   MarkerDetail: { code: string };
   /**
+   * Phase-3 (D30): per-instrument-domain check-in history drill-down, reached
+   * by tapping the "Latest check-in" card on an instrument DomainDetail. Shows
+   * every past check-in session (the date-bucketed list moved off the domain
+   * screen when it consolidated to latest-card + chart). Mirrors MarkerDetail.
+   */
+  InstrumentHistory: { domainId: DomainId };
+  /**
    * Manual marker entry ("Log a value"). Optional `markerKey` pre-selects a
    * marker; absent → the marker picker. Reached from the "+ Add" sheet and
    * the empty Health-markers detail screen.
