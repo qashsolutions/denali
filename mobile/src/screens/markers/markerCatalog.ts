@@ -66,8 +66,18 @@ export interface MarkerUnit {
   unit: string;
   /** Exactly one unit per field is canonical (the stored unit). */
   canonical?: boolean;
-  /** Multiply an entered value in THIS unit by this to get the canonical unit. */
+  /**
+   * Multiply an entered value in THIS unit by this to get the canonical unit.
+   * For feetInches composite units this factor is unused — the screen calls
+   * `feetInchesToCm()` directly. Set to 0 as a sentinel.
+   */
   toCanonicalFactor: number;
+  /**
+   * When true this unit is the feet+inches composite: the screen renders TWO
+   * inputs ([feet] ft [inches] in) and calls `feetInchesToCm()` for
+   * conversion. Only valid on height fields. All other units are unaffected.
+   */
+  feetInches?: boolean;
 }
 
 export interface MarkerField {
@@ -409,13 +419,17 @@ export const MARKER_CATALOG: ReadonlyArray<MarkerDef> = [
     category: "anthropometric",
     group: "Body",
     provisional: true,
+    entryHint: "Enter your height in feet and inches, or switch to centimeters.",
     fields: [
       {
         // LOINC 8302-2 "Body height" — NLM-verified 2026-06-15.
         loinc: "8302-2",
         units: [
+          // ft/in is the DEFAULT (listed first) for the US 45+ audience.
+          // The screen renders two inputs (feet + inches) when this unit is
+          // active. toCanonicalFactor is unused for feetInches; set to 0.
+          { unit: "ft/in", feetInches: true, toCanonicalFactor: 0 },
           { unit: "cm", canonical: true, toCanonicalFactor: 1 },
-          { unit: "in", toCanonicalFactor: IN_TO_CM },
         ],
         plausible: { min: 50, max: 250 }, // cm — typo guard (physical extremes)
       },

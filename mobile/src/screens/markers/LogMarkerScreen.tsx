@@ -8,6 +8,19 @@
  *
  * v1 dates the entry "now"; backdating a past lab value is a documented
  * follow-up (would need a date picker — out of scope, no new dep).
+ *
+ * Guardrails (all markers):
+ *   - Live validation: per-field validity + overall canSave computed on every
+ *     keystroke via pure helpers (validateField, deriveCanSave) in markerEntry.ts.
+ *   - Save is DISABLED (dimmed, non-tappable) when any field is empty,
+ *     non-numeric, or outside the field's plausible physical range.
+ *   - Error copy is a hard block, not a soft warning: "Enter a number." or
+ *     the exact valid range in the active display unit.
+ *
+ * Height — ft/in:
+ *   - Default unit for height is "ft/in" (US 45+ audience).
+ *   - Two inputs rendered: [feet] ft  [inches] in.
+ *   - Stored value is always canonical cm (feetInchesToCm conversion).
  */
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -39,12 +52,16 @@ import {
   markersFor,
   trackedMarkers,
   type MarkerDef,
+  type MarkerField,
 } from "./markerCatalog";
 import {
   buildMarkerObservations,
   canonicalUnit,
-  checkPlausible,
-  toCanonical,
+  defaultUnitForField,
+  deriveCanSave,
+  feetInchesToCm,
+  rangeErrorMessage,
+  validateField,
 } from "./markerEntry";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "LogMarker">;
@@ -66,6 +83,9 @@ export function LogMarkerScreen(): React.ReactElement {
   const marker = markerKey != null ? (findMarker(markerKey) ?? null) : null;
   const [values, setValues] = React.useState<string[]>([]);
   const [units, setUnits] = React.useState<string[]>([]);
+  // ft/in composite inputs: indexed by field index.
+  const [feetValues, setFeetValues] = React.useState<string[]>([]);
+  const [inchesValues, setInchesValues] = React.useState<string[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [sexAtBirth, setSexAtBirth] = React.useState<SexAtBirth | null>(null);
@@ -80,7 +100,10 @@ export function LogMarkerScreen(): React.ReactElement {
     hapticSelection();
     setMarkerKey(m.key);
     setValues(m.fields.map(() => ""));
-    setUnits(m.fields.map((f) => canonicalUnit(f).unit));
+    // Default unit: ft/in for height, canonical (kg / mg/dL / …) for the rest.
+    setUnits(m.fields.map(defaultUnitForField));
+    setFeetValues(m.fields.map(() => ""));
+    setInchesValues(m.fields.map(() => ""));
     setError(null);
   }, []);
 
@@ -137,28 +160,58 @@ export function LogMarkerScreen(): React.ReactElement {
     [sexAtBirth, trackedKeys],
   );
 
+  // ── Live canSave derived from current inputs ────────────────────────────
+  // Pure helper; safe to evaluate on every render — no side effects.
+  const canSave = React.useMemo(() => {
+    if (marker == null) return false;
+    return deriveCanSave(marker, values, units, feetValues, inchesValues);
+  }, [marker, values, units, feetValues, inchesValues]);
+
+  // ── Save handler ────────────────────────────────────────────────────────
   const onSave = React.useCallback(async () => {
     if (marker == null || dal == null || userId == null) {
       setError("Not ready. Please try again.");
       return;
     }
+    // Guard: canSave must be true (button should be disabled, but double-check).
+    if (!canSave) return;
+
     const entries: { value: number; unit: string }[] = [];
     for (let i = 0; i < marker.fields.length; i += 1) {
-      const num = Number(values[i]?.trim());
-      const canonical = toCanonical(marker.fields[i], num, units[i]);
-      const res = checkPlausible(marker.fields[i], canonical);
+      const field = marker.fields[i];
+      const isFeetInches =
+        field.units.find((u) => u.unit === units[i])?.feetInches === true;
+
+      // Re-validate with the SAME helper that drives the canSave gate, so the
+      // final guard is never weaker than the live gate (no divergence — e.g.
+      // the ft/in 0–11 bound and the empty-string check both hold here too).
+      const res = isFeetInches
+        ? validateField(field, units[i], undefined, feetValues[i], inchesValues[i])
+        : validateField(field, units[i], values[i]);
       if (!res.ok) {
-        const which =
-          marker.fields[i].label != null ? `${marker.fields[i].label} ` : "";
         setError(
-          res.reason === "not-a-number"
-            ? `Enter a number for ${which.trim() || "the value"}.`
-            : `That ${which}value looks unusual — double-check it.`,
+          res.reason === "out-of-range"
+            ? rangeErrorMessage(field, units[i])
+            : field.label != null
+              ? `Enter a number for ${field.label}.`
+              : "Enter a number.",
         );
         return;
       }
-      entries.push({ value: num, unit: units[i] });
+
+      if (isFeetInches) {
+        // ft/in composite: store the converted cm as a canonical "cm" entry so
+        // buildMarkerObservations applies toCanonicalFactor=1 (identity).
+        const cm = feetInchesToCm(
+          Number(feetValues[i]?.trim()),
+          Number(inchesValues[i]?.trim()),
+        );
+        entries.push({ value: cm, unit: canonicalUnit(field).unit });
+      } else {
+        entries.push({ value: Number(values[i]?.trim()), unit: units[i] });
+      }
     }
+
     setSaving(true);
     setError(null);
     try {
@@ -168,15 +221,15 @@ export function LogMarkerScreen(): React.ReactElement {
         effectiveAt: new Date().toISOString(),
         entries,
       });
-      for (const obs of inserts) {
-        await dal.insertObservation(obs);
+      for (const o of inserts) {
+        await dal.insertObservation(o);
       }
       navigation.goBack();
     } catch {
       setError("Couldn't save. Please try again.");
       setSaving(false);
     }
-  }, [marker, dal, userId, values, units, navigation]);
+  }, [marker, dal, userId, values, units, feetValues, inchesValues, canSave, navigation]);
 
   const styles = React.useMemo(
     () => makeStyles(theme, redesign, fontsLoaded, insets.top),
@@ -258,73 +311,66 @@ export function LogMarkerScreen(): React.ReactElement {
             {marker.entryHint != null ? (
               <Text style={styles.entryHint}>{marker.entryHint}</Text>
             ) : null}
+
             {marker.fields.map((field, i) => (
-              <View key={field.loinc} style={styles.fieldBlock}>
-                {field.label != null ? (
-                  <Text style={styles.fieldLabel}>{field.label}</Text>
-                ) : null}
-                <View style={styles.inputRow}>
-                  <TextInput
-                    testID={`log_marker_input_${i}`}
-                    accessibilityLabel={field.label ?? marker.display}
-                    // Signed fields (e.g. bone-density T-score) need a keyboard
-                    // that allows a leading minus sign. Unsigned fields keep the
-                    // positive-only decimal pad. The `signed` flag is explicit on
-                    // the MarkerField — never a global toggle.
-                    keyboardType={field.signed ? "numbers-and-punctuation" : "decimal-pad"}
-                    value={values[i] ?? ""}
-                    onChangeText={(t) =>
-                      setValues((prev) => {
-                        const next = [...prev];
-                        next[i] = t;
-                        return next;
-                      })
-                    }
-                    placeholder={field.signed ? "e.g. -1.5" : "0"}
-                    placeholderTextColor={redesign.ink3}
-                    style={styles.input}
-                  />
-                  {field.units.length > 1 ? (
-                    <View style={styles.unitToggle}>
-                      {field.units.map((u) => {
-                        const active = units[i] === u.unit;
-                        return (
-                          <Pressable
-                            key={u.unit}
-                            testID={`log_marker_unit_${i}_${u.unit}`}
-                            onPress={() => {
-                              hapticSelection();
-                              setUnits((prev) => {
-                                const next = [...prev];
-                                next[i] = u.unit;
-                                return next;
-                              });
-                            }}
-                            style={[
-                              styles.unitChip,
-                              active && styles.unitChipActive,
-                            ]}
-                            accessibilityRole="button"
-                            accessibilityLabel={u.unit}
-                            accessibilityState={{ selected: active }}
-                          >
-                            <Text
-                              style={[
-                                styles.unitLabel,
-                                active && styles.unitLabelActive,
-                              ]}
-                            >
-                              {u.unit}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  ) : (
-                    <Text style={styles.unitStatic}>{units[i]}</Text>
-                  )}
-                </View>
-              </View>
+              <FieldInput
+                key={field.loinc}
+                field={field}
+                fieldIndex={i}
+                markerDisplay={marker.display}
+                activeUnit={units[i] ?? field.units[0].unit}
+                value={values[i] ?? ""}
+                feetValue={feetValues[i] ?? ""}
+                inchesValue={inchesValues[i] ?? ""}
+                onChangeValue={(t) =>
+                  setValues((prev) => {
+                    const next = [...prev];
+                    next[i] = t;
+                    return next;
+                  })
+                }
+                onChangeFeet={(t) =>
+                  setFeetValues((prev) => {
+                    const next = [...prev];
+                    next[i] = t;
+                    return next;
+                  })
+                }
+                onChangeInches={(t) =>
+                  setInchesValues((prev) => {
+                    const next = [...prev];
+                    next[i] = t;
+                    return next;
+                  })
+                }
+                onChangeUnit={(unit) => {
+                  hapticSelection();
+                  setUnits((prev) => {
+                    const next = [...prev];
+                    next[i] = unit;
+                    return next;
+                  });
+                  // Reset the raw inputs when switching units to avoid
+                  // stale-string confusion (the user sees blank fields).
+                  setValues((prev) => {
+                    const next = [...prev];
+                    next[i] = "";
+                    return next;
+                  });
+                  setFeetValues((prev) => {
+                    const next = [...prev];
+                    next[i] = "";
+                    return next;
+                  });
+                  setInchesValues((prev) => {
+                    const next = [...prev];
+                    next[i] = "";
+                    return next;
+                  });
+                }}
+                styles={styles}
+                redesign={redesign}
+              />
             ))}
 
             {error != null ? (
@@ -334,12 +380,18 @@ export function LogMarkerScreen(): React.ReactElement {
             <PressableScale
               testID="log_marker_save"
               haptic
-              style={styles.saveBtn}
+              disabled={!canSave}
+              style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
               onPress={onSave}
               accessibilityRole="button"
               accessibilityLabel="Save"
+              accessibilityState={{ disabled: !canSave }}
             >
-              <Text style={styles.saveLabel}>Save</Text>
+              <Text
+                style={[styles.saveLabel, !canSave && styles.saveLabelDisabled]}
+              >
+                Save
+              </Text>
             </PressableScale>
           </>
         )}
@@ -347,6 +399,160 @@ export function LogMarkerScreen(): React.ReactElement {
     </View>
   );
 }
+
+// ── FieldInput sub-component ──────────────────────────────────────────────────
+// Extracted to keep the render body legible; receives all state as props (no
+// local state) so the parent remains the single source of truth.
+
+interface FieldInputProps {
+  field: MarkerField;
+  fieldIndex: number;
+  markerDisplay: string;
+  activeUnit: string;
+  value: string;
+  feetValue: string;
+  inchesValue: string;
+  onChangeValue: (t: string) => void;
+  onChangeFeet: (t: string) => void;
+  onChangeInches: (t: string) => void;
+  onChangeUnit: (unit: string) => void;
+  styles: ReturnType<typeof makeStyles>;
+  redesign: ReturnType<typeof useTheme>["redesign"];
+}
+
+function FieldInput({
+  field,
+  fieldIndex,
+  markerDisplay,
+  activeUnit,
+  value,
+  feetValue,
+  inchesValue,
+  onChangeValue,
+  onChangeFeet,
+  onChangeInches,
+  onChangeUnit,
+  styles,
+  redesign,
+}: FieldInputProps): React.ReactElement {
+  const i = fieldIndex;
+  const activeUnitDef = field.units.find((u) => u.unit === activeUnit);
+  const isFeetInches = activeUnitDef?.feetInches === true;
+
+  // Per-field live validation for inline error display (not blocking — the
+  // Save button handles the hard gate; inline errors guide the user).
+  const fieldResult =
+    isFeetInches
+      ? validateField(field, activeUnit, undefined, feetValue, inchesValue)
+      : validateField(field, activeUnit, value);
+
+  // Only show inline field error if the user has started typing (non-empty
+  // input) — avoids alarming them on a fresh blank field.
+  const hasTyped = isFeetInches
+    ? feetValue !== "" || inchesValue !== ""
+    : value !== "";
+  const showInlineError = hasTyped && !fieldResult.ok;
+
+  const inlineErrorText = showInlineError
+    ? fieldResult.reason === "empty"
+      ? "Enter a number."
+      : fieldResult.reason === "not-a-number"
+        ? "Enter a number."
+        : rangeErrorMessage(field, activeUnit)
+    : null;
+
+  return (
+    <View style={styles.fieldBlock}>
+      {field.label != null ? (
+        <Text style={styles.fieldLabel}>{field.label}</Text>
+      ) : null}
+
+      <View style={styles.inputRow}>
+        {isFeetInches ? (
+          // Two-input path: [feet] ft  [inches] in
+          <View style={styles.feetInchesRow}>
+            <TextInput
+              testID={`log_marker_input_${i}_feet`}
+              accessibilityLabel={`${field.label ?? markerDisplay} feet`}
+              keyboardType="number-pad"
+              value={feetValue}
+              onChangeText={onChangeFeet}
+              placeholder="5"
+              placeholderTextColor={redesign.ink3}
+              style={[styles.input, styles.inputFeetInches]}
+            />
+            <Text style={styles.feetInchesLabel}>ft</Text>
+            <TextInput
+              testID={`log_marker_input_${i}_inches`}
+              accessibilityLabel={`${field.label ?? markerDisplay} inches`}
+              keyboardType="number-pad"
+              value={inchesValue}
+              onChangeText={onChangeInches}
+              placeholder="9"
+              placeholderTextColor={redesign.ink3}
+              style={[styles.input, styles.inputFeetInches]}
+            />
+            <Text style={styles.feetInchesLabel}>in</Text>
+          </View>
+        ) : (
+          // Standard single-input path
+          <TextInput
+            testID={`log_marker_input_${i}`}
+            accessibilityLabel={field.label ?? markerDisplay}
+            // Signed fields (e.g. bone-density T-score) need a keyboard
+            // that allows a leading minus sign. Unsigned fields keep the
+            // positive-only decimal pad. The `signed` flag is explicit on
+            // the MarkerField — never a global toggle.
+            keyboardType={
+              field.signed ? "numbers-and-punctuation" : "decimal-pad"
+            }
+            value={value}
+            onChangeText={onChangeValue}
+            placeholder={field.signed ? "e.g. -1.5" : "0"}
+            placeholderTextColor={redesign.ink3}
+            style={styles.input}
+          />
+        )}
+
+        {field.units.length > 1 ? (
+          <View style={styles.unitToggle}>
+            {field.units.map((u) => {
+              const active = activeUnit === u.unit;
+              return (
+                <Pressable
+                  key={u.unit}
+                  testID={`log_marker_unit_${i}_${u.unit}`}
+                  onPress={() => onChangeUnit(u.unit)}
+                  style={[styles.unitChip, active && styles.unitChipActive]}
+                  accessibilityRole="button"
+                  accessibilityLabel={u.unit}
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text
+                    style={[
+                      styles.unitLabel,
+                      active && styles.unitLabelActive,
+                    ]}
+                  >
+                    {u.unit}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : (
+          <Text style={styles.unitStatic}>{activeUnit}</Text>
+        )}
+      </View>
+
+      {inlineErrorText != null ? (
+        <Text style={styles.fieldError}>{inlineErrorText}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 function makeStyles(
   theme: ReturnType<typeof useTheme>["theme"],
@@ -423,7 +629,18 @@ function makeStyles(
       color: redesign.ink2,
       ...fontStyle("body", 600, fontsLoaded),
     },
-    inputRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
+    inputRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+    },
+    // Container for the feet+inches dual-input pair.
+    feetInchesRow: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xs,
+    },
     input: {
       flex: 1,
       backgroundColor: redesign.surface,
@@ -435,6 +652,16 @@ function makeStyles(
       minHeight: 52,
       fontSize: theme.typography.sizes.xl,
       ...fontStyle("numbers", 600, fontsLoaded),
+    },
+    // Narrower input for ft/in pair so both fit comfortably on one line.
+    inputFeetInches: {
+      flex: 0,
+      width: 64,
+    },
+    feetInchesLabel: {
+      fontSize: theme.typography.sizes.base,
+      color: redesign.ink2,
+      ...fontStyle("body", 400, fontsLoaded),
     },
     unitToggle: { flexDirection: "row", gap: theme.spacing.xs },
     unitChip: {
@@ -457,8 +684,15 @@ function makeStyles(
       color: redesign.ink2,
       ...fontStyle("body", 400, fontsLoaded),
     },
+    // Top-level save error (from the onSave guard).
     error: {
       fontSize: theme.typography.sizes.sm,
+      color: redesign.alarm,
+      ...fontStyle("body", 400, fontsLoaded),
+    },
+    // Inline per-field error (live, shown once the user starts typing).
+    fieldError: {
+      fontSize: theme.typography.sizes.xs,
       color: redesign.alarm,
       ...fontStyle("body", 400, fontsLoaded),
     },
@@ -470,10 +704,16 @@ function makeStyles(
       alignItems: "center",
       justifyContent: "center",
     },
+    saveBtnDisabled: {
+      backgroundColor: redesign.pillSoft,
+    },
     saveLabel: {
       color: redesign.surface,
       fontSize: theme.typography.sizes.base,
       ...fontStyle("body", 600, fontsLoaded),
+    },
+    saveLabelDisabled: {
+      color: redesign.ink3,
     },
   });
 }

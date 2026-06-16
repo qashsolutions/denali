@@ -3,6 +3,10 @@
  * tactile "this is a button" feedback. Native-driver transform (smooth on New
  * Arch); honors Reduce Motion (no scale). Drop-in for primary CTAs. Forwards
  * all Pressable props + an optional `haptic` cue on press-in.
+ *
+ * When `disabled`, the control gives NO press feedback — no haptic, no
+ * press-scale — so a hard-blocked CTA never feels tappable (RN's Pressable
+ * also suppresses onPress when disabled; the guards here belt-and-brace it).
  */
 
 import React from "react";
@@ -29,6 +33,7 @@ export function PressableScale({
   style,
   children,
   haptic = false,
+  disabled,
   onPressIn,
   onPressOut,
   ...rest
@@ -51,12 +56,16 @@ export function PressableScale({
 
   return (
     <Pressable
+      disabled={disabled}
       onPressIn={(e) => {
+        // A disabled control gives no feedback — no haptic, no press-scale.
+        if (disabled) return;
         if (haptic) hapticTap();
         to(0.97);
         onPressIn?.(e);
       }}
       onPressOut={(e) => {
+        if (disabled) return;
         to(1);
         onPressOut?.(e);
       }}
