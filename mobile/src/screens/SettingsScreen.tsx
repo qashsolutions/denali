@@ -31,7 +31,15 @@ import { isBiometricAvailable, useApiClient } from "@/auth";
 import { BackupSettingsCard } from "@/backup/ui/BackupSettingsCard";
 import { PressableScale } from "@/components/PressableScale";
 import { Skeleton } from "@/components/Skeleton";
+import type { ProfileRow } from "@/contracts";
+import { useDal } from "@/db/DalProvider";
 import { hapticSelection } from "@/feedback/haptics";
+import {
+  birthYearLabel,
+  genderIdentityLabel,
+  medicareLabel,
+  sexAtBirthLabel,
+} from "@/screens/demographicsDisplay";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, MAX_FONT_SCALE, useFontsLoaded } from "@/theme/fonts";
 import { useThemeMode, type ThemeMode } from "@/theme/ThemeMode";
@@ -110,6 +118,10 @@ export function SettingsScreen(): React.ReactElement {
   const [consent, setConsent] = React.useState<ConsentSnapshot | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [signingOut, setSigningOut] = React.useState(false);
+  // Read-only demographics for the "Your details" section (D31). Loaded from
+  // the LOCAL profile (set during onboarding); never written here.
+  const dal = useDal();
+  const [profile, setProfile] = React.useState<ProfileRow | null>(null);
   // App-lock status is read-only: it reflects whether the DEVICE has a
   // biometric/credential enrolled, which is what the always-on launch gate
   // (biometricGate.ts, decision D15) keys off. null = still checking; we
@@ -153,6 +165,17 @@ export function SettingsScreen(): React.ReactElement {
       cancelled = true;
     };
   }, []);
+
+  React.useEffect(() => {
+    if (!dal) return;
+    let cancelled = false;
+    void dal.getProfile().then((p) => {
+      if (!cancelled) setProfile(p);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dal]);
 
   const onToggle = React.useCallback(
     async (type: ConsentType, next: boolean) => {
@@ -240,6 +263,28 @@ export function SettingsScreen(): React.ReactElement {
         accountLabel: {
           color: redesign.ink3,
           fontSize: theme.typography.sizes.xs,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        // Read-only "Your details" rows: label left, greyed value right.
+        detailRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: theme.spacing.md,
+          paddingVertical: theme.spacing.xs,
+        },
+        // Greyed (ink2) — signals the value is read-only / informational.
+        detailValue: {
+          color: redesign.ink2,
+          fontSize: theme.typography.sizes.base,
+          flexShrink: 1,
+          textAlign: "right",
+          ...fontStyle("body", 500, fontsLoaded),
+        },
+        detailNote: {
+          color: redesign.ink3,
+          fontSize: theme.typography.sizes.xs,
+          marginTop: theme.spacing.xs,
           ...fontStyle("body", 400, fontsLoaded),
         },
         toggleRow: cardSurface,
@@ -334,6 +379,9 @@ export function SettingsScreen(): React.ReactElement {
   );
 
   const user = api.getCurrentUser();
+  // For deriving age in the read-only "Your details" section. Component-level
+  // `new Date()` is fine; the pure label helpers take the year explicitly.
+  const currentYear = new Date().getFullYear();
 
   if (consent == null && loadError == null) {
     // Content-shaped skeletons (title + account card + a couple of setting
@@ -373,6 +421,41 @@ export function SettingsScreen(): React.ReactElement {
       <View style={styles.accountCard}>
         <Text style={styles.accountLabel}>Signed in as</Text>
         <Text style={styles.accountValue}>{user?.email ?? "Unknown"}</Text>
+      </View>
+
+      {/* Read-only demographics from sign-up (D31). Greyed because they're
+          set during onboarding; values are display-only and guide results. */}
+      <Text style={styles.sectionLabel}>Your details</Text>
+      <View
+        testID="settings_your_details"
+        accessibilityLabel="Your details — set during sign-up, read-only"
+        style={styles.accountCard}
+      >
+        <View style={styles.detailRow}>
+          <Text style={styles.accountLabel}>Year of birth</Text>
+          <Text style={styles.detailValue}>
+            {birthYearLabel(profile?.birth_year ?? null, currentYear)}
+          </Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.accountLabel}>Sex at birth</Text>
+          <Text style={styles.detailValue}>
+            {sexAtBirthLabel(profile?.sex_at_birth ?? null)}
+          </Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.accountLabel}>Gender identity</Text>
+          <Text style={styles.detailValue}>
+            {genderIdentityLabel(profile?.gender_identity ?? null)}
+          </Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.accountLabel}>Medicare</Text>
+          <Text style={styles.detailValue}>
+            {medicareLabel(profile?.is_on_medicare ?? null)}
+          </Text>
+        </View>
+        <Text style={styles.detailNote}>Set during sign-up.</Text>
       </View>
 
       <Text style={styles.sectionLabel}>Appearance</Text>

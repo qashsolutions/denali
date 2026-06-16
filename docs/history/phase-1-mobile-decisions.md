@@ -623,6 +623,20 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D31 — Settings "Your details": read-only demographics (2026-06-16)
+
+**Decision:** Operator: the mobile Settings had no age / sex / year-of-birth fields, and asked to "add them and grey them out if a user has added them." Added a read-only **"Your details"** section to `SettingsScreen` showing Year of birth (+ derived age), Sex at birth, Gender identity, and Medicare — values pulled from the local profile (`getProfile`), displayed greyed (`ink2`), with a "Set during sign-up." note. Labels via a pure, unit-tested `demographicsDisplay` helper (mirrors the cohort-onboarding option labels so Settings and onboarding never disagree). Display-only — storage untouched.
+
+**Premise correction (editing is safe — recorded for the deferred edit feature):** the operator worried that *changing* demographics would force a sign-out + re-login and risk losing data. It does NOT: `upsertProfile` is a purely local write, and `signOut()` only clears auth tokens — the encrypted on-device SQLCipher DB persists (verified on-device: logging out then back in with the same account preserved all observations). So read-only is a deliberate v1 choice, not a constraint.
+
+**Deferred — in-place editing (planned):** safe to add whenever. Clinical nuance to honor when it lands: `sex_at_birth` and `birth_year` are clinical interpretation keys — changing them re-interprets existing results (AUDIT-C sex bands, age-sex ranges) and re-gates cohort markers/instruments (PSA/menopause/ADAM), so edits to those must be deliberate (a confirm/warning). `gender_identity` is display-only (non-clinical) and free to edit. `is_on_medicare` drives cohort gating.
+
+**Verification:** tsc 0, eslint 0 errors, **1095 tests** (19 new `demographicsDisplay` pins). On-device: Settings → "Your details" shows the profile demographics read-only/greyed with derived age.
+
+**Encoded in code:** `src/screens/demographicsDisplay.ts` (+ test), `src/screens/SettingsScreen.tsx`.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).
