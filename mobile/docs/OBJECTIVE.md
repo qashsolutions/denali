@@ -192,6 +192,13 @@ store)*.
   surfacing of the D15 biometric gate (Face ID / Touch ID / fingerprint /
   passcode), reflecting device enrollment. No enable/disable toggle — disabling
   would regress the 30-day OTP cap that the always-on gate justifies.
+- 2026-06-15 — **"Due for…" preventive card scaffold** (D22): the USPSTF engine
+  now drives a dashboard card (sex/age-filtered, hidden until recs land);
+  lastDone resolves from local observations (additive `observationCodes` link);
+  `provisional` made REQUIRED on the rec type + ‡ rendered per item. Advances O5
+  (preventive layer) toward the retention hook. Recommendation SET stays
+  reviewer/USPSTF-gated (ships empty). Gates green (940 tests); clinical-boundary
+  + acceptance-auditor PASS; verified on-device (card correctly absent).
 - 2026-06-15 — **Marker expansion + local reminders** (D21). O2/O5 capture:
   height (8302-2) + BMI value (number only) + bone-density DXA-hip T-score
   (38264-8, new universal "Bone health" group, signed/negative entry) — all

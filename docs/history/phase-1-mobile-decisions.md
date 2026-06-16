@@ -477,6 +477,26 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D22 — "Due for…" preventive-cadence card scaffold (2026-06-15)
+
+**Decision:** Wire the already-shipped (empty) USPSTF preventive engine to a dashboard surface — the "Due for…" card — so it lights up the moment a recommendation set lands, with the governance baked in now.
+
+**Built:**
+- **`DueForCard`** (dashboard card): renders each due screening's title + summary (from the rec, never invented) + a factual cadence/last-logged meta line + the operator-locked referral verb "Talking with your doctor could help." EXPLAINS, never directs. Renders NOTHING when nothing is due.
+- **Dashboard wiring**: a "Due for" section computed via `dueScreenings({sexAtBirth, ageYears, lastDoneByRecId, now})`, shown only when `due.length > 0`. `lastDone` resolves from LOCAL observations via the new pure `deriveLastDoneByRecId` + an additive `observationCodes?` link on `PreventiveRecommendation` (no PHI leaves the device).
+
+**Governance baked in (clinical-boundary-reviewer WARNs, fixed now):**
+- `provisional` is now a **REQUIRED** field on `PreventiveRecommendation` — no rec can be merged into `PREVENTIVE_RECOMMENDATIONS` without the governance marker.
+- `DueForCard` renders `‡` adjacent to each title while `rec.provisional`, matching the per-item pattern on DomainCard/TimelineCardView; the dashboard's standing "‡ Interpretation pending clinical review." footnote is the legend.
+
+**Still gated:** `PREVENTIVE_RECOMMENDATIONS` ships **EMPTY** — the recommendation SET + cadences are clinical content sourced from the USPSTF API / a named clinical reviewer (USPSTF access AHRQ-pending). The card is invisible in production until that lands. CC never hand-authors recs.
+
+**Verification:** tsc 0, eslint 0 errors, 940 unit tests (incl. `deriveLastDoneByRecId` + `dueForFormat`). clinical-boundary-reviewer PASS (two forward-looking WARNs fixed). acceptance-auditor: REPORT MAY SHIP (6/6). On-device: dashboard renders, "Due for" section correctly ABSENT (empty recs).
+
+**Encoded in code:** `src/preventive/{uspstf,DueForCard,dueForFormat}`, `src/screens/HealthDashboardScreen`.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

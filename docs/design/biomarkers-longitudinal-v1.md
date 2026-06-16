@@ -66,14 +66,14 @@ So "CMS or others" → **USPSTF** for the age/sex preventive layer, **guidelines
 
 ---
 
-## 5. USPSTF preventive layer (scaffold shipped)
+## 5. USPSTF preventive layer (engine + **card scaffold** shipped — D22, 2026-06-15)
 
-`mobile/src/preventive/uspstf.ts` — types + pure `dueScreenings(age, sex, lastDone, now)` logic + an **empty `PREVENTIVE_RECOMMENDATIONS`** set (reviewer/API-gated, same pattern as the interpretation table).
+`mobile/src/preventive/uspstf.ts` — types + pure `dueScreenings({sexAtBirth, ageYears, lastDoneByRecId, now})` logic + an **empty `PREVENTIVE_RECOMMENDATIONS`** set (reviewer/API-gated, same pattern as the interpretation table). `provisional` is a **REQUIRED** field on `PreventiveRecommendation` so no rec merges without the governance marker.
 
-Integration plan:
-1. Fetch the USPSTF recommendation set via their API (key-gated), map to `PreventiveRecommendation`, store as a **versioned set with provenance** (topic + grade + retrieval date). Queries are **by age/sex only — no PHI leaves the device** (same posture as the government-API tools).
-2. "Last done" dates come from **local observations** (a logged mammogram/DEXA/colonoscopy date), never transmitted.
-3. Surface a **"Due for…"** card on the dashboard, sex/age-filtered. Copy **states the standardized cadence + the operator-locked referral verb** ("talking with your doctor could help") — explains, never directs.
+Integration plan (✅ = shipped as scaffold; recommendation SET still gated):
+1. Fetch the USPSTF recommendation set via their API (key-gated), map to `PreventiveRecommendation`, store as a **versioned set with provenance** (topic + grade + retrieval date). Queries are **by age/sex only — no PHI leaves the device**. *(GATED on USPSTF access — AHRQ-pending.)*
+2. ✅ "Last done" dates come from **local observations** — `deriveLastDoneByRecId` maps each rec's additive `observationCodes` (e.g. a logged DEXA date 38264-8) to its latest local observation; never transmitted.
+3. ✅ The **"Due for…"** card (`DueForCard`) is wired into the dashboard, sex/age-filtered, **hidden until recs land**. Copy states the standardized cadence + the operator-locked referral verb ("Talking with your doctor could help.") — explains, never directs; renders `‡` per item while `provisional`.
 
 ---
 
