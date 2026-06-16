@@ -34,6 +34,7 @@ import {
   getDomainName,
   getDomainPrompt,
 } from "./displayMapping";
+import { deriveBmi, deriveBmiTrend } from "../markers/bmi";
 import type { TimelineCard } from "./grouping";
 import { dateKeyOf, formatGroupHeader } from "./groupObservations";
 import { lookupInterpretation } from "./interpretation/lookup";
@@ -194,6 +195,27 @@ export function DomainCard({
       count,
       formatGroupHeader(dateKeyOf(latest.effective_at)),
     );
+    // Derived BMI — shown only on the health_markers card when both
+    // height and weight observations are present. NUMBER ONLY, no
+    // category label (WHO bands are reviewer-gated — deferred).
+    // Trend direction (if ≥2 BMI points): plain arrow, no verdict.
+    const bmiResult =
+      rollup.domainId === "health_markers"
+        ? deriveBmi(rollup.rows)
+        : null;
+    const bmiTrend =
+      bmiResult != null && rollup.domainId === "health_markers"
+        ? deriveBmiTrend(rollup.rows)
+        : [];
+    // Trend arrow: compare last two points (ascending → last two).
+    let trendArrow: string | null = null;
+    if (bmiTrend.length >= 2) {
+      const prev = bmiTrend[bmiTrend.length - 2]!.bmi;
+      const curr = bmiTrend[bmiTrend.length - 1]!.bmi;
+      if (curr > prev) trendArrow = "↑";
+      else if (curr < prev) trendArrow = "↓";
+      else trendArrow = "→";
+    }
     return (
       <Pressable
         testID={`dashboard_card_${rollup.domainId}`}
@@ -210,6 +232,14 @@ export function DomainCard({
             {name}
           </Text>
           <View style={styles.spacer} />
+          {bmiResult != null ? (
+            <Text
+              testID="dashboard_card_bmi_value"
+              style={styles.bmiValue}
+            >
+              BMI {bmiResult.bmi.toFixed(1)}{trendArrow != null ? ` ${trendArrow}` : ""}
+            </Text>
+          ) : null}
           {chevron}
         </View>
         <Text style={styles.prompt}>{summary}</Text>
@@ -336,6 +366,15 @@ function makeStyles(
       lineHeight: 13.5 * 1.45,
       marginTop: theme.spacing.space3 - 1,
       ...fontStyle("body", 400, fontsLoaded),
+    },
+    // Derived BMI inline value — shown in the health_markers card row
+    // when both height + weight are present. Number only; no category
+    // label (WHO bands are reviewer-gated).
+    bmiValue: {
+      color: redesign.ink2,
+      fontSize: theme.typography.sizes.sm,
+      fontVariant: ["tabular-nums"] as const,
+      ...fontStyle("numbers", 500, fontsLoaded),
     },
   });
 }

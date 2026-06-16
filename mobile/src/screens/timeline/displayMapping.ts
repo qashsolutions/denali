@@ -146,6 +146,12 @@ export const LAB_FRIENDLY_NAME: Readonly<Record<string, string>> = {
   "2951-2": "Sodium",
   "2160-1": "Calcium",
   "2885-2": "Total protein",
+  // Body markers — NLM-verified 2026-06-15
+  "8302-2": "Height",
+  "29463-7": "Weight",
+  "39156-5": "BMI",
+  // Bone health — NLM-verified 2026-06-15
+  "38264-8": "Bone density (DXA hip T-score)",
 };
 
 /**

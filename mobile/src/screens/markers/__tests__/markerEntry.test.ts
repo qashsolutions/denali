@@ -24,6 +24,8 @@ const bp = findMarker("blood_pressure")!;
 const hba1c = findMarker("hba1c")!;
 const triglycerides = findMarker("triglycerides")!;
 const waist = findMarker("waist_circumference")!;
+const height = findMarker("height")!;
+const boneDensity = findMarker("bone_density_tscore_hip")!;
 
 describe("toCanonical", () => {
   it("converts lb → kg", () => {
@@ -166,6 +168,14 @@ describe("expansion conversions + integrity", () => {
     expect(toCanonical(waist.fields[0], 10, "in")).toBeCloseTo(25.4, 3);
   });
 
+  it("height in → cm (68 in = 172.72 cm)", () => {
+    expect(toCanonical(height.fields[0], 68, "in")).toBeCloseTo(172.72, 2);
+  });
+
+  it("height cm stays cm (identity conversion)", () => {
+    expect(toCanonical(height.fields[0], 170, "cm")).toBe(170);
+  });
+
   it("every catalog marker is provisional + every field has a LOINC code", () => {
     for (const m of MARKER_CATALOG) {
       expect(m.provisional).toBe(true);
@@ -173,6 +183,130 @@ describe("expansion conversions + integrity", () => {
         expect(f.loinc).toMatch(/^\d+-\d$/);
       }
     }
+  });
+});
+
+describe("signed-number entry — bone-density T-score (LOINC 38264-8)", () => {
+  it("bone_density_tscore_hip marker exists in the catalog", () => {
+    expect(boneDensity).toBeDefined();
+    expect(boneDensity.key).toBe("bone_density_tscore_hip");
+  });
+
+  it("LOINC code is 38264-8", () => {
+    expect(boneDensity.fields[0].loinc).toBe("38264-8");
+  });
+
+  it("field is marked signed: true", () => {
+    expect(boneDensity.fields[0].signed).toBe(true);
+  });
+
+  it("accepts a typical negative T-score (e.g. -1.5)", () => {
+    const result = checkPlausible(boneDensity.fields[0], -1.5);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("accepts a typical osteoporosis T-score (e.g. -2.7)", () => {
+    const result = checkPlausible(boneDensity.fields[0], -2.7);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("accepts a positive T-score (e.g. +1.0)", () => {
+    const result = checkPlausible(boneDensity.fields[0], 1.0);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("rejects values below the plausible floor (e.g. -6.0)", () => {
+    const result = checkPlausible(boneDensity.fields[0], -6.0);
+    expect(result).toEqual({ ok: false, reason: "out-of-range" });
+  });
+
+  it("rejects values above the plausible ceiling (e.g. 7.0)", () => {
+    const result = checkPlausible(boneDensity.fields[0], 7.0);
+    expect(result).toEqual({ ok: false, reason: "out-of-range" });
+  });
+
+  it("unsigned fields still REJECT negative values (weight field)", () => {
+    // weight field: signed is absent (undefined), min is 20 kg.
+    const result = checkPlausible(weight.fields[0], -10);
+    expect(result).toEqual({ ok: false, reason: "out-of-range" });
+  });
+
+  it("unsigned HbA1c field rejects negative values", () => {
+    const hba1cField = hba1c.fields[0];
+    expect(hba1cField.signed).toBeFalsy();
+    expect(checkPlausible(hba1cField, -1)).toEqual({
+      ok: false,
+      reason: "out-of-range",
+    });
+  });
+
+  it("buildMarkerObservations for bone density stores the canonical value", () => {
+    const [obs] = buildMarkerObservations({
+      marker: boneDensity,
+      userId: "u1",
+      effectiveAt: "2026-06-15T00:00:00.000Z",
+      entries: [{ value: -1.5, unit: "T-score" }],
+    });
+    expect(obs).toMatchObject({
+      user_id: "u1",
+      category: "biomarker",
+      code_system: "LOINC",
+      code: "38264-8",
+      value_num: -1.5,
+      unit: "T-score",
+      source: "self_reported",
+      supersedes_id: null,
+    });
+  });
+
+  it("bone density group is 'Bone health' (NOT sex-gated)", () => {
+    expect(boneDensity.group).toBe("Bone health");
+    expect(boneDensity.cohort).toBeUndefined();
+  });
+});
+
+describe("height marker (LOINC 8302-2)", () => {
+  it("height marker exists in the catalog", () => {
+    expect(height).toBeDefined();
+    expect(height.key).toBe("height");
+  });
+
+  it("LOINC code is 8302-2", () => {
+    expect(height.fields[0].loinc).toBe("8302-2");
+  });
+
+  it("canonical unit is cm", () => {
+    expect(canonicalUnit(height.fields[0]).unit).toBe("cm");
+  });
+
+  it("is NOT sex-gated (universal)", () => {
+    expect(height.cohort).toBeUndefined();
+  });
+
+  it("is in the 'Body' group", () => {
+    expect(height.group).toBe("Body");
+  });
+
+  it("plausible range rejects a clearly-wrong value (e.g. 5 cm)", () => {
+    expect(checkPlausible(height.fields[0], 5)).toEqual({
+      ok: false,
+      reason: "out-of-range",
+    });
+  });
+
+  it("plausible range accepts 170 cm", () => {
+    expect(checkPlausible(height.fields[0], 170)).toEqual({ ok: true });
+  });
+
+  it("plausible range rejects 300 cm", () => {
+    expect(checkPlausible(height.fields[0], 300)).toEqual({
+      ok: false,
+      reason: "out-of-range",
+    });
+  });
+
+  it("is NOT signed (no signed field)", () => {
+    expect(height.fields[0].signed).toBeFalsy();
   });
 });
 

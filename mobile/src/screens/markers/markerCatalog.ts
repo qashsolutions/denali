@@ -47,6 +47,7 @@ export type MarkerGroup =
   | "Kidney & liver"
   | "Thyroid & nutrients"
   | "Body"
+  | "Bone health"
   | "Men's health";
 
 /** Render order for the grouped picker. */
@@ -56,6 +57,7 @@ export const MARKER_GROUP_ORDER: ReadonlyArray<MarkerGroup> = [
   "Kidney & liver",
   "Thyroid & nutrients",
   "Body",
+  "Bone health",
   "Men's health",
 ];
 
@@ -77,6 +79,13 @@ export interface MarkerField {
   units: ReadonlyArray<MarkerUnit>;
   /** Physical-plausibility bounds in the CANONICAL unit (typo guard only). */
   plausible: { min: number; max: number };
+  /**
+   * When true, this field accepts negative values (e.g. bone-density T-score).
+   * The entry input switches from the positive-only numeric pad to a keyboard
+   * type that allows a leading minus sign. The plausible.min must be negative
+   * for the typo guard to accept the value. Absent = false (unsigned only).
+   */
+  signed?: boolean;
 }
 
 export interface MarkerDef {
@@ -395,6 +404,24 @@ export const MARKER_CATALOG: ReadonlyArray<MarkerDef> = [
     ],
   },
   {
+    key: "height",
+    display: "Height",
+    category: "anthropometric",
+    group: "Body",
+    provisional: true,
+    fields: [
+      {
+        // LOINC 8302-2 "Body height" — NLM-verified 2026-06-15.
+        loinc: "8302-2",
+        units: [
+          { unit: "cm", canonical: true, toCanonicalFactor: 1 },
+          { unit: "in", toCanonicalFactor: IN_TO_CM },
+        ],
+        plausible: { min: 50, max: 250 }, // cm — typo guard (physical extremes)
+      },
+    ],
+  },
+  {
     key: "waist_circumference",
     display: "Waist circumference",
     category: "anthropometric",
@@ -409,6 +436,33 @@ export const MARKER_CATALOG: ReadonlyArray<MarkerDef> = [
           { unit: "in", toCanonicalFactor: IN_TO_CM },
         ],
         plausible: { min: 30, max: 250 }, // cm
+      },
+    ],
+  },
+
+  // ── Bone health (universal — men get osteoporosis too; women's relevance
+  //    is delivered via reviewer-gated interpretation + cadence) ─────────
+  {
+    key: "bone_density_tscore_hip",
+    display: "Bone density (DXA hip T-score)",
+    category: "biomarker",
+    group: "Bone health",
+    provisional: true,
+    // WHO T-score bands (≥-1.0 normal, -1.0 to -2.5 low, ≤-2.5 osteoporosis)
+    // are reviewer-gated and NOT applied here. This entry hint is data-quality
+    // guidance only: clarifies which site/score to enter, not a clinical claim.
+    entryHint:
+      "Enter the hip T-score from your DXA (bone density) report. These are often negative numbers — type it exactly as shown, including any minus sign.",
+    fields: [
+      {
+        // LOINC 38264-8 "DXA Hip [T-score] Bone density" — NLM-verified 2026-06-15.
+        loinc: "38264-8",
+        units: [{ unit: "T-score", canonical: true, toCanonicalFactor: 1 }],
+        // T-score physical range: -5.0 to +6.0 (extreme pathological bounds;
+        // a typo guard, not clinical normal/abnormal).
+        plausible: { min: -5.0, max: 6.0 },
+        // This field accepts negative values — enables the minus-sign keyboard.
+        signed: true,
       },
     ],
   },

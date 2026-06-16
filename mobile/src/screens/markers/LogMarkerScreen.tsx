@@ -267,7 +267,11 @@ export function LogMarkerScreen(): React.ReactElement {
                   <TextInput
                     testID={`log_marker_input_${i}`}
                     accessibilityLabel={field.label ?? marker.display}
-                    keyboardType="decimal-pad"
+                    // Signed fields (e.g. bone-density T-score) need a keyboard
+                    // that allows a leading minus sign. Unsigned fields keep the
+                    // positive-only decimal pad. The `signed` flag is explicit on
+                    // the MarkerField — never a global toggle.
+                    keyboardType={field.signed ? "numbers-and-punctuation" : "decimal-pad"}
                     value={values[i] ?? ""}
                     onChangeText={(t) =>
                       setValues((prev) => {
@@ -276,7 +280,7 @@ export function LogMarkerScreen(): React.ReactElement {
                         return next;
                       })
                     }
-                    placeholder="0"
+                    placeholder={field.signed ? "e.g. -1.5" : "0"}
                     placeholderTextColor={redesign.ink3}
                     style={styles.input}
                   />
