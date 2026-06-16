@@ -665,6 +665,19 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D34 — Confirm-step polish: crisp copy + editable-until-Continue (2026-06-16)
+
+**Decision:** Operator review of the D33 confirm screen: the warning read as one dense paragraph, and the permanent fields were only correctable via Back. Two fixes:
+
+- **Crisper, split copy.** The single paragraph became four short, scannable lines: "These guide how we read your results." / "Fix them now — after Continue they can't be changed." / "Changing them later means starting over and losing your data." / "Gender and Medicare stay editable anytime in Settings." (Two lead lines `ink2`, two muted `ink3`.)
+- **Editable until Continue.** Year of birth + sex at birth are now **tap-to-edit inline** on the confirm screen (the fields aren't locked until Continue, so they should be correctable there, not only via Back). Tapping the year row reveals an inline number input; tapping the sex row reveals the 3 sex options; selecting/blurring collapses back to the summary. `Continue` is gated on a valid year (1900–current) + a chosen sex. The edit writes the same `birthYearStr`/`sexLikert` state the earlier steps use, so it's consistent and `confirmAndSubmit` reads the corrected values.
+
+**Verification:** tsc 0, eslint 0 errors, 232 cohort/onboarding tests pass. On-device visual of the polished confirm + tap-to-edit is at the next fresh onboarding (re-triggering needs a clear-state; the current account is onboarded).
+
+**Encoded in code:** `src/screens/CohortOnboardingScreen.tsx` (confirm step `confirmEdit` state + inline editors + `birthYearValid` gate + crisp copy/styles).
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

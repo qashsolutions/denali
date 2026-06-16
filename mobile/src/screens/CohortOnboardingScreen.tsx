@@ -26,7 +26,8 @@
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React from "react";
-import { ActivityIndicator, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pencil } from "lucide-react-native";
 
 import { useApiClient } from "@/auth";
 import type { GenderIdentity, SexAtBirth } from "@/contracts";
@@ -102,6 +103,11 @@ export function CohortOnboardingScreen(): React.ReactElement {
 
   const [submitting, setSubmitting] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  // Confirm step (D34): which permanent field is being edited INLINE. Year +
+  // sex stay editable here until the user taps Continue (the lock point).
+  const [confirmEdit, setConfirmEdit] = React.useState<"year" | "sex" | null>(
+    null,
+  );
 
   const birthYear = React.useMemo(() => {
     const n = parseInt(birthYearStr, 10);
@@ -116,6 +122,8 @@ export function CohortOnboardingScreen(): React.ReactElement {
     genderLikert == null
       ? null
       : (GENDER_OPTIONS.find((g) => g.value === genderLikert)?.gid ?? null);
+  const birthYearValid =
+    birthYear != null && birthYear >= 1900 && birthYear <= currentYear;
 
   // Submit the cohort with an EXPLICIT payload. Takes the payload as an
   // arg (not from closure) so the auto-advance path can pass the just-
@@ -295,6 +303,54 @@ export function CohortOnboardingScreen(): React.ReactElement {
           color: redesign.ink,
           ...fontStyle("body", 600, fontsLoaded),
         },
+        // Crisp, split warning lines (D34) — short, scannable, not a paragraph.
+        confirmIntro: {
+          gap: theme.spacing.sm,
+          marginBottom: theme.spacing.md,
+        },
+        confirmLead: {
+          fontSize: theme.typography.sizes.base,
+          lineHeight: theme.typography.sizes.base * 1.35,
+          color: redesign.ink2,
+          ...fontStyle("body", 500, fontsLoaded),
+        },
+        confirmMuted: {
+          fontSize: theme.typography.sizes.sm,
+          lineHeight: theme.typography.sizes.sm * 1.35,
+          color: redesign.ink3,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        // Value + edit-pencil (tap-to-edit affordance).
+        confirmValueWrap: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: theme.spacing.xs,
+        },
+        // Inline year edit: label left, input right.
+        confirmEditRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: theme.spacing.md,
+        },
+        confirmInput: {
+          borderColor: redesign.teal,
+          borderWidth: 1,
+          borderRadius: theme.radii.sm,
+          paddingVertical: theme.spacing.xs,
+          paddingHorizontal: theme.spacing.sm,
+          minWidth: 96,
+          fontSize: theme.typography.sizes.lg,
+          color: redesign.ink,
+          backgroundColor: redesign.surface,
+          textAlign: "right",
+          fontVariant: ["tabular-nums"],
+          ...fontStyle("numbers", 600, fontsLoaded),
+        },
+        // Inline sex edit: label above the options.
+        confirmEditCol: {
+          gap: theme.spacing.sm,
+        },
       }),
     [theme, redesign, fontsLoaded],
   );
@@ -420,25 +476,95 @@ export function CohortOnboardingScreen(): React.ReactElement {
           totalSteps={TOTAL_STEPS}
           sectionLabel="About you"
           question="Please confirm"
-          helperText="Your year of birth and sex at birth guide how we interpret your results, so they can’t be changed after this step — changing them later means starting over and losing your data. Gender identity and Medicare can be updated anytime in Settings."
-          canContinue={!submitting}
+          canContinue={birthYearValid && sexAtBirth != null && !submitting}
           onContinue={confirmAndSubmit}
           onBack={goBack}
           errorMessage={errorMsg}
         >
+          {/* Crisp, scannable lines (not one paragraph). */}
+          <View style={styles.confirmIntro}>
+            <Text style={styles.confirmLead}>
+              These guide how we read your results.
+            </Text>
+            <Text style={styles.confirmLead}>
+              Fix them now — after Continue they can’t be changed.
+            </Text>
+            <Text style={styles.confirmMuted}>
+              Changing them later means starting over and losing your data.
+            </Text>
+            <Text style={styles.confirmMuted}>
+              Gender and Medicare stay editable anytime in Settings.
+            </Text>
+          </View>
+
+          {/* Tap a row to edit it inline — editable until Continue (D34). */}
           <View testID="cohort_confirm_summary" style={styles.confirmCard}>
-            <View style={styles.confirmRow}>
-              <Text style={styles.confirmLabel}>Year of birth</Text>
-              <Text testID="cohort_confirm_birth_year" style={styles.confirmValue}>
-                {birthYear ?? "—"}
-              </Text>
-            </View>
-            <View style={styles.confirmRow}>
-              <Text style={styles.confirmLabel}>Sex at birth</Text>
-              <Text testID="cohort_confirm_sex" style={styles.confirmValue}>
-                {sexAtBirthLabel(sexAtBirth)}
-              </Text>
-            </View>
+            {confirmEdit === "year" ? (
+              <View style={styles.confirmEditRow}>
+                <Text style={styles.confirmLabel}>Year of birth</Text>
+                <TextInput
+                  testID="cohort_confirm_year_input"
+                  style={styles.confirmInput}
+                  keyboardType="number-pad"
+                  autoFocus
+                  value={birthYearStr}
+                  onChangeText={(t) =>
+                    setBirthYearStr(t.replace(/[^0-9]/g, "").slice(0, 4))
+                  }
+                  onBlur={() => setConfirmEdit(null)}
+                  onSubmitEditing={() => setConfirmEdit(null)}
+                  maxLength={4}
+                  accessibilityLabel="Year of birth"
+                />
+              </View>
+            ) : (
+              <Pressable
+                testID="cohort_confirm_year_row"
+                accessibilityRole="button"
+                accessibilityLabel={`Year of birth: ${birthYear ?? "not set"}. Tap to edit.`}
+                onPress={() => setConfirmEdit("year")}
+                style={styles.confirmRow}
+              >
+                <Text style={styles.confirmLabel}>Year of birth</Text>
+                <View style={styles.confirmValueWrap}>
+                  <Text testID="cohort_confirm_birth_year" style={styles.confirmValue}>
+                    {birthYear ?? "—"}
+                  </Text>
+                  <Pencil color={redesign.tealDeep} size={15} />
+                </View>
+              </Pressable>
+            )}
+
+            {confirmEdit === "sex" ? (
+              <View style={styles.confirmEditCol}>
+                <Text style={styles.confirmLabel}>Sex at birth</Text>
+                <LikertInput
+                  options={SEX_OPTIONS}
+                  value={sexLikert}
+                  onChange={(v) => {
+                    setSexLikert(v);
+                    setConfirmEdit(null);
+                  }}
+                  accessibilityLabel="Sex at birth"
+                />
+              </View>
+            ) : (
+              <Pressable
+                testID="cohort_confirm_sex_row"
+                accessibilityRole="button"
+                accessibilityLabel={`Sex at birth: ${sexAtBirthLabel(sexAtBirth)}. Tap to edit.`}
+                onPress={() => setConfirmEdit("sex")}
+                style={styles.confirmRow}
+              >
+                <Text style={styles.confirmLabel}>Sex at birth</Text>
+                <View style={styles.confirmValueWrap}>
+                  <Text testID="cohort_confirm_sex" style={styles.confirmValue}>
+                    {sexAtBirthLabel(sexAtBirth)}
+                  </Text>
+                  <Pencil color={redesign.tealDeep} size={15} />
+                </View>
+              </Pressable>
+            )}
           </View>
         </OneItemScreen>
       );
