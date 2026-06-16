@@ -31,6 +31,10 @@ secrets/
 supabase/.env
 .supabase/
 
+# Maestro screenshots written to the run cwd (e.g. takeScreenshot install_check)
+/install_check.png
+*.maestro-screenshot.png
+
 # Source assets (exported sizes live in app/public/)
 Images/
 denali.png
