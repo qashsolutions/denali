@@ -109,6 +109,7 @@ export type BandId =
   | "healthy-weight"
   | "overweight"
   | "obesity"
+  | "severe-obesity"
   | "osteoporosis"
   | "bone-low"
   | "bone-normal";
@@ -710,7 +711,7 @@ const ADAM_SOURCE =
 // renderer shows the raw number with NO band (never a wrong band).
 
 const BMI_SOURCE =
-  "World Health Organization (2000) — Obesity: Preventing and Managing the Global Epidemic. WHO Technical Report Series 894 (adult BMI classification: underweight <18.5 / normal 18.5–24.9 / overweight 25.0–29.9 / obese ≥30).";
+  "World Health Organization (2000) — Obesity: Preventing and Managing the Global Epidemic. WHO Technical Report Series 894 (adult BMI classification: underweight <18.5 / normal 18.5–24.9 / overweight 25.0–29.9 / obese ≥30, with obese class I 30.0–34.9, class II 35.0–39.9, class III ≥40.0).";
 const BMI_BANDS: InterpretationBand[] = [
   {
     minScore: Number.NEGATIVE_INFINITY,
@@ -744,12 +745,22 @@ const BMI_BANDS: InterpretationBand[] = [
   },
   {
     minScore: 30.0,
-    maxScore: Number.POSITIVE_INFINITY,
+    maxScore: 39.9,
     bandId: "obesity",
     pill: "Obesity range",
     headline: "A BMI of {{score}} is in the obesity range.",
     explanation:
-      "The World Health Organization classifies a BMI of 30.0 or higher as obesity. Talking with your doctor could help.",
+      "The World Health Organization classifies a BMI of 30.0 to 39.9 as obesity (classes I and II). Talking with your doctor could help.",
+    provisional: true,
+  },
+  {
+    minScore: 40.0,
+    maxScore: Number.POSITIVE_INFINITY,
+    bandId: "severe-obesity",
+    pill: "Severe obesity",
+    headline: "A BMI of {{score}} is in the severe obesity range.",
+    explanation:
+      "The World Health Organization classifies a BMI of 40.0 or higher as severe obesity (class III). Talking with your doctor could help.",
     provisional: true,
   },
 ];
@@ -881,7 +892,7 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
       strategy: { kind: "uniform", bands: BMI_BANDS },
       clinicalReviewerNotes: [
         "WHO also publishes lower cut-offs for adults of South/East-Asian descent (overweight ≥23, obesity ≥27.5) — decide whether to offer a population-specific variant before clearing provisional.",
-        "Obesity sub-classes (I 30–34.9, II 35–39.9, III ≥40) are collapsed into one band; split if desired.",
+        "Obesity is split into Obesity (30.0–39.9, classes I+II) and Severe obesity (≥40.0, class III, D29). Further granularity (separating class I 30.0–34.9 from class II 35.0–39.9) remains an option to decide before clearing provisional.",
       ],
     },
     // Bone-density hip T-score — WHO 1994 categories. PROVISIONAL.

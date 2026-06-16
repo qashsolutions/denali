@@ -316,6 +316,46 @@ describe("V1.1 — object-form signature + kind: 'biomarker' path", () => {
   });
 });
 
+describe("BMI bands (39156-5, WHO TRS 894) — class III split (D29)", () => {
+  const bmi = (score: number) =>
+    lookupInterpretation({
+      key: "39156-5",
+      score,
+      sexAtBirth: "male",
+      ageYears: 50,
+      kind: "biomarker",
+    });
+
+  it.each([
+    [17, "underweight"],
+    [22, "healthy-weight"],
+    [26, "overweight"],
+    [32, "obesity"],
+    [35, "obesity"],
+    [42, "severe-obesity"],
+  ])("BMI %d → %s", (score, bandId) => {
+    expect(bmi(score)?.band.bandId).toBe(bandId);
+  });
+
+  it("splits obesity at 40: 39.9 is obesity, 40.0 is severe obesity", () => {
+    expect(bmi(39.9)?.band.bandId).toBe("obesity");
+    expect(bmi(40.0)?.band.bandId).toBe("severe-obesity");
+  });
+
+  it("severe-obesity ships the WHO pill and stays provisional (‡)", () => {
+    const r = bmi(45);
+    expect(r?.band.pill).toBe("Severe obesity");
+    expect(r?.band.provisional).toBe(true);
+  });
+
+  it("adult BMI is uniform — same band at any age/sex", () => {
+    const a = lookupInterpretation({ key: "39156-5", score: 42, sexAtBirth: "female", ageYears: 80, kind: "biomarker" });
+    const b = lookupInterpretation({ key: "39156-5", score: 42, sexAtBirth: "male", ageYears: 30, kind: "biomarker" });
+    expect(a?.band.bandId).toBe("severe-obesity");
+    expect(b?.band.bandId).toBe("severe-obesity");
+  });
+});
+
 describe("V1.1 — age-sex-specific strategy (synthetic table for testing)", () => {
   // No real instrument uses age-sex-specific in V1.1 (biomarkers ship
   // empty), so these tests use a synthetic table to exercise the lookup

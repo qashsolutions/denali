@@ -74,6 +74,7 @@ export function tintClassForBand(band: {
     case "underweight":
     case "overweight":
     case "obesity":
+    case "severe-obesity":
     case "bone-low":
     case "osteoporosis":
       return "watch";
