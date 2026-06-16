@@ -1,33 +1,32 @@
 # ─────────────────────────────────────────────────────────────────────────
-# Flow 4 — Trend chart + range control (Mood / PHQ-2)
+# Flow 4 — Trend chart + range control (Mood / PHQ-9)
 #
-#   A per-instrument trend chart only renders once a domain has ≥ 2
-#   completed sessions IN the selected range (TrendChart returns the
-#   trend_empty_state line at n < 2). This flow GENERATES the second
-#   session itself so it is self-contained: onboarding records mood
-#   session #1 (a negative PHQ-2), then a repeat mood check-in via the
-#   dashboard records session #2. With two PHQ-2 sessions the mood
-#   domain detail renders trend_chart_PHQ-2 + trend_delta, and we
-#   exercise the range control (3M / 6M / Y / All).
+#   The mood domain charts ONLY the full PHQ-9 check-in — PHQ-2 is the gate
+#   screen and is never charted (2026-06-12 review; D30). A per-instrument
+#   chart needs ≥2 completed PHQ-9 sessions in range. This flow generates
+#   them: onboarding leaves a negative PHQ-2 (not chartable), then we add
+#   TWO full PHQ-9 check-ins (item 9 = 0, so the 988 surface is untouched —
+#   that path is exercised in crisis_988.yaml). With two PHQ-9 sessions the
+#   mood detail renders trend_chart_PHQ-9 + trend_delta, and we exercise the
+#   range control (3M / 6M / Y / All).
 #
 # GATE — needs an E2E test-OTP backend running NODE_ENV != production.
 # See signin_onboarding.yaml / ./README.md for setup. The bypass works
-# ONLY in a NODE_ENV != production backend (local next dev / CI), never
+# ONLY in a NODE_ENV != production backend (local `next dev` or CI), never
 # the deployed staging service. Point the mobile build's API_BASE_URL at it.
 #
 # Selectors are the testID / accessibilityLabel inventory in ../README.md.
 # ─────────────────────────────────────────────────────────────────────────
 appId: health.denali.mobile
 ---
-# Sign in + onboarding → dashboard. Onboarding records mood session #1
-# (the negative PHQ-2 answered inside signin_onboarding.yaml).
+# Sign in + onboarding → dashboard. Onboarding records a NEGATIVE PHQ-2 mood
+# session (not chartable).
 - runFlow: signin_onboarding.yaml
 
-# ── Second mood check-in (session #2) ───────────────────────────────────
-# Open the mood domain card → detail → "Start a check-in" → focus "mood"
-# runs the full PHQ-2 path again. Answer negatively (value 0 on both
-# items) so we stay in PHQ-2 and never touch the 988 surface. A focused
-# check-in returns to the detail screen on completion.
+# A full check-in = positive PHQ-2 (2 + 2 → expands to PHQ-9), PHQ-9 items
+# 3–8 = 0, item 9 = 0 (no 988). Focused check-ins return to the mood detail.
+
+# ── PHQ-9 check-in #1 ───────────────────────────────────────────────────
 - assertVisible:
     id: "dashboard_card_mood"
 - tapOn:
@@ -37,46 +36,77 @@ appId: health.denali.mobile
 - tapOn:
     id: "domain_detail_start_checkin"
 - assertVisible:
-    id: "instruments_mood_item1_option_0"
+    id: "instruments_mood_item1_option_2"
 - tapOn:
-    id: "instruments_mood_item1_option_0"
-- assertVisible:
-    id: "instruments_mood_item2_option_0"
+    id: "instruments_mood_item1_option_2"
 - tapOn:
-    id: "instruments_mood_item2_option_0"
+    id: "instruments_mood_item2_option_2"
+- tapOn:
+    id: "instruments_mood_item3_option_0"
+- tapOn:
+    id: "instruments_mood_item4_option_0"
+- tapOn:
+    id: "instruments_mood_item5_option_0"
+- tapOn:
+    id: "instruments_mood_item6_option_0"
+- tapOn:
+    id: "instruments_mood_item7_option_0"
+- tapOn:
+    id: "instruments_mood_item8_option_0"
+- tapOn:
+    id: "instruments_phq9_item9_option_0"
 
-# ── Back on the mood detail — now n=2 → the trend chart renders ─────────
-# The detail screen reloads on focus, so the second session is present.
-# trend_chart_PHQ-2 is the per-instrument chart container; its presence
-# (vs. trend_empty_state) proves the ≥2-session path.
+# ── PHQ-9 check-in #2 (back on the mood detail) ─────────────────────────
 - assertVisible:
-    id: "trend_chart_PHQ-2"
+    id: "domain_detail_start_checkin"
+- tapOn:
+    id: "domain_detail_start_checkin"
+- assertVisible:
+    id: "instruments_mood_item1_option_2"
+- tapOn:
+    id: "instruments_mood_item1_option_2"
+- tapOn:
+    id: "instruments_mood_item2_option_2"
+- tapOn:
+    id: "instruments_mood_item3_option_0"
+- tapOn:
+    id: "instruments_mood_item4_option_0"
+- tapOn:
+    id: "instruments_mood_item5_option_0"
+- tapOn:
+    id: "instruments_mood_item6_option_0"
+- tapOn:
+    id: "instruments_mood_item7_option_0"
+- tapOn:
+    id: "instruments_mood_item8_option_0"
+- tapOn:
+    id: "instruments_phq9_item9_option_0"
 
-# Factual delta line under the chart (latest vs previous session).
+# ── Now ≥2 PHQ-9 sessions → the PHQ-9 trend chart renders ───────────────
+- assertVisible:
+    id: "trend_chart_PHQ-9"
 - assertVisible:
     id: "trend_delta"
 
 # ── Exercise the shared range control (Step-3 rule 11) ──────────────────
-# Default is 6M. Cycle through every segment; the chart stays mounted
-# because both sessions are "today" and fall inside every window.
 - assertVisible:
     id: "trend_range_3m"
 - tapOn:
     id: "trend_range_3m"
 - assertVisible:
-    id: "trend_chart_PHQ-2"
+    id: "trend_chart_PHQ-9"
 - tapOn:
     id: "trend_range_6m"
 - assertVisible:
-    id: "trend_chart_PHQ-2"
+    id: "trend_chart_PHQ-9"
 - tapOn:
     id: "trend_range_y"
 - assertVisible:
-    id: "trend_chart_PHQ-2"
+    id: "trend_chart_PHQ-9"
 - tapOn:
     id: "trend_range_all"
 - assertVisible:
-    id: "trend_chart_PHQ-2"
+    id: "trend_chart_PHQ-9"
 
 # Delta is computed over full history, so it survives the range changes.
 - assertVisible:
