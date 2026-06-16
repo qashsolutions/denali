@@ -65,6 +65,7 @@ import { isChartableInstrument, type TrendRange } from "./timeline/trend/session
 import { TrendChart } from "./timeline/trend/TrendChart";
 import { TrendRangeControl } from "./timeline/trend/TrendRangeControl";
 import { deriveBmiTrend } from "./markers/bmi";
+import { latestPerCode } from "./markers/latestPerCode";
 
 import type { RootStackParamList } from "@/navigation/types";
 
@@ -75,6 +76,8 @@ const PAGE_SIZE = 200;
 
 type ListItem =
   | { kind: "header"; dateKey: string }
+  /** Plain section label (non-date) — e.g. "Latest readings" for markers. */
+  | { kind: "label"; text: string }
   | { kind: "card"; card: TimelineCard }
   /** Trend section (Step 3): range control + one chart per chartable
    *  instrument, placed below the latest-session card. */
@@ -234,35 +237,60 @@ export function DomainDetailScreen(): React.ReactElement {
     const mine = rollups.find((r) => r.domainId === domainId);
     if (mine == null || mine.kind === "empty-domain") return [];
 
-    // Flatten the rollup back to TimelineCard[] for date-bucketing.
-    const cardsInDomain: TimelineCard[] = [];
-    if (mine.kind === "instrument-domain") {
-      cardsInDomain.push(...mine.sessions);
-    } else {
-      // single-domain — wrap each row back as a single card.
-      for (const row of mine.rows) {
-        cardsInDomain.push({ kind: "single", row });
-      }
-    }
-
-    // Bucket by date for section headers.
-    const buckets = new Map<string, TimelineCard[]>();
-    for (const card of cardsInDomain) {
-      const key = dateKeyOf(cardEffectiveAt(card));
-      const bucket = buckets.get(key);
-      if (bucket) bucket.push(card);
-      else buckets.set(key, [card]);
-    }
-    for (const bucket of buckets.values()) {
-      bucket.sort((a, b) =>
-        cardEffectiveAt(a) < cardEffectiveAt(b) ? 1 : -1,
-      );
-    }
-    const sortedKeys = [...buckets.keys()].sort((a, b) => (a < b ? 1 : -1));
+    // Health markers consolidate to ONE card per marker (latest reading) under
+    // a single "Latest readings" label — the trend chart carries the full
+    // history, so a card-per-entry wall is redundant (D27). Date-bucketing is
+    // dropped here on purpose: each marker's latest reading has its own date
+    // (shown on the card), so buckets would fragment to one card each. Every
+    // OTHER domain keeps the date-bucketed, all-entries view — health_history
+    // diagnoses are distinct facts, not a "latest value", and instrument
+    // sessions are each meaningful.
+    const isMarkers =
+      mine.kind === "single-domain" && domainId === "health_markers";
     const out: ListItem[] = [];
-    for (const key of sortedKeys) {
-      out.push({ kind: "header", dateKey: key });
-      for (const c of buckets.get(key) ?? []) out.push({ kind: "card", card: c });
+
+    if (isMarkers) {
+      // latestPerCode is fed the same rows; the BMI chart below still gets the
+      // FULL unfiltered history (mine.rows) for its dots.
+      const latest = latestPerCode(mine.rows); // newest-first, one per code
+      if (latest.length > 0) {
+        out.push({ kind: "label", text: "Latest readings" });
+        for (const row of latest) {
+          out.push({ kind: "card", card: { kind: "single", row } });
+        }
+      }
+    } else {
+      // Flatten the rollup back to TimelineCard[] for date-bucketing.
+      const cardsInDomain: TimelineCard[] = [];
+      if (mine.kind === "instrument-domain") {
+        cardsInDomain.push(...mine.sessions);
+      } else {
+        // single-domain (e.g. health_history) — wrap each row as a card.
+        for (const row of mine.rows) {
+          cardsInDomain.push({ kind: "single", row });
+        }
+      }
+
+      // Bucket by date for section headers.
+      const buckets = new Map<string, TimelineCard[]>();
+      for (const card of cardsInDomain) {
+        const key = dateKeyOf(cardEffectiveAt(card));
+        const bucket = buckets.get(key);
+        if (bucket) bucket.push(card);
+        else buckets.set(key, [card]);
+      }
+      for (const bucket of buckets.values()) {
+        bucket.sort((a, b) =>
+          cardEffectiveAt(a) < cardEffectiveAt(b) ? 1 : -1,
+        );
+      }
+      const sortedKeys = [...buckets.keys()].sort((a, b) => (a < b ? 1 : -1));
+      for (const key of sortedKeys) {
+        out.push({ kind: "header", dateKey: key });
+        for (const c of buckets.get(key) ?? []) {
+          out.push({ kind: "card", card: c });
+        }
+      }
     }
 
     // Trend section (Step 3) — chartable instruments in this domain,
@@ -293,7 +321,7 @@ export function DomainDetailScreen(): React.ReactElement {
     // Pin above the value cards if ≥1 BMI point is computable from the rows
     // (deriveBmiTrend returns [] when there is no height+weight pair, so this
     // guard is the only gate needed — the chart itself handles n<2 quietly).
-    if (mine.kind === "single-domain" && domainId === "health_markers") {
+    if (isMarkers) {
       const bmiPoints = deriveBmiTrend(mine.rows);
       if (bmiPoints.length >= 1) {
         // Pass the raw rows (not the points) so BmiTrendChart can re-derive
@@ -523,6 +551,13 @@ export function DomainDetailScreen(): React.ReactElement {
         </View>
       );
     }
+    if (item.kind === "label") {
+      return (
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionHeaderText}>{item.text}</Text>
+        </View>
+      );
+    }
     if (item.kind === "trend") {
       return (
         <View style={styles.trendSection}>
@@ -691,6 +726,7 @@ export function DomainDetailScreen(): React.ReactElement {
             data={items}
             keyExtractor={(item) => {
               if (item.kind === "header") return `h:${item.dateKey}`;
+              if (item.kind === "label") return `l:${item.text}`;
               if (item.kind === "trend") return "trend";
               if (item.kind === "bmi-trend") return "bmi-trend";
               return cardId(item.card);

@@ -214,6 +214,13 @@ store)*.
   O4 (graphical longitudinal view) into the markers domain. acceptance-auditor
   MAY SHIP; on-device verified (BMI line inside plot; Mood chart pixel-identical);
   1044 tests.
+- 2026-06-16 — **Markers detail consolidation** (D27): the Health-markers detail
+  now shows ONE card per marker (the latest reading) under a "Latest readings"
+  label instead of a card-per-entry wall — the trend chart carries the full
+  history (every dot). Pure `latestPerCode` helper feeds only the cards; the
+  chart still gets full history. Scoped to `health_markers` (conditions/instrument
+  domains keep all entries). Storage untouched; display-only. On-device verified
+  (two weights → one card + 2-dot chart); 1050 tests.
 - 2026-06-15 — **WHO interpretation bands** (D23): BMI categories + bone-density
   hip T-score bands added to the versioned `tableV1` biomarkers map (provisional,
   ‡, WHO-cited — TRS 894 / TRS 843), wired to the dashboard BMI value (renders

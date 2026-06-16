@@ -562,6 +562,21 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D27 — Health-markers detail: latest-per-marker cards, not card-per-entry (2026-06-16)
+
+**Decision:** Operator: *"when a user adds BMI data — every day/week/month — we should not create one card for every day but instead create a chart alone and show the latest data in the cards … multiple data dots in the chart. agree?"* Agreed. The markers detail previously emitted **one card per observation** (logging weight daily → a wall of weight cards). It now shows **one card per marker (the latest reading)** under a single "Latest readings" label; the **trend chart carries the full history** (every dot).
+
+- **Chart = history; cards = latest snapshot.** New pure helper `latestPerCode(rows)` (`src/screens/markers/latestPerCode.ts`, unit-tested) collapses to one row per LOINC code, newest-first, deterministic tie-break (`effective_at → recorded_at → id`). It feeds **only the card list** — `BmiTrendChart` is still passed the FULL unfiltered `mine.rows`, so every reading still plots as a dot. On-device: two weights (80 kg + the stale 36.3 kg) → one "Weight 80 kg" card + a 2-dot BMI line (11.8→26.0).
+- **Scope: `health_markers` only.** `health_history` (diagnoses — each a distinct fact, not a "latest value") and instrument domains (each session meaningful) KEEP the date-bucketed, all-entries view. Date-bucketing is dropped for markers on purpose — each marker's latest reading has its own date (shown on the card), so buckets would fragment to one card each. A flat "Latest readings" label replaces the date headers.
+- **Not a clinical-display change.** Touches no interpretation string, band, pill, headline, disclaimer, ‡, or 988 path — the only new string is the navigation label "Latest readings". TimelineCardView/SingleRowCard rendering is unchanged. So the clinical-boundary-reviewer trigger is not met; this is display organization, not clinical content. Storage is untouched (append-only DAL + export keep every reading) — the helper selects by recency, never mutates or drops a stored row.
+- **Disclosed tradeoff + follow-up.** For markers WITHOUT a trend chart yet (labs other than BMI), older readings no longer show as cards — they remain in storage/export and will surface when those markers get their own charts, or via a future **"show all readings" expander**. BMI/weight history is already fully visible (the chart's dots).
+
+**Verification:** tsc 0, eslint 0 errors, **1050 tests** (1044 + 6 new `latestPerCode` pins). On-device (clean relaunch, served-bundle grep confirmed fresh): markers detail shows BMI chart → "LATEST READINGS" → one Weight card (80 kg) + one Height card (175 cm); no duplicate weight card; disclaimer + ‡ intact.
+
+**Encoded in code:** `src/screens/markers/latestPerCode.ts` (+ test), `src/screens/DomainDetailScreen.tsx` (`isMarkers` branch + `label` list item).
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).
