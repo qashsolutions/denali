@@ -41,6 +41,7 @@ import {
   applyConsentToggle,
   type ConsentType,
 } from "./settings/consentToggle";
+import { useReminders } from "@/notifications/useReminders";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -98,6 +99,13 @@ export function SettingsScreen(): React.ReactElement {
   const dark = scheme === "dark";
   const switchThumb = dark ? redesign.ink : redesign.surface;
   const switchOffTrack = dark ? redesign.line : redesign.line2;
+
+  const {
+    enabled: remindersEnabled,
+    loading: remindersLoading,
+    lastError: remindersError,
+    setEnabled: setRemindersEnabled,
+  } = useReminders();
 
   const [consent, setConsent] = React.useState<ConsentSnapshot | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -235,6 +243,7 @@ export function SettingsScreen(): React.ReactElement {
           ...fontStyle("body", 400, fontsLoaded),
         },
         toggleRow: cardSurface,
+        remindersRow: cardSurface,
         lockCard: cardSurface,
         toggleHeader: {
           flexDirection: "row",
@@ -256,6 +265,12 @@ export function SettingsScreen(): React.ReactElement {
         },
         inertHint: {
           color: redesign.amber,
+          fontSize: theme.typography.sizes.xs,
+          fontStyle: "italic",
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        remindersErrorHint: {
+          color: redesign.alarm,
           fontSize: theme.typography.sizes.xs,
           fontStyle: "italic",
           ...fontStyle("body", 400, fontsLoaded),
@@ -393,6 +408,43 @@ export function SettingsScreen(): React.ReactElement {
             </Pressable>
           );
         })}
+      </View>
+
+      <Text style={styles.sectionLabel}>Reminders</Text>
+      <View style={styles.remindersRow}>
+        <View style={styles.toggleHeader}>
+          <Text style={styles.toggleLabel}>Check-in reminders</Text>
+          {remindersLoading ? (
+            <ActivityIndicator size="small" color={redesign.teal} />
+          ) : (
+            <Switch
+              testID="settings_reminders_toggle"
+              accessibilityLabel="Check-in reminders"
+              onValueChange={(next) => {
+                hapticSelection();
+                setRemindersEnabled(next);
+              }}
+              value={remindersEnabled}
+              trackColor={{ false: switchOffTrack, true: redesign.teal }}
+              thumbColor={switchThumb}
+            />
+          )}
+        </View>
+        <Text style={styles.toggleBody}>
+          Receive gentle nudges to log how you are doing. Reminders are
+          scheduled locally on your device — no data is sent to any server.
+        </Text>
+        {remindersError === "permission_denied" && (
+          <Text style={styles.remindersErrorHint}>
+            Notification permission was denied. Enable notifications for Denali
+            in your device settings to use reminders.
+          </Text>
+        )}
+        {remindersError === "error" && (
+          <Text style={styles.remindersErrorHint}>
+            Could not schedule reminders. Please try again.
+          </Text>
+        )}
       </View>
 
       <Text style={styles.sectionLabel}>Privacy & Data</Text>

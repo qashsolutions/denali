@@ -32,6 +32,7 @@
     "expo-haptics": "~56.0.3",
     "expo-image-picker": "~56.0.15",
     "expo-local-authentication": "~56.0.4",
+    "expo-notifications": "~56.0.18",
     "expo-pdf-text-extract": "^1.1.0",
     "expo-secure-store": "~56.0.4",
     "expo-sqlite": "~56.0.4",

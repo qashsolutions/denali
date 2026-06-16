@@ -56,6 +56,20 @@ const config: ExpoConfig = {
           "Denali uses Face ID to unlock your health information on this device.",
       },
     ],
+    [
+      // Local-only check-in reminders (O7). The plugin injects the iOS
+      // NSUserNotificationUsageDescription and wires the Android channel
+      // permissions. Push tokens are never requested — scheduling is
+      // calendar-trigger only (scheduleNotificationAsync, no server).
+      // Invariant 1: nothing leaves the device.
+      "expo-notifications",
+      {
+        icon: "./assets/notification-icon.png",
+        color: "#4B9E9E",
+        iosDisplayInForeground: false,
+        requestPermissionsOnLaunch: false,
+      },
+    ],
   ],
   extra: {
     // Default to staging until the build pipeline injects per-channel overrides.
