@@ -36,10 +36,23 @@ describe("recovery key generation + rendering", () => {
 });
 
 describe("phrase validation (fails closed)", () => {
-  const validPhrase = recoveryKeyToPhrase(generateRecoveryKey(rng));
+  // FIXED known-answer vectors (official BIP39 / Trezor test vectors) instead of
+  // a random phrase. A randomly generated `validPhrase` made the last-word-swap
+  // checksum test flaky: swapping the final word of a 24-word phrase changes 3
+  // entropy bits but only an 8-bit checksum, so ~1 in 256 random phrases survive
+  // the swap with a still-valid checksum and the "expect false" assertion fails.
+  // Deterministic vectors remove the non-determinism without weakening intent —
+  // the production checksum logic is correct; only the test's input was random.
+  //
+  // 32 bytes of 0xff -> the canonical "zoo … vote" mnemonic (last word "vote").
+  const validPhrase =
+    "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote";
+  // Sanity-pin: the fixed vector round-trips to all-0xff entropy via the prod code.
+  const validEntropyHex = "ff".repeat(32);
 
-  it("accepts a freshly generated phrase", () => {
+  it("the fixed vector is a real BIP39 phrase that decodes to its known entropy", () => {
     expect(isValidRecoveryPhrase(validPhrase)).toBe(true);
+    expect(hex(phraseToRecoveryKey(validPhrase))).toBe(validEntropyHex);
   });
 
   it("tolerates messy whitespace + casing", () => {
@@ -56,9 +69,13 @@ describe("phrase validation (fails closed)", () => {
   });
 
   it("rejects a failed checksum (last word swapped for another valid word)", () => {
-    // Swap the final word for a different real word -> checksum should fail.
+    // Deterministic: for the all-0xff vector the final word is "vote"; swapping it
+    // to "zoo" (a real wordlist word) yields a phrase whose checksum no longer
+    // matches the entropy, so validation MUST fail. Unlike the old random phrase,
+    // this swap is a guaranteed checksum mismatch, not a 1-in-256 gamble.
     const words = validPhrase.split(" ");
-    const swapped = [...words.slice(0, 23), words[23] === "zoo" ? "zone" : "zoo"].join(" ");
+    const swapped = [...words.slice(0, 23), "zoo"].join(" ");
+    expect(swapped).not.toBe(validPhrase); // guard: the swap actually changed a word
     expect(isValidRecoveryPhrase(swapped)).toBe(false);
   });
 
