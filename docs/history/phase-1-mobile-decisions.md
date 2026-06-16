@@ -531,6 +531,19 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D25 — Marker display: plain language (no LOINC) + value rounding (2026-06-16)
+
+**Decision:** Operator-flagged on the timeline detail surface (`SingleRowCard`): it showed internal jargon + float noise. Display-layer fix only — storage untouched.
+
+- **No LOINC shown to the user.** Removed the "Reference: LOINC `<code>`" line from the details reveal — LOINC is internal jargon (repo rule: *never show codes to the user*). The plain-language name is the card title; the "Source:" and (for unmapped codes) "Clinical name:" lines remain. The LOINC code stays in the DAL / export.
+- **Display rounding.** Values render via `formatMarkerValue(code, value)`: per-marker `displayDecimals` (height 0 → "175 cm", weight 1 → "36.3 kg", creatinine/TSH 2, default 1), trailing zeros stripped. Kills IEEE float noise from unit conversions ("36.287389600000004" → "36.3"). **DISPLAY-ONLY** — `value_num` keeps full precision in storage.
+
+**Verification:** tsc 0, eslint 0, 418 marker+timeline tests (incl. `formatMarkerValue`). clinical-boundary-reviewer run on the diff. On-device: detail shows "80 kg" / "36.3 kg" / "175 cm"; the details reveal shows only "Source: User input" (no LOINC line).
+
+**Encoded in code:** `src/screens/markers/markerCatalog` (`displayDecimals` + `formatMarkerValue`), `src/screens/timeline/TimelineCardView` (SingleRowCard).
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

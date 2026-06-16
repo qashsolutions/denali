@@ -192,6 +192,11 @@ store)*.
   surfacing of the D15 biometric gate (Face ID / Touch ID / fingerprint /
   passcode), reflecting device enrollment. No enable/disable toggle — disabling
   would regress the 30-day OTP cap that the always-on gate justifies.
+- 2026-06-16 — **Marker display polish** (D25): the timeline detail no longer
+  shows the raw LOINC code (plain language only — LOINC stays in storage/export);
+  values round for display via `formatMarkerValue` (height "175 cm" whole, weight
+  "36.3 kg" 1 dp, creatinine/TSH 2 dp) — kills float noise from unit conversions
+  while storage keeps full precision. clinical-boundary PASS; on-device verified.
 - 2026-06-16 — **Marker-entry guardrails + feet/inches** (D24): live validation +
   disabled Save (no press feedback) + clear "valid range" copy hard-block
   implausible values (e.g. 555 cm / 9 ft); height gains a feet/inches two-field

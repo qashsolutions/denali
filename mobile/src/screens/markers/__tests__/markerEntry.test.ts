@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   findMarker,
+  formatMarkerValue,
   MARKER_CATALOG,
   markersFor,
   trackedMarkers,
@@ -122,6 +123,29 @@ describe("defaultUnitForField — entry default never diverges from canonical (e
   it("single-unit fields default to that unit", () => {
     expect(defaultUnitForField(bp.fields[0])).toBe("mmHg");
     expect(defaultUnitForField(hba1c.fields[0])).toBe("%");
+  });
+});
+
+// ── formatMarkerValue (display rounding; storage keeps full precision) ───────
+
+describe("formatMarkerValue — display rounding", () => {
+  it("weight (default 1 dp) strips float noise from a lb→kg conversion", () => {
+    expect(formatMarkerValue("29463-7", 80)).toBe("80");
+    expect(formatMarkerValue("29463-7", 36.287389600000004)).toBe("36.3");
+  });
+
+  it("height (0 dp) shows a whole number", () => {
+    expect(formatMarkerValue("8302-2", 175.26)).toBe("175");
+    expect(formatMarkerValue("8302-2", 180)).toBe("180");
+  });
+
+  it("creatinine (2 dp) keeps sub-decimal precision", () => {
+    expect(formatMarkerValue("2160-0", 0.95)).toBe("0.95");
+  });
+
+  it("unknown code (e.g. uploaded lab) uses the default precision", () => {
+    expect(formatMarkerValue("99999-9", 12.3456)).toBe("12.3");
+    expect(formatMarkerValue("99999-9", 42)).toBe("42");
   });
 });
 

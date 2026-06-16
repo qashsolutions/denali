@@ -34,6 +34,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { ObservationRow, SexAtBirth } from "@/contracts";
 import { getInstrumentById } from "@/onboarding/instruments";
+import { formatMarkerValue } from "@/screens/markers/markerCatalog";
 import { fontStyle, MAX_FONT_SCALE, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
@@ -320,8 +321,8 @@ function SingleRowCard({
   const value =
     row.value_num != null
       ? row.unit
-        ? `${row.value_num} ${row.unit}`
-        : String(row.value_num)
+        ? `${formatMarkerValue(row.code, row.value_num)} ${row.unit}`
+        : formatMarkerValue(row.code, row.value_num)
       : row.value_text;
 
   return (
@@ -379,9 +380,9 @@ function SingleRowCard({
               Clinical name: {row.display}
             </Text>
           ) : null}
-          <Text style={styles.provenance}>
-            Reference: {row.code_system} {row.code}
-          </Text>
+          {/* LOINC code is intentionally NOT shown — it's storage/export-only
+              jargon. The plain-language name is the card title (or the
+              "Clinical name" line above for unmapped codes). */}
         </View>
       ) : null}
 

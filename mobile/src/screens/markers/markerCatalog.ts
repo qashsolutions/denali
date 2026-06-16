@@ -96,6 +96,14 @@ export interface MarkerField {
    * for the typo guard to accept the value. Absent = false (unsigned only).
    */
   signed?: boolean;
+  /**
+   * Decimal places to DISPLAY this value (storage always keeps full precision).
+   * Unit conversions (lb→kg, ft/in→cm, mmol→mg/dL) leave float noise like
+   * 36.287389600000004; the display rounds it off. Absent → DEFAULT_DISPLAY_DECIMALS.
+   * Use 0 for whole-number markers (height), 2 where sub-decimal precision
+   * matters (creatinine, TSH).
+   */
+  displayDecimals?: number;
 }
 
 export interface MarkerDef {
@@ -302,6 +310,7 @@ export const MARKER_CATALOG: ReadonlyArray<MarkerDef> = [
         loinc: "2160-0",
         units: [{ unit: "mg/dL", canonical: true, toCanonicalFactor: 1 }],
         plausible: { min: 0.1, max: 20 },
+        displayDecimals: 2, // creatinine is reported to 2 dp (e.g. 0.95)
       },
     ],
   },
@@ -363,6 +372,7 @@ export const MARKER_CATALOG: ReadonlyArray<MarkerDef> = [
         loinc: "3016-3",
         units: [{ unit: "mIU/L", canonical: true, toCanonicalFactor: 1 }],
         plausible: { min: 0.001, max: 100 },
+        displayDecimals: 2, // TSH is reported to 2 dp (e.g. 0.45)
       },
     ],
   },
@@ -432,6 +442,7 @@ export const MARKER_CATALOG: ReadonlyArray<MarkerDef> = [
           { unit: "cm", canonical: true, toCanonicalFactor: 1 },
         ],
         plausible: { min: 50, max: 250 }, // cm — typo guard (physical extremes)
+        displayDecimals: 0, // height shows as a whole number (175 cm)
       },
     ],
   },
@@ -518,6 +529,32 @@ export const MARKER_CATALOG: ReadonlyArray<MarkerDef> = [
 /** Look up a marker definition by key. */
 export function findMarker(key: string): MarkerDef | undefined {
   return MARKER_CATALOG.find((m) => m.key === key);
+}
+
+/** Default display precision when a field doesn't specify `displayDecimals`. */
+export const DEFAULT_DISPLAY_DECIMALS = 1;
+
+/** Find a catalog field by its LOINC code (across all markers). */
+function findFieldByLoinc(code: string): MarkerField | undefined {
+  for (const m of MARKER_CATALOG) {
+    for (const f of m.fields) {
+      if (f.loinc === code) return f;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Format a stored numeric value for DISPLAY: round to the field's
+ * `displayDecimals` (default `DEFAULT_DISPLAY_DECIMALS`) and strip trailing
+ * zeros — so 80→"80", 36.287389600000004→"36.3" (weight), 175.26→"175"
+ * (height), 0.95→"0.95" (creatinine). Storage/export keep the raw value;
+ * this is display-only. Unknown codes (e.g. uploaded labs) use the default.
+ */
+export function formatMarkerValue(code: string, value: number): string {
+  const decimals =
+    findFieldByLoinc(code)?.displayDecimals ?? DEFAULT_DISPLAY_DECIMALS;
+  return String(Number(value.toFixed(decimals)));
 }
 
 /**
