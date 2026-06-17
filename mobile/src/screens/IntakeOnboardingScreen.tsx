@@ -521,7 +521,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
           paddingHorizontal: theme.spacing.md,
           borderRadius: theme.radii.md,
           alignSelf: "flex-start",
-          minHeight: 44,
+          minHeight: 48,
           justifyContent: "center",
         },
         addLabel: {

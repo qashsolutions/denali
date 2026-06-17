@@ -380,8 +380,8 @@ export function DomainDetailScreen(): React.ReactElement {
           // Mockup .navh .back is a 34×34 teal-wash chip; we keep the
           // 44×44 minimum tap target by padding the Pressable and round
           // the chip look onto it. Pairs with hitSlop for forgiveness.
-          minWidth: 44,
-          minHeight: 44,
+          minWidth: 48,
+          minHeight: 48,
           borderRadius: redesign.rChip,
           backgroundColor: redesign.tealWash,
           alignItems: "center",

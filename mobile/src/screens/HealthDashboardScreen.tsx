@@ -26,7 +26,7 @@
 
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Plus } from "lucide-react-native";
+import { ChevronRight, Plus } from "lucide-react-native";
 import React from "react";
 import {
   FlatList,
@@ -54,16 +54,25 @@ import {
   PREVENTIVE_RECOMMENDATIONS,
   type DueScreening,
 } from "@/preventive/uspstf";
-import { fontStyle, useFontsLoaded } from "@/theme/fonts";
+import { fontStyle, MAX_FONT_SCALE, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { checkInAvailable } from "./instrumentsFocus";
 import { QuickAddSheet, type QuickAddOption } from "./QuickAddSheet";
 import { DomainCard } from "./timeline/DomainCard";
+import {
+  mostSevereDomain,
+  type AttentionItem,
+} from "./timeline/dashboardAttention";
 import { dateKeyOf, formatGroupHeader } from "./timeline/groupObservations";
 import { groupByInstrumentSession } from "./timeline/grouping";
 import { rollupCardsByDomain, type DomainRollup } from "./timeline/rollup";
-import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
+import {
+  getDomainIcon,
+  getDomainName,
+  STANDING_DISCLAIMER,
+} from "./timeline/displayMapping";
+import { pillTintForBand } from "./timeline/pill";
 
 import type { IntakeSection, RootStackParamList } from "@/navigation/types";
 
@@ -72,6 +81,8 @@ type Nav = NativeStackNavigationProp<RootStackParamList, "MainTabs">;
 const PAGE_SIZE = 200;
 
 type ListItem =
+  /** Single "needs attention" callout, pinned at the very top (D35). */
+  | { kind: "attention"; attention: AttentionItem }
   | { kind: "section-header"; title: string }
   | { kind: "rollup"; rollup: DomainRollup }
   | { kind: "due-for"; due: ReadonlyArray<DueScreening> }
@@ -236,6 +247,13 @@ export function HealthDashboardScreen(): React.ReactElement {
     ];
 
     const out: ListItem[] = [];
+    // ONE attention item, pinned above everything (principle 7): the single
+    // domain whose latest check-in is in a severe band. The grid below is NOT
+    // reordered. Null → no callout. Reuses the cards' own band logic.
+    const attention = mostSevereDomain(rollups, userSexAtBirth, userAgeYears);
+    if (attention != null) {
+      out.push({ kind: "attention", attention });
+    }
     // "Due for…" preventive layer — sex/age-filtered, hidden when nothing is
     // due. PREVENTIVE_RECOMMENDATIONS ships empty (reviewer/USPSTF-gated), so
     // `due` is [] today and no card renders; the wiring lights up when the set
@@ -311,6 +329,52 @@ export function HealthDashboardScreen(): React.ReactElement {
           ...fontStyle("body", 400, fontsLoaded),
         },
         // Mockup .eyebrow: body 600, 11px, .15em tracking, uppercase, ink-3.
+        // ONE attention callout (D35) — a surface card with a severity-tinted
+        // left accent + border, pinned at the top. Reuses the pill tint.
+        attentionCard: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: theme.spacing.space3,
+          marginHorizontal: theme.spacing.space5,
+          marginTop: theme.spacing.space3,
+          paddingVertical: theme.spacing.md,
+          paddingRight: theme.spacing.md,
+          paddingLeft: theme.spacing.md,
+          borderRadius: redesign.rCard,
+          borderWidth: 1,
+          backgroundColor: redesign.surface,
+          overflow: "hidden",
+        },
+        attentionAccent: {
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+        },
+        attentionIcon: {
+          width: theme.spacing.xl,
+          height: theme.spacing.xl,
+          borderRadius: redesign.rChip,
+          backgroundColor: redesign.tealWash,
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        attentionName: {
+          color: redesign.ink,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("display", 600, fontsLoaded),
+        },
+        spacer: { flex: 1 },
+        attentionPill: {
+          borderRadius: redesign.rChip,
+          paddingHorizontal: theme.spacing.sm,
+          paddingVertical: 3,
+        },
+        attentionPillText: {
+          fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
         sectionHeader: {
           paddingHorizontal: theme.spacing.space5,
           paddingTop: theme.spacing.space5,
@@ -371,6 +435,44 @@ export function HealthDashboardScreen(): React.ReactElement {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionHeaderText}>{item.title}</Text>
         </View>
+      );
+    }
+    if (item.kind === "attention") {
+      // ONE attention item (principle 7). Reuses the band's pill + tint (no new
+      // clinical copy); tap opens the domain detail where the full reading +
+      // any crisis path lives.
+      const a = item.attention;
+      const tint = pillTintForBand(redesign, a.band);
+      const Icon = getDomainIcon(a.domainId);
+      return (
+        <Pressable
+          testID="dashboard_attention"
+          accessibilityRole="button"
+          accessibilityLabel={`${getDomainName(a.domainId)}: ${a.band.pill}. Open details.`}
+          onPress={() =>
+            navigation.navigate("DomainDetail", { domainId: a.domainId })
+          }
+          style={[styles.attentionCard, { borderColor: tint.fg }]}
+        >
+          <View style={[styles.attentionAccent, { backgroundColor: tint.fg }]} />
+          <View style={styles.attentionIcon}>
+            <Icon color={tint.fg} size={18} />
+          </View>
+          <Text style={styles.attentionName} numberOfLines={1}>
+            {getDomainName(a.domainId)}
+          </Text>
+          <View style={styles.spacer} />
+          <View style={[styles.attentionPill, { backgroundColor: tint.bg }]}>
+            <Text
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              style={[styles.attentionPillText, { color: tint.fg }]}
+            >
+              {a.band.pill}
+              {a.band.provisional ? "‡" : ""}
+            </Text>
+          </View>
+          <ChevronRight color={redesign.ink3} size={18} />
+        </Pressable>
       );
     }
     if (item.kind === "rollup") {
@@ -474,6 +576,8 @@ export function HealthDashboardScreen(): React.ReactElement {
           style={{ flex: 1 }}
           data={items}
           keyExtractor={(item) => {
+            if (item.kind === "attention")
+              return `a:${item.attention.domainId}`;
             if (item.kind === "section-header") return `s:${item.title}`;
             if (item.kind === "rollup") return `r:${item.rollup.domainId}`;
             if (item.kind === "due-for") return "due-for";

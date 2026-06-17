@@ -352,7 +352,7 @@ export function SettingsScreen(): React.ReactElement {
           alignItems: "center",
           justifyContent: "space-between",
           paddingVertical: theme.spacing.sm,
-          minHeight: 44,
+          minHeight: 48,
         },
         optionLabel: {
           color: redesign.ink2,
@@ -432,7 +432,7 @@ export function SettingsScreen(): React.ReactElement {
         },
         segment: {
           flex: 1,
-          minHeight: 44,
+          minHeight: 48,
           alignItems: "center",
           justifyContent: "center",
           borderRadius: redesign.rChip - 2,

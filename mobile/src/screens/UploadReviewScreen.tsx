@@ -157,7 +157,7 @@ export function UploadReviewScreen(): React.ReactElement {
           paddingHorizontal: theme.spacing.sm,
           paddingVertical: theme.spacing.xs,
           fontSize: theme.typography.sizes.base,
-          minHeight: 44,
+          minHeight: 48,
           ...fontStyle("body", 400, fontsLoaded),
         },
         sourceText: {
@@ -177,7 +177,7 @@ export function UploadReviewScreen(): React.ReactElement {
           borderRadius: theme.radii.md,
           alignItems: "center",
           justifyContent: "center",
-          minHeight: 44,
+          minHeight: 48,
           borderWidth: 1,
           borderColor: redesign.line,
           backgroundColor: redesign.paper,

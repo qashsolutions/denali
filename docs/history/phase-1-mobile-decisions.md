@@ -678,6 +678,23 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D35 — A11y 45+ floor + one-attention-item (design reconciliation) (2026-06-17)
+
+**Decision:** Operator handed a longitudinal-health design proposal; we reconciled it against the codebase (Phases 1–3) and adopted only the measured wins. Most principles were already satisfied (≤5 tabs, status text+color via pills, plain-language readouts, AA contrast tested, one primary action). Three adopted, on branch `feat/mobile-a11y-45plus`:
+
+- **Touch targets → ≥48px (principle 8).** Audited every interactive `minHeight`/`minWidth` and bumped the ~25 remaining `44`s to `48` across 14 files (back chips, CTAs, list rows, cards). Non-interactive dims (14/50/52) untouched. Guarded by a source-scan test (`a11y.test.ts`).
+- **Body base 16 → 17px (principle 8).** One token (`tokens.ts` `sizes.base`). Dynamic Type still respected (MAX_FONT_SCALE caps chrome only). Does NOT touch the colors-only token-drift test. On-device visual pass: no layout breakage.
+- **One attention item on Today (principle 7).** A single top callout for the domain whose latest check-in is in a severe (`alarm`-tint) band — pure `mostSevereDomain` helper, reusing the cards' own `lookupInterpretation` + `tintClassForBand` so callout and card can never disagree. NO new clinical copy (reuses the versioned band pill); tap → the domain detail where the full reading + any 988 path live. The grid is NOT reordered (stable layout for 45+). Markers (watch tint) never trigger it.
+- **Refactor:** `tintClassForBand` extracted to RN-free `bandTint.ts` (pill.ts re-exports it) so the node-only attention helper + test don't drag in react-native. Byte-identical logic; all callers unchanged.
+
+**Rejected (with rationale):** dedicated Trends tab (our sparkline-glance + per-domain drill-down already cover it for a many-domain IA); Meds archetype (Phase 1 isn't a med manager); trend event-annotations (sparse self-reported events; defer).
+
+**Verification:** tsc 0, eslint 0 errors, **1103 tests** (new `a11y` acceptance + `dashboardAttention` pins). On-device: severe check-in → the callout surfaces at the top; body bump renders without breakage.
+
+**Encoded in code:** `src/theme/tokens.ts` (base 17), ~14 screens (targets 48), `src/screens/timeline/{dashboardAttention,bandTint}.ts` (+ tests), `src/screens/HealthDashboardScreen.tsx` (callout), `src/screens/timeline/pill.ts` (re-export), `src/theme/__tests__/a11y.test.ts`.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

@@ -259,8 +259,8 @@ function makeStyles(
       paddingBottom: theme.spacing.md,
     },
     backButton: {
-      minWidth: 44,
-      minHeight: 44,
+      minWidth: 48,
+      minHeight: 48,
       borderRadius: redesign.rChip,
       backgroundColor: redesign.tealWash,
       alignItems: "center",

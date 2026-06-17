@@ -147,7 +147,7 @@ export function UploadScreen(): React.ReactElement {
           borderRadius: redesign.rCard,
           padding: theme.spacing.md,
           marginBottom: theme.spacing.sm,
-          minHeight: 44,
+          minHeight: 48,
           gap: theme.spacing.xs,
         },
         typeCardActive: {
@@ -173,7 +173,7 @@ export function UploadScreen(): React.ReactElement {
           paddingHorizontal: theme.spacing.md,
           paddingVertical: theme.spacing.sm,
           fontSize: theme.typography.sizes.base,
-          minHeight: 44,
+          minHeight: 48,
           ...fontStyle("body", 400, fontsLoaded),
         },
         // Mockup .cta: teal primary; .cta.ghost: surface + teal border.

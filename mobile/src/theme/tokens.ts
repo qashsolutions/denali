@@ -375,7 +375,10 @@ export const tokens = {
     sizes: {
       xs: 12,
       sm: 14,
-      base: 16,
+      // base bumped 16 → 17 for the 45+ legibility floor (proposed a11y
+      // acceptance criterion: body ≥17px, Dynamic Type still respected via
+      // MAX_FONT_SCALE chrome caps). Colors-only token-drift test is unaffected.
+      base: 17,
       lg: 18,
       xl: 20,
       "2xl": 24,

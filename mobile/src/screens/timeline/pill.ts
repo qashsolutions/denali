@@ -19,6 +19,7 @@ import type { TextStyle, ViewStyle } from "react-native";
 import { fontStyle } from "@/theme/fonts";
 import type { useTheme } from "@/theme/useTheme";
 
+import { tintClassForBand } from "./bandTint";
 import type { BandId, TintClass } from "./interpretation/tableV1";
 
 type Redesign = ReturnType<typeof useTheme>["redesign"];
@@ -43,50 +44,10 @@ export function tintByClass(redesign: Redesign, cls: TintClass): PillTint {
   }
 }
 
-/**
- * Default bandId → tint class. The trend chart shares this so band
- * shading and pill colors can never disagree.
- */
-export function tintClassForBand(band: {
-  bandId: BandId;
-  tint?: TintClass;
-}): TintClass {
-  // Curated per-band override (v1.3, table-owned) wins.
-  if (band.tint) return band.tint;
-  switch (band.bandId) {
-    // ok — screen-negative / lowest-severity / in-range bands.
-    case "negative":
-    case "minimal":
-    case "lower-risk":
-    case "healthy-weight":
-    case "bone-normal":
-      return "ok";
-    // soft — within-normal bands.
-    case "lower-normal":
-    case "higher-normal":
-      return "soft";
-    // watch — calm attention. WHO biomarker out-of-range bands stay "watch"
-    // (calm), not "alarm" — clinical surfaces stay calm; the reviewer may
-    // escalate via the table's per-band `tint` override before sign-off.
-    case "mild":
-    case "moderate":
-    case "higher-risk":
-    case "underweight":
-    case "overweight":
-    case "obesity":
-    case "severe-obesity":
-    case "bone-low":
-    case "osteoporosis":
-      return "watch";
-    // alarm — severe screener bands (alarm tokens' only UI consumer
-    // besides the crisis path).
-    case "moderately-severe":
-    case "severe":
-    case "likely-aud":
-    case "positive":
-      return "alarm";
-  }
-}
+// The pure bandId → tint class mapping lives in bandTint.ts (RN-free so node
+// consumers can use it). Re-exported (import below) so existing `from "./pill"`
+// callers (TrendChart, etc.) are unchanged.
+export { tintClassForBand };
 
 /**
  * Tint for a band: curated `tint` override wins; otherwise the default
