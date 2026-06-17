@@ -61,7 +61,7 @@ import { checkInAvailable } from "./instrumentsFocus";
 import { QuickAddSheet, type QuickAddOption } from "./QuickAddSheet";
 import { DomainCard } from "./timeline/DomainCard";
 import {
-  mostSevereDomain,
+  severeDomains,
   type AttentionItem,
 } from "./timeline/dashboardAttention";
 import { dateKeyOf, formatGroupHeader } from "./timeline/groupObservations";
@@ -81,8 +81,9 @@ type Nav = NativeStackNavigationProp<RootStackParamList, "MainTabs">;
 const PAGE_SIZE = 200;
 
 type ListItem =
-  /** Single "needs attention" callout, pinned at the very top (D35). */
-  | { kind: "attention"; attention: AttentionItem }
+  /** Single "needs attention" callout, pinned at the very top (D35). Carries
+   *  every severe domain; the callout shows the first + a "+N more" line. */
+  | { kind: "attention"; severe: ReadonlyArray<AttentionItem> }
   | { kind: "section-header"; title: string }
   | { kind: "rollup"; rollup: DomainRollup }
   | { kind: "due-for"; due: ReadonlyArray<DueScreening> }
@@ -250,9 +251,9 @@ export function HealthDashboardScreen(): React.ReactElement {
     // ONE attention item, pinned above everything (principle 7): the single
     // domain whose latest check-in is in a severe band. The grid below is NOT
     // reordered. Null → no callout. Reuses the cards' own band logic.
-    const attention = mostSevereDomain(rollups, userSexAtBirth, userAgeYears);
-    if (attention != null) {
-      out.push({ kind: "attention", attention });
+    const severe = severeDomains(rollups, userSexAtBirth, userAgeYears);
+    if (severe.length > 0) {
+      out.push({ kind: "attention", severe });
     }
     // "Due for…" preventive layer — sex/age-filtered, hidden when nothing is
     // due. PREVENTIVE_RECOMMENDATIONS ships empty (reviewer/USPSTF-gated), so
@@ -330,7 +331,8 @@ export function HealthDashboardScreen(): React.ReactElement {
         },
         // Mockup .eyebrow: body 600, 11px, .15em tracking, uppercase, ink-3.
         // ONE attention callout (D35) — a surface card with a severity-tinted
-        // left accent + border, pinned at the top. Reuses the pill tint.
+        // border, pinned at the top. Reuses the pill tint. Single row; a
+        // "+N more" subtitle (not extra cards) when several domains are severe.
         attentionCard: {
           flexDirection: "row",
           alignItems: "center",
@@ -338,19 +340,10 @@ export function HealthDashboardScreen(): React.ReactElement {
           marginHorizontal: theme.spacing.space5,
           marginTop: theme.spacing.space3,
           paddingVertical: theme.spacing.md,
-          paddingRight: theme.spacing.md,
-          paddingLeft: theme.spacing.md,
+          paddingHorizontal: theme.spacing.md,
           borderRadius: redesign.rCard,
           borderWidth: 1,
           backgroundColor: redesign.surface,
-          overflow: "hidden",
-        },
-        attentionAccent: {
-          position: "absolute",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 4,
         },
         attentionIcon: {
           width: theme.spacing.xl,
@@ -360,12 +353,17 @@ export function HealthDashboardScreen(): React.ReactElement {
           alignItems: "center",
           justifyContent: "center",
         },
+        attentionTextBlock: { flex: 1, gap: 1 },
         attentionName: {
           color: redesign.ink,
           fontSize: theme.typography.sizes.base,
           ...fontStyle("display", 600, fontsLoaded),
         },
-        spacer: { flex: 1 },
+        attentionMore: {
+          color: redesign.ink3,
+          fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
         attentionPill: {
           borderRadius: redesign.rChip,
           paddingHorizontal: theme.spacing.sm,
@@ -438,30 +436,37 @@ export function HealthDashboardScreen(): React.ReactElement {
       );
     }
     if (item.kind === "attention") {
-      // ONE attention item (principle 7). Reuses the band's pill + tint (no new
-      // clinical copy); tap opens the domain detail where the full reading +
-      // any crisis path lives.
-      const a = item.attention;
+      // ONE compact callout (principle 7) — the most-severe domain, plus a
+      // "+N more" line if others are also severe (never N stacked cards).
+      // Reuses the band's pill + tint (no new clinical copy); tap opens the
+      // detail where the full reading + any crisis path lives.
+      const a = item.severe[0];
+      const moreCount = item.severe.length - 1;
       const tint = pillTintForBand(redesign, a.band);
       const Icon = getDomainIcon(a.domainId);
       return (
         <Pressable
           testID="dashboard_attention"
           accessibilityRole="button"
-          accessibilityLabel={`${getDomainName(a.domainId)}: ${a.band.pill}. Open details.`}
+          accessibilityLabel={`${getDomainName(a.domainId)}: ${a.band.pill}.${moreCount > 0 ? ` ${moreCount} ${moreCount === 1 ? "other is" : "others are"} also severe.` : ""} Open details.`}
           onPress={() =>
             navigation.navigate("DomainDetail", { domainId: a.domainId })
           }
           style={[styles.attentionCard, { borderColor: tint.fg }]}
         >
-          <View style={[styles.attentionAccent, { backgroundColor: tint.fg }]} />
           <View style={styles.attentionIcon}>
             <Icon color={tint.fg} size={18} />
           </View>
-          <Text style={styles.attentionName} numberOfLines={1}>
-            {getDomainName(a.domainId)}
-          </Text>
-          <View style={styles.spacer} />
+          <View style={styles.attentionTextBlock}>
+            <Text style={styles.attentionName} numberOfLines={1}>
+              {getDomainName(a.domainId)}
+            </Text>
+            {moreCount > 0 ? (
+              <Text style={styles.attentionMore} numberOfLines={1}>
+                {moreCount} {moreCount === 1 ? "other is" : "others are"} severe
+              </Text>
+            ) : null}
+          </View>
           <View style={[styles.attentionPill, { backgroundColor: tint.bg }]}>
             <Text
               maxFontSizeMultiplier={MAX_FONT_SCALE}
@@ -577,7 +582,7 @@ export function HealthDashboardScreen(): React.ReactElement {
           data={items}
           keyExtractor={(item) => {
             if (item.kind === "attention")
-              return `a:${item.attention.domainId}`;
+              return `a:${item.severe[0].domainId}`;
             if (item.kind === "section-header") return `s:${item.title}`;
             if (item.kind === "rollup") return `r:${item.rollup.domainId}`;
             if (item.kind === "due-for") return "due-for";

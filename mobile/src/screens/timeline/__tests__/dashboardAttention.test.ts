@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { mostSevereDomain } from "../dashboardAttention";
+import { severeDomains } from "../dashboardAttention";
 import type { DomainRollup } from "../rollup";
 
 function instrument(
@@ -21,22 +21,23 @@ function instrument(
   } as unknown as DomainRollup;
 }
 
-describe("mostSevereDomain", () => {
+describe("severeDomains", () => {
   it("returns the domain whose latest band is severe (alarm tint)", () => {
     // PHQ-9 22 → severe band → alarm tint.
-    const r = mostSevereDomain([instrument("mood", "PHQ-9", 22)], "male", 50);
-    expect(r?.domainId).toBe("mood");
-    expect(r?.band.bandId).toBe("severe");
+    const r = severeDomains([instrument("mood", "PHQ-9", 22)], "male", 50);
+    expect(r).toHaveLength(1);
+    expect(r[0].domainId).toBe("mood");
+    expect(r[0].band.bandId).toBe("severe");
   });
 
-  it("ignores non-severe domains (minimal PHQ-9 → null)", () => {
+  it("ignores non-severe domains (minimal PHQ-9 → empty)", () => {
     expect(
-      mostSevereDomain([instrument("mood", "PHQ-9", 2)], "male", 50),
-    ).toBeNull();
+      severeDomains([instrument("mood", "PHQ-9", 2)], "male", 50),
+    ).toEqual([]);
   });
 
-  it("returns the FIRST severe domain only — single item, no pile-up", () => {
-    const r = mostSevereDomain(
+  it("returns ALL severe, in order — the dashboard shows [0] + a +N more line", () => {
+    const r = severeDomains(
       [
         instrument("mood", "PHQ-9", 22), // severe
         instrument("anxiety", "GAD-7", 18), // also severe
@@ -44,22 +45,22 @@ describe("mostSevereDomain", () => {
       "female",
       60,
     );
-    expect(r?.domainId).toBe("mood");
+    expect(r.map((x) => x.domainId)).toEqual(["mood", "anxiety"]);
   });
 
   it("skips null scores and non-instrument domains", () => {
     expect(
-      mostSevereDomain([instrument("mood", "PHQ-9", null)], "male", 50),
-    ).toBeNull();
+      severeDomains([instrument("mood", "PHQ-9", null)], "male", 50),
+    ).toEqual([]);
     const markers = {
       kind: "single-domain",
       domainId: "health_markers",
       rows: [],
     } as unknown as DomainRollup;
-    expect(mostSevereDomain([markers], "male", 50)).toBeNull();
+    expect(severeDomains([markers], "male", 50)).toEqual([]);
   });
 
-  it("empty → null", () => {
-    expect(mostSevereDomain([], "male", 50)).toBeNull();
+  it("empty → empty", () => {
+    expect(severeDomains([], "male", 50)).toEqual([]);
   });
 });

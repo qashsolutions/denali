@@ -26,11 +26,19 @@ export interface AttentionItem {
   band: InterpretationBand;
 }
 
-export function mostSevereDomain(
+/**
+ * EVERY domain whose latest check-in is in a severe ("alarm"-tint) band, in
+ * rollup order (data-bearing, most-recent-first). The dashboard shows the FIRST
+ * in a single compact callout and indicates any others as a "+N more" line — it
+ * never stacks N cards (that would be the pile-up principle 7 forbids). Empty
+ * when nothing is severe.
+ */
+export function severeDomains(
   rollups: ReadonlyArray<DomainRollup>,
   sexAtBirth: SexAtBirth | null,
   ageYears: number | null,
-): AttentionItem | null {
+): AttentionItem[] {
+  const out: AttentionItem[] = [];
   for (const r of rollups) {
     if (r.kind !== "instrument-domain") continue;
     if (r.latestScore == null) continue;
@@ -43,10 +51,8 @@ export function mostSevereDomain(
     });
     if (lookup == null) continue;
     if (tintClassForBand(lookup.band) === "alarm") {
-      // First severe domain wins — rollups are data-bearing, most-recent-first.
-      // Single item by construction (we return immediately): no pile-up.
-      return { domainId: r.domainId, band: lookup.band };
+      out.push({ domainId: r.domainId, band: lookup.band });
     }
   }
-  return null;
+  return out;
 }
