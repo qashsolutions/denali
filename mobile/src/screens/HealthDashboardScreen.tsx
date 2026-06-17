@@ -26,7 +26,7 @@
 
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { ChevronRight, Plus } from "lucide-react-native";
+import { Plus } from "lucide-react-native";
 import React from "react";
 import {
   FlatList,
@@ -68,11 +68,9 @@ import { dateKeyOf, formatGroupHeader } from "./timeline/groupObservations";
 import { groupByInstrumentSession } from "./timeline/grouping";
 import { rollupCardsByDomain, type DomainRollup } from "./timeline/rollup";
 import {
-  getDomainIcon,
   getDomainName,
   STANDING_DISCLAIMER,
 } from "./timeline/displayMapping";
-import { pillTintForBand } from "./timeline/pill";
 
 import type { IntakeSection, RootStackParamList } from "@/navigation/types";
 
@@ -329,47 +327,43 @@ export function HealthDashboardScreen(): React.ReactElement {
           marginTop: theme.spacing.xs,
           ...fontStyle("body", 400, fontsLoaded),
         },
-        // Mockup .eyebrow: body 600, 11px, .15em tracking, uppercase, ink-3.
-        // ONE attention callout (D35) — a surface card with a severity-tinted
-        // border, pinned at the top. Reuses the pill tint. Single row; a
-        // "+N more" subtitle (not extra cards) when several domains are severe.
+        // ONE attention callout (D35) — light-grey card with a thin RED border
+        // (the red border alone signals severity), pinned at the top. Holds up
+        // to 3 individually tappable severe-domain names in a single row.
         attentionCard: {
           flexDirection: "row",
           alignItems: "center",
-          gap: theme.spacing.space3,
+          gap: theme.spacing.sm,
           marginHorizontal: theme.spacing.space5,
           marginTop: theme.spacing.space3,
-          paddingVertical: theme.spacing.md,
+          paddingVertical: theme.spacing.sm + 1,
           paddingHorizontal: theme.spacing.md,
           borderRadius: redesign.rCard,
           borderWidth: 1,
-          backgroundColor: redesign.surface,
+          borderColor: redesign.alarm,
+          backgroundColor: redesign.pillSoft,
         },
-        attentionIcon: {
-          width: theme.spacing.xl,
-          height: theme.spacing.xl,
-          borderRadius: redesign.rChip,
-          backgroundColor: redesign.tealWash,
+        attentionChips: {
+          flex: 1,
+          flexDirection: "row",
           alignItems: "center",
+          gap: theme.spacing.md,
+        },
+        // Tappable severe-domain name — borderless red text. Compact visual;
+        // vertical hitSlop (render) lifts the tap target to the 48px floor
+        // without overlapping the next name horizontally.
+        attentionChip: {
+          flexShrink: 1,
+          paddingVertical: 7,
           justifyContent: "center",
         },
-        attentionTextBlock: { flex: 1, gap: 1 },
-        attentionName: {
-          color: redesign.ink,
-          fontSize: theme.typography.sizes.base,
-          ...fontStyle("display", 600, fontsLoaded),
+        attentionChipText: {
+          color: redesign.alarm,
+          fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 600, fontsLoaded),
         },
         attentionMore: {
-          color: redesign.ink3,
-          fontSize: theme.typography.sizes.sm,
-          ...fontStyle("body", 400, fontsLoaded),
-        },
-        attentionPill: {
-          borderRadius: redesign.rChip,
-          paddingHorizontal: theme.spacing.sm,
-          paddingVertical: 3,
-        },
-        attentionPillText: {
+          color: redesign.alarm,
           fontSize: theme.typography.sizes.sm,
           ...fontStyle("body", 600, fontsLoaded),
         },
@@ -440,44 +434,45 @@ export function HealthDashboardScreen(): React.ReactElement {
       // "+N more" line if others are also severe (never N stacked cards).
       // Reuses the band's pill + tint (no new clinical copy); tap opens the
       // detail where the full reading + any crisis path lives.
-      const a = item.severe[0];
-      const moreCount = item.severe.length - 1;
-      const tint = pillTintForBand(redesign, a.band);
-      const Icon = getDomainIcon(a.domainId);
+      // Up to 3 severe domains as individually tappable red chips, in one row,
+      // on a distinct alarm-wash background. No new clinical copy — each chip is
+      // the versioned domain name; the red conveys the alarm-band severity; tap
+      // → that domain's detail (full reading + any 988 path). "+N" when more.
+      const shown = item.severe.slice(0, 3);
+      const moreCount = item.severe.length - shown.length;
       return (
-        <Pressable
+        <View
           testID="dashboard_attention"
-          accessibilityRole="button"
-          accessibilityLabel={`${getDomainName(a.domainId)}: ${a.band.pill}.${moreCount > 0 ? ` ${moreCount} ${moreCount === 1 ? "other is" : "others are"} also severe.` : ""} Open details.`}
-          onPress={() =>
-            navigation.navigate("DomainDetail", { domainId: a.domainId })
-          }
-          style={[styles.attentionCard, { borderColor: tint.fg }]}
+          accessibilityLabel="Checks in the severe range"
+          style={styles.attentionCard}
         >
-          <View style={styles.attentionIcon}>
-            <Icon color={tint.fg} size={18} />
-          </View>
-          <View style={styles.attentionTextBlock}>
-            <Text style={styles.attentionName} numberOfLines={1}>
-              {getDomainName(a.domainId)}
-            </Text>
+          <View style={styles.attentionChips}>
+            {shown.map((s) => (
+              <Pressable
+                key={s.domainId}
+                testID={`dashboard_attention_${s.domainId}`}
+                accessibilityRole="button"
+                accessibilityLabel={`${getDomainName(s.domainId)}, ${s.band.pill}. Open details.`}
+                onPress={() =>
+                  navigation.navigate("DomainDetail", { domainId: s.domainId })
+                }
+                hitSlop={{ top: 9, bottom: 9 }}
+                style={styles.attentionChip}
+              >
+                <Text
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                  numberOfLines={1}
+                  style={styles.attentionChipText}
+                >
+                  {getDomainName(s.domainId)}
+                </Text>
+              </Pressable>
+            ))}
             {moreCount > 0 ? (
-              <Text style={styles.attentionMore} numberOfLines={1}>
-                {moreCount} {moreCount === 1 ? "other is" : "others are"} severe
-              </Text>
+              <Text style={styles.attentionMore}>+{moreCount}</Text>
             ) : null}
           </View>
-          <View style={[styles.attentionPill, { backgroundColor: tint.bg }]}>
-            <Text
-              maxFontSizeMultiplier={MAX_FONT_SCALE}
-              style={[styles.attentionPillText, { color: tint.fg }]}
-            >
-              {a.band.pill}
-              {a.band.provisional ? "‡" : ""}
-            </Text>
-          </View>
-          <ChevronRight color={redesign.ink3} size={18} />
-        </Pressable>
+        </View>
       );
     }
     if (item.kind === "rollup") {
