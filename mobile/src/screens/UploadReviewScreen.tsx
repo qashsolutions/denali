@@ -42,11 +42,17 @@ import {
   buildInsertsForReport,
   computeParseStatus,
 } from "../upload/reviewCommit";
+import {
+  ragForObservation,
+  summarizeReport,
+} from "../upload/reportInterpretation";
 import type {
   ExtractedObservation,
   ParseReportResponse,
   ReviewRowState,
 } from "../upload/types";
+import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
+import { tintByClass } from "./timeline/pill";
 import { takeParsePayload } from "./UploadScreen";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "UploadReview">;
@@ -109,6 +115,30 @@ export function UploadReviewScreen(): React.ReactElement {
           fontSize: theme.typography.sizes.base,
           lineHeight: theme.typography.sizes.base * 1.5,
           ...fontStyle("body", 400, fontsLoaded),
+        },
+        // Always-on AI caveat — this screen shows machine-read values.
+        caveat: {
+          color: redesign.ink3,
+          fontSize: theme.typography.sizes.sm,
+          lineHeight: theme.typography.sizes.sm * 1.4,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        // Right-aligned header cluster: RAG chip + confidence.
+        headerRight: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: theme.spacing.sm,
+          flexShrink: 0,
+        },
+        // Sourced RAG chip — colors injected from the band tint system.
+        ragChip: {
+          paddingHorizontal: theme.spacing.sm,
+          paddingVertical: theme.spacing.xs / 2,
+          borderRadius: theme.radii.lg,
+        },
+        ragChipText: {
+          fontSize: theme.typography.sizes.xs,
+          ...fontStyle("body", 600, fontsLoaded),
         },
         // White r-18 surface card per row.
         row: {
@@ -298,11 +328,12 @@ export function UploadReviewScreen(): React.ReactElement {
 
       const status = computeParseStatus(rows);
       const acceptedCount = rows.filter((r) => r.accepted).length;
+      // Store a FACTUAL summary only — never the model's free-text (which can
+      // drift into diagnosis). Just the count of values kept.
       const summary =
-        payload?.summary ??
-        (acceptedCount > 0
+        acceptedCount > 0
           ? `${acceptedCount} value${acceptedCount === 1 ? "" : "s"} saved.`
-          : "No values saved.");
+          : "No values saved.";
       await dal.updateReportParseStatus(reportId, status, summary);
 
       // Navigate back to the upload flow's home (the Upload tab).
@@ -315,7 +346,7 @@ export function UploadReviewScreen(): React.ReactElement {
     } finally {
       setCommitting(false);
     }
-  }, [dal, navigation, payload, reportId, rows]);
+  }, [dal, navigation, reportId, rows]);
 
   const onSkip = React.useCallback(async () => {
     setCommitting(true);
@@ -341,6 +372,10 @@ export function UploadReviewScreen(): React.ReactElement {
   const renderRow = (row: ReviewRowState, idx: number) => {
     const obs = row.edited;
     const confidencePct = Math.round(obs.confidence * 100);
+    // RAG reflects the REPORT'S OWN flag (from row.original — editing a value
+    // doesn't change what the report printed). null = report stated no flag.
+    const rag = ragForObservation(row.original);
+    const ragColors = rag ? tintByClass(redesign, rag.tint) : null;
     return (
       <View
         key={idx}
@@ -350,9 +385,18 @@ export function UploadReviewScreen(): React.ReactElement {
           <Text style={styles.rowTitle} numberOfLines={2}>
             {obs.display || obs.code}
           </Text>
-          <Text style={styles.rowConfidence}>
-            {Number.isFinite(confidencePct) ? `${confidencePct}%` : "—"}
-          </Text>
+          <View style={styles.headerRight}>
+            {rag && ragColors && (
+              <View style={[styles.ragChip, { backgroundColor: ragColors.bg }]}>
+                <Text style={[styles.ragChipText, { color: ragColors.fg }]}>
+                  {rag.label}
+                </Text>
+              </View>
+            )}
+            <Text style={styles.rowConfidence}>
+              {Number.isFinite(confidencePct) ? `${confidencePct}%` : "—"}
+            </Text>
+          </View>
         </View>
 
         <View>
@@ -456,9 +500,14 @@ export function UploadReviewScreen(): React.ReactElement {
       keyboardShouldPersistTaps="handled"
     >
       <Text style={styles.title}>Review extracted values</Text>
-      {payload?.summary && (
-        <Text style={styles.summary}>{payload.summary}</Text>
+      {payload && payload.observations.length > 0 && (
+        <Text style={styles.summary}>
+          {summarizeReport(payload.observations)}
+        </Text>
       )}
+      <Text style={styles.caveat}>
+        {`AI-generated from your report. ${STANDING_DISCLAIMER} Check with your doctor.`}
+      </Text>
 
       {errorMsg && (
         <View style={styles.banner} accessibilityRole="alert">

@@ -37,12 +37,29 @@ export interface ExtractedObservation {
   confidence: number;
   /** Short excerpt from the source text for review-screen citation. */
   source_text: string;
+  /**
+   * The report's OWN printed reference interval, verbatim (e.g. "8-61"), if
+   * present — storage/citation only, never our own range. Optional: older
+   * parse responses (pre-RAG backend) don't emit it.
+   */
+  reference_range?: string | null;
+  /**
+   * The report's OWN abnormal flag, copied verbatim from the report
+   * (its "H"/"High"/"L"/"Critical" column) — NEVER a flag we infer. Drives
+   * the sourced RAG chip. Optional for the same back-compat reason; when
+   * absent the client falls back to scanning `source_text`.
+   */
+  abnormal_flag?: "normal" | "low" | "high" | "critical" | null;
 }
 
 export interface ParseReportResponse {
   observations: ExtractedObservation[];
-  /** 1-2 sentence plain-language summary; stored in reports.summary_text. */
-  summary: string;
+  // NOTE: the backend still returns a model-written `summary`, but the client
+  // DELIBERATELY does not type or surface it — a free-text LLM summary can
+  // drift into diagnosis. The review screen shows the deterministic
+  // `summarizeReport()` (report-only counts) and the stored report summary is
+  // a factual value count. Intentional client/wire divergence: do NOT re-add
+  // `summary` here without a clinical-boundary review of every consumer.
 }
 
 /** Internal review-UI row state. Tracks user edits + accept/reject. */
