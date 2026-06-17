@@ -346,8 +346,9 @@ export function HealthDashboardScreen(): React.ReactElement {
         attentionChips: {
           flex: 1,
           flexDirection: "row",
+          flexWrap: "nowrap", // never spill onto a second row
           alignItems: "center",
-          gap: theme.spacing.md,
+          gap: theme.spacing.sm,
         },
         // Tappable severe-domain name — borderless red text. Compact visual;
         // vertical hitSlop (render) lifts the tap target to the 48px floor
@@ -430,15 +431,14 @@ export function HealthDashboardScreen(): React.ReactElement {
       );
     }
     if (item.kind === "attention") {
-      // ONE compact callout (principle 7) — the most-severe domain, plus a
-      // "+N more" line if others are also severe (never N stacked cards).
-      // Reuses the band's pill + tint (no new clinical copy); tap opens the
-      // detail where the full reading + any crisis path lives.
-      // Up to 3 severe domains as individually tappable red chips, in one row,
-      // on a distinct alarm-wash background. No new clinical copy — each chip is
-      // the versioned domain name; the red conveys the alarm-band severity; tap
-      // → that domain's detail (full reading + any 988 path). "+N" when more.
-      const shown = item.severe.slice(0, 3);
+      // ONE compact callout (principle 7) — up to the top 4 severe domains as
+      // individually tappable red chips in a single non-wrapping row on a
+      // light-grey (pillSoft) card with a thin alarm border; a "+N" overflow
+      // when more than 4 are severe (never N stacked cards). No new clinical
+      // copy — each chip is the versioned domain name; the red conveys the
+      // alarm-band severity; tap → that domain's detail (full reading + any
+      // 988 path). The row never wraps: nowrap + chip numberOfLines=1/flexShrink.
+      const shown = item.severe.slice(0, 4);
       const moreCount = item.severe.length - shown.length;
       return (
         <View
@@ -469,7 +469,12 @@ export function HealthDashboardScreen(): React.ReactElement {
               </Pressable>
             ))}
             {moreCount > 0 ? (
-              <Text style={styles.attentionMore}>+{moreCount}</Text>
+              <Text
+                style={styles.attentionMore}
+                accessibilityLabel={`${moreCount} more in the severe range`}
+              >
+                +{moreCount}
+              </Text>
             ) : null}
           </View>
         </View>

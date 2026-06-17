@@ -1,5 +1,6 @@
 /**
- * mostSevereDomain tests — the single Today attention item (D35).
+ * severeDomains tests — the Today attention card lists the top-4 severe
+ * domains as chips; the render slices to 4 + a "+N" overflow (D35).
  */
 
 import { describe, expect, it } from "vitest";
