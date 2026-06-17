@@ -21,6 +21,17 @@
  *   the peer-reviewed thresholds for each screen. Cutoff edits are
  *   non-trivial and should re-cite.
  *
+ * DELTA — LOINC citation fixes (2026-06-17, v1.3.1, loinc-audit):
+ *   - Corrected fabricated `loincPanel` citations, each verified verbatim
+ *     against loinc.org: Epworth 85563-1 (nonexistent) → denali.EPWORTH.v1;
+ *     IPSS 75636-1 ("Emergency severity index") → denali.IPSS.v1; MRS 76494-4
+ *     ("Tacrolimus blood level") → denali.MRS.v1; ADAM 77692-2 ("UPDRS
+ *     swallowing scale") → denali.ADAM.v1 (these four instruments have no
+ *     verified LOINC and use internal codes); AUDIT-C 75624-7 ("Total score
+ *     [AUDIT]", the full 10-item AUDIT) → 75626-2 ("Total score [AUDIT-C]").
+ *   - `loincPanel` is a citation only (lookup keys off `instrument` id), so
+ *     this is metadata-only — zero render/interpretation/band change.
+ *
  * DELTA — trend-chart config (2026-06-09, v1.3.0, Step-3 prompt):
  *   - `scoreRange` added per chartable instrument (definitional maxima,
  *     cited by each entry's existing provenance source): PHQ-2 0–6,
@@ -268,7 +279,7 @@ export interface BiomarkerInterpretation {
  */
 export interface InterpretationTableV1_1 {
   /** Semantic version of this table. Provisional until clinical review. */
-  version: "1.3.0-provisional";
+  version: "1.3.1-provisional";
   /** ISO date the table was clinically reviewed, or null until reviewed. */
   lastClinicallyReviewedAt: string | null;
   /** Reviewer name, or null until reviewed. */
@@ -801,7 +812,7 @@ const BONE_DENSITY_BANDS: InterpretationBand[] = [
 ];
 
 export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
-  version: "1.3.0-provisional",
+  version: "1.3.1-provisional",
   lastClinicallyReviewedAt: null,
   lastClinicallyReviewedBy: null,
   instruments: {
@@ -831,7 +842,9 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
     },
     Epworth: {
       instrument: "Epworth",
-      loincPanel: "85563-1",
+      // 85563-1 was fabricated (nonexistent on loinc.org); no verified Epworth
+      // LOINC, so mirror the instrument file's internal code.
+      loincPanel: "denali.EPWORTH.v1",
       cutoffSource: EPWORTH_SOURCE,
       provenance: pendingReview(EPWORTH_SOURCE),
       scoreRange: { min: 0, max: 24 },
@@ -839,7 +852,10 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
     },
     "AUDIT-C": {
       instrument: "AUDIT-C",
-      loincPanel: "75624-7",
+      // 75624-7 is "Total score [AUDIT]" (the full 10-item AUDIT), not AUDIT-C.
+      // 75626-2 = "Total score [AUDIT-C]" (verified loinc.org), matching the
+      // instrument file.
+      loincPanel: "75626-2",
       cutoffSource: AUDIT_C_SOURCE,
       provenance: pendingReview(AUDIT_C_SOURCE),
       scoreRange: { min: 0, max: 12 },
@@ -853,7 +869,9 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
     },
     IPSS: {
       instrument: "IPSS",
-      loincPanel: "75636-1",
+      // 75636-1 is "Emergency severity index [ESI]" — unrelated. IPSS has no
+      // verified LOINC; mirror the instrument file's internal code.
+      loincPanel: "denali.IPSS.v1",
       cutoffSource: IPSS_SOURCE,
       provenance: pendingReview(IPSS_SOURCE),
       scoreRange: { min: 0, max: 35 },
@@ -861,7 +879,9 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
     },
     MRS: {
       instrument: "MRS",
-      loincPanel: "76494-4",
+      // 76494-4 is "Tacrolimus [Moles/volume] in Blood" — unrelated. MRS has no
+      // verified LOINC; mirror the instrument file's internal code.
+      loincPanel: "denali.MRS.v1",
       cutoffSource: MRS_SOURCE,
       provenance: pendingReview(MRS_SOURCE),
       scoreRange: { min: 0, max: 44 },
@@ -869,7 +889,9 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
     },
     ADAM: {
       instrument: "ADAM",
-      loincPanel: "77692-2",
+      // 77692-2 is "Swallowing scale [UPDRS]" — unrelated. ADAM has no verified
+      // LOINC; mirror the instrument file's internal code.
+      loincPanel: "denali.ADAM.v1",
       cutoffSource: ADAM_SOURCE,
       provenance: pendingReview(ADAM_SOURCE),
       strategy: { kind: "uniform", bands: ADAM_BANDS },
