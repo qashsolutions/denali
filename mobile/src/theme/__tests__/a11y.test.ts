@@ -32,15 +32,17 @@ describe("a11y acceptance — 45+ floor (principle 8)", () => {
       "src/backup/ui",
     ];
     const offenders: string[] = [];
+    // Catches both `minHeight/minWidth: 44` AND a fixed `height: 44` (square
+    // touch buttons set both w/h). A bare `width: 44` is NOT flagged — that's
+    // the non-interactive itemBarTrack magnitude bar (height 6).
+    const re = /(?:min(?:Height|Width)|height):\s*44\b/;
     const walk = (dir: string): void => {
       for (const entry of readdirSync(dir)) {
         const p = join(dir, entry);
         if (statSync(p).isDirectory()) {
           walk(p);
         } else if (p.endsWith(".tsx") || p.endsWith(".ts")) {
-          if (/min(?:Height|Width):\s*44\b/.test(readFileSync(p, "utf8"))) {
-            offenders.push(p);
-          }
+          if (re.test(readFileSync(p, "utf8"))) offenders.push(p);
         }
       }
     };
