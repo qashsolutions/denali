@@ -27,7 +27,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { ConsentGetResponse } from "@/api/routeContracts";
-import { isBiometricAvailable, useApiClient } from "@/auth";
+import { HttpError, isBiometricAvailable, useApiClient } from "@/auth";
 import { BackupSettingsCard } from "@/backup/ui/BackupSettingsCard";
 import { PressableScale } from "@/components/PressableScale";
 import { Skeleton } from "@/components/Skeleton";
@@ -118,6 +118,7 @@ export function SettingsScreen(): React.ReactElement {
 
   const [consent, setConsent] = React.useState<ConsentSnapshot | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [retrying, setRetrying] = React.useState(false);
   const [signingOut, setSigningOut] = React.useState(false);
   // Read-only demographics for the "Your details" section (D31). Loaded from
   // the LOCAL profile (set during onboarding); never written here.
@@ -169,23 +170,47 @@ export function SettingsScreen(): React.ReactElement {
       ? "Off — set up Face ID or a passcode in your device settings to lock Denali."
       : "Off — set up a fingerprint or screen lock in your device settings to lock Denali.";
 
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  // Consent load is a single mount-time GET, but resilient: it retries
+  // transient failures (5xx cold-start / scaling, network blips) before
+  // surfacing an error, and the error state offers "Try again" — so a longer
+  // outage (e.g. staging's morning cold-start) doesn't strand the user on a
+  // permanent-looking error until they kill the app.
+  const mountedRef = React.useRef(true);
+  const loadConsent = React.useCallback(async () => {
+    setLoadError(null);
+    setRetrying(true);
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         const res = await api.apiGet<ConsentGetResponse>("/api/consent");
-        if (cancelled) return;
+        if (!mountedRef.current) return;
         setConsent(res.consent);
+        setRetrying(false);
+        return;
       } catch (err) {
-        if (cancelled) return;
-        setLoadError("Couldn't load your settings. Try again later.");
-        console.warn("[Settings] consent GET failed", err);
+        // 5xx + network errors (no HttpError thrown) are transient; a 4xx
+        // (e.g. a real 401 after refresh) is terminal — don't keep retrying.
+        const transient = !(err instanceof HttpError) || err.status >= 500;
+        if (!transient || attempt === MAX_ATTEMPTS) {
+          if (!mountedRef.current) return;
+          setLoadError("Couldn't load your settings.");
+          setRetrying(false);
+          console.warn("[Settings] consent GET failed", err);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+        if (!mountedRef.current) return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    }
   }, [api]);
+
+  React.useEffect(() => {
+    mountedRef.current = true;
+    void loadConsent();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [loadConsent]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -418,6 +443,17 @@ export function SettingsScreen(): React.ReactElement {
           color: redesign.alarm,
           fontSize: theme.typography.sizes.sm,
           ...fontStyle("body", 400, fontsLoaded),
+        },
+        loadErrorRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: theme.spacing.md,
+        },
+        loadRetry: {
+          color: redesign.tealDeep,
+          fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 600, fontsLoaded),
         },
         // Appearance segmented control — pill-track of three equal segments,
         // the active one tinted teal-wash with teal-deep text.
@@ -721,7 +757,23 @@ export function SettingsScreen(): React.ReactElement {
           <Text style={styles.toggleBody}>{lockStatusCopy}</Text>
         </View>
       )}
-      {loadError != null && <Text style={styles.loadError}>{loadError}</Text>}
+      {loadError != null && (
+        <View style={styles.loadErrorRow}>
+          <Text style={styles.loadError}>{loadError}</Text>
+          <Pressable
+            testID="settings_consent_retry"
+            accessibilityRole="button"
+            accessibilityLabel="Try loading settings again"
+            disabled={retrying}
+            hitSlop={{ top: 9, bottom: 9, left: 9, right: 9 }}
+            onPress={() => void loadConsent()}
+          >
+            <Text style={styles.loadRetry}>
+              {retrying ? "Trying…" : "Try again"}
+            </Text>
+          </Pressable>
+        </View>
+      )}
       {consent != null &&
         (Object.keys(TOGGLE_COPY) as ConsentType[])
           .filter((type) => type !== "health_data_storage")
