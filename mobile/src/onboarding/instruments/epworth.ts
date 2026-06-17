@@ -4,8 +4,13 @@
  * Canonical reference: Johns MW. A new method for measuring daytime
  * sleepiness: the Epworth sleepiness scale. Sleep. 1991;14(6):540-545.
  *
- * LOINC panel: 89204-2 ("Total score [Epworth Sleepiness Scale]"). Per-item
- * LOINC codes follow the LOINC Epworth panel.
+ * Coding: no clinician-verified LOINC for the ESS total/items is on hand. The
+ * previously-used "89204-2" is in fact "PHQ-9 modified for Teens total score"
+ * and "89202-6" etc. are unrelated administrative codes (verified on
+ * loinc.org) — a fabricated panel. Coded with denali `internal` slugs (same
+ * pattern as ADAM / MRS / IPSS) until a real LOINC is sourced. Interpretation
+ * keys off the instrument `id`, never this code, so it is storage provenance
+ * only; swap to a verified LOINC later without touching the analysis layer.
  *
  * Scoring: sum of 8 items, each 0-3. Range 0-24.
  *   0-7 normal | 8-9 mild | 10-15 moderate | 16-24 severe daytime sleepiness
@@ -29,40 +34,40 @@ const EPWORTH_RESPONSE_OPTIONS = [
 
 export const EPWORTH: InstrumentDefinition = {
   id: "Epworth",
-  loincCode: "89204-2",
-  codeSystem: "LOINC",
+  loincCode: "denali.EPWORTH.v1",
+  codeSystem: "internal",
   displayName: "Epworth Sleepiness Scale",
   items: [
-    { number: 1, itemCode: "89202-6", text: "Sitting and reading." },
-    { number: 2, itemCode: "89203-4", text: "Watching TV." },
+    { number: 1, itemCode: "denali.EPWORTH.v1.1", text: "Sitting and reading." },
+    { number: 2, itemCode: "denali.EPWORTH.v1.2", text: "Watching TV." },
     {
       number: 3,
-      itemCode: "89205-9",
+      itemCode: "denali.EPWORTH.v1.3",
       text: "Sitting inactive in a public place (e.g., a theater or a meeting).",
     },
     {
       number: 4,
-      itemCode: "89206-7",
+      itemCode: "denali.EPWORTH.v1.4",
       text: "As a passenger in a car for an hour without a break.",
     },
     {
       number: 5,
-      itemCode: "89207-5",
+      itemCode: "denali.EPWORTH.v1.5",
       text: "Lying down to rest in the afternoon when circumstances permit.",
     },
     {
       number: 6,
-      itemCode: "89208-3",
+      itemCode: "denali.EPWORTH.v1.6",
       text: "Sitting and talking to someone.",
     },
     {
       number: 7,
-      itemCode: "89209-1",
+      itemCode: "denali.EPWORTH.v1.7",
       text: "Sitting quietly after a lunch without alcohol.",
     },
     {
       number: 8,
-      itemCode: "89210-9",
+      itemCode: "denali.EPWORTH.v1.8",
       text: "In a car, while stopped for a few minutes in traffic.",
     },
   ],

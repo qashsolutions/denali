@@ -455,7 +455,10 @@ export const MARKER_CATALOG: ReadonlyArray<MarkerDef> = [
     entryHint: "Measure at the navel, after breathing out.",
     fields: [
       {
-        loinc: "56086-2",
+        // 8280-0 = "Waist Circumference at umbilicus by Tape measure" (a
+        // measured Qn value). NOT 56086-2, which is the "Adult Waist
+        // Circumference Protocol" panel/selector concept (carries no Quantity).
+        loinc: "8280-0",
         units: [
           { unit: "cm", canonical: true, toCanonicalFactor: 1 },
           { unit: "in", toCanonicalFactor: IN_TO_CM },
