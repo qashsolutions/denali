@@ -464,6 +464,9 @@ export function DomainDetailScreen(): React.ReactElement {
           marginHorizontal: theme.spacing.space5,
           marginTop: theme.spacing.sm,
           paddingVertical: theme.spacing.md - 1,
+          // Match the primary `cta` so the two check-in CTAs ("Start a
+          // check-in" / "Check in again") render identically.
+          paddingHorizontal: theme.spacing.lg,
           borderRadius: theme.radii.xl - 2,
           backgroundColor: redesign.surface,
           borderColor: redesign.line,
@@ -474,7 +477,9 @@ export function DomainDetailScreen(): React.ReactElement {
         },
         ctaSecondaryLabel: {
           color: redesign.tealDeep,
-          fontSize: theme.typography.sizes.base,
+          // Fixed 16 to match `ctaLabel` (see note there) — the check-in CTAs
+          // stay the same size across the empty + has-data states.
+          fontSize: 16,
           ...fontStyle("body", 600, fontsLoaded),
         },
         // "Saved" pill (teal-wash chip, centered) — transient confirmation.
