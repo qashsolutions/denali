@@ -437,6 +437,9 @@ export function DomainDetailScreen(): React.ReactElement {
           marginHorizontal: theme.spacing.space5,
           marginTop: theme.spacing.xs,
           paddingVertical: theme.spacing.md - 1,
+          // Horizontal breathing room so the label never sits edge-to-edge
+          // when the empty-state (styles.center) shrinks the pill to content.
+          paddingHorizontal: theme.spacing.lg,
           borderRadius: theme.radii.xl - 2,
           backgroundColor: redesign.teal,
           alignItems: "center",
@@ -450,7 +453,11 @@ export function DomainDetailScreen(): React.ReactElement {
         },
         ctaLabel: {
           color: redesign.surface,
-          fontSize: theme.typography.sizes.base,
+          // Chrome CTA label — fixed 16, intentionally NOT the body `sizes.base`
+          // (17). The 45+ body-floor bump is for content text; tying this label
+          // to it crowded the pill (the label sat edge-to-edge). The 48px touch
+          // target is preserved by `cta.minHeight`, so a11y is unaffected.
+          fontSize: 16,
           ...fontStyle("body", 600, fontsLoaded),
         },
         ctaSecondary: {
