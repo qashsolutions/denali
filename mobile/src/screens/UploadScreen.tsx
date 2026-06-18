@@ -37,7 +37,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
-import type { LocalDataDAL, ReportType } from "@/contracts";
+import type { LocalDataDAL, ReportRow, ReportType } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
@@ -91,6 +91,8 @@ export function UploadScreen(): React.ReactElement {
   const [phase, setPhase] = React.useState<Phase>("idle");
   const [error, setError] = React.useState<ErrorState | null>(null);
   const [consentReady, setConsentReady] = React.useState<boolean | null>(null);
+  // Saved reports list — loaded on focus so it refreshes after each save.
+  const [reports, setReports] = React.useState<ReportRow[]>([]);
 
   // Re-check consent on every screen FOCUS (not just mount). The Upload
   // tab stays mounted in the bottom-tab navigator, so a mount-only effect
@@ -103,11 +105,21 @@ export function UploadScreen(): React.ReactElement {
       (async () => {
         const ok = await fetchHealthDataAiConsent(api);
         if (!cancelled) setConsentReady(ok);
+        // Refresh the saved-reports list (so a just-saved report appears).
+        const user = api.getCurrentUser();
+        if (user && dal) {
+          try {
+            const list = await dal.listReports(user.userId);
+            if (!cancelled) setReports(list);
+          } catch {
+            // Non-fatal: the list just stays as-is.
+          }
+        }
       })();
       return () => {
         cancelled = true;
       };
-    }, [api]),
+    }, [api, dal]),
   );
 
   const styles = React.useMemo(
@@ -208,6 +220,31 @@ export function UploadScreen(): React.ReactElement {
           flexDirection: "row",
           alignItems: "center",
           gap: theme.spacing.sm,
+        },
+        reportsSection: {
+          marginTop: theme.spacing.space3,
+          gap: theme.spacing.sm,
+        },
+        reportCard: {
+          backgroundColor: redesign.surface,
+          borderColor: redesign.line,
+          borderWidth: 1,
+          borderRadius: redesign.rCard,
+          padding: theme.spacing.md,
+          minHeight: 48,
+          gap: theme.spacing.xs / 2,
+        },
+        reportName: {
+          color: redesign.ink,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
+        // Date + summary, grey italics — the "underneath" line.
+        reportMeta: {
+          color: redesign.ink3,
+          fontSize: theme.typography.sizes.sm,
+          fontStyle: "italic",
+          ...fontStyle("body", 400, fontsLoaded),
         },
       }),
     [theme, redesign, fontsLoaded, insets.top],
@@ -442,8 +479,50 @@ export function UploadScreen(): React.ReactElement {
           Pick a photo
         </Text>
       </PressableScale>
+
+      {reports.length > 0 && (
+        <View style={styles.reportsSection}>
+          <Text style={styles.sectionLabel}>Your reports</Text>
+          {reports.map((r) => (
+            <Pressable
+              key={r.id}
+              accessibilityRole="button"
+              accessibilityLabel={`${r.original_filename}. Open report.`}
+              onPress={() =>
+                navigation.navigate("ReportDetail", { reportId: r.id })
+              }
+              style={({ pressed }) => [
+                styles.reportCard,
+                pressed && styles.buttonDisabled,
+              ]}
+            >
+              <Text style={styles.reportName} numberOfLines={1}>
+                {r.original_filename}
+              </Text>
+              <Text style={styles.reportMeta} numberOfLines={1}>
+                {formatReportMeta(r)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
+}
+
+/** "Added Jun 17, 2026 · 6 values saved." — the grey-italics list subtitle. */
+function formatReportMeta(r: ReportRow): string {
+  const d = new Date(r.uploaded_at);
+  const date = Number.isNaN(d.getTime())
+    ? r.uploaded_at
+    : d.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+  return r.summary_text
+    ? `Added ${date} · ${r.summary_text}`
+    : `Added ${date}`;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
