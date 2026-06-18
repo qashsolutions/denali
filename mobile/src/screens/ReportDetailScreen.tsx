@@ -15,7 +15,15 @@
 import { useRoute } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 import type { ObservationRow } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
@@ -67,6 +75,31 @@ export function ReportDetailScreen(): React.ReactElement {
   const [subtitle, setSubtitle] = React.useState<string>("");
   const [rows, setRows] = React.useState<ObservationRow[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
+  // Inline rename of the report (its filename). Persisted via renameReport;
+  // the Upload-tab list refreshes the new name on its next focus.
+  const [editing, setEditing] = React.useState<boolean>(false);
+  const [draftName, setDraftName] = React.useState<string>("");
+  const [renaming, setRenaming] = React.useState<boolean>(false);
+  const [renameError, setRenameError] = React.useState<string | null>(null);
+
+  const onSaveName = React.useCallback(async () => {
+    const next = draftName.trim();
+    if (!dal || next.length === 0) {
+      setEditing(false);
+      return;
+    }
+    setRenaming(true);
+    setRenameError(null);
+    try {
+      await dal.renameReport(reportId, next);
+      setName(next);
+      setEditing(false);
+    } catch {
+      setRenameError("Couldn't rename — please try again.");
+    } finally {
+      setRenaming(false);
+    }
+  }, [dal, draftName, reportId]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -108,6 +141,55 @@ export function ReportDetailScreen(): React.ReactElement {
           color: redesign.ink3,
           fontSize: theme.typography.sizes.sm,
           fontStyle: "italic",
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        renameLink: {
+          color: redesign.tealDeep,
+          fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
+        editBlock: { gap: theme.spacing.sm },
+        nameInput: {
+          backgroundColor: redesign.surface,
+          color: redesign.ink,
+          borderColor: redesign.line,
+          borderWidth: 1,
+          borderRadius: theme.radii.md,
+          paddingHorizontal: theme.spacing.sm,
+          paddingVertical: theme.spacing.xs,
+          fontSize: theme.typography.sizes.base,
+          minHeight: 48,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        editRow: { flexDirection: "row", gap: theme.spacing.sm },
+        editBtn: {
+          flex: 1,
+          paddingVertical: theme.spacing.sm,
+          borderRadius: theme.radii.md,
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 48,
+          borderWidth: 1,
+          borderColor: redesign.line,
+          backgroundColor: redesign.surface,
+        },
+        editBtnPrimary: {
+          backgroundColor: redesign.teal,
+          borderColor: redesign.teal,
+        },
+        editBtnText: {
+          color: redesign.tealDeep,
+          fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
+        editBtnPrimaryText: {
+          color: redesign.surface,
+          fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
+        renameError: {
+          color: redesign.alarm,
+          fontSize: theme.typography.sizes.sm,
           ...fontStyle("body", 400, fontsLoaded),
         },
         caveat: {
@@ -178,6 +260,54 @@ export function ReportDetailScreen(): React.ReactElement {
             : subtitle}
         </Text>
       )}
+
+      {editing ? (
+        <View style={styles.editBlock}>
+          <TextInput
+            accessibilityLabel="Report name"
+            autoFocus
+            editable={!renaming}
+            maxLength={120}
+            onChangeText={setDraftName}
+            placeholder="Report name"
+            placeholderTextColor={redesign.ink3}
+            style={styles.nameInput}
+            value={draftName}
+          />
+          <View style={styles.editRow}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={renaming}
+              onPress={onSaveName}
+              style={[styles.editBtn, styles.editBtnPrimary]}
+            >
+              <Text style={styles.editBtnPrimaryText}>Save</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={renaming}
+              onPress={() => setEditing(false)}
+              style={styles.editBtn}
+            >
+              <Text style={styles.editBtnText}>Cancel</Text>
+            </Pressable>
+          </View>
+          {renameError && <Text style={styles.renameError}>{renameError}</Text>}
+        </View>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Rename this report"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={() => {
+            setDraftName(name);
+            setEditing(true);
+          }}
+        >
+          <Text style={styles.renameLink}>Rename</Text>
+        </Pressable>
+      )}
+
       <Text style={styles.caveat}>
         {`AI-generated from your report. ${STANDING_DISCLAIMER} Check with your doctor.`}
       </Text>
