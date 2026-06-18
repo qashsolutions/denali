@@ -109,3 +109,39 @@ export function suggestReportName(reportType: string, date: Date): string {
   });
   return `${label} · ${month}`;
 }
+
+/**
+ * Suggest a name from the parsed report's OWN content — "Health report · {Mon
+ * YYYY}" using the report's most-common observation date (so the month is the
+ * report's, e.g. "May 2026", not today). Falls back to `fallbackDate` when no
+ * observation date parses. Pre-fills the review-screen name field.
+ */
+export function suggestNameFromObservations(
+  observations: ReadonlyArray<ExtractedObservation>,
+  fallbackDate: Date,
+): string {
+  const months = observations
+    .map((o) => o.effective_at)
+    .filter((s): s is string => typeof s === "string" && s.length >= 7)
+    .map((s) => s.slice(0, 7)); // "YYYY-MM"
+  const dominant = mostCommon(months);
+  const parsed = dominant ? new Date(`${dominant}-01T00:00:00`) : fallbackDate;
+  const date = Number.isNaN(parsed.getTime()) ? fallbackDate : parsed;
+  return suggestReportName("general", date);
+}
+
+function mostCommon(values: ReadonlyArray<string>): string | null {
+  if (values.length === 0) return null;
+  const counts = new Map<string, number>();
+  let best = values[0];
+  let bestN = 0;
+  for (const v of values) {
+    const n = (counts.get(v) ?? 0) + 1;
+    counts.set(v, n);
+    if (n > bestN) {
+      bestN = n;
+      best = v;
+    }
+  }
+  return best;
+}

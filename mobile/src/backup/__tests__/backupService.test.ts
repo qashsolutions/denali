@@ -114,6 +114,9 @@ class FakeDal implements LocalDataDAL {
   async updateReportParseStatus(): Promise<void> {
     throw new Error("not used in FakeDal");
   }
+  async renameReport(): Promise<void> {
+    throw new Error("not used in FakeDal");
+  }
   async insertAnalysis(_i: AnalysisInsertInput): Promise<{ id: string }> {
     throw new Error("not used in FakeDal");
   }

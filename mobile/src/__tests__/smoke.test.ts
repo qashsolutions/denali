@@ -180,6 +180,10 @@ function makeInMemoryDal(): LocalDataDAL & {
         r.parsed_at = new Date().toISOString();
       }
     },
+    async renameReport(id, name) {
+      const r = reports.find((x) => x.id === id);
+      if (r) r.original_filename = name;
+    },
 
     async getProfile() {
       return profile;

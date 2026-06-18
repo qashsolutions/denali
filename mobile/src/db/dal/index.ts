@@ -35,6 +35,7 @@ import {
   getReport,
   insertReport,
   listReports,
+  renameReport,
   updateReportParseStatus,
 } from "./reports";
 
@@ -57,6 +58,7 @@ export function createLocalDataDAL(db: SqliteAdapter): LocalDataDAL {
     listReports: (userId) => listReports(db, userId),
     updateReportParseStatus: (id, status, summary) =>
       updateReportParseStatus(db, id, status, summary),
+    renameReport: (id, name) => renameReport(db, id, name),
 
     // Profile
     getProfile: () => getProfile(db),

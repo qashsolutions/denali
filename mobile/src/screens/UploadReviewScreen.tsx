@@ -44,6 +44,7 @@ import {
 } from "../upload/reviewCommit";
 import {
   ragForObservation,
+  suggestNameFromObservations,
   summarizeReport,
 } from "../upload/reportInterpretation";
 import type {
@@ -85,6 +86,19 @@ export function UploadReviewScreen(): React.ReactElement {
   // After a successful save we show a results summary (the kept rows) instead
   // of silently popping back — confirmation + a recap of what was stored.
   const [saved, setSaved] = React.useState<ReviewRowState[] | null>(null);
+
+  // The user names the report HERE, after the parse — pre-filled from the
+  // report's own content (its dominant date), editable, persisted on save.
+  const [reportName, setReportName] = React.useState<string>("");
+  const [nameEdited, setNameEdited] = React.useState<boolean>(false);
+  const suggestedName = React.useMemo(
+    () =>
+      payload
+        ? suggestNameFromObservations(payload.observations, new Date())
+        : "",
+    [payload],
+  );
+  const nameValue = nameEdited ? reportName : suggestedName;
 
   const onDone = React.useCallback(() => {
     navigation.popToTop();
@@ -345,6 +359,12 @@ export function UploadReviewScreen(): React.ReactElement {
         await dal.insertObservation(insert);
       }
 
+      // Persist the name the user gave the report (metadata only).
+      const finalName = nameValue.trim();
+      if (finalName.length > 0) {
+        await dal.renameReport(reportId, finalName);
+      }
+
       const status = computeParseStatus(rows);
       const acceptedCount = rows.filter((r) => r.accepted).length;
       // Store a FACTUAL summary only — never the model's free-text (which can
@@ -366,7 +386,7 @@ export function UploadReviewScreen(): React.ReactElement {
     } finally {
       setCommitting(false);
     }
-  }, [dal, reportId, rows]);
+  }, [dal, reportId, rows, nameValue]);
 
   const onSkip = React.useCallback(async () => {
     setCommitting(true);
@@ -520,6 +540,9 @@ export function UploadReviewScreen(): React.ReactElement {
         style={styles.screen}
       >
         <Text style={styles.savedHeader}>✓ Saved to your record</Text>
+        {nameValue.trim().length > 0 && (
+          <Text style={styles.rowTitle}>{nameValue.trim()}</Text>
+        )}
         <Text style={styles.summary}>
           {`${saved.length} value${saved.length === 1 ? "" : "s"} added to your health record.`}
         </Text>
@@ -587,6 +610,25 @@ export function UploadReviewScreen(): React.ReactElement {
       <Text style={styles.caveat}>
         {`AI-generated from your report. ${STANDING_DISCLAIMER} Check with your doctor.`}
       </Text>
+
+      {payload && payload.observations.length > 0 && (
+        <View>
+          <Text style={styles.fieldLabel}>Name this report</Text>
+          <TextInput
+            accessibilityLabel="Report name"
+            editable={!committing}
+            maxLength={120}
+            onChangeText={(text) => {
+              setReportName(text);
+              setNameEdited(true);
+            }}
+            placeholder="Name this report"
+            placeholderTextColor={redesign.ink3}
+            style={styles.input}
+            value={nameValue}
+          />
+        </View>
+      )}
 
       {errorMsg && (
         <View style={styles.banner} accessibilityRole="alert">

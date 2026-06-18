@@ -693,6 +693,22 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 **Encoded in code:** `src/theme/tokens.ts` (base 17), ~14 screens (targets 48), `src/screens/timeline/{dashboardAttention,bandTint}.ts` (+ tests), `src/screens/HealthDashboardScreen.tsx` (callout), `src/screens/timeline/pill.ts` (re-export), `src/theme/__tests__/a11y.test.ts`.
 
+## D36 — Upload analysis: report-only interpretation + free-form + post-parse naming (2026-06-17)
+
+**Decision:** Reworked the upload→parse→review surface around "interpret only what the report prints; never diagnose," plus free-form upload and post-parse naming.
+
+- **No-diagnosis summary.** `/api/parse-report` summary prompt forbids diagnosis; the review screen shows a deterministic report-only `summarizeReport()` and the model's free-text summary is sealed off the client wire type. Stored report summary is a factual count.
+- **Sourced RAG chips.** New `reference_range` + `abnormal_flag` parse fields the model COPIES from the report (never infers); `ragForObservation` (`src/upload/reportInterpretation.ts`) maps the report's own flag → ok/watch/alarm chip via the band `tintByClass`, with a source_text flag-word fallback; no flag stated → no chip. Caveat composed from `STANDING_DISCLAIMER`.
+- **Free-form upload.** Removed the lab/ehr/visit picker — the per-observation `category` already classifies each value; report-level `type` is invisible metadata, defaulted.
+- **Post-parse naming (additive contract change).** Naming moved to the review screen, pre-filled from the report's own dominant date (`suggestNameFromObservations`), persisted via a NEW DAL method **`renameReport(id, name)`** — report METADATA only (same mutation surface as `updateReportParseStatus`; observations stay append-only). Contract edited via the documented rm-marker → additive-edit → re-touch procedure; test fakes (`smoke.test.ts`, `backupService.test.ts`) updated.
+- **Post-save results summary.** After Save the review screen shows a "✓ Saved to your record" recap (kept values + RAG chips + the name) instead of silently popping back.
+
+**Reviewed:** clinical-boundary-reviewer PASS (no blockers) on the analysis diff; two WARNs (latent model-summary field; bespoke caveat) fixed.
+
+**Open follow-up:** the parser still extracts narrative DIAGNOSES as `condition` observations (e.g. "Unspecified liver disease due to alcohol") — a backend extraction-prompt fix that needs a staging deploy. Users can Skip such rows in review meanwhile.
+
+**Verification:** app tsc 0 + 21 parse-report tests; mobile tsc 0, eslint 0, **1117 tests**. On-device: upload → report-only summary + sourced chips → name → Save → saved recap.
+
 ---
 
 ## See also

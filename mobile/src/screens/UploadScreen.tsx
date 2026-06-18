@@ -48,7 +48,6 @@ import { fetchHealthDataAiConsent } from "../upload/consentClient";
 import { extractText } from "../upload/extract";
 import { pickImage, pickPdf, type PickedFile } from "../upload/picker";
 import { parseReport } from "../upload/parseClient";
-import { suggestReportName } from "../upload/reportInterpretation";
 import type { ParseReportResponse } from "../upload/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "MainTabs">;
@@ -86,16 +85,9 @@ export function UploadScreen(): React.ReactElement {
   const fontsLoaded = useFontsLoaded();
   const insets = useSafeAreaInsets();
 
-  // Name is pre-filled with an identifiable default ("Health report · Jun
-  // 2026") so the user never has to think of one; we only treat it as
-  // user-owned once they actually edit it.
-  const [reportName, setReportName] = React.useState<string>("");
-  const [nameEdited, setNameEdited] = React.useState<boolean>(false);
-  const suggestedName = React.useMemo(
-    () => suggestReportName("general", new Date()),
-    [],
-  );
-  const nameValue = nameEdited ? reportName : suggestedName;
+  // Naming happens AFTER the parse, on the review screen (the report is
+  // inserted here with its original filename as a placeholder). Keeps the
+  // upload step friction-free.
   const [phase, setPhase] = React.useState<Phase>("idle");
   const [error, setError] = React.useState<ErrorState | null>(null);
   const [consentReady, setConsentReady] = React.useState<boolean | null>(null);
@@ -270,9 +262,8 @@ export function UploadScreen(): React.ReactElement {
       }
 
       const reportId = Crypto.randomUUID();
-      const chosenName = (nameEdited ? reportName : suggestedName).trim();
-      const fileName =
-        chosenName.length > 0 ? chosenName : picked.file.name;
+      // Placeholder name (the picked filename); the user names it on review.
+      const fileName = picked.file.name;
 
       // c) Insert reports row (pending), then encrypt + store the blob.
       let blobUri: string;
@@ -354,7 +345,7 @@ export function UploadScreen(): React.ReactElement {
       setPhase("done");
       navigation.navigate("UploadReview", { reportId });
     },
-    [api, dal, navigation, nameEdited, reportName, suggestedName],
+    [api, dal, navigation],
   );
 
   const renderConsentBanner = () => {
@@ -420,23 +411,6 @@ export function UploadScreen(): React.ReactElement {
       </Text>
 
       {renderConsentBanner()}
-
-      <View>
-        <Text style={styles.sectionLabel}>Name</Text>
-        <TextInput
-          accessibilityLabel="Report name"
-          editable={!busy}
-          maxLength={120}
-          onChangeText={(text) => {
-            setReportName(text);
-            setNameEdited(true);
-          }}
-          placeholder="e.g. May 2026 A1c"
-          placeholderTextColor={redesign.ink3}
-          style={styles.input}
-          value={nameValue}
-        />
-      </View>
 
       {renderProgress()}
       {renderError()}

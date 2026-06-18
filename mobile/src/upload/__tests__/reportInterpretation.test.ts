@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ragForObservation,
+  suggestNameFromObservations,
   suggestReportName,
   summarizeReport,
 } from "../reportInterpretation";
@@ -125,5 +126,27 @@ describe("suggestReportName", () => {
   it("falls back to 'Health report' for an unknown/free-form type", () => {
     expect(suggestReportName("other", d)).toBe("Health report · Jun 2026");
     expect(suggestReportName("general", d)).toBe("Health report · Jun 2026");
+  });
+});
+
+describe("suggestNameFromObservations", () => {
+  const today = new Date("2026-06-17T12:00:00Z");
+  it("uses the report's own dominant month, not today", () => {
+    const rows = [
+      obs({ effective_at: "2026-05-12" }),
+      obs({ effective_at: "2026-05-12" }),
+      obs({ effective_at: "2026-03-01" }),
+    ];
+    expect(suggestNameFromObservations(rows, today)).toBe(
+      "Health report · May 2026",
+    );
+  });
+  it("falls back to the given date when no observation date parses", () => {
+    expect(suggestNameFromObservations([], today)).toBe(
+      "Health report · Jun 2026",
+    );
+    expect(
+      suggestNameFromObservations([obs({ effective_at: "" })], today),
+    ).toBe("Health report · Jun 2026");
   });
 });
