@@ -78,9 +78,10 @@ export function ReportDetailScreen(): React.ReactElement {
         if (cancelled) return;
         if (report) {
           setName(report.original_filename);
-          const parts = [`Added ${formatDate(report.uploaded_at)}`];
-          if (report.summary_text) parts.push(report.summary_text);
-          setSubtitle(parts.join(" · "));
+          // Date only. The value COUNT is derived from the actual linked
+          // observations (below), never the stored summary_text — re-upload
+          // dedup can make them disagree.
+          setSubtitle(`Added ${formatDate(report.uploaded_at)}`);
         }
         setRows(obs);
       } finally {
@@ -170,7 +171,13 @@ export function ReportDetailScreen(): React.ReactElement {
   return (
     <ScrollView contentContainerStyle={styles.content} style={styles.screen}>
       <Text style={styles.title}>{name || "Report"}</Text>
-      {subtitle.length > 0 && <Text style={styles.subtitle}>{subtitle}</Text>}
+      {subtitle.length > 0 && (
+        <Text style={styles.subtitle}>
+          {rows.length > 0
+            ? `${subtitle} · ${rows.length} value${rows.length === 1 ? "" : "s"}`
+            : subtitle}
+        </Text>
+      )}
       <Text style={styles.caveat}>
         {`AI-generated from your report. ${STANDING_DISCLAIMER} Check with your doctor.`}
       </Text>

@@ -86,6 +86,8 @@ export function UploadReviewScreen(): React.ReactElement {
   // After a successful save we show a results summary (the kept rows) instead
   // of silently popping back — confirmation + a recap of what was stored.
   const [saved, setSaved] = React.useState<ReviewRowState[] | null>(null);
+  // How many kept values were already in the record (deduped, not re-saved).
+  const [savedSkipped, setSavedSkipped] = React.useState<number>(0);
 
   // The user names the report HERE, after the parse — pre-filled from the
   // report's own content (its dominant date), editable, persisted on save.
@@ -354,9 +356,15 @@ export function UploadReviewScreen(): React.ReactElement {
         return;
       }
 
+      const acceptedRows = rows.filter((r) => r.accepted);
       const inserts = buildInsertsForReport(rows, report.user_id, reportId);
-      for (const insert of inserts) {
-        await dal.insertObservation(insert);
+      // Track which rows ACTUALLY inserted. A value already in the record
+      // (same code + effective_at) is a no-op (inserted:false) — it isn't
+      // linked to this report, so it must not be counted as newly saved.
+      const savedRows: ReviewRowState[] = [];
+      for (let i = 0; i < inserts.length; i += 1) {
+        const res = await dal.insertObservation(inserts[i]);
+        if (res.inserted) savedRows.push(acceptedRows[i]);
       }
 
       // Persist the name the user gave the report (metadata only).
@@ -366,18 +374,18 @@ export function UploadReviewScreen(): React.ReactElement {
       }
 
       const status = computeParseStatus(rows);
-      const acceptedCount = rows.filter((r) => r.accepted).length;
-      // Store a FACTUAL summary only — never the model's free-text (which can
-      // drift into diagnosis). Just the count of values kept.
+      // Store a FACTUAL summary — the count of values ACTUALLY saved to this
+      // report (matches what its detail will list), never the model's text.
       const summary =
-        acceptedCount > 0
-          ? `${acceptedCount} value${acceptedCount === 1 ? "" : "s"} saved.`
-          : "No values saved.";
+        savedRows.length > 0
+          ? `${savedRows.length} value${savedRows.length === 1 ? "" : "s"} saved.`
+          : "No new values saved.";
       await dal.updateReportParseStatus(reportId, status, summary);
 
-      // Show the saved-results summary (the kept rows) instead of silently
-      // returning — the user needs to see the save landed + what was stored.
-      setSaved(rows.filter((r) => r.accepted));
+      // Recap only the rows that actually landed in the record; note any that
+      // were already present (deduped).
+      setSavedSkipped(acceptedRows.length - savedRows.length);
+      setSaved(savedRows);
     } catch (err) {
       setErrorMsg(
         "Couldn't save your review. Please try Confirm again.",
@@ -546,6 +554,11 @@ export function UploadReviewScreen(): React.ReactElement {
         <Text style={styles.summary}>
           {`${saved.length} value${saved.length === 1 ? "" : "s"} added to your health record.`}
         </Text>
+        {savedSkipped > 0 && (
+          <Text style={styles.caveat}>
+            {`${savedSkipped} ${savedSkipped === 1 ? "value was" : "values were"} already in your record.`}
+          </Text>
+        )}
         <Text style={styles.caveat}>
           {`AI-generated from your report. ${STANDING_DISCLAIMER} Check with your doctor.`}
         </Text>
