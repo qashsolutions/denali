@@ -122,7 +122,8 @@ describe("suggestReportName", () => {
     expect(suggestReportName("ehr", d)).toBe("EHR export · Jun 2026");
     expect(suggestReportName("visit", d)).toBe("Visit summary · Jun 2026");
   });
-  it("falls back to 'Report' for an unknown type", () => {
-    expect(suggestReportName("other", d)).toBe("Report · Jun 2026");
+  it("falls back to 'Health report' for an unknown/free-form type", () => {
+    expect(suggestReportName("other", d)).toBe("Health report · Jun 2026");
+    expect(suggestReportName("general", d)).toBe("Health report · Jun 2026");
   });
 });

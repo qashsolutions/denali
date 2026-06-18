@@ -39,7 +39,6 @@ import { useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
 import type { LocalDataDAL, ReportType } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
-import { hapticSelection } from "@/feedback/haptics";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
@@ -54,11 +53,13 @@ import type { ParseReportResponse } from "../upload/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "MainTabs">;
 
-const REPORT_TYPES: ReadonlyArray<{ value: ReportType; label: string; hint: string }> = [
-  { value: "lab", label: "Lab results", hint: "A1c, glucose, lipid panel, etc." },
-  { value: "ehr", label: "EHR export", hint: "Records from your patient portal." },
-  { value: "visit", label: "Visit summary", hint: "After-visit summary or discharge papers." },
-];
+// Free-form upload: the user uploads ANY health report; we read it on-device
+// and the parser categorizes every value individually (each observation gets
+// its own category: biomarker / vital / condition / …). The report-level type
+// (lab/ehr/visit) is invisible metadata, so we default it rather than make the
+// user pick — removing all upfront friction. (Auto-classifying the report-level
+// type is a follow-up; it needs the row inserted after parse.)
+const DEFAULT_REPORT_TYPE: ReportType = "lab";
 
 type SourceKind = "pdf" | "image";
 
@@ -85,15 +86,14 @@ export function UploadScreen(): React.ReactElement {
   const fontsLoaded = useFontsLoaded();
   const insets = useSafeAreaInsets();
 
-  const [reportType, setReportType] = React.useState<ReportType>("lab");
-  // Name is pre-filled with an identifiable default ("Lab results · Jun 2026")
-  // so the user never has to think of one; we only treat it as user-owned once
-  // they actually edit it (then we stop auto-syncing it to the report type).
+  // Name is pre-filled with an identifiable default ("Health report · Jun
+  // 2026") so the user never has to think of one; we only treat it as
+  // user-owned once they actually edit it.
   const [reportName, setReportName] = React.useState<string>("");
   const [nameEdited, setNameEdited] = React.useState<boolean>(false);
   const suggestedName = React.useMemo(
-    () => suggestReportName(reportType, new Date()),
-    [reportType],
+    () => suggestReportName("general", new Date()),
+    [],
   );
   const nameValue = nameEdited ? reportName : suggestedName;
   const [phase, setPhase] = React.useState<Phase>("idle");
@@ -148,31 +148,6 @@ export function UploadScreen(): React.ReactElement {
           marginBottom: theme.spacing.xs,
           textTransform: "uppercase",
           ...fontStyle("body", 600, fontsLoaded),
-        },
-        // White r-18 surface card; selected = teal border on teal-wash.
-        typeCard: {
-          backgroundColor: redesign.surface,
-          borderColor: redesign.line,
-          borderWidth: 1,
-          borderRadius: redesign.rCard,
-          padding: theme.spacing.md,
-          marginBottom: theme.spacing.sm,
-          minHeight: 48,
-          gap: theme.spacing.xs,
-        },
-        typeCardActive: {
-          borderColor: redesign.teal,
-          backgroundColor: redesign.tealWash,
-        },
-        typeLabel: {
-          color: redesign.ink,
-          fontSize: theme.typography.sizes.base,
-          ...fontStyle("body", 600, fontsLoaded),
-        },
-        typeHint: {
-          color: redesign.ink2,
-          fontSize: theme.typography.sizes.sm,
-          ...fontStyle("body", 400, fontsLoaded),
         },
         input: {
           backgroundColor: redesign.surface,
@@ -312,7 +287,7 @@ export function UploadScreen(): React.ReactElement {
         await dal.insertReport({
           id: reportId,
           user_id: user.userId,
-          type: reportType,
+          type: DEFAULT_REPORT_TYPE,
           file_blob_ref: blobUri,
           original_filename: fileName,
           parse_status: "parsing",
@@ -354,7 +329,7 @@ export function UploadScreen(): React.ReactElement {
       let parsed: ParseReportResponse;
       try {
         parsed = await parseReport(api, {
-          reportType,
+          reportType: DEFAULT_REPORT_TYPE,
           extractedText: extracted.text,
         });
       } catch (err) {
@@ -379,7 +354,7 @@ export function UploadScreen(): React.ReactElement {
       setPhase("done");
       navigation.navigate("UploadReview", { reportId });
     },
-    [api, dal, navigation, nameEdited, reportName, suggestedName, reportType],
+    [api, dal, navigation, nameEdited, reportName, suggestedName],
   );
 
   const renderConsentBanner = () => {
@@ -438,39 +413,13 @@ export function UploadScreen(): React.ReactElement {
     >
       <Text style={styles.title}>Upload a report</Text>
       <Text style={styles.subtitle}>
-        Pick a PDF or photo from your phone. Your file stays on this device
-        — only the typed-out text is sent to the AI for parsing, and nothing
-        is stored on our servers.
+        Upload any health report — a lab result, visit summary, anything. We
+        read it on your device and pull out the values for you; no need to say
+        what kind it is. Your file stays on this phone — only the typed-out
+        text is sent for parsing, and nothing is stored on our servers.
       </Text>
 
       {renderConsentBanner()}
-
-      <View>
-        <Text style={styles.sectionLabel}>What kind of report?</Text>
-        {REPORT_TYPES.map((opt) => {
-          const isActive = opt.value === reportType;
-          return (
-            <Pressable
-              key={opt.value}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive }}
-              disabled={busy}
-              onPress={() => {
-                hapticSelection();
-                setReportType(opt.value);
-              }}
-              style={({ pressed }) => [
-                styles.typeCard,
-                isActive && styles.typeCardActive,
-                pressed && styles.buttonDisabled,
-              ]}
-            >
-              <Text style={styles.typeLabel}>{opt.label}</Text>
-              <Text style={styles.typeHint}>{opt.hint}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
 
       <View>
         <Text style={styles.sectionLabel}>Name</Text>

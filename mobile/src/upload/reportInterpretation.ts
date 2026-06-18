@@ -100,7 +100,9 @@ const TYPE_LABEL: Record<string, string> = {
  * in (testable; no internal clock). Editable downstream.
  */
 export function suggestReportName(reportType: string, date: Date): string {
-  const label = TYPE_LABEL[reportType] ?? "Report";
+  // Free-form upload has no declared type, so an unknown type falls back to a
+  // neutral "Health report" label (still identifiable by month).
+  const label = TYPE_LABEL[reportType] ?? "Health report";
   const month = date.toLocaleDateString("en-US", {
     month: "short",
     year: "numeric",
