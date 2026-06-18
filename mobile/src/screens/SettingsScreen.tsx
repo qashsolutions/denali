@@ -12,10 +12,17 @@
 import { CommonActions, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React from "react";
-import { Check, ChevronDown, ChevronUp, Lock } from "lucide-react-native";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Lock,
+} from "lucide-react-native";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -33,6 +40,7 @@ import { PressableScale } from "@/components/PressableScale";
 import { Skeleton } from "@/components/Skeleton";
 import type { GenderIdentity, ProfileRow } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
+import { wipeAllLocalData } from "@/db/wipe";
 import { hapticSelection } from "@/feedback/haptics";
 import {
   birthYearLabel,
@@ -53,6 +61,15 @@ import {
 import { useReminders } from "@/notifications/useReminders";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+// Legal pages live on the public production site (same content on every env);
+// the API base can be staging, so the legal links are pinned to prod.
+const LEGAL_BASE = "https://denali.health";
+const LEGAL_LINKS: ReadonlyArray<{ label: string; path: string }> = [
+  { label: "Terms of Service", path: "/terms" },
+  { label: "Privacy Policy", path: "/privacy" },
+  { label: "Notice of Privacy Practices", path: "/hipaa" },
+];
 
 // The consent map shape comes from the network contract — see
 // src/api/routeContracts.ts. Single source of truth across mobile.
@@ -120,6 +137,7 @@ export function SettingsScreen(): React.ReactElement {
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [retrying, setRetrying] = React.useState(false);
   const [signingOut, setSigningOut] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
   // Read-only demographics for the "Your details" section (D31). Loaded from
   // the LOCAL profile (set during onboarding); never written here.
   const dal = useDal();
@@ -269,6 +287,46 @@ export function SettingsScreen(): React.ReactElement {
       );
     }
   }, [api, navigation]);
+
+  // Account deletion (App Store / Play Store requirement). Server delete first
+  // (Cognito + server-side rows via /api/account/delete), then a full local
+  // wipe, then reset to SignIn. Admin self-delete is blocked server-side (403).
+  const doDeleteAccount = React.useCallback(async () => {
+    setDeleting(true);
+    try {
+      await api.apiDelete<unknown>("/api/account/delete");
+      await wipeAllLocalData();
+      navigation.dispatch(
+        CommonActions.reset({ index: 0, routes: [{ name: "SignIn" }] }),
+      );
+    } catch (err) {
+      setDeleting(false);
+      const msg =
+        err instanceof HttpError && err.status === 403
+          ? "This account can't be deleted from the app."
+          : "Couldn't delete your account. Please try again.";
+      Alert.alert("Delete failed", msg);
+      console.warn("[Settings] account delete failed", err);
+    }
+  }, [api, navigation]);
+
+  const onDeleteAccount = React.useCallback(() => {
+    Alert.alert(
+      "Delete your account?",
+      "This permanently deletes your account and all your health data — on " +
+        "this device and on our servers. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void doDeleteAccount();
+          },
+        },
+      ],
+    );
+  }, [doDeleteAccount]);
 
   const styles = React.useMemo(
     () => {
@@ -438,6 +496,45 @@ export function SettingsScreen(): React.ReactElement {
           color: redesign.alarm,
           fontSize: theme.typography.sizes.base,
           ...fontStyle("body", 600, fontsLoaded),
+        },
+        legalRow: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          paddingVertical: theme.spacing.sm,
+          minHeight: 48,
+        },
+        legalRowBorder: {
+          borderTopWidth: 1,
+          borderTopColor: redesign.line,
+        },
+        legalLabel: {
+          color: redesign.ink,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        deleteBtn: {
+          backgroundColor: redesign.alarmWash,
+          borderColor: redesign.alarm,
+          borderWidth: 1,
+          borderRadius: theme.radii.xl - 2,
+          paddingVertical: theme.spacing.md,
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 48,
+          marginTop: theme.spacing.sm,
+        },
+        deleteText: {
+          color: redesign.alarm,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
+        deleteHint: {
+          color: redesign.ink3,
+          fontSize: theme.typography.sizes.xs,
+          textAlign: "center",
+          marginTop: theme.spacing.xs,
+          ...fontStyle("body", 400, fontsLoaded),
         },
         loadError: {
           color: redesign.alarm,
@@ -814,6 +911,24 @@ export function SettingsScreen(): React.ReactElement {
         />
       )}
 
+      <Text style={styles.sectionLabel}>Legal</Text>
+      <View style={styles.accountCard}>
+        {LEGAL_LINKS.map((l, i) => (
+          <Pressable
+            key={l.path}
+            accessibilityRole="link"
+            accessibilityLabel={l.label}
+            onPress={() => {
+              void Linking.openURL(`${LEGAL_BASE}${l.path}`);
+            }}
+            style={[styles.legalRow, i > 0 && styles.legalRowBorder]}
+          >
+            <Text style={styles.legalLabel}>{l.label}</Text>
+            <ChevronRight size={18} color={redesign.ink3} />
+          </Pressable>
+        ))}
+      </View>
+
       <PressableScale
         accessibilityRole="button"
         disabled={signingOut}
@@ -826,6 +941,27 @@ export function SettingsScreen(): React.ReactElement {
           <Text style={styles.signOutText}>Sign out</Text>
         )}
       </PressableScale>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Delete account"
+        disabled={deleting}
+        onPress={onDeleteAccount}
+        style={({ pressed }) => [
+          styles.deleteBtn,
+          (deleting || pressed) && { opacity: 0.6 },
+        ]}
+      >
+        {deleting ? (
+          <ActivityIndicator color={redesign.alarm} />
+        ) : (
+          <Text style={styles.deleteText}>Delete account</Text>
+        )}
+      </Pressable>
+      <Text style={styles.deleteHint}>
+        Permanently deletes your account and all your data. This can&rsquo;t be
+        undone.
+      </Text>
     </ScrollView>
   );
 }

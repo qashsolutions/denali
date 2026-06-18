@@ -139,6 +139,15 @@ export function deleteBlob(reportId: string): void {
   if (file.exists) file.delete();
 }
 
+/**
+ * Delete ALL encrypted report blobs (account deletion / full local wipe).
+ * Best-effort; safe when the directory does not exist.
+ */
+export function clearAllReportBlobs(): void {
+  const dir = new Directory(Paths.document, REPORTS_SUBDIR);
+  if (dir.exists) dir.delete();
+}
+
 // ── HKDF-SHA-256 ─────────────────────────────────────────────────────────
 
 /**
@@ -172,11 +181,21 @@ async function deriveBlobKey(): Promise<AESEncryptionKey> {
 }
 
 /**
- * Test-only — clear the memoized key. Used by unit tests that exercise the
- * fresh-derivation path. Real callers don't need to call this.
+ * Clear the memoized blob key from process memory. Called during account
+ * deletion (full local wipe) so no derived AES key material lingers after the
+ * user's data is erased. Safe to call anytime — the next derive re-reads the
+ * keystore.
+ */
+export function clearBlobKeyCache(): void {
+  cachedKeyPromise = null;
+}
+
+/**
+ * Test-only alias — kept for existing unit tests that exercise the
+ * fresh-derivation path. Real callers use {@link clearBlobKeyCache}.
  */
 export function __dangerouslyClearBlobKeyCacheForTests(): void {
-  cachedKeyPromise = null;
+  clearBlobKeyCache();
 }
 
 /**
