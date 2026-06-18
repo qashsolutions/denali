@@ -93,6 +93,11 @@ export function UploadScreen(): React.ReactElement {
   const [consentReady, setConsentReady] = React.useState<boolean | null>(null);
   // Saved reports list — loaded on focus so it refreshes after each save.
   const [reports, setReports] = React.useState<ReportRow[]>([]);
+  // ACTUAL value count per report (the stored summary_text can be stale after
+  // dedup). Keyed by report id.
+  const [reportCounts, setReportCounts] = React.useState<Map<string, number>>(
+    new Map(),
+  );
 
   // Re-check consent on every screen FOCUS (not just mount). The Upload
   // tab stays mounted in the bottom-tab navigator, so a mount-only effect
@@ -111,6 +116,14 @@ export function UploadScreen(): React.ReactElement {
           try {
             const list = await dal.listReports(user.userId);
             if (!cancelled) setReports(list);
+            // Count the ACTUAL linked observations per report so the list
+            // agrees with each report's detail (stored summary can be stale).
+            const counts = new Map<string, number>();
+            for (const r of list) {
+              const obs = await dal.listObservations({ report_id: r.id });
+              counts.set(r.id, obs.length);
+            }
+            if (!cancelled) setReportCounts(counts);
           } catch {
             // Non-fatal: the list just stays as-is.
           }
@@ -500,7 +513,7 @@ export function UploadScreen(): React.ReactElement {
                 {r.original_filename}
               </Text>
               <Text style={styles.reportMeta} numberOfLines={1}>
-                {formatReportMeta(r)}
+                {formatReportMeta(r, reportCounts.get(r.id))}
               </Text>
             </Pressable>
           ))}
@@ -510,8 +523,12 @@ export function UploadScreen(): React.ReactElement {
   );
 }
 
-/** "Added Jun 17, 2026 · 6 values saved." — the grey-italics list subtitle. */
-function formatReportMeta(r: ReportRow): string {
+/**
+ * "Added Jun 17, 2026 · 4 values" — the grey-italics list subtitle. The count
+ * is the ACTUAL linked-observation count (passed in), not the stored summary,
+ * so it always agrees with the report's detail. undefined = still counting.
+ */
+function formatReportMeta(r: ReportRow, count: number | undefined): string {
   const d = new Date(r.uploaded_at);
   const date = Number.isNaN(d.getTime())
     ? r.uploaded_at
@@ -520,9 +537,9 @@ function formatReportMeta(r: ReportRow): string {
         month: "short",
         day: "numeric",
       });
-  return r.summary_text
-    ? `Added ${date} · ${r.summary_text}`
-    : `Added ${date}`;
+  if (count === undefined) return `Added ${date}`;
+  if (count === 0) return `Added ${date} · no values`;
+  return `Added ${date} · ${count} value${count === 1 ? "" : "s"}`;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
