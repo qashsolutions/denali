@@ -82,6 +82,13 @@ export function UploadReviewScreen(): React.ReactElement {
   );
   const [committing, setCommitting] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  // After a successful save we show a results summary (the kept rows) instead
+  // of silently popping back — confirmation + a recap of what was stored.
+  const [saved, setSaved] = React.useState<ReviewRowState[] | null>(null);
+
+  const onDone = React.useCallback(() => {
+    navigation.popToTop();
+  }, [navigation]);
 
   // Sync rows when payload arrives. This handles the case where the screen
   // is reached without the in-process stash (cold launch, deep link).
@@ -121,6 +128,18 @@ export function UploadReviewScreen(): React.ReactElement {
           color: redesign.ink3,
           fontSize: theme.typography.sizes.sm,
           lineHeight: theme.typography.sizes.sm * 1.4,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        // Post-save confirmation header.
+        savedHeader: {
+          color: redesign.tealDeep,
+          fontSize: theme.typography.sizes["2xl"],
+          letterSpacing: -0.5,
+          ...fontStyle("display", 700, fontsLoaded),
+        },
+        savedValue: {
+          color: redesign.ink2,
+          fontSize: theme.typography.sizes.base,
           ...fontStyle("body", 400, fontsLoaded),
         },
         // Right-aligned header cluster: RAG chip + confidence.
@@ -336,8 +355,9 @@ export function UploadReviewScreen(): React.ReactElement {
           : "No values saved.";
       await dal.updateReportParseStatus(reportId, status, summary);
 
-      // Navigate back to the upload flow's home (the Upload tab).
-      navigation.popToTop();
+      // Show the saved-results summary (the kept rows) instead of silently
+      // returning — the user needs to see the save landed + what was stored.
+      setSaved(rows.filter((r) => r.accepted));
     } catch (err) {
       setErrorMsg(
         "Couldn't save your review. Please try Confirm again.",
@@ -346,7 +366,7 @@ export function UploadReviewScreen(): React.ReactElement {
     } finally {
       setCommitting(false);
     }
-  }, [dal, navigation, reportId, rows]);
+  }, [dal, reportId, rows]);
 
   const onSkip = React.useCallback(async () => {
     setCommitting(true);
@@ -492,6 +512,65 @@ export function UploadReviewScreen(): React.ReactElement {
       </View>
     );
   };
+
+  if (saved != null) {
+    return (
+      <ScrollView
+        contentContainerStyle={styles.content}
+        style={styles.screen}
+      >
+        <Text style={styles.savedHeader}>✓ Saved to your record</Text>
+        <Text style={styles.summary}>
+          {`${saved.length} value${saved.length === 1 ? "" : "s"} added to your health record.`}
+        </Text>
+        <Text style={styles.caveat}>
+          {`AI-generated from your report. ${STANDING_DISCLAIMER} Check with your doctor.`}
+        </Text>
+        {saved.map((r, i) => {
+          const obs = r.edited;
+          const rag = ragForObservation(r.original);
+          const ragColors = rag ? tintByClass(redesign, rag.tint) : null;
+          const value =
+            obs.value_num != null
+              ? String(obs.value_num)
+              : (obs.value_text ?? "");
+          return (
+            <View key={i} style={styles.row}>
+              <View style={styles.rowHeader}>
+                <Text style={styles.rowTitle} numberOfLines={2}>
+                  {obs.display || obs.code}
+                </Text>
+                {rag && ragColors && (
+                  <View
+                    style={[styles.ragChip, { backgroundColor: ragColors.bg }]}
+                  >
+                    <Text
+                      style={[styles.ragChipText, { color: ragColors.fg }]}
+                    >
+                      {rag.label}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {value.length > 0 && (
+                <Text style={styles.savedValue} numberOfLines={2}>
+                  {obs.unit ? `${value} ${obs.unit}` : value}
+                </Text>
+              )}
+            </View>
+          );
+        })}
+        <PressableScale
+          haptic
+          accessibilityRole="button"
+          onPress={onDone}
+          style={styles.button}
+        >
+          <Text style={styles.buttonText}>Done</Text>
+        </PressableScale>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView

@@ -413,10 +413,10 @@ export function UploadScreen(): React.ReactElement {
     >
       <Text style={styles.title}>Upload a report</Text>
       <Text style={styles.subtitle}>
-        Upload any health report — a lab result, visit summary, anything. We
-        read it on your device and pull out the values for you; no need to say
-        what kind it is. Your file stays on this phone — only the typed-out
-        text is sent for parsing, and nothing is stored on our servers.
+        Upload any health report — we read it here and pull out the values.
+      </Text>
+      <Text style={styles.subtitle}>
+        Your file never leaves your phone; only the text is sent for parsing.
       </Text>
 
       {renderConsentBanner()}
