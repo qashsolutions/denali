@@ -41,6 +41,17 @@ type Step = "email" | "otp";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Step-aware sign-in subtitle. The OTP step surfaces the 10-minute code expiry
+ * (the email states it, but users wait on this screen, not their inbox).
+ * Pure helper of live `step` per the mobile pure-helper rule.
+ */
+export function signInSubtitle(step: Step): string {
+  return step === "email"
+    ? "We’ll email you a 6-digit code. No passwords."
+    : "Enter the 6-digit code we just emailed you. It expires in 10 minutes.";
+}
+
 export function SignInScreen(): React.ReactElement {
   const api = useApiClient();
   const navigation = useNavigation<Nav>();
@@ -181,9 +192,7 @@ export function SignInScreen(): React.ReactElement {
     >
       <View style={styles.screen}>
         <Text style={styles.title}>Sign in to Denali</Text>
-        <Text style={styles.subtitle}>
-          We&rsquo;ll email you a 6-digit code. No passwords.
-        </Text>
+        <Text style={styles.subtitle}>{signInSubtitle(step)}</Text>
 
         {errorMsg && <Text style={styles.error}>{errorMsg}</Text>}
 
