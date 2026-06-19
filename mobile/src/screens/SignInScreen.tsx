@@ -31,7 +31,7 @@ import {
 } from "react-native";
 import type { StyleProp, TextStyle } from "react-native";
 
-import { useApiClient } from "@/auth";
+import { HttpError, useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
 import type { RootStackParamList } from "@/navigation/types";
 import { useTheme } from "@/theme/useTheme";
@@ -51,6 +51,51 @@ export function signInSubtitle(step: Step): string {
   return step === "email"
     ? "We’ll email you a 6-digit code. No passwords."
     : "Enter the 6-digit code we just emailed you. It expires in 10 minutes.";
+}
+
+/** Seconds the "Resend code" action stays disabled after a send, so rapid taps
+ * can't trip the server's per-email send cap (3 / 15 min). */
+const RESEND_COOLDOWN_SEC = 30;
+
+/**
+ * Map a send/resend failure to a user-facing message. A 429 (the server's
+ * per-email / per-IP send cap) is called out so the user waits rather than
+ * retrying into the same wall; everything else uses `fallback`. Never surfaces
+ * raw server text (which could carry token-bearing payloads).
+ */
+export function otpSendErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof HttpError && err.status === 429) {
+    return "Too many code requests. Please wait a few minutes, then try again.";
+  }
+  return fallback;
+}
+
+/** "Resend code" link with in-flight + cooldown disabled states. */
+function ResendButton({
+  cooldown,
+  submitting,
+  onPress,
+  linkStyle,
+}: {
+  cooldown: number;
+  submitting: boolean;
+  onPress: () => void;
+  linkStyle: StyleProp<TextStyle>;
+}): React.ReactElement {
+  const disabled = submitting || cooldown > 0;
+  const label =
+    cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code";
+  return (
+    <Pressable
+      testID="signin_resend_code_button"
+      accessibilityRole="button"
+      accessibilityLabel="Resend code"
+      disabled={disabled}
+      onPress={onPress}
+    >
+      <Text style={[linkStyle, disabled && { opacity: 0.5 }]}>{label}</Text>
+    </Pressable>
+  );
 }
 
 /** One status line — an error takes precedence over an info confirmation. */
@@ -81,6 +126,7 @@ export function SignInScreen(): React.ReactElement {
   const [submitting, setSubmitting] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
   const [infoMsg, setInfoMsg] = React.useState<string | null>(null);
+  const [cooldown, setCooldown] = React.useState(0);
 
   const styles = React.useMemo(
     () =>
@@ -166,6 +212,15 @@ export function SignInScreen(): React.ReactElement {
   const emailValid = EMAIL_RE.test(trimmedEmail);
   const otpValid = /^\d{6}$/.test(otp);
 
+  // Tick the resend cooldown down. setTimeout (not setInterval) keeps the dep
+  // array exhaustive-deps-clean: each new `cooldown` value schedules the next
+  // decrement, and reaching 0 schedules nothing.
+  React.useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const id = setTimeout(() => setCooldown(cooldown - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
+
   const onSendOtp = React.useCallback(async () => {
     setErrorMsg(null);
     setInfoMsg(null);
@@ -177,10 +232,13 @@ export function SignInScreen(): React.ReactElement {
     try {
       await api.sendOtp(trimmedEmail);
       setStep("otp");
-    } catch {
-      // Intentionally generic — server returns localized messages but we
-      // never want to mistakenly surface token-bearing payloads.
-      setErrorMsg("Couldn't send your code. Please try again.");
+      setCooldown(RESEND_COOLDOWN_SEC);
+    } catch (err) {
+      // Generic by default; never surface raw server text (token-bearing
+      // payloads). A 429 send cap is called out so the user knows to wait.
+      setErrorMsg(
+        otpSendErrorMessage(err, "Couldn't send your code. Please try again."),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -223,8 +281,11 @@ export function SignInScreen(): React.ReactElement {
     try {
       await api.sendOtp(trimmedEmail);
       setInfoMsg("New code sent — check your email.");
-    } catch {
-      setErrorMsg("Couldn't resend your code. Please try again.");
+      setCooldown(RESEND_COOLDOWN_SEC);
+    } catch (err) {
+      setErrorMsg(
+        otpSendErrorMessage(err, "Couldn't resend your code. Please try again."),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -324,15 +385,12 @@ export function SignInScreen(): React.ReactElement {
                 <Text style={styles.buttonText}>Verify code</Text>
               )}
             </PressableScale>
-            <Pressable
-              testID="signin_resend_code_button"
-              accessibilityRole="button"
-              accessibilityLabel="Resend code"
-              disabled={submitting}
+            <ResendButton
+              cooldown={cooldown}
+              submitting={submitting}
               onPress={onResend}
-            >
-              <Text style={styles.link}>Resend code</Text>
-            </Pressable>
+              linkStyle={styles.link}
+            />
             <Pressable
               testID="signin_use_different_email_button"
               accessibilityRole="button"
