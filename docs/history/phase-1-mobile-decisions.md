@@ -711,6 +711,64 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D37 — Settings account deletion + legal links (2026-06-18)
+
+**Decision:** Add the App Store / Play Store-required **account deletion** flow and the three legal links to mobile Settings. Tapping "Delete account" raises a destructive-confirm `Alert` ("Delete your account?" / body "This permanently deletes your account and all your health data — on this device and on our servers. This can't be undone." / Cancel + destructive Delete). On confirm: `DELETE /api/account/delete` (server cascade + Cognito `AdminDeleteUser`) runs FIRST, then the full local wipe (D38), then `navigation.reset` to `SignIn`. Server-first ordering means a failed server delete never silently wipes the device while the account still exists upstream.
+
+**Admin self-delete is blocked server-side.** The route does `SELECT is_admin FROM users WHERE id = $1` and returns 403 `{error:'Admin accounts cannot be deleted through the app.'}` for admins — mirroring the web app's "admins can't self-delete" rule (CLAUDE.md § Privacy). Surfaced in-app as **"This account can't be deleted from the app."** (the 403 is caught and mapped to that copy; the local wipe does NOT run on a 403).
+
+**Legal section** — three links, all pinned to the PROD host `https://denali.health` regardless of the API base (the API base may be staging, but the legal pages are prod-canonical and all three return 200 on prod):
+- Terms → `https://denali.health/terms`
+- Privacy → `https://denali.health/privacy`
+- Notice of Privacy Practices → `https://denali.health/hipaa`
+
+**Why:** account deletion is a hard App Store / Play Store submission requirement; the legal links are the standard store-review compliance set. Both are net-new mobile-only surfaces — the web app already had the delete cascade route.
+
+**Encoded in code:** `src/screens/SettingsScreen.tsx` (Delete-account row + confirm Alert + legal links), `src/db/wipe.ts` (`wipeAllLocalData`, D38). Commit `e717540`.
+
+---
+
+## D38 — Local account-delete wipe: best-effort, and the WAL-checkpoint finding (2026-06-18)
+
+**Decision:** `mobile/src/db/wipe.ts` `wipeAllLocalData()` performs the on-device side of account deletion (D37). It is **FULLY best-effort / never-throws** — every step is try/catch-guarded so a transient on-device failure can't strand the user *after the server account is already gone* (D37 runs the server delete first). Commits `e717540` + `051deaf`; unit-tested in `8640315`.
+
+**Steps, in order:**
+1. `PRAGMA secure_delete = ON` — overwrite freed pages rather than just unlink.
+2. `DELETE FROM "<table>"` for **every user table** (quoted identifier; the table list excludes `sqlite_%` internal tables and `schema_migrations`).
+3. `VACUUM` — rebuild the DB to physically reclaim/overwrite the deleted pages.
+4. `PRAGMA wal_checkpoint(TRUNCATE)` — flush the WAL into the main DB and truncate the `-wal` file to 0 (the load-bearing step, below).
+5. `clearAllReportBlobs` — delete the entire encrypted reports blob directory.
+6. `clearBlobKeyCache` — clear the in-memory derived blob key.
+7. `clearTokens` — clear the auth tokens from SecureStore.
+
+**What is intentionally KEPT:** the DB file, the SQLCipher key, and `schema_migrations`. The live connection stays valid for a clean re-onboard, and an **empty encrypted DB holds no PHI** — so retaining the file + key is safe and avoids tearing down / re-deriving the connection.
+
+**Load-bearing finding (verified on-device; the reason `051deaf` exists):** in **WAL mode** the `DELETE`s and the `VACUUM`'s rebuild all land in the `-wal` file — the main DB stayed at a single 4 KB page. SQLite only **auto-checkpoints once the WAL passes ~1000 pages**, and a small DB never reaches that, so **without an explicit checkpoint the `-wal` sat at ~1.4 MB of pre-wipe encrypted frames EVEN AFTER a cold app restart**. Because the SQLCipher key is retained by design (above), those leftover WAL frames are recoverable residue — a real PHI-remanence hole. `PRAGMA wal_checkpoint(TRUNCATE)` flushes the WAL into the main DB and truncates the `-wal` to 0. **Verified on-device: `-wal` 1,466,752 B → 0 B**, report blobs gone, SecureStore tokens cleared (5665 B → 826 B).
+
+**Takeaway for any future wipe path:** `secure_delete` + `VACUUM` alone are **INSUFFICIENT** in WAL mode — the `wal_checkpoint(TRUNCATE)` is **mandatory** to evict pre-wipe frames from the `-wal`.
+
+**Test-account note (verification evidence):** `ceeveear@yahoo.com` was the sacrificial **non-admin** account used to prove the wipe end-to-end on **staging**, and is now **DELETED** there. Both operator test accounts (ramanac, ceeveear) were found to be `is_admin = TRUE` on **STAGING** — staging's flags had diverged from the prod values documented in the root CLAUDE.md, and the on-device **403** (D37's admin block) confirmed it. ceeveear's staging `is_admin` was set **FALSE** (via a one-off `denali-staging-dbinit` Fargate task) to reach the server-200 → wipe path, then the account was deleted. (Prod flags are unchanged; this note is staging-only.)
+
+**Encoded in code:** `src/db/wipe.ts` (`wipeAllLocalData`), `src/db/__tests__/wipe.test.ts`. Commits `e717540` + `051deaf`; tests `8640315`.
+
+---
+
+## D39 — Sign-in OTP UX polish (2026-06-18)
+
+**Decision:** Five sign-in OTP improvements, all verified on-device via Maestro. Commits `820a0d3`, `45e200a`, `4b2f0e2`.
+
+1. **Step-aware subtitle surfacing the 10-minute code expiry.** The OTP step shows "Enter the 6-digit code we just emailed you. It expires in 10 minutes." (the email step keeps its own subtitle).
+2. **"Resend code" link on the OTP step.** Re-sends to the same email without leaving the step; confirms with "New code sent — check your email."
+3. **"Use a different email" now CLEARS the email field.** It previously kept the old value, so re-entry **appended** onto the stale string — a bug fix.
+4. **30-second cooldown on Resend.** "Resend code in Ns" countdown, link disabled during it, so rapid taps can't trip the server's send cap.
+5. **429-specific message.** "Too many code requests. Please wait a few minutes, then try again." — because `app/src/app/api/auth/send-otp/route.ts` rate-limits to **3 sends per email / 15 min** (and 10 per IP), returning 429.
+
+**Why:** the OTP step gave the user no expiry signal, no recovery if the code never arrived, and a stale-value bug on email re-entry; the cooldown + 429 copy keep the user from hammering (and being confused by) the server send cap.
+
+**Encoded in code:** `src/screens/SignInScreen.tsx` (step subtitle, Resend link + cooldown, different-email clear, 429 mapping). Commits `820a0d3`, `45e200a`, `4b2f0e2`. Maestro-verified on-device.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).
