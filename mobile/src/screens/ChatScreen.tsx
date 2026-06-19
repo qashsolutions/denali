@@ -50,6 +50,7 @@ import {
   stripSuggestionsBlock,
   type ChatTurn,
 } from "./chat/chatHistory";
+import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
 
 export function ChatScreen(): React.ReactElement {
   const api = useApiClient();
@@ -175,6 +176,16 @@ export function ChatScreen(): React.ReactElement {
           paddingBottom: theme.spacing.sm,
           ...fontStyle("display", 700, fontsLoaded),
         },
+        // Standing clinical disclaimer — chat is the most advice-prone surface,
+        // so it carries the same boundary every clinical card does. ink3 is
+        // WCAG-AA on paper after the contrast fix (see tokens AA matrix).
+        disclaimer: {
+          color: redesign.ink3,
+          fontSize: theme.typography.sizes.xs,
+          paddingHorizontal: theme.spacing.space5,
+          paddingBottom: theme.spacing.sm,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
         listContent: {
           padding: theme.spacing.md,
           gap: theme.spacing.sm,
@@ -298,6 +309,9 @@ export function ChatScreen(): React.ReactElement {
       style={styles.screen}
     >
       <Text style={styles.title}>Ask Denali</Text>
+      <Text testID="chat_disclaimer" style={styles.disclaimer}>
+        {STANDING_DISCLAIMER}
+      </Text>
       {history.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>
@@ -332,6 +346,11 @@ export function ChatScreen(): React.ReactElement {
         <PressableScale
           haptic
           accessibilityRole="button"
+          accessibilityLabel={streaming ? "Sending message" : "Send message"}
+          accessibilityState={{
+            busy: streaming,
+            disabled: streaming || input.trim().length === 0,
+          }}
           disabled={streaming || input.trim().length === 0}
           onPress={onSend}
           style={[
