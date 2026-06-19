@@ -20,6 +20,33 @@ import type { InstrumentDefinition } from "./types";
 export const AUDIT_C_LEAD_IN =
   "The next questions are about your use of alcoholic beverages during the past year.";
 
+// AUDIT-C uses DIFFERENT verbatim option labels per item (frequency on Q1/Q3,
+// quantity on Q2) but identical 0–4 scoring — Bush 1998 / NIAAA form. Per-item
+// `responseOptions` carry the correct labels; the previous single blended set
+// ("monthly or less / 1-2 drinks") mislabeled the Q1 frequency question with
+// Q2's quantities. These are VERBATIM instrument labels — not Denali-authored.
+const AUDIT_C_Q1_FREQUENCY = [
+  { value: 0, label: "Never" },
+  { value: 1, label: "Monthly or less" },
+  { value: 2, label: "2 to 4 times a month" },
+  { value: 3, label: "2 to 3 times a week" },
+  { value: 4, label: "4 or more times a week" },
+] as const;
+const AUDIT_C_Q2_QUANTITY = [
+  { value: 0, label: "1 or 2" },
+  { value: 1, label: "3 or 4" },
+  { value: 2, label: "5 or 6" },
+  { value: 3, label: "7 to 9" },
+  { value: 4, label: "10 or more" },
+] as const;
+const AUDIT_C_Q3_FREQUENCY = [
+  { value: 0, label: "Never" },
+  { value: 1, label: "Less than monthly" },
+  { value: 2, label: "Monthly" },
+  { value: 3, label: "Weekly" },
+  { value: 4, label: "Daily or almost daily" },
+] as const;
+
 export const AUDIT_C: InstrumentDefinition = {
   id: "AUDIT-C",
   loincCode: "75626-2",
@@ -30,6 +57,7 @@ export const AUDIT_C: InstrumentDefinition = {
       number: 1,
       itemCode: "68518-0",
       text: "How often did you have a drink containing alcohol in the past year?",
+      responseOptions: AUDIT_C_Q1_FREQUENCY,
     },
     {
       number: 2,
@@ -37,26 +65,18 @@ export const AUDIT_C: InstrumentDefinition = {
       text:
         "How many drinks containing alcohol did you have on a typical day " +
         "when you were drinking in the past year?",
+      responseOptions: AUDIT_C_Q2_QUANTITY,
     },
     {
       number: 3,
       itemCode: "68520-6",
       text:
         "How often did you have six or more drinks on one occasion in the past year?",
+      responseOptions: AUDIT_C_Q3_FREQUENCY,
     },
   ],
-  // AUDIT-C responses use DIFFERENT option labels per item but identical
-  // 0–4 scoring. We expose a single label set per item via the screen by
-  // using item-number-aware rendering — but the contract is one shared
-  // responseOptions array. The screen will branch on item number to relabel
-  // options when rendering. Keep the scoring scale 0–4 here.
-  responseOptions: [
-    { value: 0, label: "Never (or 0 drinks)" },
-    { value: 1, label: "1 (monthly or less / 1-2 drinks)" },
-    { value: 2, label: "2 (2-4 times a month / 3-4 drinks)" },
-    { value: 3, label: "3 (2-3 times a week / 5-6 drinks)" },
-    { value: 4, label: "4 (4+ times a week / 7+ drinks)" },
-  ],
+  // Shared fallback = Q1's frequency set; every item overrides it above.
+  responseOptions: AUDIT_C_Q1_FREQUENCY,
   score(responses) {
     if (responses.length < 3) return null;
     let total = 0;

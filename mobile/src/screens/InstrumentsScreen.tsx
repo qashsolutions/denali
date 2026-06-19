@@ -49,12 +49,19 @@ import { Crisis988Modal } from "@/onboarding/Crisis988Modal";
 import { assembleNextResponses, LikertInput } from "@/onboarding/inputs";
 import {
   ADAM,
+  ADAM_LEAD_IN,
   AUDIT_C,
+  AUDIT_C_LEAD_IN,
   EPWORTH,
+  EPWORTH_LEAD_IN,
   GAD7,
+  GAD7_LEAD_IN,
   IPSS,
+  IPSS_LEAD_IN,
   type InstrumentDefinition,
+  type InstrumentId,
   MRS,
+  MRS_LEAD_IN,
   PHQ2,
   PHQ9,
   PHQ9_ITEM_9_INDEX,
@@ -72,6 +79,22 @@ import {
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Instruments">;
 type InstrumentsRoute = RouteProp<RootStackParamList, "Instruments">;
+
+/**
+ * Lead-in stem per menu instrument — the framing sentence each validated
+ * screener was written with (e.g. Epworth's chance-of-dozing framing, AUDIT-C's
+ * "during the past year"). Rendered on the FIRST item of the instrument as
+ * helperText; these constants were previously exported but never rendered
+ * (dead framing). PHQ-2/PHQ-9 frame via the mood path's own helperText.
+ */
+const MENU_LEAD_IN: Partial<Record<InstrumentId, string>> = {
+  "GAD-7": GAD7_LEAD_IN,
+  "AUDIT-C": AUDIT_C_LEAD_IN,
+  Epworth: EPWORTH_LEAD_IN,
+  MRS: MRS_LEAD_IN,
+  ADAM: ADAM_LEAD_IN,
+  IPSS: IPSS_LEAD_IN,
+};
 
 // ─── Section identification ──────────────────────────────────────────────
 // MenuKey lives in ./instrumentsFocus (pure helper module) so the
@@ -788,6 +811,9 @@ export function InstrumentsScreen(): React.ReactElement {
             totalSteps={instrument.items.length}
             sectionLabel={menuItem.title}
             question={item.text}
+            helperText={
+              menuStepIdx === 0 ? MENU_LEAD_IN[instrument.id] : undefined
+            }
             autoAdvance
             onBack={
               menuStepIdx === 0
@@ -806,10 +832,12 @@ export function InstrumentsScreen(): React.ReactElement {
             errorMessage={errorMsg}
           >
             <LikertInput
-              options={instrument.responseOptions.map((opt) => ({
-                ...opt,
-                testID: `instruments_${activeMenuKey}_item${menuStepIdx + 1}_option_${opt.value}`,
-              }))}
+              options={(item.responseOptions ?? instrument.responseOptions).map(
+                (opt) => ({
+                  ...opt,
+                  testID: `instruments_${activeMenuKey}_item${menuStepIdx + 1}_option_${opt.value}`,
+                }),
+              )}
               value={responses[menuStepIdx] ?? null}
               onChange={(v) => onMenuSelectResponse(activeMenuKey, instrument, v)}
               accessibilityLabel={`Question ${menuStepIdx + 1}`}

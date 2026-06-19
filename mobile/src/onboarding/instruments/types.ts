@@ -35,6 +35,14 @@ export interface InstrumentItem {
   text: string;
   /** Stable per-item code used for the per-item observation. */
   itemCode: string;
+  /**
+   * Per-item response options that OVERRIDE the instrument's shared
+   * `responseOptions` for this item — for validated screeners whose VERBATIM
+   * option labels differ per item while the 0..N scoring is identical (e.g.
+   * AUDIT-C: frequency labels on Q1/Q3, quantity labels on Q2). Falls back to
+   * the shared set when absent.
+   */
+  responseOptions?: ReadonlyArray<ResponseOption>;
 }
 
 export interface ResponseOption {
