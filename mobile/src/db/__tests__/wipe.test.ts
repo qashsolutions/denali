@@ -20,12 +20,16 @@ const h = vi.hoisted(() => {
     failTableDeleteContaining: null as string | null,
     failVacuum: false,
     failSecureDelete: false,
+    failCheckpoint: false,
     openThrows: false,
   };
   const execAsync = vi.fn(async (sql: string) => {
     execCalls.push(sql);
     if (state.failSecureDelete && /secure_delete/i.test(sql)) {
       throw new Error("secure_delete failed");
+    }
+    if (state.failCheckpoint && /wal_checkpoint/i.test(sql)) {
+      throw new Error("checkpoint failed");
     }
     if (state.failVacuum && /VACUUM/i.test(sql)) {
       throw new Error("vacuum failed");
@@ -80,11 +84,12 @@ beforeEach(() => {
   h.state.failTableDeleteContaining = null;
   h.state.failVacuum = false;
   h.state.failSecureDelete = false;
+  h.state.failCheckpoint = false;
   h.state.openThrows = false;
 });
 
 describe("wipeAllLocalData — happy path", () => {
-  it("enables secure_delete, deletes every table (quoted), then VACUUMs", async () => {
+  it("enables secure_delete, deletes every table (quoted), VACUUMs, truncates WAL", async () => {
     await wipeAllLocalData();
 
     expect(h.openLocalDb).toHaveBeenCalledTimes(1);
@@ -96,15 +101,20 @@ describe("wipeAllLocalData — happy path", () => {
     expect(h.execCalls).toContain('DELETE FROM "profile"');
     // VACUUM issued.
     expect(idx(/^VACUUM$/i)).toBeGreaterThanOrEqual(0);
+    // WAL truncated so pre-wipe encrypted frames leave disk (not just the
+    // logical rows). This is the load-bearing step a small-DB wipe needs.
+    expect(h.execCalls).toContain("PRAGMA wal_checkpoint(TRUNCATE)");
   });
 
-  it("orders secure_delete BEFORE deletes BEFORE vacuum", async () => {
+  it("orders secure_delete BEFORE deletes BEFORE vacuum BEFORE wal truncate", async () => {
     await wipeAllLocalData();
     const secure = idx(/secure_delete/i);
     const firstDelete = idx(/^DELETE FROM/i);
     const vacuum = idx(/^VACUUM$/i);
+    const checkpoint = idx(/wal_checkpoint\(TRUNCATE\)/i);
     expect(secure).toBeLessThan(firstDelete);
     expect(firstDelete).toBeLessThan(vacuum);
+    expect(vacuum).toBeLessThan(checkpoint);
   });
 
   it("enumerates user tables excluding sqlite_% and schema_migrations", async () => {
@@ -160,6 +170,13 @@ describe("wipeAllLocalData — best-effort resilience (never rejects)", () => {
     await expect(wipeAllLocalData()).resolves.toBeUndefined();
     // Deletes still attempted after the pragma failure.
     expect(h.execCalls).toContain('DELETE FROM "observations"');
+    expect(h.clearTokens).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reject when the WAL checkpoint fails", async () => {
+    h.state.failCheckpoint = true;
+    await expect(wipeAllLocalData()).resolves.toBeUndefined();
+    expect(h.clearAllReportBlobs).toHaveBeenCalledTimes(1);
     expect(h.clearTokens).toHaveBeenCalledTimes(1);
   });
 });

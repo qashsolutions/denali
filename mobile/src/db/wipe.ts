@@ -28,10 +28,10 @@ export async function wipeAllLocalData(): Promise<void> {
   // would be worse than a degraded best-effort wipe of encrypted-at-rest data.
   try {
     const db = await openLocalDb();
-    // secure_delete zeroes freed pages in-place, so deleted PHI leaves no
-    // recoverable ciphertext in the SQLite free-list / WAL; VACUUM then
-    // compacts the file and resets the WAL. Both are scoped to this wipe
-    // connection, never the global open path (secure_delete has a write cost).
+    // secure_delete zeroes freed pages in-place so deleted PHI leaves no
+    // recoverable ciphertext in the SQLite free-list. It must be ON BEFORE the
+    // DELETEs so their freed pages are zeroed (it has a write cost, so it is
+    // scoped to this wipe connection, never the global open path).
     try {
       await db.execAsync("PRAGMA secure_delete = ON");
     } catch {
@@ -52,9 +52,23 @@ export async function wipeAllLocalData(): Promise<void> {
       }
     }
     try {
+      // VACUUM rebuilds a compact DB with no free pages holding old content.
       await db.execAsync("VACUUM");
     } catch {
       // Compaction is best-effort; rows are already zeroed by secure_delete.
+    }
+    try {
+      // CRITICAL for a privacy wipe: in WAL mode every write above (DELETEs +
+      // VACUUM's full rebuild) lands in the -wal file, NOT the main DB, and
+      // SQLite only auto-checkpoints once the WAL crosses ~1000 pages — a small
+      // DB may never reach that, so the pre-wipe encrypted frames would sit on
+      // disk indefinitely (and the DB key is retained by design). TRUNCATE
+      // flushes the WAL into the main DB and shrinks the -wal file to zero,
+      // physically removing those frames. Verified on-device: without this the
+      // -wal stayed ~1.3MB after a full account delete + app restart.
+      await db.execAsync("PRAGMA wal_checkpoint(TRUNCATE)");
+    } catch {
+      // Best-effort.
     }
   } catch {
     // DB open / enumerate failed — still clear blobs + tokens below.
