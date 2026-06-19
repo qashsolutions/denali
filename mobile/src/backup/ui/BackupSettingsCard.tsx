@@ -283,7 +283,7 @@ function makeStyles(
       ...fontStyle("body", 600, fontsLoaded),
     },
     primaryBtn: {
-      backgroundColor: redesign.teal,
+      backgroundColor: redesign.tealDeep,
       borderRadius: theme.radii.lg,
       paddingVertical: theme.spacing.md,
       alignItems: "center",

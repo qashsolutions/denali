@@ -183,7 +183,7 @@ export function ChatScreen(): React.ReactElement {
         // card with a hairline (so it reads on paper), ink text.
         bubbleUser: {
           alignSelf: "flex-end",
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           borderRadius: redesign.rChip + 4,
           padding: theme.spacing.md,
           maxWidth: "85%",
@@ -242,7 +242,7 @@ export function ChatScreen(): React.ReactElement {
           ...fontStyle("body", 400, fontsLoaded),
         },
         sendBtn: {
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           borderRadius: theme.radii.lg,
           paddingHorizontal: theme.spacing.md,
           minHeight: 48,

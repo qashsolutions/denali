@@ -248,7 +248,7 @@ export function UploadReviewScreen(): React.ReactElement {
           backgroundColor: redesign.paper,
         },
         toggleActive: {
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           borderColor: redesign.teal,
         },
         toggleText: {
@@ -261,7 +261,7 @@ export function UploadReviewScreen(): React.ReactElement {
         },
         // Mockup .cta + .cta.ghost.
         button: {
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           borderRadius: theme.radii.xl - 2,
           paddingVertical: theme.spacing.md - 1,
           minHeight: 48,

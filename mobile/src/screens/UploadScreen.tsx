@@ -180,7 +180,7 @@ export function UploadScreen(): React.ReactElement {
         },
         // Mockup .cta: teal primary; .cta.ghost: surface + teal border.
         button: {
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           borderRadius: theme.radii.xl - 2,
           paddingVertical: theme.spacing.md - 1,
           minHeight: 48,

@@ -441,7 +441,7 @@ export function DomainDetailScreen(): React.ReactElement {
           // when the empty-state (styles.center) shrinks the pill to content.
           paddingHorizontal: theme.spacing.lg,
           borderRadius: theme.radii.xl - 2,
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           alignItems: "center",
           justifyContent: "center",
           minHeight: 48,

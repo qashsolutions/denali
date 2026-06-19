@@ -132,7 +132,7 @@ export function OneItemScreen({
         },
         progressFill: {
           height: 4,
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           borderRadius: theme.radii.sm,
         },
         progressLabel: {
@@ -222,7 +222,7 @@ export function OneItemScreen({
           paddingHorizontal: theme.spacing.lg,
           paddingVertical: theme.spacing.md,
           borderRadius: theme.radii.xl - 2,
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           justifyContent: "center",
           alignItems: "center",
         },

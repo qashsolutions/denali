@@ -105,8 +105,10 @@ export const redesign = {
   ink: "#142433",
   /** Secondary text. */
   ink2: "#566472",
-  /** Tertiary / captions / disclaimer. */
-  ink3: "#93A1AC",
+  /** Tertiary / captions / disclaimer — darkened to clear WCAG AA (4.5:1) on
+   *  `paper` (was #93A1AC = 2.46:1), since the clinical disclaimer + ‡ footnote
+   *  render in this color at 12px. */
+  ink3: "#60707B",
   /** Hairlines. */
   line: "#E4EBF0",
   /** Softer hairline / neutral tertiary fill. */
@@ -119,8 +121,9 @@ export const redesign = {
   tealWash: "#E4F1F0",
   /** Calm secondary data line (e.g. diastolic). */
   blue: "#4E8FA6",
-  /** Reserved attention (calm). */
-  amber: "#B0791F",
+  /** Reserved attention (calm) — darkened to clear WCAG AA on `amberWash`
+   *  (watch-pill text was #B0791F = 3.20:1). */
+  amber: "#8F5F10",
   /** Calm reference band / watch-pill background. */
   amberWash: "#F6ECD7",
   /** Calm "typical range" band. */
@@ -130,7 +133,7 @@ export const redesign = {
    * defines no alarm state). Carried over from the pre-redesign palette.
    * Consumers: severe screener bands and crisis-path UI ONLY.
    */
-  alarm: "#C44536",
+  alarm: "#B53A2C",
   /**
    * Light alarm wash — companion to `alarm`, built to the same
    * construction as the other *-wash tokens (pale tint of the base hue

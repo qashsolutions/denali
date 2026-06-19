@@ -119,7 +119,7 @@ export function Crisis988Modal({
           backgroundColor: redesign.alarm,
         },
         textButton: {
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
         },
         // Acknowledge = neutral ghost.
         ackButton: {

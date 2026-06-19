@@ -654,7 +654,7 @@ export function InstrumentsScreen(): React.ReactElement {
         },
         // Mockup .cta: teal primary, white label.
         primaryAction: {
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           paddingVertical: theme.spacing.md,
           paddingHorizontal: theme.spacing.lg,
           borderRadius: theme.radii.xl - 2,

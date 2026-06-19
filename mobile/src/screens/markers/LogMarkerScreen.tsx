@@ -698,7 +698,7 @@ function makeStyles(
     },
     saveBtn: {
       marginTop: theme.spacing.sm,
-      backgroundColor: redesign.teal,
+      backgroundColor: redesign.tealDeep,
       borderRadius: theme.radii.xl - 2,
       minHeight: 50,
       alignItems: "center",

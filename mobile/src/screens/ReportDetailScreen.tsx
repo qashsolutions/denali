@@ -160,7 +160,7 @@ export function ReportDetailScreen(): React.ReactElement {
           backgroundColor: redesign.surface,
         },
         editBtnPrimary: {
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           borderColor: redesign.teal,
         },
         editBtnText: {
