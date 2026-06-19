@@ -40,6 +40,22 @@ export interface InstrumentItem {
 export interface ResponseOption {
   value: number;
   label: string;
+  /**
+   * Optional short italic hint shown under the label to calibrate a
+   * self-rating scale (e.g. what "Mild" vs "Severe" means). This is
+   * Denali-authored CALIBRATION copy — NOT part of a verbatim validated
+   * instrument — so it must only describe perceived intensity, never a
+   * diagnosis or recommendation, and its wording is clinical-review gated.
+   */
+  helperText?: string;
+  /**
+   * Governance flag for `helperText`: `true` while the calibration copy is
+   * pending a named clinical reviewer's sign-off; `false` once cleared.
+   * REQUIRED whenever `helperText` is set — enforced by
+   * `instruments/__tests__/helperTextGovernance.test.ts` so no un-reviewed
+   * calibration copy ships silently (mirrors InterpretationBand.provisional).
+   */
+  helperTextProvisional?: boolean;
 }
 
 export interface InstrumentDefinition {

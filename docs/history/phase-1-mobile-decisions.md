@@ -769,6 +769,31 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D40 — MRS severity-scale calibration anchors (operator-accepted deviation, 2026-06-19)
+
+**Decision:** Add a short italic CALIBRATION hint under each MRS severity option so a user knows which level to self-rate (the bare labels "Mild"/"Moderate"/… don't say *mild what?*). The 0-4 anchors:
+
+| Level | Anchor |
+|---|---|
+| None | *not present at all* |
+| Mild | *slight, easy to ignore* |
+| Moderate | *noticeable, sometimes bothersome* |
+| Severe | *strong, frequently bothersome* |
+| Very severe | *intense, very distressing* |
+
+**This is a DELIBERATE deviation from the verbatim validated instrument.** The published MRS (Heinemann 2003) has NO per-level anchors — respondents self-rate against the bare labels, and the score-band cutoffs Denali uses (`MRS_BANDS`, `tableV1.ts`) were derived from data gathered *without* anchors. Denali-authored anchors can shift how a user self-rates, so **pre-clinical-review MRS scores collected with these anchors may not be comparable to published norms.** The clinical-boundary review (2026-06-18) returned this as a BLOCKER pending a named operator decision; the operator (Venkata) **accepted the deviation** in favor of the usability gain. This entry IS that recorded decision.
+
+**Why accepted:** the anchors are pure perceived-INTENSITY descriptors — no diagnosis, no condition name, no recommendation (clinical-boundary review confirmed the wording is clean) — and the calibration value to a 45+ self-rater outweighs the norm-comparability cost while the score bands remain provisional (‡) anyway.
+
+**Guardrails / follow-ups:**
+- Marked `helperTextProvisional: true` on every anchor; a governance test (`instruments/__tests__/helperTextGovernance.test.ts`) fails if any `helperText` ships without an explicit provisional flag, mirroring `InterpretationBand.provisional`.
+- Pending a NAMED clinician to clear the wording (then flip to `helperTextProvisional: false`). The reviewer specifically flagged "very distressing" (level 4) for scope, since MRS items 4 (depressive mood) and 6 (anxiety) carry more loaded affect than the somatic items.
+- Scope is MRS only — the other instruments (PHQ-9/GAD-7/Epworth/AUDIT-C) use self-explanatory frequency/quantity labels and carry no anchors.
+
+**Encoded in code:** `src/onboarding/instruments/mrs.ts` (anchors), `src/onboarding/instruments/types.ts` (`ResponseOption.helperText` + `helperTextProvisional`), `src/onboarding/inputs/LikertInput.tsx` (italic helper render), `src/onboarding/instruments/__tests__/helperTextGovernance.test.ts`. On-device verified (Maestro hierarchy + screenshot, female cohort, MRS item 7).
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

@@ -85,6 +85,7 @@ export function LikertInput({
           fontSize: theme.typography.sizes.sm,
           color: redesign.ink2,
           ...fontStyle("body", 400, fontsLoaded),
+          fontStyle: "italic", // calibration hint reads as a soft italic aside
         },
       }),
     [theme, redesign, fontsLoaded],
