@@ -29,6 +29,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import type { StyleProp, TextStyle } from "react-native";
 
 import { useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
@@ -52,6 +53,23 @@ export function signInSubtitle(step: Step): string {
     : "Enter the 6-digit code we just emailed you. It expires in 10 minutes.";
 }
 
+/** One status line — an error takes precedence over an info confirmation. */
+function StatusMessage({
+  error,
+  info,
+  errorStyle,
+  infoStyle,
+}: {
+  error: string | null;
+  info: string | null;
+  errorStyle: StyleProp<TextStyle>;
+  infoStyle: StyleProp<TextStyle>;
+}): React.ReactElement | null {
+  if (error) return <Text style={errorStyle}>{error}</Text>;
+  if (info) return <Text style={infoStyle}>{info}</Text>;
+  return null;
+}
+
 export function SignInScreen(): React.ReactElement {
   const api = useApiClient();
   const navigation = useNavigation<Nav>();
@@ -62,6 +80,7 @@ export function SignInScreen(): React.ReactElement {
   const [otp, setOtp] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const [infoMsg, setInfoMsg] = React.useState<string | null>(null);
 
   const styles = React.useMemo(
     () =>
@@ -133,6 +152,12 @@ export function SignInScreen(): React.ReactElement {
           fontSize: theme.typography.sizes.sm,
           marginBottom: theme.spacing.sm,
         },
+        info: {
+          color: active.textSecondary,
+          fontFamily: theme.typography.fonts.sans,
+          fontSize: theme.typography.sizes.sm,
+          marginBottom: theme.spacing.sm,
+        },
       }),
     [active, theme],
   );
@@ -143,6 +168,7 @@ export function SignInScreen(): React.ReactElement {
 
   const onSendOtp = React.useCallback(async () => {
     setErrorMsg(null);
+    setInfoMsg(null);
     if (!emailValid) {
       setErrorMsg("Enter a valid email address.");
       return;
@@ -162,6 +188,7 @@ export function SignInScreen(): React.ReactElement {
 
   const onVerifyOtp = React.useCallback(async () => {
     setErrorMsg(null);
+    setInfoMsg(null);
     if (!otpValid) {
       setErrorMsg("Enter the 6-digit code from your email.");
       return;
@@ -185,6 +212,24 @@ export function SignInScreen(): React.ReactElement {
     }
   }, [api, navigation, otp, otpValid, trimmedEmail]);
 
+  // Re-send a code to the SAME email without leaving the OTP step — covers the
+  // 10-minute expiry, where the only prior recourse was "Use a different email"
+  // + retyping. Clears any stale code and confirms via infoMsg.
+  const onResend = React.useCallback(async () => {
+    setErrorMsg(null);
+    setInfoMsg(null);
+    setOtp("");
+    setSubmitting(true);
+    try {
+      await api.sendOtp(trimmedEmail);
+      setInfoMsg("New code sent — check your email.");
+    } catch {
+      setErrorMsg("Couldn't resend your code. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [api, trimmedEmail]);
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -194,7 +239,12 @@ export function SignInScreen(): React.ReactElement {
         <Text style={styles.title}>Sign in to Denali</Text>
         <Text style={styles.subtitle}>{signInSubtitle(step)}</Text>
 
-        {errorMsg && <Text style={styles.error}>{errorMsg}</Text>}
+        <StatusMessage
+          error={errorMsg}
+          info={infoMsg}
+          errorStyle={styles.error}
+          infoStyle={styles.info}
+        />
 
         {step === "email" ? (
           <>
@@ -275,14 +325,25 @@ export function SignInScreen(): React.ReactElement {
               )}
             </PressableScale>
             <Pressable
+              testID="signin_resend_code_button"
+              accessibilityRole="button"
+              accessibilityLabel="Resend code"
+              disabled={submitting}
+              onPress={onResend}
+            >
+              <Text style={styles.link}>Resend code</Text>
+            </Pressable>
+            <Pressable
               testID="signin_use_different_email_button"
               accessibilityRole="button"
               accessibilityLabel="Use a different email"
               disabled={submitting}
               onPress={() => {
                 setOtp("");
+                setEmail("");
                 setStep("email");
                 setErrorMsg(null);
+                setInfoMsg(null);
               }}
             >
               <Text style={styles.link}>Use a different email</Text>
