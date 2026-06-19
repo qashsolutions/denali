@@ -16,6 +16,8 @@
  * dashboard bands. Kept RN-free for vitest.
  */
 
+import type { ObservationRow } from "@/contracts";
+
 import type { ExtractedObservation } from "./types";
 
 export type ReportFlag = "normal" | "low" | "high" | "critical";
@@ -46,6 +48,26 @@ export function ragForObservation(obs: ExtractedObservation): RagResult | null {
       return { tint: "alarm", label: "Flagged critical" };
     default:
       return null;
+  }
+}
+
+/**
+ * Recover the report's OWN flag for a SAVED observation row from its audit
+ * metadata (`metadata_json.unedited` — the unedited ExtractedObservation kept
+ * at save time). Returns null when there is no metadata or no stated flag, so
+ * the caller shows value-only (no claim). Same sourced-flag rule as
+ * {@link ragForObservation}; this is the row-shaped entry point shared by the
+ * report detail screen and the dashboard marker preview.
+ */
+export function ragForRow(row: ObservationRow): RagResult | null {
+  if (!row.metadata_json) return null;
+  try {
+    const meta = JSON.parse(row.metadata_json) as {
+      unedited?: ExtractedObservation;
+    };
+    return meta.unedited ? ragForObservation(meta.unedited) : null;
+  } catch {
+    return null;
   }
 }
 

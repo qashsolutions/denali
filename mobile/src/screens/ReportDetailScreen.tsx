@@ -31,8 +31,7 @@ import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
-import { ragForObservation } from "../upload/reportInterpretation";
-import type { ExtractedObservation } from "../upload/types";
+import { ragForRow } from "../upload/reportInterpretation";
 import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
 import { tintByClass } from "./timeline/pill";
 
@@ -49,19 +48,6 @@ function formatDate(iso: string): string {
     month: "short",
     day: "numeric",
   });
-}
-
-/** Recover the report's own flag for a saved row from its audit metadata. */
-function ragForRow(obs: ObservationRow): ReturnType<typeof ragForObservation> {
-  if (!obs.metadata_json) return null;
-  try {
-    const meta = JSON.parse(obs.metadata_json) as {
-      unedited?: ExtractedObservation;
-    };
-    return meta.unedited ? ragForObservation(meta.unedited) : null;
-  } catch {
-    return null;
-  }
 }
 
 export function ReportDetailScreen(): React.ReactElement {
