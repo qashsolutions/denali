@@ -34,6 +34,10 @@ const ALL_INSTRUMENTS: ReadonlyArray<InstrumentDefinition> = [
   PHQ9,
 ];
 
+function hasNamedReviewer(reviewedBy: string | null | undefined): boolean {
+  return typeof reviewedBy === "string" && reviewedBy.trim().length > 0;
+}
+
 describe("helperText governance", () => {
   it("every option with helperText declares helperTextProvisional", () => {
     const offenders: string[] = [];
@@ -50,11 +54,33 @@ describe("helperText governance", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("the MRS severity anchors are present and marked provisional", () => {
+  it("a CLEARED helperText (provisional false) names its clinical reviewer", () => {
+    // The ‡ can only be cleared with a named clinician on record — CC never
+    // clears it, and a false flag without a reviewer is a silent self-clear.
+    const offenders: string[] = [];
+    for (const inst of ALL_INSTRUMENTS) {
+      for (const opt of inst.responseOptions) {
+        if (
+          opt.helperText != null &&
+          opt.helperTextProvisional === false &&
+          !hasNamedReviewer(opt.helperTextReviewedBy)
+        ) {
+          offenders.push(`${inst.id}:${opt.value} ("${opt.helperText}")`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("the MRS severity anchors are present, provisional, and unreviewed", () => {
     const withHints = MRS.responseOptions.filter((o) => o.helperText != null);
     // All 5 levels carry a calibration hint (D40).
     expect(withHints).toHaveLength(5);
-    // Every one is provisional until a named clinician clears the wording.
+    // Every one is provisional + has no named reviewer yet — the ‡ stands
+    // until a credentialed clinician signs off (helperTextReviewedBy).
     expect(withHints.every((o) => o.helperTextProvisional === true)).toBe(true);
+    expect(withHints.every((o) => !hasNamedReviewer(o.helperTextReviewedBy))).toBe(
+      true,
+    );
   });
 });

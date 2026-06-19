@@ -787,7 +787,8 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 **Guardrails / follow-ups:**
 - Marked `helperTextProvisional: true` on every anchor; a governance test (`instruments/__tests__/helperTextGovernance.test.ts`) fails if any `helperText` ships without an explicit provisional flag, mirroring `InterpretationBand.provisional`.
-- Pending a NAMED clinician to clear the wording (then flip to `helperTextProvisional: false`). The reviewer specifically flagged "very distressing" (level 4) for scope, since MRS items 4 (depressive mood) and 6 (anxiety) carry more loaded affect than the somatic items.
+- **Clinician-gated clearance (prod sign-off mechanism).** `ResponseOption.helperTextReviewedBy: string | null` mirrors `tableV1`'s `lastClinicallyReviewedBy`. The governance test forbids `helperTextProvisional: false` while `helperTextReviewedBy` is empty — so the ‡ can ONLY clear with a named clinician on record; **CC never clears it.** To clear: a credentialed clinician reviews the wording, then someone sets `helperTextReviewedBy` to that attestation (e.g. `"J. Smith, MD — 2026-06-20"`) AND flips `helperTextProvisional: false` per anchor. Currently `helperTextReviewedBy` is unset on all five (unreviewed).
+- The reviewer specifically flagged "very distressing" (level 4) for that clinical review's scope, since MRS items 4 (depressive mood) and 6 (anxiety) carry more loaded affect than the somatic items.
 - Scope is MRS only — the other instruments (PHQ-9/GAD-7/Epworth/AUDIT-C) use self-explanatory frequency/quantity labels and carry no anchors.
 
 **Encoded in code:** `src/onboarding/instruments/mrs.ts` (anchors), `src/onboarding/instruments/types.ts` (`ResponseOption.helperText` + `helperTextProvisional`), `src/onboarding/inputs/LikertInput.tsx` (italic helper render), `src/onboarding/instruments/__tests__/helperTextGovernance.test.ts`. On-device verified (Maestro hierarchy + screenshot, female cohort, MRS item 7).

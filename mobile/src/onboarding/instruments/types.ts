@@ -56,6 +56,17 @@ export interface ResponseOption {
    * calibration copy ships silently (mirrors InterpretationBand.provisional).
    */
   helperTextProvisional?: boolean;
+  /**
+   * Named clinical reviewer who signed off on `helperText` (e.g.
+   * "J. Smith, MD — 2026-06-20"), or null/absent while unreviewed. CC NEVER
+   * sets this — it records a human attestation only. The governance test
+   * forbids flipping `helperTextProvisional` to `false` while this is empty,
+   * so the ‡ can only clear with a named reviewer on record (mirrors
+   * `tableV1`'s `lastClinicallyReviewedBy`). To clear: a credentialed clinician
+   * reviews the wording, then set this to their attestation AND
+   * `helperTextProvisional: false`.
+   */
+  helperTextReviewedBy?: string | null;
 }
 
 export interface InstrumentDefinition {
