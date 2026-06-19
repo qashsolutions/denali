@@ -1,0 +1,69 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Flow — Sign-in resend / cooldown / use-a-different-email
+#
+#   SignIn email step → Send code → OTP step → assert the expiry subtitle,
+#   the "Resend code" affordance, and the active resend cooldown countdown
+#   → "Use a different email" → back on the email step with an EMPTY field.
+#
+# GATE — needs an E2E test-OTP backend running NODE_ENV != production.
+# Same backend requirement as signin_onboarding.yaml: the bypass works ONLY
+# in a NODE_ENV != production backend (local `next dev` or CI) — NOT the
+# deployed staging service. This flow does NOT verify the OTP; it only
+# drives the email → Send code → OTP-step UI to exercise the resend-cooldown
+# and use-a-different-email affordances. Point the mobile build's
+# API_BASE_URL at the local/CI test-OTP backend before running.
+#
+# TIME-SENSITIVE — the resend cooldown is a ~30s countdown that starts the
+# instant "Send code" returns. The countdown assertion (the
+# ".*Resend code in [0-9]+s.*" regex) MUST run immediately after Send code,
+# before the window elapses and the label flips back to a tappable
+# "Resend code". The steps below keep no delays between Send code and the
+# countdown assertion for this reason.
+#
+# Selectors are the testID / accessibilityLabel inventory in
+# ../README.md. No coordinate-based taps.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+# Cold start — clear state so we always begin at the SignIn email step.
+- launchApp:
+    clearState: true
+
+# ── SignIn email step — enter an email and send the code ────────────────
+- assertVisible:
+    id: "signin_email_input"
+- tapOn:
+    id: "signin_email_input"
+- inputText: "e2e@denali.health"
+- tapOn:
+    id: "signin_send_code_button"
+
+# ── OTP step — assert the expiry copy and the resend affordances ────────
+# The (bypassed) send-code call returns and the OTP field appears.
+- assertVisible:
+    id: "signin_otp_input"
+
+# Subtitle states the code lifetime.
+- assertVisible:
+    text: ".*It expires in 10 minutes\\..*"
+
+# The resend control is present.
+- assertVisible:
+    text: "Resend code"
+
+# Cooldown is active — match the live countdown label. This MUST land
+# inside the ~30s window (see TIME-SENSITIVE note in the header), so it
+# runs with no intervening delay after Send code.
+- assertVisible:
+    text: ".*Resend code in [0-9]+s.*"
+
+# ── Use a different email — return to the email step, field cleared ─────
+- tapOn:
+    id: "signin_use_different_email_button"
+
+# Back on the email step: the input is present and EMPTY — the placeholder
+# "you@example.com" is visible again, proving the prior address was cleared.
+- assertVisible:
+    id: "signin_email_input"
+- assertVisible:
+    text: "you@example.com"
