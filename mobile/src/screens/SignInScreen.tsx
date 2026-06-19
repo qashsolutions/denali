@@ -33,6 +33,7 @@ import type { StyleProp, TextStyle } from "react-native";
 
 import { HttpError, useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
+import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
 import { useTheme } from "@/theme/useTheme";
 
@@ -118,6 +119,7 @@ function StatusMessage({
 export function SignInScreen(): React.ReactElement {
   const api = useApiClient();
   const navigation = useNavigation<Nav>();
+  const dal = useDal();
   const { active, theme } = useTheme();
 
   const [step, setStep] = React.useState<Step>("email");
@@ -254,21 +256,28 @@ export function SignInScreen(): React.ReactElement {
     setSubmitting(true);
     try {
       await api.verifyOtp(trimmedEmail, otp);
-      // Wave 2: route through PrivacyNotice first (mobile-onboarding-builder
-      // added the data-locality notice as the pre-cohort acknowledgement
-      // screen — see PrivacyNoticeScreen.tsx). Wave 3 will further refine to
-      // skip the whole interstitial chain when a local profile is already
-      // present via LocalDataDAL.getProfile().
+      // Returning-user short-circuit: if a COMPLETED local profile already
+      // exists (the permanent birth-year + sex fields are written at the
+      // cohort confirm step), the user has onboarded before — skip the whole
+      // interstitial chain and go straight to the app, mirroring RootNavigator's
+      // cold-launch restore. Re-walking PrivacyNotice → the 5-step cohort
+      // (re-confirming fields Settings locks) → Intake → PHQ-2 reads as "the
+      // app forgot me". A fresh user (no profile) still onboards.
+      const profile = dal ? await dal.getProfile() : null;
+      const onboarded =
+        profile != null &&
+        profile.birth_year != null &&
+        profile.sex_at_birth != null;
       navigation.reset({
         index: 0,
-        routes: [{ name: "PrivacyNotice" }],
+        routes: [{ name: onboarded ? "MainTabs" : "PrivacyNotice" }],
       });
     } catch {
       setErrorMsg("That code didn't work. Please try again.");
     } finally {
       setSubmitting(false);
     }
-  }, [api, navigation, otp, otpValid, trimmedEmail]);
+  }, [api, dal, navigation, otp, otpValid, trimmedEmail]);
 
   // Re-send a code to the SAME email without leaving the OTP step — covers the
   // 10-minute expiry, where the only prior recourse was "Use a different email"
