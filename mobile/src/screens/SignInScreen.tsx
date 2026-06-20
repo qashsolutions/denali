@@ -35,6 +35,7 @@ import { HttpError, useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
 import { isOnboardingComplete } from "@/auth/onboardingGate";
 import { useDal } from "@/db/DalProvider";
+import { PHQ2 } from "@/onboarding/instruments";
 import type { RootStackParamList } from "@/navigation/types";
 import { useTheme } from "@/theme/useTheme";
 
@@ -263,12 +264,20 @@ export function SignInScreen(): React.ReactElement {
       // are written before the mood screener, so gating on them would skip it
       // and its 988 path for a user who abandoned after cohort). A fresh or
       // partially-onboarded user re-onboards (the safe direction).
-      const profile = dal ? await dal.getProfile() : null;
-      const hasMood = dal
-        ? (await dal.listObservations({ category: "questionnaire", limit: 1 }))
-            .length > 0
-        : false;
-      const onboarded = isOnboardingComplete(profile, hasMood);
+      //
+      // Both reads are scoped to the just-signed-in user (NAV-2): the per-device
+      // DB can hold another account's rows, so getProfile()'s most-recent row is
+      // checked for ownership in the gate, and the mood signal uses the
+      // user-scoped getLatestObservation(userId, PHQ-2 panel) — the PHQ-2 summary
+      // is always written when the mandatory mood screener completes.
+      const userId = api.getCurrentUser()?.userId ?? null;
+      const profile = dal && userId ? await dal.getProfile() : null;
+      const hasMood =
+        dal && userId
+          ? (await dal.getLatestObservation(userId, PHQ2.loincCode)) != null
+          : false;
+      const onboarded =
+        userId != null && isOnboardingComplete(profile, hasMood, userId);
       navigation.reset({
         index: 0,
         routes: [{ name: onboarded ? "MainTabs" : "PrivacyNotice" }],

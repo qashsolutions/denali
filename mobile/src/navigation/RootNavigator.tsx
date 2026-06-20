@@ -16,7 +16,9 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 
 import { runBiometricGate, useApiClient } from "@/auth";
+import { isOnboardingComplete } from "@/auth/onboardingGate";
 import { useDalState } from "@/db/DalProvider";
+import { PHQ2 } from "@/onboarding/instruments";
 import { PrivacyNoticeScreen } from "@/onboarding/PrivacyNoticeScreen";
 import { CohortOnboardingScreen } from "@/screens/CohortOnboardingScreen";
 import { DomainDetailScreen } from "@/screens/DomainDetailScreen";
@@ -77,8 +79,22 @@ export function RootNavigator() {
                 setPhase("locked");
                 return;
               }
-              // passed | unavailable → enter the app.
-              setInitialRoute("MainTabs");
+              // passed | unavailable → enter the app ONLY if onboarding is
+              // complete. A user who signed in (session) and completed cohort
+              // but killed the app before the MANDATORY mood screener has a
+              // restorable session + a profile — gating cold-launch on profile
+              // existence alone would skip that screener and its 988 path
+              // (NAV-1). Re-check the cohort fields AND a user-scoped mood signal
+              // (PHQ-2 panel — always written when the screener completes); fall
+              // back to the onboarding chain when incomplete (the safe direction).
+              const hasMood =
+                (await dal.getLatestObservation(profile.id, PHQ2.loincCode)) !=
+                null;
+              setInitialRoute(
+                isOnboardingComplete(profile, hasMood, profile.id)
+                  ? "MainTabs"
+                  : "PrivacyNotice",
+              );
             }
           }
         }
