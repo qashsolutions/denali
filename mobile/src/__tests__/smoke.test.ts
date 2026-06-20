@@ -184,6 +184,10 @@ function makeInMemoryDal(): LocalDataDAL & {
       const r = reports.find((x) => x.id === id);
       if (r) r.original_filename = name;
     },
+    async deleteReport(id) {
+      const i = reports.findIndex((x) => x.id === id);
+      if (i >= 0) reports.splice(i, 1);
+    },
 
     async getProfile() {
       return profile;

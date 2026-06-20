@@ -25,6 +25,8 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+import { MIGRATIONS } from "../migrations";
+
 // ──────────────────────────────────────────────────────────────────────
 // Module mocks
 //
@@ -141,14 +143,14 @@ describe("openLocalDb — concurrency + cache-on-rejection", () => {
     expect(sqliteState.openCalls).toBe(1);
 
     // The migration runner ran exactly once. Detect by counting INSERTs
-    // into schema_migrations — runner does one runAsync per pending
-    // migration (here: 1 migration → 1 INSERT). If both runners executed,
-    // we'd see 2 INSERTs (and the second would have collided in real
-    // SQLite — the failure scenario this test exists to prevent).
+    // into schema_migrations — the runner does one runAsync per pending
+    // migration, so a single run inserts exactly MIGRATIONS.length rows. If
+    // both runners executed (the race this test exists to prevent), we'd see
+    // 2× that many (and the duplicate would have collided in real SQLite).
     const insertCalls = fakeDb.runAsync.mock.calls.filter((args) =>
       String(args[0]).includes("INSERT INTO schema_migrations"),
     );
-    expect(insertCalls.length).toBe(1);
+    expect(insertCalls.length).toBe(MIGRATIONS.length);
 
     // The PRAGMA key statement ran exactly once too (proves the keying
     // step wasn't double-executed either).

@@ -42,6 +42,7 @@ import {
   buildInsertsForReport,
   computeParseStatus,
 } from "../upload/reviewCommit";
+import { removeReport } from "../upload/removeReport";
 import {
   ragForObservation,
   suggestNameFromObservations,
@@ -52,6 +53,7 @@ import type {
   ParseReportResponse,
   ReviewRowState,
 } from "../upload/types";
+import { formatMarkerValue } from "./markers/markerCatalog";
 import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
 import { tintByClass } from "./timeline/pill";
 import { takeParsePayload } from "./UploadScreen";
@@ -109,21 +111,16 @@ export function UploadReviewScreen(): React.ReactElement {
   // Abandon guard. The report row is created at upload time (parse_status
   // "parsing"); confirm/skip move it to a terminal state. If the user LEAVES
   // review without finalizing (e.g. the native back chevron), the row would
-  // linger as a "parsing" ghost in the Upload list with no committed
-  // observations — so on an un-finalized leave, mark it rejected. (No
-  // observations exist yet, so this is safe vs. the append-only invariant.)
-  // Fire-and-forget; navigation is never blocked.
+  // linger as a "parsing" ghost — so on an un-finalized leave, fully REMOVE the
+  // report (row + encrypted blob) via removeReport. The user never chose to keep
+  // this document, and no observations exist yet, so removal is safe vs. the
+  // append-only invariant (UPL-2: this also frees the blob that previously
+  // leaked). Fire-and-forget; navigation is never blocked.
   const finalizedRef = React.useRef(false);
   React.useEffect(() => {
     const unsub = navigation.addListener("beforeRemove", () => {
       if (finalizedRef.current || !dal) return;
-      void dal
-        .updateReportParseStatus(
-          reportId,
-          "rejected",
-          "Left review without saving.",
-        )
-        .catch(() => {});
+      void removeReport(dal, reportId);
     });
     return unsub;
   }, [navigation, dal, reportId]);
@@ -428,12 +425,10 @@ export function UploadReviewScreen(): React.ReactElement {
         setErrorMsg("Storage is still opening. Try again in a moment.");
         return;
       }
-      await dal.updateReportParseStatus(
-        reportId,
-        "rejected",
-        "Skipped on review.",
-      );
+      // Skip = the user does not want this document → remove it entirely
+      // (row + blob), not a hidden 'rejected' tombstone that leaks its blob.
       finalizedRef.current = true;
+      await removeReport(dal, reportId);
       navigation.popToTop();
     } catch (err) {
       setErrorMsg("Couldn't skip — please try again.");
@@ -573,12 +568,18 @@ export function UploadReviewScreen(): React.ReactElement {
         contentContainerStyle={styles.content}
         style={styles.screen}
       >
-        <Text style={styles.savedHeader}>✓ Saved to your record</Text>
+        <Text style={styles.savedHeader}>
+          {saved.length > 0
+            ? "✓ Saved to your record"
+            : "✓ Document saved to your record"}
+        </Text>
         {nameValue.trim().length > 0 && (
           <Text style={styles.rowTitle}>{nameValue.trim()}</Text>
         )}
         <Text style={styles.summary}>
-          {`${saved.length} value${saved.length === 1 ? "" : "s"} added to your health record.`}
+          {saved.length > 0
+            ? `${saved.length} value${saved.length === 1 ? "" : "s"} added to your health record.`
+            : "No values were added — the document is saved on file."}
         </Text>
         {savedSkipped > 0 && (
           <Text style={styles.caveat}>
@@ -594,7 +595,7 @@ export function UploadReviewScreen(): React.ReactElement {
           const ragColors = rag ? tintByClass(redesign, rag.tint) : null;
           const value =
             obs.value_num != null
-              ? String(obs.value_num)
+              ? formatMarkerValue(obs.code, obs.value_num)
               : (obs.value_text ?? "");
           return (
             <View key={i} style={styles.row}>

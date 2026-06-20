@@ -124,3 +124,17 @@ export async function renameReport(
     id,
   ]);
 }
+
+/**
+ * Permanently delete a report ROW (UPL-2). The encrypted on-device blob is the
+ * caller's responsibility (`deleteBlob` via `src/upload/removeReport.ts`).
+ * Deliberately does NOT delete observations linked by `report_id`: committed
+ * values are append-only and survive removal of their source document
+ * (invariant 4). Idempotent — a no-op when the id is already gone.
+ */
+export async function deleteReport(
+  db: SqliteAdapter,
+  id: string,
+): Promise<void> {
+  await db.runAsync(`DELETE FROM reports WHERE id = ?`, [id]);
+}

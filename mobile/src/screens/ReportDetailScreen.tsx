@@ -12,11 +12,12 @@
  * All styling via useTheme() — no hardcoded design values.
  */
 
-import { useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -32,6 +33,7 @@ import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { ragForRow } from "../upload/reportInterpretation";
+import { removeReport } from "../upload/removeReport";
 import { formatMarkerValue } from "./markers/markerCatalog";
 import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
 import { tintByClass } from "./timeline/pill";
@@ -40,6 +42,10 @@ type RouteProps = NativeStackScreenProps<
   RootStackParamList,
   "ReportDetail"
 >["route"];
+type NavProps = NativeStackScreenProps<
+  RootStackParamList,
+  "ReportDetail"
+>["navigation"];
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -53,10 +59,12 @@ function formatDate(iso: string): string {
 
 export function ReportDetailScreen(): React.ReactElement {
   const route = useRoute<RouteProps>();
+  const navigation = useNavigation<NavProps>();
   const dal = useDal();
   const { theme, redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
   const reportId = route.params.reportId;
+  const [deleting, setDeleting] = React.useState<boolean>(false);
 
   const [name, setName] = React.useState<string>("");
   const [subtitle, setSubtitle] = React.useState<string>("");
@@ -87,6 +95,31 @@ export function ReportDetailScreen(): React.ReactElement {
       setRenaming(false);
     }
   }, [dal, draftName, reportId]);
+
+  // UPL-2: remove this document (row + encrypted blob). Native confirm first —
+  // irreversible, and any saved values stay in the record (the document is the
+  // only thing removed). Uses the same removeReport orchestration as the
+  // skip/abandon/failure paths so the blob is never left behind.
+  const onDelete = React.useCallback(() => {
+    if (!dal || deleting) return;
+    Alert.alert(
+      "Delete this document?",
+      "The uploaded document is removed from this device. Any values already saved to your health record are kept.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setDeleting(true);
+            void removeReport(dal, reportId)
+              .then(() => navigation.goBack())
+              .catch(() => setDeleting(false));
+          },
+        },
+      ],
+    );
+  }, [dal, deleting, reportId, navigation]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -233,6 +266,18 @@ export function ReportDetailScreen(): React.ReactElement {
           marginTop: theme.spacing.sm,
           ...fontStyle("body", 400, fontsLoaded),
         },
+        deleteButton: {
+          minHeight: 48,
+          justifyContent: "center",
+          alignItems: "center",
+          marginTop: theme.spacing.lg,
+          paddingHorizontal: theme.spacing.md,
+        },
+        deleteButtonText: {
+          color: redesign.alarmText,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
       }),
     [theme, redesign, fontsLoaded],
   );
@@ -344,6 +389,19 @@ export function ReportDetailScreen(): React.ReactElement {
         Your original file is kept encrypted on this device — nothing is stored
         on our servers.
       </Text>
+
+      <Pressable
+        testID="report_detail_delete"
+        accessibilityRole="button"
+        accessibilityLabel="Delete this document"
+        disabled={deleting || !dal}
+        onPress={onDelete}
+        style={styles.deleteButton}
+      >
+        <Text style={styles.deleteButtonText}>
+          {deleting ? "Deleting…" : "Delete document"}
+        </Text>
+      </Pressable>
     </ScrollView>
   );
 }

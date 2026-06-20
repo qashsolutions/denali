@@ -68,7 +68,19 @@ export type ConditionSource = "claims" | "self_reported" | "ehr" | "uploaded_rep
 // ─── Reports + plan + chat ────────────────────────────────────────────────
 
 export type ReportType = "lab" | "ehr" | "visit";
-export type ReportParseStatus = "pending" | "parsing" | "confirmed" | "partial" | "rejected";
+// "kept" (additive, post-Wave-0 2026-06-20, CU-3): the user pressed Save on the
+// review screen with NO values accepted — a deliberate decision to keep the
+// DOCUMENT on file. Distinct from "rejected" (a no-keep artifact: skip / abandon
+// / unreadable / parse-failure), which is removed entirely rather than retained.
+// A "kept" report is value-bearing in the UX sense (it stays in the list) even
+// though it carries no observations.
+export type ReportParseStatus =
+  | "pending"
+  | "parsing"
+  | "confirmed"
+  | "partial"
+  | "rejected"
+  | "kept";
 
 export type Plan = "trial" | "starter" | "plus" | "unlimited";
 
@@ -252,6 +264,16 @@ export interface LocalDataDAL {
    * (2026-06-17).
    */
   renameReport(id: string, name: string): Promise<void>;
+  /**
+   * Permanently delete a report ROW (UPL-2). Additive, post-Wave-0 (2026-06-20).
+   * The caller is responsible for also removing the encrypted on-device blob via
+   * `deleteBlob(id)` — see `src/upload/removeReport.ts`, the single orchestration
+   * point. Does NOT delete linked observations: committed values are append-only
+   * and independent of the source document, so deleting a confirmed report's
+   * document keeps its readings (invariant 4 intact). Used for every no-keep
+   * terminal state and for an explicit user "delete document".
+   */
+  deleteReport(id: string): Promise<void>;
 
   // Profile
   getProfile(): Promise<ProfileRow | null>;

@@ -65,12 +65,20 @@ export function buildObservationInsert(
  *   all rows accepted   → "confirmed"
  *   some accepted       → "partial"
  *   none accepted (or
- *     zero rows at all) → "rejected"
+ *     zero rows at all) → "kept"
+ *
+ * CU-3: this runs ONLY on the Save path (the review screen's confirm button), so
+ * reaching it always means the user DELIBERATELY chose to save — keeping the
+ * DOCUMENT on file even with no values to commit. That is "kept", NOT "rejected".
+ * "rejected" is reserved for no-keep artifacts (skip / abandon / unreadable /
+ * parse-failure), which are removed entirely (`removeReport`) rather than saved.
+ * Returning "rejected" here made a deliberately-kept document vanish from the
+ * Upload list after a success confirmation.
  */
 export function computeParseStatus(rows: ReviewRowState[]): ReportParseStatus {
-  if (rows.length === 0) return "rejected";
+  if (rows.length === 0) return "kept";
   const acceptedCount = rows.filter((r) => r.accepted).length;
-  if (acceptedCount === 0) return "rejected";
+  if (acceptedCount === 0) return "kept";
   if (acceptedCount === rows.length) return "confirmed";
   return "partial";
 }

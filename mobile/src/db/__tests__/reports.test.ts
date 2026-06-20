@@ -86,4 +86,72 @@ describe("reports DAL", () => {
     const list = await dal.listReports(USER);
     expect(list.map((r) => r.id)).toEqual([r2.id, r1.id]);
   });
+
+  // CU-3 / migration 002: the 'kept' status (deliberate document-on-file).
+  it("accepts the 'kept' parse_status (migration 002 expanded the CHECK)", async () => {
+    const r = await dal.insertReport({
+      user_id: USER,
+      type: "lab",
+      file_blob_ref: "/blobs/kept.enc",
+      original_filename: "kept-doc.pdf",
+    });
+    await dal.updateReportParseStatus(r.id, "kept", "No new values saved.");
+    const fetched = await dal.getReport(r.id);
+    expect(fetched!.parse_status).toBe("kept");
+  });
+
+  it("still rejects an unknown parse_status after the rebuild", async () => {
+    const r = await dal.insertReport({
+      user_id: USER,
+      type: "lab",
+      file_blob_ref: "/blobs/x.enc",
+      original_filename: "x.pdf",
+    });
+    await expect(
+      // @ts-expect-error — exercising the DB CHECK with an invalid value.
+      dal.updateReportParseStatus(r.id, "bogus", "nope"),
+    ).rejects.toThrow();
+  });
+
+  // UPL-2: deleteReport removes the row (blob handled by removeReport).
+  it("deleteReport removes the row and is idempotent", async () => {
+    const r = await dal.insertReport({
+      user_id: USER,
+      type: "lab",
+      file_blob_ref: "/blobs/del.enc",
+      original_filename: "del.pdf",
+    });
+    expect(await dal.getReport(r.id)).not.toBeNull();
+    await dal.deleteReport(r.id);
+    expect(await dal.getReport(r.id)).toBeNull();
+    // Idempotent — deleting a gone id is a no-op, not an error.
+    await expect(dal.deleteReport(r.id)).resolves.toBeUndefined();
+  });
+
+  it("deleteReport leaves linked observations intact (append-only invariant)", async () => {
+    const r = await dal.insertReport({
+      user_id: USER,
+      type: "lab",
+      file_blob_ref: "/blobs/obs.enc",
+      original_filename: "obs.pdf",
+    });
+    await dal.insertObservation({
+      user_id: USER,
+      category: "biomarker",
+      code_system: "LOINC",
+      code: "2345-7",
+      display: "Glucose",
+      value_num: 95,
+      value_text: null,
+      unit: "mg/dL",
+      source: "uploaded_report",
+      effective_at: "2026-06-01T00:00:00.000Z",
+      report_id: r.id,
+      supersedes_id: null,
+      metadata_json: null,
+    });
+    await dal.deleteReport(r.id);
+    const obs = await dal.listObservations({ report_id: r.id });
+    expect(obs).toHaveLength(1); // committed values survive document removal
+  });
 });

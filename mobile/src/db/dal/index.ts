@@ -32,6 +32,7 @@ import {
 } from "./observations";
 import { getProfile, upsertProfile } from "./profile";
 import {
+  deleteReport,
   getReport,
   insertReport,
   listReports,
@@ -59,6 +60,7 @@ export function createLocalDataDAL(db: SqliteAdapter): LocalDataDAL {
     updateReportParseStatus: (id, status, summary) =>
       updateReportParseStatus(db, id, status, summary),
     renameReport: (id, name) => renameReport(db, id, name),
+    deleteReport: (id) => deleteReport(db, id),
 
     // Profile
     getProfile: () => getProfile(db),

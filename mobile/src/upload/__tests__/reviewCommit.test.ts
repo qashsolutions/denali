@@ -93,17 +93,19 @@ describe("buildObservationInsert", () => {
 });
 
 describe("computeParseStatus", () => {
-  it("returns 'rejected' for an empty row list", () => {
-    expect(computeParseStatus([])).toBe("rejected");
+  it("returns 'kept' for an empty row list (CU-3: deliberate save, doc on file)", () => {
+    // computeParseStatus runs only on the Save path, so an empty/no-accepted
+    // result is a deliberate keep — NOT a rejection (which would hide the doc).
+    expect(computeParseStatus([])).toBe("kept");
   });
 
-  it("returns 'rejected' when no row is accepted", () => {
+  it("returns 'kept' when no row is accepted (CU-3)", () => {
     expect(
       computeParseStatus([
         row({ accepted: false }),
         row({ accepted: false }),
       ]),
-    ).toBe("rejected");
+    ).toBe("kept");
   });
 
   it("returns 'partial' when some rows are accepted", () => {

@@ -37,13 +37,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
-import type { LocalDataDAL, ReportRow, ReportType } from "@/contracts";
+import type { ReportRow, ReportType } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { storeBlob } from "../upload/blobStore";
+import { removeReport } from "../upload/removeReport";
 import { fetchHealthDataAiConsent } from "../upload/consentClient";
 import { extractText } from "../upload/extract";
 import { pickImage, pickPdf, type PickedFile } from "../upload/picker";
@@ -115,13 +116,17 @@ export function UploadScreen(): React.ReactElement {
         if (user && dal) {
           try {
             const list = await dal.listReports(user.userId);
-            // CU-3: only show reports that reached a value-bearing terminal
-            // state — hide abandoned/skipped/failed "rejected" rows and
-            // in-flight "parsing"/"pending" rows, which aren't meaningful
-            // entries (the abandon guard now marks back-outs "rejected").
+            // CU-3: show reports the user chose to keep — values saved
+            // ("confirmed"/"partial") OR a deliberate document-on-file
+            // ("kept"). In-flight "parsing"/"pending" rows aren't meaningful
+            // entries, and no-keep artifacts (skip/abandon/failed) are now
+            // REMOVED at the source (removeReport), so no 'rejected' rows
+            // linger to filter.
             const visible = list.filter(
               (r) =>
-                r.parse_status === "confirmed" || r.parse_status === "partial",
+                r.parse_status === "confirmed" ||
+                r.parse_status === "partial" ||
+                r.parse_status === "kept",
             );
             if (!cancelled) setReports(visible);
             // Count the ACTUAL linked observations per report so the list
@@ -342,6 +347,10 @@ export function UploadScreen(): React.ReactElement {
           parse_status: "parsing",
         });
       } catch (err) {
+        // storeBlob may have written the .bin before insertReport threw —
+        // remove any orphaned row/blob so it doesn't leak (UPL-2). No-op if
+        // neither was created.
+        await removeReport(dal, reportId);
         setError({
           message:
             "Couldn't save the file securely on your device. Free up some space and try again.",
@@ -367,7 +376,10 @@ export function UploadScreen(): React.ReactElement {
         const summary = isOcrGap
           ? scannedOrImageCopy
           : "Couldn't read this file. Please try a different document.";
-        await safeUpdateStatus(dal, reportId, "rejected", summary);
+        // Unreadable file: a no-keep artifact → remove the row + blob (UPL-2)
+        // rather than leave a hidden 'rejected' row with a leaked blob. Retry
+        // generates a fresh reportId, so nothing here is reused.
+        await removeReport(dal, reportId);
         setError({ message: summary, isOcrGap });
         setPhase("error");
         return;
@@ -382,12 +394,8 @@ export function UploadScreen(): React.ReactElement {
           extractedText: extracted.text,
         });
       } catch (err) {
-        await safeUpdateStatus(
-          dal,
-          reportId,
-          "rejected",
-          "Parse failed. Try again later.",
-        );
+        // Parse failure: a no-keep artifact → remove the row + blob (UPL-2).
+        await removeReport(dal, reportId);
         setError({
           message: "Couldn't parse the report. Please try again in a moment.",
         });
@@ -568,19 +576,6 @@ function messageForPickerError(reason: string): string {
   }
 }
 
-async function safeUpdateStatus(
-  dal: LocalDataDAL,
-  reportId: string,
-  status: "rejected" | "partial" | "confirmed",
-  summary: string,
-): Promise<void> {
-  try {
-    await dal.updateReportParseStatus(reportId, status, summary);
-  } catch {
-    // Best-effort; the report row exists with status='parsing' which the
-    // user can resolve by deleting from the timeline.
-  }
-}
 
 // ── Cross-screen parse payload handoff ───────────────────────────────────
 //
