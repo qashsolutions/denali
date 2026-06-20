@@ -308,6 +308,14 @@ export function ChatScreen(): React.ReactElement {
           fontSize: theme.typography.sizes.sm,
           ...fontStyle("body", 400, fontsLoaded),
         },
+        // chat-2: the retry control needs its own ≥48px tap target (D35) — the
+        // bare text + hitSlop only reached ~36px. minHeight + horizontal padding
+        // matches the suggestion-chip / send-button targets.
+        retryButton: {
+          minHeight: 48,
+          justifyContent: "center",
+          paddingHorizontal: theme.spacing.sm,
+        },
         retryText: {
           color: redesign.tealDeep,
           fontSize: theme.typography.sizes.sm,
@@ -422,7 +430,7 @@ export function ChatScreen(): React.ReactElement {
             accessibilityLabel="Try again"
             disabled={streaming}
             onPress={onRetry}
-            hitSlop={8}
+            style={styles.retryButton}
           >
             <Text style={styles.retryText}>Try again</Text>
           </Pressable>
