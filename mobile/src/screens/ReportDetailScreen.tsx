@@ -32,6 +32,7 @@ import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { ragForRow } from "../upload/reportInterpretation";
+import { formatMarkerValue } from "./markers/markerCatalog";
 import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
 import { tintByClass } from "./timeline/pill";
 
@@ -250,6 +251,7 @@ export function ReportDetailScreen(): React.ReactElement {
       {editing ? (
         <View style={styles.editBlock}>
           <TextInput
+            testID="report_detail_name_input"
             accessibilityLabel="Report name"
             autoFocus
             editable={!renaming}
@@ -262,6 +264,7 @@ export function ReportDetailScreen(): React.ReactElement {
           />
           <View style={styles.editRow}>
             <Pressable
+              testID="report_detail_rename_save"
               accessibilityRole="button"
               disabled={renaming}
               onPress={onSaveName}
@@ -282,6 +285,7 @@ export function ReportDetailScreen(): React.ReactElement {
         </View>
       ) : (
         <Pressable
+          testID="report_detail_rename"
           accessibilityRole="button"
           accessibilityLabel="Rename this report"
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -310,7 +314,7 @@ export function ReportDetailScreen(): React.ReactElement {
           const ragColors = rag ? tintByClass(redesign, rag.tint) : null;
           const value =
             obs.value_num != null
-              ? String(obs.value_num)
+              ? formatMarkerValue(obs.code, obs.value_num)
               : (obs.value_text ?? "");
           return (
             <View key={obs.id} style={styles.row}>

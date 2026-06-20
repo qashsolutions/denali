@@ -106,6 +106,28 @@ export function UploadReviewScreen(): React.ReactElement {
     navigation.popToTop();
   }, [navigation]);
 
+  // Abandon guard. The report row is created at upload time (parse_status
+  // "parsing"); confirm/skip move it to a terminal state. If the user LEAVES
+  // review without finalizing (e.g. the native back chevron), the row would
+  // linger as a "parsing" ghost in the Upload list with no committed
+  // observations — so on an un-finalized leave, mark it rejected. (No
+  // observations exist yet, so this is safe vs. the append-only invariant.)
+  // Fire-and-forget; navigation is never blocked.
+  const finalizedRef = React.useRef(false);
+  React.useEffect(() => {
+    const unsub = navigation.addListener("beforeRemove", () => {
+      if (finalizedRef.current || !dal) return;
+      void dal
+        .updateReportParseStatus(
+          reportId,
+          "rejected",
+          "Left review without saving.",
+        )
+        .catch(() => {});
+    });
+    return unsub;
+  }, [navigation, dal, reportId]);
+
   // Sync rows when payload arrives. This handles the case where the screen
   // is reached without the in-process stash (cold launch, deep link).
   React.useEffect(() => {
@@ -381,6 +403,9 @@ export function UploadReviewScreen(): React.ReactElement {
           ? `${savedRows.length} value${savedRows.length === 1 ? "" : "s"} saved.`
           : "No new values saved.";
       await dal.updateReportParseStatus(reportId, status, summary);
+      // Finalized — the abandon guard must not re-mark this on the later
+      // Done → popToTop.
+      finalizedRef.current = true;
 
       // Recap only the rows that actually landed in the record; note any that
       // were already present (deduped).
@@ -408,6 +433,7 @@ export function UploadReviewScreen(): React.ReactElement {
         "rejected",
         "Skipped on review.",
       );
+      finalizedRef.current = true;
       navigation.popToTop();
     } catch (err) {
       setErrorMsg("Couldn't skip — please try again.");
@@ -597,6 +623,7 @@ export function UploadReviewScreen(): React.ReactElement {
           );
         })}
         <PressableScale
+          testID="upload_review_done"
           haptic
           accessibilityRole="button"
           onPress={onDone}
@@ -628,6 +655,7 @@ export function UploadReviewScreen(): React.ReactElement {
         <View>
           <Text style={styles.fieldLabel}>Name this report</Text>
           <TextInput
+            testID="upload_review_name"
             accessibilityLabel="Report name"
             editable={!committing}
             maxLength={120}
@@ -663,6 +691,7 @@ export function UploadReviewScreen(): React.ReactElement {
       )}
 
       <PressableScale
+        testID="upload_review_confirm"
         haptic
         accessibilityRole="button"
         disabled={committing || !reportLoaded}
@@ -682,6 +711,7 @@ export function UploadReviewScreen(): React.ReactElement {
       </PressableScale>
 
       <Pressable
+        testID="upload_review_skip"
         accessibilityRole="button"
         disabled={committing}
         onPress={onSkip}

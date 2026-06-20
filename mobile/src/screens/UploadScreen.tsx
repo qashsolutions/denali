@@ -466,6 +466,7 @@ export function UploadScreen(): React.ReactElement {
       {renderError()}
 
       <PressableScale
+        testID="upload_pick_pdf"
         haptic
         accessibilityRole="button"
         disabled={busy || consentReady !== true}
@@ -479,6 +480,7 @@ export function UploadScreen(): React.ReactElement {
       </PressableScale>
 
       <PressableScale
+        testID="upload_pick_image"
         accessibilityRole="button"
         disabled={busy || consentReady !== true}
         onPress={() => runPipeline("image")}
@@ -499,6 +501,7 @@ export function UploadScreen(): React.ReactElement {
           {reports.map((r) => (
             <Pressable
               key={r.id}
+              testID={`upload_report_row_${r.id}`}
               accessibilityRole="button"
               accessibilityLabel={`${r.original_filename}. Open report.`}
               onPress={() =>
