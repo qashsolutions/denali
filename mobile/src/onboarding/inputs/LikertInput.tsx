@@ -20,6 +20,11 @@ import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { isValidLikertValue } from "./helpers";
+import {
+  PROVISIONAL_FOOTNOTE,
+  helperSuffix,
+  shouldShowProvisionalFootnote,
+} from "./likertProvisional";
 
 export interface LikertOption {
   value: number;
@@ -137,15 +142,15 @@ export function LikertInput({
             {opt.helperText ? (
               <Text style={styles.helper}>
                 {opt.helperText}
-                {opt.helperTextProvisional ? " ‡" : ""}
+                {helperSuffix(opt)}
               </Text>
             ) : null}
           </Pressable>
         );
       })}
-      {options.some((o) => o.helperText != null && o.helperTextProvisional) ? (
+      {shouldShowProvisionalFootnote(options) ? (
         <Text testID="likert_provisional_footnote" style={styles.provisionalFootnote}>
-          ‡ Wording pending clinical review.
+          {PROVISIONAL_FOOTNOTE}
         </Text>
       ) : null}
     </View>
