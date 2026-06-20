@@ -156,8 +156,24 @@ the full gate.
 | Flow | Path exercised |
 |---|---|
 | `signin_onboarding.yaml` | Sign-in (test-OTP bypass) → PrivacyNotice → CohortOnboarding → Intake → PHQ-2 negative → MainTabs Timeline ("Your health") |
+| `crisis_988.yaml` ⚠️ | Onboarding → PHQ-2 **positive** → PHQ-9 → **item 9 > 0** → asserts the Crisis988Modal (call / text / acknowledge). LOAD-BEARING safety surface — never relax the `crisis988_modal` assertion |
+| `chat_crisis_988.yaml` ⚠️ | Chat tab → self-harm language → asserts the in-chat 988 surface (no model round-trip) |
+| `onboarding_positive_relaunch.yaml` ⚠️ | **NAV-1 regression guard.** Onboarding → PHQ-2 **positive** → full PHQ-9 (item 9 = 0, no 988) → MainTabs → **relaunch with `clearState: false`** → asserts the app lands on "Your health", NOT the onboarding chain. A positive screen persists only the PHQ-9 summary (44249-1); gating "mood done" on the PHQ-2 panel alone looped this cohort forever |
 | `account_delete.yaml` | Onboarding happy path → Settings → "Delete account" → confirm Alert ("Delete your account?" / Cancel / Delete) → local wipe → reset to SignIn. Needs a NON-ADMIN account (admin → 403, no wipe); DELETES the account so it is not idempotent without backend reseeding |
 | `signin_resend.yaml` | SignIn email → Send code → OTP step: assert "It expires in 10 minutes." + "Resend code" + the active `Resend code in Ns` cooldown countdown → "Use a different email" → email step with an empty field (placeholder "you@example.com" visible). Cooldown is time-sensitive (~30s window) |
+
+**Not yet automatable:** the upload keep/abandon journey (CU-3 'kept' / UPL-2
+removeReport) needs a deterministic test fixture for the native file picker +
+`/api/parse-report` (neither exists yet), so that surface is covered by unit /
+DAL tests (`reviewCommit.test.ts`, `reports.test.ts`) rather than a Maestro flow.
+
+## CI
+
+`.github/workflows/mobile-e2e.yml` boots an Android emulator and runs the
+load-bearing flows above. It is **`workflow_dispatch`-only and NOT yet validated**
+— it needs the operator to stand up the NODE_ENV!=production test-OTP backend,
+point `API_BASE_URL` at it, SHA-pin the actions, and confirm one green run before
+it becomes a required check. The header comment in that file is the runbook.
 
 ## Selector policy
 

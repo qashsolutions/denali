@@ -1,0 +1,147 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Flow — POSITIVE-screen onboarding survives relaunch  ⚠️  LOAD-BEARING (NAV-1)
+#
+#   Regression guard for the NAV-1 loop. A user who screens POSITIVE on PHQ-2
+#   expands to PHQ-9 and the app persists the PHQ-9 summary (LOINC 44249-1) —
+#   it never writes the PHQ-2 panel (55757-9). The returning-user gate once
+#   keyed "mood done" on 55757-9 ALONE, so every positive-screen user — exactly
+#   the cohort the screener exists to catch — was judged "not onboarded" and
+#   looped back through cohort + intake + the 988 surface on every launch.
+#
+#   This flow drives a POSITIVE PHQ-2 → full PHQ-9 (item 9 = 0, so NO 988
+#   detour — that path is crisis_988.yaml), finishes onboarding to MainTabs,
+#   then RELAUNCHES WITHOUT clearing state and asserts the app lands back on
+#   the dashboard ("Your health") — NOT the onboarding chain. If this flow ever
+#   lands on PrivacyNotice / cohort after relaunch, the NAV-1 loop regressed.
+#   Do not relax the post-relaunch "Your health" assertion.
+#
+#   Item 9 = 0 keeps the run off the 988 path; the regression is about the
+#   PHQ-9 SUMMARY (44249-1) being the only mood signal persisted on a positive
+#   screen — which item 9 = 0 still produces.
+#
+# GATE — needs an E2E test-OTP backend running NODE_ENV != production. See
+# signin_onboarding.yaml / ./README.md for setup. The bypass works ONLY in a
+# NODE_ENV != production backend (local next dev / CI), never deployed staging.
+#
+# RELAUNCH NOTE — the second launchApp uses clearState: false so the encrypted
+# local DB + the secure-store session survive. RootNavigator then runs its
+# cold-launch restore + biometric gate (unavailable on a bare CI emulator →
+# proceeds) + the onboarding-complete gate. The fix makes that gate honor the
+# PHQ-9 summary, so a positive-screen user reaches MainTabs.
+#
+# Selectors are the testID / accessibilityLabel inventory in ../README.md.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+- launchApp:
+    clearState: true
+
+# ── SignIn — test-OTP bypass ────────────────────────────────────────────
+- assertVisible:
+    id: "signin_email_input"
+- tapOn:
+    id: "signin_email_input"
+- inputText: "e2e@denali.health"
+- tapOn:
+    id: "signin_send_code_button"
+- assertVisible:
+    id: "signin_otp_input"
+- tapOn:
+    id: "signin_otp_input"
+- inputText: "999999"
+- tapOn:
+    id: "signin_verify_button"
+
+# ── PrivacyNotice ───────────────────────────────────────────────────────
+- assertVisible:
+    id: "privacy_acknowledge_button"
+- tapOn:
+    id: "privacy_acknowledge_button"
+
+# ── CohortOnboarding ────────────────────────────────────────────────────
+- assertVisible:
+    id: "cohort_step1_birth_year_input"
+- tapOn:
+    id: "cohort_step1_birth_year_input"
+- inputText: "1965"
+- tapOn:
+    id: "oneitem_continue_button"
+- tapOn:
+    id: "cohort_step2_option_female"
+- tapOn:
+    id: "cohort_step3_option_yes"
+- tapOn:
+    id: "cohort_step4_option_female"
+- assertVisible:
+    id: "cohort_confirm_summary"
+- tapOn:
+    id: "oneitem_continue_button"
+
+# ── Intake — finish straight through ────────────────────────────────────
+- assertVisible:
+    id: "intake_finish_button"
+- tapOn:
+    id: "intake_finish_button"
+
+# ── Mood path — answer PHQ-2 POSITIVELY to expand into PHQ-9 ─────────────
+# Items 1 + 2 = 2 each → sum 4 ≥ 3 (Kroenke 2003 positive-screen threshold) →
+# expands to the full PHQ-9. This is the branch that persists 44249-1, NOT the
+# PHQ-2 panel. Both items auto-advance on tap.
+- assertVisible:
+    id: "instruments_mood_item1_option_2"
+- tapOn:
+    id: "instruments_mood_item1_option_2"
+- assertVisible:
+    id: "instruments_mood_item2_option_2"
+- tapOn:
+    id: "instruments_mood_item2_option_2"
+
+# Now in PHQ-9. Items 3–8 = 0 (these don't gate 988); each auto-advances.
+- assertVisible:
+    id: "instruments_mood_item3_option_0"
+- tapOn:
+    id: "instruments_mood_item3_option_0"
+- tapOn:
+    id: "instruments_mood_item4_option_0"
+- tapOn:
+    id: "instruments_mood_item5_option_0"
+- tapOn:
+    id: "instruments_mood_item6_option_0"
+- tapOn:
+    id: "instruments_mood_item7_option_0"
+- tapOn:
+    id: "instruments_mood_item8_option_0"
+
+# Item 9 = 0 — NO 988 detour (the positive-screen persistence is what we test).
+- assertVisible:
+    id: "instruments_phq9_item9_option_0"
+- tapOn:
+    id: "instruments_phq9_item9_option_0"
+
+# A completed PHQ-9 lands on the optional check-in menu. Finish to the app.
+- scrollUntilVisible:
+    element:
+      id: "instruments_finish_button"
+    direction: DOWN
+- tapOn:
+    id: "instruments_finish_button"
+
+# ── MainTabs — confirm we reached the app ───────────────────────────────
+- assertVisible:
+    text: "Your health"
+
+# ── RELAUNCH without clearing state — THE NAV-1 REGRESSION ASSERTION ─────
+# Keep the encrypted DB + session. The cold-launch gate must recognize the
+# PHQ-9 summary as "mood done" and land on the dashboard again — NOT re-onboard.
+- launchApp:
+    clearState: false
+
+# LOAD-BEARING: a positive-screen, fully-onboarded user lands on "Your health".
+# If this fails (e.g. PrivacyNotice / cohort_step1 appears), the NAV-1 loop is
+# back. Assert the dashboard is present AND the onboarding entry is NOT.
+- assertVisible:
+    text: "Your health"
+- assertNotVisible:
+    id: "privacy_acknowledge_button"
+- assertNotVisible:
+    id: "cohort_step1_birth_year_input"

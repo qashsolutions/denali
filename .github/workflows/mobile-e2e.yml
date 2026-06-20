@@ -1,0 +1,115 @@
+name: Mobile E2E (Maestro)
+
+# ─────────────────────────────────────────────────────────────────────────
+# Integration gate for the Phase-1 React Native app — drives the REAL screens
+# on an Android emulator with Maestro. This is the layer the unit suite cannot
+# provide: it caught NONE of the multi-screen journey regressions (NAV-1
+# positive-screen onboarding loop, the upload keep/abandon trap, the 988 path)
+# because those live across screens + relaunch, not in a pure function.
+#
+# ⚠️  NOT YET VALIDATED ON CI — operator action required before this can be a
+#     required check. It is workflow_dispatch-only (manual) on purpose, so it
+#     never blocks PRs until a human has confirmed one green run. To finish
+#     standing it up:
+#
+#   1. Stand up the E2E test-OTP backend (NODE_ENV != production):
+#        - next dev (or a CI service container) for app/ with the five-guard
+#          test-OTP env set (E2E_TEST_OTP_* — see app/src/lib/e2e-test-otp.ts
+#          and STAGING-LOCKDOWN.md "E2E test-OTP bypass — operating instructions").
+#        - the e2e@denali.health Cognito user + DB row + static test password.
+#        - The bypass is structurally unreachable in production (G2 + the
+#          module-load assertion key on NODE_ENV), so it runs ONLY here / local.
+#   2. Expose that backend to the emulator and point the mobile build's
+#        API_BASE_URL at it (10.0.2.2:<port> from inside the Android emulator).
+#   3. SHA-pin every third-party action below (the repo convention — see
+#        deploy.yml). The version tags here are placeholders to resolve first.
+#   4. Run once via the Actions "Run workflow" button; once green, wire it as a
+#        required check (or add the push/pull_request triggers).
+#
+# The flows under mobile/maestro/flows/ are the contract. The load-bearing
+# ones: crisis_988.yaml (988 safety surface), onboarding_positive_relaunch.yaml
+# (NAV-1 — positive-screen onboarding must survive relaunch), signin_onboarding
+# .yaml (happy path). Selector inventory: mobile/maestro/README.md.
+# ─────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "Mobile API_BASE_URL pointing at the NODE_ENV!=production test-OTP backend (e.g. http://10.0.2.2:3000)"
+        required: true
+        type: string
+
+concurrency:
+  group: mobile-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  maestro:
+    name: Maestro flows on Android emulator
+    # macOS runner: nested KVM/HAXM acceleration for the emulator is far more
+    # reliable here than on ubuntu (which needs the KVM workaround).
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      # TODO(operator): SHA-pin all actions below before enabling as a check.
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Install Maestro CLI
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      # Expo prebuild + a debug build. The app reads API_BASE_URL from the
+      # workflow input so it targets the test-OTP backend, never staging/prod.
+      - name: Build debug APK (Expo prebuild + Gradle)
+        working-directory: mobile
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url }}
+        run: |
+          npx expo prebuild --platform android --no-install
+          cd android
+          ./gradlew :app:assembleDebug
+
+      - name: Run Maestro flows on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          # No biometric enrolled → RootNavigator's biometric gate resolves
+          # "unavailable" and proceeds (the relaunch flow depends on this).
+          script: |
+            adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            # Load-bearing safety + journey flows first; fail fast on these.
+            maestro test mobile/maestro/flows/crisis_988.yaml
+            maestro test mobile/maestro/flows/onboarding_positive_relaunch.yaml
+            maestro test mobile/maestro/flows/signin_onboarding.yaml
+            maestro test mobile/maestro/flows/chat_crisis_988.yaml
+
+      - name: Upload Maestro artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-output
+          path: ~/.maestro/tests/**
+          if-no-files-found: ignore
