@@ -33,6 +33,7 @@ import type { StyleProp, TextStyle } from "react-native";
 
 import { HttpError, useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
+import { isOnboardingComplete } from "@/auth/onboardingGate";
 import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
 import { useTheme } from "@/theme/useTheme";
@@ -256,18 +257,18 @@ export function SignInScreen(): React.ReactElement {
     setSubmitting(true);
     try {
       await api.verifyOtp(trimmedEmail, otp);
-      // Returning-user short-circuit: if a COMPLETED local profile already
-      // exists (the permanent birth-year + sex fields are written at the
-      // cohort confirm step), the user has onboarded before — skip the whole
-      // interstitial chain and go straight to the app, mirroring RootNavigator's
-      // cold-launch restore. Re-walking PrivacyNotice → the 5-step cohort
-      // (re-confirming fields Settings locks) → Intake → PHQ-2 reads as "the
-      // app forgot me". A fresh user (no profile) still onboards.
+      // Returning-user short-circuit: skip the interstitial chain straight to
+      // the app ONLY when onboarding is fully complete — the permanent cohort
+      // fields AND the MANDATORY mood screener (NAV-1: the cohort fields alone
+      // are written before the mood screener, so gating on them would skip it
+      // and its 988 path for a user who abandoned after cohort). A fresh or
+      // partially-onboarded user re-onboards (the safe direction).
       const profile = dal ? await dal.getProfile() : null;
-      const onboarded =
-        profile != null &&
-        profile.birth_year != null &&
-        profile.sex_at_birth != null;
+      const hasMood = dal
+        ? (await dal.listObservations({ category: "questionnaire", limit: 1 }))
+            .length > 0
+        : false;
+      const onboarded = isOnboardingComplete(profile, hasMood);
       navigation.reset({
         index: 0,
         routes: [{ name: onboarded ? "MainTabs" : "PrivacyNotice" }],
