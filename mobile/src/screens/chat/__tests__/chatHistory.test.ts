@@ -16,6 +16,7 @@ import {
   appendUserTurn,
   clearHistory,
   stripSuggestionsBlock,
+  stripTrailingAssistant,
   withAssistantTurn,
   type ChatTurn,
 } from "../chatHistory";
@@ -78,6 +79,32 @@ describe("appendAssistantDelta", () => {
 describe("clearHistory", () => {
   it("returns an empty array (D11 — session-scoped chat)", () => {
     expect(clearHistory()).toEqual([]);
+  });
+});
+
+describe("stripTrailingAssistant (retry strip — chat-1)", () => {
+  const user = (content: string): ChatTurn => ({ role: "user", content });
+  const asst = (content: string): ChatTurn => ({ role: "assistant", content });
+
+  it("drops a trailing PARTIAL assistant turn, keeping the user turn", () => {
+    const h = [user("hi"), asst("partial repl")];
+    expect(stripTrailingAssistant(h)).toEqual([user("hi")]);
+  });
+
+  it("is a no-op when the last turn is the user (failure left no partial)", () => {
+    const h = [asst("done"), user("next question")];
+    expect(stripTrailingAssistant(h)).toEqual(h);
+  });
+
+  it("returns an empty array for empty history", () => {
+    expect(stripTrailingAssistant([])).toEqual([]);
+  });
+
+  it("does not mutate the input array", () => {
+    const h = [user("hi"), asst("partial")];
+    const copy = [...h];
+    stripTrailingAssistant(h);
+    expect(h).toEqual(copy);
   });
 });
 

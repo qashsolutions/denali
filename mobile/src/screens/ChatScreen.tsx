@@ -49,8 +49,13 @@ import {
   appendUserTurn,
   clearHistory,
   stripSuggestionsBlock,
+  stripTrailingAssistant,
   type ChatTurn,
 } from "./chat/chatHistory";
+import {
+  CHAT_GENERIC_ERROR_MESSAGE,
+  chatErrorMessage,
+} from "./chat/chatErrors";
 import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
 
 /** Tappable first-prompts for the empty state — a blank box is paralyzing for
@@ -128,13 +133,16 @@ export function ChatScreen(): React.ReactElement {
           } else if (event.type === "error") {
             // D11: generic message — no PHI from the body. Log status-only.
             console.warn("[Chat] server error event:", event.message);
-            setError("Something went wrong. Please try again.");
+            setError(CHAT_GENERIC_ERROR_MESSAGE);
             break;
           }
         }
       } catch (err) {
+        // chat-offline: distinguish a connectivity failure (RN fetch throws
+        // TypeError "Network request failed") from a generic error so a
+        // low-bandwidth user gets actionable guidance instead of a blank fail.
         console.warn("[Chat] stream failed", err);
-        setError("Something went wrong. Please try again.");
+        setError(chatErrorMessage(err));
       } finally {
         setStreaming(false);
         abortRef.current = null;
@@ -174,13 +182,12 @@ export function ChatScreen(): React.ReactElement {
   // no re-appended user turn (it's already in history).
   const onRetry = React.useCallback(() => {
     if (lastSentRef.current.length === 0 || streaming) return;
-    // chat-1: drop any PARTIAL assistant turn the failed attempt left behind,
-    // so the retry starts a fresh reply instead of appending deltas onto the
+    // chat-1: drop any PARTIAL assistant turn the failed attempt left behind, so
+    // the retry starts a fresh reply instead of appending deltas onto the
     // half-streamed one. The trailing user turn is preserved as the context.
-    const base =
-      history.length > 0 && history[history.length - 1]?.role === "assistant"
-        ? history.slice(0, -1)
-        : history;
+    // Decision lives in the pure stripTrailingAssistant helper (not this
+    // closure) per the stale-closure rule — see chatHistory.test.ts.
+    const base = stripTrailingAssistant(history);
     setHistory(base);
     void streamReply(lastSentRef.current, base);
   }, [streamReply, history, streaming]);

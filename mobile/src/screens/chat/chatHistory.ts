@@ -53,6 +53,27 @@ export function appendAssistantDelta(
   return [...history, { role: "assistant", content: delta }];
 }
 
+/**
+ * Drop a trailing PARTIAL assistant turn before a retry.
+ *
+ * When a stream fails or is aborted mid-reply, the half-streamed assistant turn
+ * is still the last element of `history`. Retrying against that history would
+ * append fresh deltas onto the partial turn (a doubled/garbled reply). Stripping
+ * a trailing assistant turn — and ONLY when one is present — leaves the trailing
+ * USER turn as the retry context. No-op when the failure left no partial turn.
+ *
+ * Pure helper with the live state as an explicit argument (mobile/CLAUDE.md
+ * stale-closure rule) — the retry decision must not live in a useCallback body.
+ */
+export function stripTrailingAssistant(
+  history: ReadonlyArray<ChatTurn>,
+): ChatTurn[] {
+  const last = history[history.length - 1];
+  return last && last.role === "assistant"
+    ? history.slice(0, -1)
+    : [...history];
+}
+
 /** Clear history (used on sign-out — Phase 1 chat is session-scoped). */
 export function clearHistory(): ChatTurn[] {
   return [];
