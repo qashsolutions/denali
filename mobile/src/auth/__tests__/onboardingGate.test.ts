@@ -12,10 +12,22 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { isOnboardingComplete } from "../onboardingGate";
+import { PHQ2, PHQ9 } from "@/onboarding/instruments";
+
+import {
+  hasMoodScreenerObservation,
+  isOnboardingComplete,
+  MOOD_SCREENER_CODES,
+} from "../onboardingGate";
 
 const USER = "user-abc";
 const FULL = { id: USER, birth_year: 1960, sex_at_birth: "female" as const };
+
+/** A fake user-scoped lookup: returns a truthy row only for codes in `present`. */
+function lookupWith(present: ReadonlyArray<string>) {
+  return async (code: string): Promise<unknown | null> =>
+    present.includes(code) ? { code } : null;
+}
 
 describe("isOnboardingComplete", () => {
   it("false when there is no profile", () => {
@@ -54,5 +66,35 @@ describe("isOnboardingComplete", () => {
         USER,
       ),
     ).toBe(false);
+  });
+});
+
+describe("hasMoodScreenerObservation (NAV-1 positive-screen fix)", () => {
+  it("recognizes the PHQ-2 panel (negative screen)", async () => {
+    expect(await hasMoodScreenerObservation(lookupWith([PHQ2.loincCode]))).toBe(
+      true,
+    );
+  });
+
+  it("recognizes the PHQ-9 summary ALONE (positive screen — the regression)", async () => {
+    // A positive PHQ-2 expands to PHQ-9 and persists ONLY 44249-1, never the
+    // PHQ-2 panel 55757-9. Gating on 55757-9 alone looped this cohort forever.
+    expect(await hasMoodScreenerObservation(lookupWith([PHQ9.loincCode]))).toBe(
+      true,
+    );
+    expect(PHQ2.loincCode).not.toBe(PHQ9.loincCode); // genuinely distinct codes
+  });
+
+  it("false when neither mood-screener code is present", async () => {
+    expect(await hasMoodScreenerObservation(lookupWith([]))).toBe(false);
+    expect(
+      await hasMoodScreenerObservation(lookupWith(["some-other-code"])),
+    ).toBe(false);
+  });
+
+  it("MOOD_SCREENER_CODES is exactly the PHQ-2 panel + PHQ-9 total", () => {
+    expect([...MOOD_SCREENER_CODES].sort()).toEqual(
+      [PHQ2.loincCode, PHQ9.loincCode].sort(),
+    );
   });
 });

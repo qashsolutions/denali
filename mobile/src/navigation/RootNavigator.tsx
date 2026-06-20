@@ -16,9 +16,11 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 
 import { runBiometricGate, useApiClient } from "@/auth";
-import { isOnboardingComplete } from "@/auth/onboardingGate";
+import {
+  hasMoodScreenerObservation,
+  isOnboardingComplete,
+} from "@/auth/onboardingGate";
 import { useDalState } from "@/db/DalProvider";
-import { PHQ2 } from "@/onboarding/instruments";
 import { PrivacyNoticeScreen } from "@/onboarding/PrivacyNoticeScreen";
 import { CohortOnboardingScreen } from "@/screens/CohortOnboardingScreen";
 import { DomainDetailScreen } from "@/screens/DomainDetailScreen";
@@ -85,11 +87,11 @@ export function RootNavigator() {
               // restorable session + a profile — gating cold-launch on profile
               // existence alone would skip that screener and its 988 path
               // (NAV-1). Re-check the cohort fields AND a user-scoped mood signal
-              // (PHQ-2 panel — always written when the screener completes); fall
-              // back to the onboarding chain when incomplete (the safe direction).
-              const hasMood =
-                (await dal.getLatestObservation(profile.id, PHQ2.loincCode)) !=
-                null;
+              // (PHQ-2 panel OR PHQ-9 summary — a positive screen persists PHQ-9
+              // instead); fall back to the onboarding chain when incomplete.
+              const hasMood = await hasMoodScreenerObservation((code) =>
+                dal.getLatestObservation(profile.id, code),
+              );
               setInitialRoute(
                 isOnboardingComplete(profile, hasMood, profile.id)
                   ? "MainTabs"

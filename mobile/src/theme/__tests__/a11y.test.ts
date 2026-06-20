@@ -23,7 +23,7 @@ describe("a11y acceptance — 45+ floor (principle 8)", () => {
     expect(tokens.typography.sizes.base).toBeGreaterThanOrEqual(17);
   });
 
-  it("no 44px touch targets remain — the floor is 48", () => {
+  it("no sub-48px touch targets remain — the floor is 48", () => {
     const roots = [
       "src/screens",
       "src/onboarding",
@@ -32,24 +32,43 @@ describe("a11y acceptance — 45+ floor (principle 8)", () => {
       "src/backup/ui",
     ];
     const offenders: string[] = [];
-    // Catches both `minHeight/minWidth: 44` AND a fixed `height: 44` (square
-    // touch buttons set both w/h). A bare `width: 44` is NOT flagged — that's
-    // the non-interactive itemBarTrack magnitude bar (height 6).
-    const re = /(?:min(?:Height|Width)|height):\s*44\b/;
+    // A11Y-04: broadened from the literal `44` to the whole INTERACTIVE-RANGE
+    // sub-48 band. `minHeight`/`minWidth` in [24,47] reads as an undersized
+    // touch target (44, 40, 36, …) and fails — not just the old 44px floor.
+    // Values < 24 are decorative non-interactive dims (magnitude bars, dots,
+    // the 14px chart marker) and are NOT flagged. A fixed `height: 44` is also
+    // caught (square touch buttons set both w/h) but `height` is not range-
+    // scanned to avoid flagging decorative fixed heights.
+    //   NOTE: a bare interactive Pressable with NO minHeight at all (the
+    //   original Resend-link defect) cannot be caught by a numeric source scan —
+    //   that structural class is covered by the Maestro touch-target flow.
+    const TOUCH_FLOOR = 48;
+    const INTERACTIVE_MIN = 24;
+    const minRe = /min(?:Height|Width):\s*(\d+)\b/g;
+    const heightRe = /\bheight:\s*44\b/;
     const walk = (dir: string): void => {
       for (const entry of readdirSync(dir)) {
         const p = join(dir, entry);
         if (statSync(p).isDirectory()) {
           walk(p);
         } else if (p.endsWith(".tsx") || p.endsWith(".ts")) {
-          if (re.test(readFileSync(p, "utf8"))) offenders.push(p);
+          const src = readFileSync(p, "utf8");
+          let m: RegExpExecArray | null;
+          minRe.lastIndex = 0;
+          while ((m = minRe.exec(src)) !== null) {
+            const n = Number(m[1]);
+            if (n >= INTERACTIVE_MIN && n < TOUCH_FLOOR) {
+              offenders.push(`${p} (${m[0]})`);
+            }
+          }
+          if (heightRe.test(src)) offenders.push(`${p} (height: 44)`);
         }
       }
     };
     for (const r of roots) walk(join(process.cwd(), r));
     expect(
       offenders,
-      `44px touch targets must be bumped to 48: ${offenders.join(", ")}`,
+      `sub-48px touch targets must be bumped to 48: ${offenders.join(", ")}`,
     ).toEqual([]);
   });
 });

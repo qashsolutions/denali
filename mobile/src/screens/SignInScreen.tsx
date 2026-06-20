@@ -29,13 +29,15 @@ import {
   TextInput,
   View,
 } from "react-native";
-import type { StyleProp, TextStyle } from "react-native";
+import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 
 import { HttpError, useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
-import { isOnboardingComplete } from "@/auth/onboardingGate";
+import {
+  hasMoodScreenerObservation,
+  isOnboardingComplete,
+} from "@/auth/onboardingGate";
 import { useDal } from "@/db/DalProvider";
-import { PHQ2 } from "@/onboarding/instruments";
 import type { RootStackParamList } from "@/navigation/types";
 import { useTheme } from "@/theme/useTheme";
 
@@ -79,11 +81,13 @@ function ResendButton({
   submitting,
   onPress,
   linkStyle,
+  buttonStyle,
 }: {
   cooldown: number;
   submitting: boolean;
   onPress: () => void;
   linkStyle: StyleProp<TextStyle>;
+  buttonStyle: StyleProp<ViewStyle>;
 }): React.ReactElement {
   const disabled = submitting || cooldown > 0;
   const label =
@@ -95,6 +99,7 @@ function ResendButton({
       accessibilityLabel="Resend code"
       disabled={disabled}
       onPress={onPress}
+      style={buttonStyle}
     >
       <Text style={[linkStyle, disabled && { opacity: 0.5 }]}>{label}</Text>
     </Pressable>
@@ -193,8 +198,17 @@ export function SignInScreen(): React.ReactElement {
           color: active.accentPrimary,
           fontFamily: theme.typography.fonts.sans,
           fontSize: theme.typography.sizes.sm,
-          marginTop: theme.spacing.md,
           textAlign: "center",
+        },
+        // A11Y-04 (+LINKS): secondary text links are tappable, so the TOUCH
+        // TARGET — not just the text — must meet the 48px 45+ floor (D35). The
+        // bare Pressables that wrapped `link` were ~18px tall. The spacing that
+        // used to live on `link` (marginTop) moves here so the gap is preserved.
+        linkButton: {
+          minHeight: 48,
+          justifyContent: "center",
+          alignItems: "center",
+          marginTop: theme.spacing.md,
         },
         error: {
           color: active.error,
@@ -267,14 +281,17 @@ export function SignInScreen(): React.ReactElement {
       //
       // Both reads are scoped to the just-signed-in user (NAV-2): the per-device
       // DB can hold another account's rows, so getProfile()'s most-recent row is
-      // checked for ownership in the gate, and the mood signal uses the
-      // user-scoped getLatestObservation(userId, PHQ-2 panel) — the PHQ-2 summary
-      // is always written when the mandatory mood screener completes.
+      // checked for ownership in the gate, and the mood signal uses a user-scoped
+      // lookup. "Mood done" recognizes the PHQ-2 panel OR the PHQ-9 summary
+      // (NAV-1): a positive screen expands to PHQ-9 and persists 44249-1 instead
+      // of the PHQ-2 panel, so gating on PHQ-2 alone looped that cohort forever.
       const userId = api.getCurrentUser()?.userId ?? null;
       const profile = dal && userId ? await dal.getProfile() : null;
       const hasMood =
         dal && userId
-          ? (await dal.getLatestObservation(userId, PHQ2.loincCode)) != null
+          ? await hasMoodScreenerObservation((code) =>
+              dal.getLatestObservation(userId, code),
+            )
           : false;
       const onboarded =
         userId != null && isOnboardingComplete(profile, hasMood, userId);
@@ -409,6 +426,7 @@ export function SignInScreen(): React.ReactElement {
               submitting={submitting}
               onPress={onResend}
               linkStyle={styles.link}
+              buttonStyle={styles.linkButton}
             />
             <Pressable
               testID="signin_use_different_email_button"
@@ -422,6 +440,7 @@ export function SignInScreen(): React.ReactElement {
                 setErrorMsg(null);
                 setInfoMsg(null);
               }}
+              style={styles.linkButton}
             >
               <Text style={styles.link}>Use a different email</Text>
             </Pressable>
