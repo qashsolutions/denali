@@ -245,8 +245,11 @@ const redesignColors: ThemeColors = {
   textSecondary: redesign.ink2,
   textMuted: redesign.ink3,
 
-  // Accents
-  accentPrimary: redesign.teal,
+  // Accents — accentPrimary points at tealDeep (A11Y-01/02): the only
+  // consumers are the pre-redesign entry screens (SignIn / LockScreen), whose
+  // CTA fills (white text) and accent links need WCAG AA on the light bg —
+  // teal fails (3.82/4.11:1), tealDeep clears it (5.90/6.35:1).
+  accentPrimary: redesign.tealDeep,
   accentSecondary: redesign.tealDeep,
 
   // Structural
@@ -273,8 +276,10 @@ const redesignDarkColors: ThemeColors = {
   textSecondary: redesignDark.ink2,
   textMuted: redesignDark.ink3,
 
-  // Accents
-  accentPrimary: redesignDark.teal,
+  // Accents — accentPrimary points at tealDeep to match the light mapping
+  // (A11Y-01/02); in dark both teal variants are bright, so this is contrast-
+  // neutral, kept symmetric with light for consistency.
+  accentPrimary: redesignDark.tealDeep,
   accentSecondary: redesignDark.tealDeep,
 
   // Structural

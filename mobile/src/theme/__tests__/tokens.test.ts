@@ -149,7 +149,8 @@ describe("ThemeColors mapping — resolves onto the redesign palette", () => {
     ["textPrimary", redesign.ink],
     ["textSecondary", redesign.ink2],
     ["textMuted", redesign.ink3],
-    ["accentPrimary", redesign.teal],
+    // accentPrimary points at tealDeep (A11Y-01/02 — entry-screen CTA/link AA).
+    ["accentPrimary", redesign.tealDeep],
     ["accentSecondary", redesign.tealDeep],
     ["border", redesign.line],
     ["success", redesign.teal],
