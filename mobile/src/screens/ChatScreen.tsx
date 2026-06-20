@@ -174,7 +174,15 @@ export function ChatScreen(): React.ReactElement {
   // no re-appended user turn (it's already in history).
   const onRetry = React.useCallback(() => {
     if (lastSentRef.current.length === 0 || streaming) return;
-    void streamReply(lastSentRef.current, history);
+    // chat-1: drop any PARTIAL assistant turn the failed attempt left behind,
+    // so the retry starts a fresh reply instead of appending deltas onto the
+    // half-streamed one. The trailing user turn is preserved as the context.
+    const base =
+      history.length > 0 && history[history.length - 1]?.role === "assistant"
+        ? history.slice(0, -1)
+        : history;
+    setHistory(base);
+    void streamReply(lastSentRef.current, base);
   }, [streamReply, history, streaming]);
 
   const styles = React.useMemo(
