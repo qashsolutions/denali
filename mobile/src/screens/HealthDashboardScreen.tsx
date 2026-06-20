@@ -359,12 +359,14 @@ export function HealthDashboardScreen(): React.ReactElement {
           justifyContent: "center",
         },
         attentionChipText: {
-          color: redesign.alarm,
+          // A11Y-03: alarmText (not alarm) — clears AA on the pillSoft card in
+          // dark mode; the alarm-border above stays `alarm`.
+          color: redesign.alarmText,
           fontSize: theme.typography.sizes.sm,
           ...fontStyle("body", 600, fontsLoaded),
         },
         attentionMore: {
-          color: redesign.alarm,
+          color: redesign.alarmText,
           fontSize: theme.typography.sizes.sm,
           ...fontStyle("body", 600, fontsLoaded),
         },

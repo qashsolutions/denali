@@ -135,6 +135,16 @@ export const redesign = {
    */
   alarm: "#B53A2C",
   /**
+   * Alarm TEXT color — for alarm-red text on the neutral `pillSoft` card
+   * (the Today attention chips, A11Y-03). Separated from `alarm` because the
+   * dark variant must brighten to clear AA on the dark pillSoft WITHOUT
+   * lightening `alarm`-as-background (which would lower the 988 button's
+   * surface-on-alarm contrast). In LIGHT mode the existing alarm red already
+   * clears AA on pillSoft (~6:1), so this equals `alarm`. Guarded by the
+   * clinical-contrast matrix (tokens.test.ts) for both palettes.
+   */
+  alarmText: "#B53A2C",
+  /**
    * Light alarm wash — companion to `alarm`, built to the same
    * construction as the other *-wash tokens (pale tint of the base hue
    * for pill/band backgrounds). Same two consumers as `alarm`.
@@ -208,6 +218,14 @@ export const redesignDark: RedesignPalette = {
   sageWash: "#16301F",
   /** Alarm red — severe screener bands + crisis-path UI ONLY. */
   alarm: "#E96458",
+  /**
+   * Alarm TEXT (A11Y-03) — brightened so alarm-red text clears WCAG AA on the
+   * dark `pillSoft` card (the Today attention chips). The base `alarm` #E96458
+   * is only 4.16:1 on #20303A (sub-AA); #F58A80 is ~5.71:1. Kept distinct from
+   * `alarm` so the 988 button's surface-on-alarm pair is unaffected. Enforced
+   * by the clinical-contrast matrix (tokens.test.ts).
+   */
+  alarmText: "#F58A80",
   /** Light alarm wash — severe band / pill background. */
   alarmWash: "#3C1C17",
   /** Neutral pill background. */

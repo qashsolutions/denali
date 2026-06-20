@@ -137,6 +137,16 @@ describe("alarm tokens — intentional additions beyond the mockup :root", () =>
   it("ThemeColors.error resolves to the alarm token", () => {
     expect(tokens.colors.light.error).toBe(redesign.alarm);
   });
+  it("alarmText (A11Y-03) is a valid hex in both palettes; dark ≠ alarm", () => {
+    // Alarm-red TEXT for the pillSoft attention chips. Light equals `alarm`
+    // (already AA on light pillSoft); dark is brightened so it must DIFFER from
+    // the dark `alarm` base (which is sub-AA on dark pillSoft). The actual AA
+    // contrast is enforced by the clinical-contrast matrix above.
+    expect(redesign.alarmText).toMatch(/^#[0-9A-F]{6}$/i);
+    expect(redesignDark.alarmText).toMatch(/^#[0-9A-F]{6}$/i);
+    expect(redesign.alarmText).toBe(redesign.alarm); // light: reuse the AA red
+    expect(redesignDark.alarmText).not.toBe(redesignDark.alarm); // dark: brightened
+  });
 });
 
 describe("ThemeColors mapping — resolves onto the redesign palette", () => {
@@ -209,6 +219,10 @@ describe("Alpine-night dark palette — derived from the light vocabulary", () =
     ["ok pill (tealDeep on tealWash)", p.tealDeep, p.tealWash],
     ["watch pill (amber on amberWash)", p.amber, p.amberWash],
     ["severe pill (alarm on alarmWash)", p.alarm, p.alarmWash],
+    // Today attention chips (A11Y-03): alarm-red TEXT on the neutral pillSoft
+    // card. The dark pair was 4.16:1 (alarm #E96458 on pillSoft #20303A) and
+    // unguarded — `alarmText` brightens it; this pin keeps it from regressing.
+    ["attention chip (alarmText on pillSoft)", p.alarmText, p.pillSoft],
     // Crisis-988 "Call 988" button: surface-colored label on the alarm fill.
     ["crisis 988 button (surface on alarm)", p.surface, p.alarm],
     // Primary CTA: white/surface label on the teal-deep button fill (the
