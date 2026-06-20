@@ -795,6 +795,66 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D41 — Returning-user onboarding gate: mood-screener + per-user scoping; CU-4 deferred (2026-06-20)
+
+**Context:** A follow-up UX/clinical audit of the mobile branch flagged that the
+returning-user "skip straight to the app" path was gated on the permanent cohort
+fields alone. Those fields are written at the cohort confirm step, which runs
+*before* the MANDATORY mood screener (PHQ-2 — first instrument, carries the 988
+crisis surface). So a user who completed cohort but abandoned before the mood
+screener could be sent straight into the app, silently skipping it (**NAV-1**).
+A second gap (**NAV-2**): the SQLCipher DB is keyed per-DEVICE, so on a
+shared/test device it can hold more than one account's rows; `getProfile()`
+returns the most-recently-updated row regardless of who is signed in, and the
+mood check used an un-scoped `listObservations` — so account A's completed
+onboarding could let a freshly-signed-in account B skip the screener.
+
+**Decision:**
+- **Onboarding completion = cohort fields AND a user-scoped mood signal.** The
+  pure `src/auth/onboardingGate.ts#isOnboardingComplete(profile, hasMood, userId)`
+  requires `profile != null && profile.id === userId && birth_year != null &&
+  sex_at_birth != null && hasMood`. The safe direction is always "re-onboard",
+  never "skip". Re-running onboarding is idempotent (cohort upsert merges;
+  intake/instrument observations are append-only `ON CONFLICT DO NOTHING`).
+- **Both onboarding gates apply it.** `SignInScreen` (post-OTP path) and
+  `RootNavigator` (cold-launch session-restore path — previously routed to
+  MainTabs on profile-exists + biometric with NO mood gate). The cold-launch
+  hole was reachable by sign-in → cohort → kill-app-before-mood → relaunch.
+- **Mood signal is user-scoped without a contract change.** Uses
+  `getLatestObservation(userId, PHQ2.loincCode)` (`55757-9`) rather than an
+  un-scoped questionnaire query. The PHQ-2 summary is always written when the
+  mandatory screener completes, and only the instrument battery writes the
+  `questionnaire` category (PHQ-2 always first) — so this is a precise,
+  cross-user-safe "mood ran" proxy. `ObservationsFilter` has no `user_id` and the
+  contract is frozen, so the scoped read avoids un-freezing it.
+
+**CU-4 (report dedup) — DEFERRED (operator-ratified 2026-06-20).** The same audit
+asked for report de-duplication. There is no content-addressable signal to dedup
+on: `reports.id` is a per-upload uuid, the encrypted blob is keyed `${reportId}.bin`
+with a random IV (identical files → different ciphertext), and confirm *updates*
+the row (one upload = one row, no double-insert). The only available key is
+`original_filename`, which is lossy — two genuinely distinct reports sharing a
+name would collapse and one would be hidden from the list. Per "storage is truth;
+display never silently hides data without a sound key," the operator chose to
+**leave re-uploads as distinct cards**: they are distinct upload events and
+observations already dedupe at storage (`UNIQUE(user_id, code, effective_at)` +
+`ON CONFLICT DO NOTHING`), so there is no clinical-data duplication — only an
+extra card. A proper content-hash column + migration is the path if real dedup is
+wanted later.
+
+**Broader NAV-2 follow-up (open).** ~12 display-surface `getProfile()` callers
+(Timeline, Settings, Dashboard, Instruments, markers, backup, …) still read the
+most-recent profile un-scoped. The *clinical-safety* subset is closed (the two
+onboarding gates above can't skip the screener for the wrong user). Scoping every
+display read needs an additive contract change to `getProfile(userId?)` /
+`ObservationsFilter.user_id` — a separate reviewed unit, tracked here, out of
+scope for this clinical-safety pass.
+
+**Encoded in code:** `src/auth/onboardingGate.ts` (+`__tests__/onboardingGate.test.ts`
+incl. the cross-user case), `src/screens/SignInScreen.tsx`, `src/navigation/RootNavigator.tsx`.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).
