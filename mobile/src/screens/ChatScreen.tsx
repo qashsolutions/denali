@@ -26,6 +26,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -52,6 +53,14 @@ import {
 } from "./chat/chatHistory";
 import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
 
+/** Tappable first-prompts for the empty state — a blank box is paralyzing for
+ *  a 45+ audience. Plain-English, Medicare-relevant, no clinical claims. */
+const SUGGESTED_PROMPTS: ReadonlyArray<string> = [
+  "What does my latest lab result mean?",
+  "Am I due for any screenings?",
+  "Help me understand my last visit summary.",
+];
+
 export function ChatScreen(): React.ReactElement {
   const api = useApiClient();
   const { theme, redesign } = useTheme();
@@ -64,6 +73,8 @@ export function ChatScreen(): React.ReactElement {
   const [error, setError] = React.useState<string | null>(null);
   const [crisisVisible, setCrisisVisible] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
+  // Last content sent — for the error "Try again" without retyping.
+  const lastSentRef = React.useRef<string>("");
 
   // Clear history when the user signs out — D11 (session-scoped chat).
   React.useEffect(() => {
@@ -83,84 +94,88 @@ export function ChatScreen(): React.ReactElement {
     };
   }, []);
 
-  const onSend = React.useCallback(async () => {
-    const content = input.trim();
-    if (content.length === 0 || streaming) return;
-
-    // Deterministic crisis surface: self-harm / suicidal ideation shows the
-    // 988 modal and is NOT sent to the model — the crisis resource is the
-    // response (no LLM round-trip, no chat bubble, nothing logged; Phase-1
-    // invariant 1). Mirrors the PHQ-9 item-9 path. The backend (Sonnet +
-    // prompt safety carve-out) is the secondary, model-dependent layer.
-    if (detectCrisisLanguage(content)) {
-      Keyboard.dismiss();
-      setInput("");
-      setCrisisVisible(true);
-      return;
-    }
-
-    // Drop the soft keyboard on send so it (and the emulator's
-    // hardware-keyboard bar) doesn't linger over the conversation.
-    Keyboard.dismiss();
-    setError(null);
-
-    // Snapshot the new history so we send the server-supplied context.
-    const nextHistory = appendUserTurn(history, content);
-    setHistory(nextHistory);
-    setInput("");
-    setStreaming(true);
-
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      // The server requires `noPersist: true` (literal) per the contract
-      // and the D9 defensive runtime check.
-      const stream = api.chat(
-        {
-          content,
-          history: nextHistory,
-          noPersist: true,
-        },
-        { signal: controller.signal },
-      );
-
-      // Accumulate the streamed reply so we can announce it once on completion
-      // (TalkBack/VoiceOver) — the live delta loop is silent to screen readers
-      // otherwise. Announcing on `done` (not per-delta) avoids speech spam.
-      let assistantText = "";
-      for await (const event of stream) {
-        if (event.type === "delta") {
-          assistantText += event.text;
-          setHistory((h) => appendAssistantDelta(h, event.text));
-        } else if (event.type === "done") {
-          const spoken = plainSummaryForSpeech(
-            stripSuggestionsBlock(assistantText),
-          );
-          if (spoken.length > 0) {
-            AccessibilityInfo.announceForAccessibility(spoken);
+  // Core streaming request — shared by a fresh send and the error retry.
+  // Announces "thinking" then (on done) the reply for screen readers; the live
+  // delta loop is otherwise silent to TalkBack/VoiceOver.
+  const streamReply = React.useCallback(
+    async (content: string, historyToSend: ChatTurn[]) => {
+      setError(null);
+      setStreaming(true);
+      AccessibilityInfo.announceForAccessibility("Denali is thinking");
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      try {
+        // The server requires `noPersist: true` (literal) per the contract
+        // and the D9 defensive runtime check.
+        const stream = api.chat(
+          { content, history: historyToSend, noPersist: true },
+          { signal: controller.signal },
+        );
+        let assistantText = "";
+        for await (const event of stream) {
+          if (event.type === "delta") {
+            assistantText += event.text;
+            setHistory((h) => appendAssistantDelta(h, event.text));
+          } else if (event.type === "done") {
+            const spoken = plainSummaryForSpeech(
+              stripSuggestionsBlock(assistantText),
+            );
+            if (spoken.length > 0) {
+              AccessibilityInfo.announceForAccessibility(spoken);
+            }
+            break;
+          } else if (event.type === "error") {
+            // D11: generic message — no PHI from the body. Log status-only.
+            console.warn("[Chat] server error event:", event.message);
+            setError("Something went wrong. Please try again.");
+            break;
           }
-          break;
-        } else if (event.type === "error") {
-          // D11: render a generic message — no PHI from the error body.
-          // Diagnostic: the event.message carries the HTTP status (e.g.
-          // "Chat request failed (HTTP 403)."), which the UI intentionally
-          // hides — log it (status only, no body/PHI) so failures are
-          // diagnosable from logcat.
-          console.warn("[Chat] server error event:", event.message);
-          setError("Something went wrong. Please try again.");
-          break;
         }
+      } catch (err) {
+        console.warn("[Chat] stream failed", err);
+        setError("Something went wrong. Please try again.");
+      } finally {
+        setStreaming(false);
+        abortRef.current = null;
       }
-    } catch (err) {
-      console.warn("[Chat] stream failed", err);
-      setError("Something went wrong. Please try again.");
-    } finally {
-      setStreaming(false);
-      abortRef.current = null;
-    }
-  }, [api, history, input, streaming]);
+    },
+    [api],
+  );
+
+  const sendMessage = React.useCallback(
+    (raw: string) => {
+      const content = raw.trim();
+      if (content.length === 0 || streaming) return;
+      // Deterministic crisis surface: self-harm / suicidal ideation shows the
+      // 988 modal and is NOT sent to the model (Phase-1 invariant 1; mirrors
+      // the PHQ-9 item-9 path). No LLM round-trip, no bubble, nothing logged.
+      if (detectCrisisLanguage(content)) {
+        Keyboard.dismiss();
+        setInput("");
+        setCrisisVisible(true);
+        return;
+      }
+      Keyboard.dismiss();
+      const nextHistory = appendUserTurn(history, content);
+      setHistory(nextHistory);
+      setInput("");
+      lastSentRef.current = content;
+      void streamReply(content, nextHistory);
+    },
+    [history, streaming, streamReply],
+  );
+
+  const onSend = React.useCallback(() => {
+    sendMessage(input);
+  }, [sendMessage, input]);
+
+  // Error retry: re-request the reply for the last message — no retyping and
+  // no re-appended user turn (it's already in history).
+  const onRetry = React.useCallback(() => {
+    if (lastSentRef.current.length === 0 || streaming) return;
+    void streamReply(lastSentRef.current, history);
+  }, [streamReply, history, streaming]);
 
   const styles = React.useMemo(
     () =>
@@ -267,6 +282,10 @@ export function ChatScreen(): React.ReactElement {
           ...fontStyle("body", 600, fontsLoaded),
         },
         errorBanner: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: theme.spacing.sm,
           backgroundColor: redesign.surface,
           borderColor: redesign.alarm,
           borderWidth: 1,
@@ -276,9 +295,46 @@ export function ChatScreen(): React.ReactElement {
           padding: theme.spacing.md,
         },
         errorText: {
+          flexShrink: 1,
           color: redesign.ink,
           fontSize: theme.typography.sizes.sm,
           ...fontStyle("body", 400, fontsLoaded),
+        },
+        retryText: {
+          color: redesign.tealDeep,
+          fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
+        // Tappable first-prompts in the empty state.
+        suggestions: {
+          marginTop: theme.spacing.lg,
+          gap: theme.spacing.sm,
+          alignSelf: "stretch",
+        },
+        suggestionChip: {
+          borderColor: redesign.line,
+          borderWidth: 1,
+          borderRadius: redesign.rCard,
+          backgroundColor: redesign.surface,
+          paddingVertical: theme.spacing.md,
+          paddingHorizontal: theme.spacing.md,
+          minHeight: 48,
+          justifyContent: "center",
+        },
+        suggestionText: {
+          color: redesign.tealDeep,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 500, fontsLoaded),
+        },
+        // "Denali is thinking…" placeholder while streaming, before the first
+        // delta — a visible in-progress cue (the SR cue is announced).
+        thinking: {
+          color: redesign.ink3,
+          fontSize: theme.typography.sizes.sm,
+          paddingHorizontal: theme.spacing.md,
+          paddingVertical: theme.spacing.sm,
+          ...fontStyle("body", 400, fontsLoaded),
+          fontStyle: "italic",
         },
       }),
     [theme, redesign, fontsLoaded, insets.top],
@@ -318,6 +374,21 @@ export function ChatScreen(): React.ReactElement {
             Ask Denali anything about your health. Your conversation is not
             stored on our servers.
           </Text>
+          <View style={styles.suggestions}>
+            {SUGGESTED_PROMPTS.map((p) => (
+              <Pressable
+                key={p}
+                testID="chat_suggested_prompt"
+                accessibilityRole="button"
+                accessibilityLabel={p}
+                disabled={streaming}
+                onPress={() => sendMessage(p)}
+                style={styles.suggestionChip}
+              >
+                <Text style={styles.suggestionText}>{p}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       ) : (
         <FlatList
@@ -325,11 +396,28 @@ export function ChatScreen(): React.ReactElement {
           data={history}
           keyExtractor={(_item, idx) => String(idx)}
           renderItem={renderItem}
+          ListFooterComponent={
+            streaming && history[history.length - 1]?.role === "user" ? (
+              <Text testID="chat_thinking" style={styles.thinking}>
+                Denali is thinking…
+              </Text>
+            ) : null
+          }
         />
       )}
       {error != null && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{error}</Text>
+          <Pressable
+            testID="chat_retry"
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            disabled={streaming}
+            onPress={onRetry}
+            hitSlop={8}
+          >
+            <Text style={styles.retryText}>Try again</Text>
+          </Pressable>
         </View>
       )}
       <View style={styles.inputBar}>
