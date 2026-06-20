@@ -87,9 +87,14 @@ export async function updateReportParseStatus(
   status: ReportParseStatus,
   summary?: string,
 ): Promise<void> {
-  // parsed_at is stamped when the pipeline reaches a terminal state.
+  // parsed_at is stamped when the pipeline reaches a TERMINAL state. 'kept'
+  // (CU-3 — a deliberate document-on-file save) is terminal like the others, so
+  // it stamps too; only the in-flight 'pending'/'parsing' states leave it null.
   const parsedAt =
-    status === "confirmed" || status === "partial" || status === "rejected"
+    status === "confirmed" ||
+    status === "partial" ||
+    status === "rejected" ||
+    status === "kept"
       ? new Date().toISOString()
       : null;
 

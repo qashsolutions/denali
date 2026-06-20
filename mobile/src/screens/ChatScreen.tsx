@@ -52,10 +52,7 @@ import {
   stripTrailingAssistant,
   type ChatTurn,
 } from "./chat/chatHistory";
-import {
-  CHAT_GENERIC_ERROR_MESSAGE,
-  chatErrorMessage,
-} from "./chat/chatErrors";
+import { chatErrorMessage } from "./chat/chatErrors";
 import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
 
 /** Tappable first-prompts for the empty state — a blank box is paralyzing for
@@ -131,16 +128,21 @@ export function ChatScreen(): React.ReactElement {
             }
             break;
           } else if (event.type === "error") {
-            // D11: generic message — no PHI from the body. Log status-only.
-            console.warn("[Chat] server error event:", event.message);
-            setError(CHAT_GENERIC_ERROR_MESSAGE);
+            // chat-offline: a connectivity failure surfaces HERE as an error
+            // EVENT, not a thrown error — chatStream's iterator converts the
+            // RN "Network request failed" TypeError into an error event
+            // (chatStream.ts next()), so the catch below never sees it.
+            // Classify the event message to distinguish offline from a genuine
+            // server error. chatErrorMessage returns one of two FIXED strings
+            // (never the raw message), so no PHI from the body reaches the UI
+            // (D11) — the message is used only for pattern matching.
+            console.warn("[Chat] stream error event:", event.message);
+            setError(chatErrorMessage(event.message));
             break;
           }
         }
       } catch (err) {
-        // chat-offline: distinguish a connectivity failure (RN fetch throws
-        // TypeError "Network request failed") from a generic error so a
-        // low-bandwidth user gets actionable guidance instead of a blank fail.
+        // Defense-in-depth: same classification if the iterator ever rethrows.
         console.warn("[Chat] stream failed", err);
         setError(chatErrorMessage(err));
       } finally {

@@ -132,6 +132,18 @@ describe("chatStream — frame parsing", () => {
     expect(events).toEqual([{ type: "error", message: "oops" }]);
   });
 
+  it("surfaces a transport failure as an error EVENT carrying the message (chat-offline)", async () => {
+    // The RN offline failure is a thrown TypeError, NOT an SSE error frame —
+    // the iterator catches it and converts it to an error event, preserving
+    // the message. ChatScreen routes that message through chatErrorMessage to
+    // show the offline copy; this pins the message is not lost/renamed.
+    rawRequestSpy.mockRejectedValueOnce(new TypeError("Network request failed"));
+    const events = await collectEvents(chatStream(baseInput, hooks));
+    expect(events).toEqual([
+      { type: "error", message: "Network request failed" },
+    ]);
+  });
+
   it("reassembles a frame split across two chunks", async () => {
     // First chunk: half the header. Second chunk: rest of the header +
     // data + blank-line delimiter. The iterator must yield ONE delta with

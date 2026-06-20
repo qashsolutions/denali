@@ -49,4 +49,17 @@ describe("chatErrorMessage", () => {
   it("returns the generic copy otherwise", () => {
     expect(chatErrorMessage(new Error("500"))).toBe(CHAT_GENERIC_ERROR_MESSAGE);
   });
+
+  // ChatScreen's error-EVENT branch passes the raw event.message STRING (the
+  // offline failure arrives as an error event, not a thrown error — see
+  // chatStream.ts). Pin that the string path classifies the same way.
+  it("classifies an error-event message STRING (offline vs server)", () => {
+    expect(chatErrorMessage("Network request failed")).toBe(
+      CHAT_OFFLINE_MESSAGE,
+    );
+    expect(chatErrorMessage("Chat request failed (HTTP 500).")).toBe(
+      CHAT_GENERIC_ERROR_MESSAGE,
+    );
+    expect(chatErrorMessage("HTTP 500")).toBe(CHAT_GENERIC_ERROR_MESSAGE);
+  });
 });

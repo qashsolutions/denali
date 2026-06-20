@@ -98,6 +98,8 @@ describe("reports DAL", () => {
     await dal.updateReportParseStatus(r.id, "kept", "No new values saved.");
     const fetched = await dal.getReport(r.id);
     expect(fetched!.parse_status).toBe("kept");
+    // 'kept' is terminal (the Save path) → parsed_at stamped, like confirmed.
+    expect(fetched!.parsed_at).not.toBeNull();
   });
 
   it("still rejects an unknown parse_status after the rebuild", async () => {
