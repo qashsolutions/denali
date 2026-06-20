@@ -115,11 +115,19 @@ export function UploadScreen(): React.ReactElement {
         if (user && dal) {
           try {
             const list = await dal.listReports(user.userId);
-            if (!cancelled) setReports(list);
+            // CU-3: only show reports that reached a value-bearing terminal
+            // state — hide abandoned/skipped/failed "rejected" rows and
+            // in-flight "parsing"/"pending" rows, which aren't meaningful
+            // entries (the abandon guard now marks back-outs "rejected").
+            const visible = list.filter(
+              (r) =>
+                r.parse_status === "confirmed" || r.parse_status === "partial",
+            );
+            if (!cancelled) setReports(visible);
             // Count the ACTUAL linked observations per report so the list
             // agrees with each report's detail (stored summary can be stale).
             const counts = new Map<string, number>();
-            for (const r of list) {
+            for (const r of visible) {
               const obs = await dal.listObservations({ report_id: r.id });
               counts.set(r.id, obs.length);
             }
