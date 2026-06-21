@@ -3,112 +3,240 @@ name: Mobile E2E (Maestro)
 # ─────────────────────────────────────────────────────────────────────────
 # Integration gate for the Phase-1 React Native app — drives the REAL screens
 # on an Android emulator with Maestro. This is the layer the unit suite cannot
-# provide: it caught NONE of the multi-screen journey regressions (NAV-1
-# positive-screen onboarding loop, the upload keep/abandon trap, the 988 path)
-# because those live across screens + relaunch, not in a pure function.
+# provide: it caught NONE of the cross-screen / relaunch regressions (NAV-1
+# positive-screen onboarding loop, NAV-3A cold-launch cross-user boot, the
+# upload keep/abandon trap, the 988 path) because those live across screens +
+# relaunch, not in a pure function.
 #
-# ⚠️  NOT YET VALIDATED ON CI — operator action required before this can be a
-#     required check. It is workflow_dispatch-only (manual) on purpose, so it
-#     never blocks PRs until a human has confirmed one green run. To finish
-#     standing it up:
+# TOPOLOGY = Option A (operator-ratified): an EPHEMERAL in-job backend —
+#   Postgres service container → schema → seed → `next dev` (NODE_ENV !=
+#   production, so the test-OTP bypass's G2 + module-load assertion permit it)
+#   → real Cognito (a DEDICATED `denali-e2e` pool, NOT staging) → emulator
+#   reaches the backend at 10.0.2.2:3000 (the Android NAT alias for the runner
+#   host loopback). The bypass mints a REAL Cognito session (never a fabricated
+#   token). See docs / STAGING-LOCKDOWN.md "E2E test-OTP bypass".
 #
-#   1. Stand up the E2E test-OTP backend (NODE_ENV != production):
-#        - next dev (or a CI service container) for app/ with the five-guard
-#          test-OTP env set (E2E_TEST_OTP_* — see app/src/lib/e2e-test-otp.ts
-#          and STAGING-LOCKDOWN.md "E2E test-OTP bypass — operating instructions").
-#        - the e2e@denali.health Cognito user + DB row + static test password.
-#        - The bypass is structurally unreachable in production (G2 + the
-#          module-load assertion key on NODE_ENV), so it runs ONLY here / local.
-#   2. Expose that backend to the emulator and point the mobile build's
-#        API_BASE_URL at it (10.0.2.2:<port> from inside the Android emulator).
-#   3. SHA-pin every third-party action below (the repo convention — see
-#        deploy.yml). The version tags here are placeholders to resolve first.
-#   4. Run once via the Actions "Run workflow" button; once green, wire it as a
-#        required check (or add the push/pull_request triggers).
+# ⚠️  STATUS: workflow_dispatch-ONLY, and NOT yet green. The trigger flip to
+#     `pull_request` is DELIBERATELY deferred (see "Trigger policy" below) — an
+#     armed-but-always-red required gate is the inverse of the bug it guards.
 #
-# The flows under mobile/maestro/flows/ are the contract. The load-bearing
-# ones: crisis_988.yaml (988 safety surface), onboarding_positive_relaunch.yaml
-# (NAV-1 — positive-screen onboarding must survive relaunch), signin_onboarding
-# .yaml (happy path). Selector inventory: mobile/maestro/README.md.
+# OPERATOR-BLOCKED (the run cannot go green until these exist; every value is a
+#   marked placeholder below, never a guessed concrete form):
+#   - `denali-e2e-ci-role` (OIDC) → repo var E2E_CI_ROLE_ARN. Least privilege:
+#       cognito-idp:AdminCreateUser/AdminSetUserPassword/AdminInitiateAuth on the
+#       e2e pool + secretsmanager:GetSecretValue on the static-password secret.
+#   - `denali-e2e` Cognito pool + app client (ALLOW_ADMIN_USER_PASSWORD_AUTH) →
+#       vars E2E_COGNITO_POOL_ID, E2E_COGNITO_APP_CLIENT_ID.
+#   - static-password secret → var E2E_STATIC_PASSWORD_SECRET_ARN.
+#   - two seeded accounts (A onboarded in-flow w/ data; B a DIFFERENT id) →
+#       vars E2E_EMAIL_A, E2E_EMAIL_B.
+#   - the from-zero SCHEMA bootstrap: app/scripts/ has NO single from-zero
+#       migrate script today (only partial migrate-idme*.sql) — 4a sub-decision 3
+#       is unresolved. The "Apply schema" step is a PLACEHOLDER until provided.
+#   - confirmation of the backend's DB env (db.ts) + `dev` script binding.
+#
+# Trigger policy (guardrail): keep workflow_dispatch until the backend above is
+#   provisioned and produces ONE green run. THEN, coupled to that green run: add
+#   `push: develop` (or non-blocking pull_request) for a proving period → measure
+#   flake → only then promote crisis_988 + onboarding_positive_relaunch +
+#   cross_user_isolation to required-on-PR.
+#
+# Flows (mobile/maestro/flows/, selector inventory in mobile/maestro/README.md):
+#   crisis_988 (988 safety surface), onboarding_positive_relaunch (NAV-1),
+#   cross_user_isolation (NAV-2 SignIn gate + NAV-3A cold-launch restore),
+#   signin_onboarding (happy path), chat_crisis_988.
 # ─────────────────────────────────────────────────────────────────────────
 
 on:
-  workflow_dispatch:
-    inputs:
-      api_base_url:
-        description: "Mobile API_BASE_URL pointing at the NODE_ENV!=production test-OTP backend (e.g. http://10.0.2.2:3000)"
-        required: true
-        type: string
+  workflow_dispatch: {} # NO pull_request yet — flip is coupled to the first green run (see above).
 
 concurrency:
   group: mobile-e2e-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  id-token: write # OIDC → assume denali-e2e-ci-role (Cognito seed + Secrets read)
+  contents: read
+
 jobs:
   maestro:
     name: Maestro flows on Android emulator
-    # macOS runner: nested KVM/HAXM acceleration for the emulator is far more
-    # reliable here than on ubuntu (which needs the KVM workaround).
-    runs-on: macos-14
-    timeout-minutes: 45
+    # ubuntu + KVM (4a decision): one Linux host runs the Postgres `services:`
+    # container AND the KVM-accelerated emulator. macOS can't run service
+    # containers, so it is out.
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      # Emulator → runner host loopback via the Android NAT alias. The mobile
+      # build reads DENALI_API_BASE_URL (NOT API_BASE_URL — app.config.ts:76).
+      DENALI_API_BASE_URL: "http://10.0.2.2:3000"
+      E2E_OTP_CODE: "999999"
+      # ── operator-supplied placeholders (repo/environment Variables) ──
+      E2E_CI_ROLE_ARN: ${{ vars.E2E_CI_ROLE_ARN }} # TODO(operator): denali-e2e-ci-role
+      E2E_COGNITO_POOL_ID: ${{ vars.E2E_COGNITO_POOL_ID }} # TODO(operator)
+      E2E_COGNITO_APP_CLIENT_ID: ${{ vars.E2E_COGNITO_APP_CLIENT_ID }} # TODO(operator)
+      E2E_STATIC_PASSWORD_SECRET_ARN: ${{ vars.E2E_STATIC_PASSWORD_SECRET_ARN }} # TODO(operator)
+      E2E_EMAIL_A: ${{ vars.E2E_EMAIL_A }} # TODO(operator): account A (onboarded in-flow, has data)
+      E2E_EMAIL_B: ${{ vars.E2E_EMAIL_B }} # TODO(operator): account B (DIFFERENT id)
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: denali
+          POSTGRES_PASSWORD: denali
+          POSTGRES_DB: denali_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U denali"
+          --health-interval 5s --health-timeout 5s --health-retries 12
 
     steps:
-      # TODO(operator): SHA-pin all actions below before enabling as a check.
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      # KVM (4a sub-decision 2): enable AND prove it — treat a missing /dev/kvm
+      # as a hard failure rather than silently falling back to a slow emulator.
+      - name: Enable + verify KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -e /dev/kvm || { echo "::error::KVM not present on this runner"; exit 1; }
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: mobile/package-lock.json
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Install mobile dependencies
-        working-directory: mobile
-        run: npm ci
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
+        with:
+          role-to-assume: ${{ env.E2E_CI_ROLE_ARN }} # TODO(operator): denali-e2e-ci-role
+          aws-region: us-east-1
+
+      - name: Fetch static test password (Secrets Manager)
+        run: |
+          PW="$(aws secretsmanager get-secret-value \
+                  --secret-id "$E2E_STATIC_PASSWORD_SECRET_ARN" \
+                  --query SecretString --output text)"
+          echo "::add-mask::$PW" # guardrail: never let the static password hit the log
+          echo "E2E_TEST_OTP_STATIC_PASSWORD=$PW" >> "$GITHUB_ENV"
+
+      - name: Install dependencies (mobile + app)
+        run: |
+          (cd mobile && npm ci)
+          (cd app && npm ci)
+
+      # SCHEMA — OPERATOR-BLOCKED. There is NO single from-zero migrate script in
+      # app/scripts (only partial migrate-idme*.sql). 4a sub-decision 3 is
+      # unresolved. Provide the from-zero schema bootstrap, then enable below.
+      - name: Apply schema to ephemeral Postgres (PLACEHOLDER)
+        env:
+          PGHOST: localhost
+          PGUSER: denali
+          PGPASSWORD: denali
+          PGDATABASE: denali_e2e
+        run: |
+          echo "::warning::schema bootstrap is a PLACEHOLDER — provide the from-zero schema source (4a sub-decision 3)"
+          # TODO(operator): apply the canonical schema, e.g.
+          #   psql -f app/scripts/<SCHEMA_BOOTSTRAP>.sql
+          #   for f in app/scripts/migrate-*.sql; do psql -f "$f"; done   # in order
+
+      # SEED — OPERATOR-BLOCKED. Two Cognito users (static password) + the DB
+      # rows the bypass needs. A's HEALTH data is created ON-DEVICE by the flow,
+      # not seeded here; this only provisions AUTH for both emails.
+      - name: Seed E2E accounts — Cognito + Postgres (PLACEHOLDER)
+        run: |
+          for EMAIL in "$E2E_EMAIL_A" "$E2E_EMAIL_B"; do
+            echo "Seeding $EMAIL"
+            aws cognito-idp admin-create-user \
+              --user-pool-id "$E2E_COGNITO_POOL_ID" --username "$EMAIL" \
+              --message-action SUPPRESS \
+              --user-attributes Name=email,Value="$EMAIL" Name=email_verified,Value=true || true
+            aws cognito-idp admin-set-user-password \
+              --user-pool-id "$E2E_COGNITO_POOL_ID" --username "$EMAIL" \
+              --password "$E2E_TEST_OTP_STATIC_PASSWORD" --permanent
+            # TODO(operator): insert users + user_verification rows for $EMAIL to
+            # match the applied schema. (send-otp also upserts these in-flow, but
+            # seed them so verify-otp never 404s on a cold DB.)
+          done
+
+      - name: Start test-OTP backend (next dev, NODE_ENV=development)
+        working-directory: app
+        env:
+          NODE_ENV: development
+          # TODO(operator): match the env db.ts actually reads (DATABASE_URL vs PG*).
+          DATABASE_URL: "postgres://denali:denali@localhost:5432/denali_e2e"
+          # The four E2E_TEST_OTP_* vars (STATIC_PASSWORD injected + masked above).
+          E2E_TEST_OTP_ENABLED: "true"
+          E2E_TEST_OTP_EMAILS: "${{ env.E2E_EMAIL_A }},${{ env.E2E_EMAIL_B }}"
+          E2E_TEST_OTP_CODE: "${{ env.E2E_OTP_CODE }}"
+          # TODO(operator): Cognito client env the backend needs to talk to the
+          # e2e pool (region, pool id, app client id) — wire to E2E_COGNITO_*.
+        run: |
+          # TODO(operator): confirm the dev script name. next dev binds 127.0.0.1,
+          # which the emulator reaches at 10.0.2.2 — no 0.0.0.0 needed.
+          npm run dev > /tmp/next-dev.log 2>&1 &
+          echo $! > /tmp/next-dev.pid
+
+      - name: Warm the auth routes (next dev compiles on first hit)
+        run: |
+          # next dev compiles a route on its FIRST request; a cold send-otp would
+          # time out the flow's first tap. Poll until it compiles + responds.
+          ok=""
+          for i in $(seq 1 60); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+              -H 'content-type: application/json' -H 'X-Client-Type: mobile' \
+              -d "{\"email\":\"$E2E_EMAIL_A\"}" \
+              http://localhost:3000/api/auth/send-otp || echo 000)"
+            echo "send-otp warm attempt $i → HTTP $code"
+            if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then ok=1; break; fi
+            sleep 2
+          done
+          [ -n "$ok" ] || { echo "::error::backend never warmed"; cat /tmp/next-dev.log; exit 1; }
 
       - name: Install Maestro CLI
         run: |
           curl -Ls "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
-      # Expo prebuild + a debug build. The app reads API_BASE_URL from the
-      # workflow input so it targets the test-OTP backend, never staging/prod.
       - name: Build debug APK (Expo prebuild + Gradle)
         working-directory: mobile
-        env:
-          API_BASE_URL: ${{ inputs.api_base_url }}
         run: |
+          # DENALI_API_BASE_URL (job env) is baked into the build by app.config.ts.
           npx expo prebuild --platform android --no-install
-          cd android
-          ./gradlew :app:assembleDebug
+          (cd android && ./gradlew :app:assembleDebug)
 
       - name: Run Maestro flows on emulator
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a # v2
         with:
           api-level: 34
           arch: x86_64
           profile: pixel_6
-          # No biometric enrolled → RootNavigator's biometric gate resolves
-          # "unavailable" and proceeds (the relaunch flow depends on this).
+          # No biometric enrolled → the cold-launch biometric gate resolves
+          # "unavailable" and proceeds (the relaunch flows depend on this).
           script: |
             adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
-            # Load-bearing safety + journey flows first; fail fast on these.
+            # Load-bearing safety + isolation flows first; fail fast on these.
             maestro test mobile/maestro/flows/crisis_988.yaml
             maestro test mobile/maestro/flows/onboarding_positive_relaunch.yaml
+            maestro test mobile/maestro/flows/cross_user_isolation.yaml
             maestro test mobile/maestro/flows/signin_onboarding.yaml
             maestro test mobile/maestro/flows/chat_crisis_988.yaml
 
       - name: Upload Maestro artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: maestro-output
           path: ~/.maestro/tests/**

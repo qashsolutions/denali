@@ -1,0 +1,155 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Flow — cross-user PHI isolation  ⚠️  LOAD-BEARING (NAV-2 + NAV-3A)
+#
+#   Proves the two distinct isolation guarantees on a multi-account device:
+#
+#   NAV-2 (SignIn post-OTP gate): account A onboards (profile + mood persisted
+#   locally), signs out (token cleared, encrypted DB retained), then account B
+#   — a DIFFERENT id — signs in. B must be sent to PrivacyNotice (re-onboard),
+#   NOT into A's MainTabs, because the most-recent stored profile (A's) is not B.
+#
+#   NAV-3A (cold-launch restore): B then ABANDONS onboarding (does NOT complete
+#   cohort) and the app is KILLED + COLD-RELAUNCHED. This exercises the
+#   RootNavigator restore path — distinct from the SignIn gate above. B's token
+#   is stored but the most-recent profile is still A's; restore must REFUSE
+#   (token owner != profile owner) and land on SignIn — NOT boot into A's
+#   "Your health" with A's data. Pre-NAV-3A, this relaunch booted into A's
+#   MainTabs (confirmed on-device 2026-06-20); this flow is that regression's
+#   permanent guard. Do NOT relax the post-relaunch assertions.
+#
+# TWO SEEDED ACCOUNTS (auth only — A's HEALTH data is created on-device by this
+#   flow, not seeded server-side):
+#     A = e2e@denali.health      (onboarded in-flow, becomes the most-recent profile)
+#     B = e2e-b@denali.health    (a DIFFERENT users.id)
+#   The workflow's E2E_EMAIL_A / E2E_EMAIL_B + the Cognito/DB seed MUST use these
+#   exact addresses, and both MUST be in E2E_TEST_OTP_EMAILS.
+#
+# MISSING testID (flagged, not added here per change-budget): the Settings
+#   "Sign out" Pressable (SettingsScreen.tsx:932) has NO testID — selected by
+#   visible text below. Follow-up: add `settings_sign_out_button`.
+#
+# GATE — needs the NODE_ENV != production E2E test-OTP backend (see
+#   mobile-e2e.yml / mobile/maestro/README.md). UNVALIDATED until that backend
+#   is provisioned and produces one green run.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+# Fresh DB so A is the only account, then B is added — no cross-flow carryover.
+- launchApp:
+    clearState: true
+
+# ══ ACCOUNT A — sign in + full onboarding (becomes the most-recent profile) ══
+- assertVisible:
+    id: "signin_email_input"
+- tapOn:
+    id: "signin_email_input"
+- inputText: "e2e@denali.health"
+- tapOn:
+    id: "signin_send_code_button"
+- assertVisible:
+    id: "signin_otp_input"
+- tapOn:
+    id: "signin_otp_input"
+- inputText: "999999"
+- tapOn:
+    id: "signin_verify_button"
+
+- assertVisible:
+    id: "privacy_acknowledge_button"
+- tapOn:
+    id: "privacy_acknowledge_button"
+
+# Cohort (5 steps) — birth year uses an explicit Continue; the rest auto-advance.
+- assertVisible:
+    id: "cohort_step1_birth_year_input"
+- tapOn:
+    id: "cohort_step1_birth_year_input"
+- inputText: "1965"
+- tapOn:
+    id: "oneitem_continue_button"
+- tapOn:
+    id: "cohort_step2_option_male"
+- tapOn:
+    id: "cohort_step3_option_yes"
+- tapOn:
+    id: "cohort_step4_option_male"
+- assertVisible:
+    id: "cohort_confirm_summary"
+- tapOn:
+    id: "oneitem_continue_button"
+
+# Intake — finish straight through.
+- assertVisible:
+    id: "intake_finish_button"
+- tapOn:
+    id: "intake_finish_button"
+
+# Mood — PHQ-2 NEGATIVE (items 1+2 = 0) so it does not expand to PHQ-9 / 988.
+# This still persists A's mood observation (the cold-launch gate's signal).
+- assertVisible:
+    id: "instruments_mood_item1_option_0"
+- tapOn:
+    id: "instruments_mood_item1_option_0"
+- assertVisible:
+    id: "instruments_mood_item2_option_0"
+- tapOn:
+    id: "instruments_mood_item2_option_0"
+- scrollUntilVisible:
+    element:
+      id: "instruments_finish_button"
+    direction: DOWN
+- tapOn:
+    id: "instruments_finish_button"
+
+# A is fully onboarded → MainTabs dashboard.
+- assertVisible:
+    text: "Your health"
+
+# ══ A signs out (clears token, KEEPS the encrypted DB → A's profile + mood) ══
+- tapOn:
+    text: "Settings tab"
+- scrollUntilVisible:
+    element:
+      text: "Sign out"
+    direction: DOWN
+- tapOn:
+    text: "Sign out"
+# Back at SignIn after sign-out.
+- assertVisible:
+    id: "signin_email_input"
+
+# ══ ACCOUNT B — different id signs in → NAV-2 must re-onboard, NOT show A ══
+- tapOn:
+    id: "signin_email_input"
+- inputText: "e2e-b@denali.health"
+- tapOn:
+    id: "signin_send_code_button"
+- assertVisible:
+    id: "signin_otp_input"
+- tapOn:
+    id: "signin_otp_input"
+- inputText: "999999"
+- tapOn:
+    id: "signin_verify_button"
+
+# NAV-2 ASSERTION: B lands on PrivacyNotice (re-onboard), NOT A's MainTabs.
+- assertVisible:
+    id: "privacy_acknowledge_button"
+- assertNotVisible:
+    text: "Your health"
+
+# ══ B ABANDONS onboarding, then KILL + COLD-RELAUNCH → NAV-3A ══
+# Do NOT acknowledge / complete cohort. Relaunch without clearing state: the
+# encrypted DB (A's profile, most-recent) + B's stored token both survive.
+- launchApp:
+    clearState: false
+
+# NAV-3A ASSERTION (LOAD-BEARING): restore must REFUSE (B's token does not own
+# A's profile) → SignIn. The app must NOT boot into A's MainTabs/data. If
+# "Your health" appears here, the cold-launch cross-user leak has regressed.
+- assertVisible:
+    id: "signin_email_input"
+- assertNotVisible:
+    text: "Your health"
+- assertNotVisible:
+    id: "privacy_acknowledge_button"

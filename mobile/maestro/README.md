@@ -159,6 +159,7 @@ the full gate.
 | `crisis_988.yaml` ⚠️ | Onboarding → PHQ-2 **positive** → PHQ-9 → **item 9 > 0** → asserts the Crisis988Modal (call / text / acknowledge). LOAD-BEARING safety surface — never relax the `crisis988_modal` assertion |
 | `chat_crisis_988.yaml` ⚠️ | Chat tab → self-harm language → asserts the in-chat 988 surface (no model round-trip) |
 | `onboarding_positive_relaunch.yaml` ⚠️ | **NAV-1 regression guard.** Onboarding → PHQ-2 **positive** → full PHQ-9 (item 9 = 0, no 988) → MainTabs → **relaunch with `clearState: false`** → asserts the app lands on "Your health", NOT the onboarding chain. A positive screen persists only the PHQ-9 summary (44249-1); gating "mood done" on the PHQ-2 panel alone looped this cohort forever |
+| `cross_user_isolation.yaml` ⚠️ | **NAV-2 + NAV-3A regression guard.** Account A (`e2e@denali.health`) onboards → sign out → account B (`e2e-b@denali.health`, different id) signs in → asserts B lands on **PrivacyNotice**, NOT A's MainTabs (NAV-2 SignIn gate). Then B **abandons** onboarding → **kill + cold-relaunch** → asserts the app lands on **SignIn**, NOT A's "Your health" (NAV-3A restore refuses a token whose owner ≠ the most-recent profile). Needs TWO seeded accounts; the kill+relaunch step is what exercises `restoreSession`, distinct from the SignIn gate. Uses `tapOn: text "Sign out"` — see missing-testID note below |
 | `account_delete.yaml` | Onboarding happy path → Settings → "Delete account" → confirm Alert ("Delete your account?" / Cancel / Delete) → local wipe → reset to SignIn. Needs a NON-ADMIN account (admin → 403, no wipe); DELETES the account so it is not idempotent without backend reseeding |
 | `signin_resend.yaml` | SignIn email → Send code → OTP step: assert "It expires in 10 minutes." + "Resend code" + the active `Resend code in Ns` cooldown countdown → "Use a different email" → email step with an empty field (placeholder "you@example.com" visible). Cooldown is time-sensitive (~30s window) |
 
@@ -167,13 +168,24 @@ removeReport) needs a deterministic test fixture for the native file picker +
 `/api/parse-report` (neither exists yet), so that surface is covered by unit /
 DAL tests (`reviewCommit.test.ts`, `reports.test.ts`) rather than a Maestro flow.
 
+**Missing testID (flagged):** the Settings "Sign out" Pressable
+(`SettingsScreen.tsx:932`) has **no testID** — `cross_user_isolation.yaml`
+selects it by visible text. Follow-up: add `settings_sign_out_button` (and list
+it here) so the sign-out tap is selector-stable like every other interactive
+element. Not done inline to respect the active change-budget.
+
 ## CI
 
 `.github/workflows/mobile-e2e.yml` boots an Android emulator and runs the
-load-bearing flows above. It is **`workflow_dispatch`-only and NOT yet validated**
-— it needs the operator to stand up the NODE_ENV!=production test-OTP backend,
-point `API_BASE_URL` at it, SHA-pin the actions, and confirm one green run before
-it becomes a required check. The header comment in that file is the runbook.
+load-bearing flows above. The actions are **SHA-pinned** (repo convention) and
+the Option-A backend scaffold (Postgres service → schema → seed → `next dev` →
+warm → emulator) is in place. It is **`workflow_dispatch`-only and NOT yet
+green** — the trigger flip to `pull_request` is deliberately **coupled to the
+first green run** (an armed-but-always-red required gate is the inverse of the
+bug it guards). Operator-blocked pieces (the `denali-e2e-ci-role`, the dedicated
+`denali-e2e` Cognito pool + app client, the static-password secret, the two
+seeded accounts, and the from-zero schema bootstrap) are marked `TODO(operator)`
+in the workflow. The header comment in that file is the runbook.
 
 ## Selector policy
 
