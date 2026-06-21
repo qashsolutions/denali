@@ -490,7 +490,10 @@ export function IntakeOnboardingScreen(): React.ReactElement {
           marginTop: theme.spacing.xs,
         },
         statusSaved: {
-          color: redesign.teal,
+          // tealDeep, not teal: the "SAVED" label is small bold text on the
+          // surface section-card → teal is 4.11:1 (sub-AA). tealDeep (6.35:1
+          // light / 8.20:1 dark) matches its statusTodo sibling below.
+          color: redesign.tealDeep,
           ...fontStyle("body", 600, fontsLoaded),
         },
         statusSkipped: {

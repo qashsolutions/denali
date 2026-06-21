@@ -46,7 +46,10 @@ export function ChatAssistantBody({
           justifyContent: "center",
         },
         toggleText: {
-          color: redesign.teal,
+          // tealDeep, not teal: teal on surface is 4.11:1 (sub-AA for this
+          // normal-size text); tealDeep is 6.35:1 light / 8.20:1 dark. Guarded
+          // by the "chat detail toggle (tealDeep on surface)" contrast-matrix row.
+          color: redesign.tealDeep,
           fontSize: theme.typography.sizes.sm,
           ...fontStyle("body", 600, fontsLoaded),
         },

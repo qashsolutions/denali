@@ -228,6 +228,10 @@ describe("Alpine-night dark palette — derived from the light vocabulary", () =
     // Primary CTA: white/surface label on the teal-deep button fill (the
     // bare-teal fill at 4.11:1 was the pre-fix failure).
     ["primary CTA (surface on tealDeep)", p.surface, p.tealDeep],
+    // Chat "Show details" toggle + Intake "SAVED" status — tealDeep TEXT on the
+    // surface card. Plain `teal` was 4.11:1 light (sub-AA for normal text);
+    // tealDeep is 6.35:1 light / 8.20:1 dark. Same color pair guards both.
+    ["chat detail toggle (tealDeep on surface)", p.tealDeep, p.surface],
     // Trend-chart band labels (ink) on each severity band fill — a band label
     // unreadable on its fill could let "severe" read as "minimal".
     ["band label (ink on bandOk)", p.ink, p.bandOk],
@@ -311,5 +315,32 @@ describe("non-color tokens — still mirror app/src/app/globals.css", () => {
   });
   it("--space-5 (1.25rem = 20px) matches tokens.spacing.space5", () => {
     expect(tokens.spacing.space5).toBe(remToPx(readVar(webRoot, "space-5")));
+  });
+});
+
+// A11Y (Phase 1b): the two sub-AA teal-on-surface TEXT consumers must use
+// `tealDeep` (6.35:1 light / 8.20:1 dark), not `teal` (4.11:1 light, sub-AA).
+// The contrast matrix proves tealDeep-on-surface is AA; THIS pins that these
+// consumers actually use it, so a revert to `teal` fails CI.
+describe("sub-AA teal-on-surface text uses tealDeep (A11Y-1b pins)", () => {
+  const SRC = resolve(__dirname, "../..");
+  /** Body of a `name: { ... }` StyleSheet block (no nested braces in these). */
+  function styleBlock(file: string, name: string): string {
+    const src = readFileSync(resolve(SRC, file), "utf8");
+    const m = new RegExp(`${name}:\\s*\\{([^}]*)\\}`).exec(src);
+    if (m == null) throw new Error(`style "${name}" not found in ${file}`);
+    return m[1]!;
+  }
+
+  it("chat 'Show details' toggle text uses tealDeep", () => {
+    expect(styleBlock("screens/chat/ChatAssistantBody.tsx", "toggleText")).toMatch(
+      /color:\s*redesign\.tealDeep/,
+    );
+  });
+
+  it("intake 'SAVED' status label uses tealDeep", () => {
+    expect(
+      styleBlock("screens/IntakeOnboardingScreen.tsx", "statusSaved"),
+    ).toMatch(/color:\s*redesign\.tealDeep/);
   });
 });
