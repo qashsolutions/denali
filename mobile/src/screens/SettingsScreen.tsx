@@ -38,6 +38,7 @@ import { HttpError, isBiometricAvailable, useApiClient } from "@/auth";
 import { BackupSettingsCard } from "@/backup/ui/BackupSettingsCard";
 import { PressableScale } from "@/components/PressableScale";
 import { Skeleton } from "@/components/Skeleton";
+import { TouchTargetLink } from "@/components/TouchTargetLink";
 import type { GenderIdentity, ProfileRow } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
 import { wipeAllLocalData } from "@/db/wipe";
@@ -857,18 +858,14 @@ export function SettingsScreen(): React.ReactElement {
       {loadError != null && (
         <View style={styles.loadErrorRow}>
           <Text style={styles.loadError}>{loadError}</Text>
-          <Pressable
+          <TouchTargetLink
             testID="settings_consent_retry"
-            accessibilityRole="button"
             accessibilityLabel="Try loading settings again"
+            label={retrying ? "Trying…" : "Try again"}
             disabled={retrying}
-            hitSlop={{ top: 9, bottom: 9, left: 9, right: 9 }}
             onPress={() => void loadConsent()}
-          >
-            <Text style={styles.loadRetry}>
-              {retrying ? "Trying…" : "Try again"}
-            </Text>
-          </Pressable>
+            textStyle={styles.loadRetry}
+          />
         </View>
       )}
       {consent != null &&

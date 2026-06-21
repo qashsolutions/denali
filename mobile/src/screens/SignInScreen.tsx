@@ -33,6 +33,7 @@ import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 
 import { HttpError, useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
+import { TouchTargetLink } from "@/components/TouchTargetLink";
 import {
   hasMoodScreenerObservation,
   isOnboardingComplete,
@@ -80,29 +81,29 @@ function ResendButton({
   cooldown,
   submitting,
   onPress,
-  linkStyle,
-  buttonStyle,
+  textStyle,
+  containerStyle,
 }: {
   cooldown: number;
   submitting: boolean;
   onPress: () => void;
-  linkStyle: StyleProp<TextStyle>;
-  buttonStyle: StyleProp<ViewStyle>;
+  textStyle: StyleProp<TextStyle>;
+  containerStyle: StyleProp<ViewStyle>;
 }): React.ReactElement {
   const disabled = submitting || cooldown > 0;
+  // Visible label shows the cooldown; the screen-reader label stays stable.
   const label =
     cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code";
   return (
-    <Pressable
+    <TouchTargetLink
       testID="signin_resend_code_button"
-      accessibilityRole="button"
       accessibilityLabel="Resend code"
+      label={label}
       disabled={disabled}
       onPress={onPress}
-      style={buttonStyle}
-    >
-      <Text style={[linkStyle, disabled && { opacity: 0.5 }]}>{label}</Text>
-    </Pressable>
+      textStyle={textStyle}
+      containerStyle={containerStyle}
+    />
   );
 }
 
@@ -200,14 +201,11 @@ export function SignInScreen(): React.ReactElement {
           fontSize: theme.typography.sizes.sm,
           textAlign: "center",
         },
-        // A11Y-04 (+LINKS): secondary text links are tappable, so the TOUCH
-        // TARGET — not just the text — must meet the 48px 45+ floor (D35). The
-        // bare Pressables that wrapped `link` were ~18px tall. The spacing that
-        // used to live on `link` (marginTop) moves here so the gap is preserved.
-        linkButton: {
-          minHeight: 48,
-          justifyContent: "center",
-          alignItems: "center",
+        // A11Y-04: the ≥48px touch target now lives in the shared TouchTargetLink
+        // component (src/components/TouchTargetLink.tsx); this leaves only the
+        // per-site spacing. The parent `screen` stretches its children, so the
+        // link box stretches full width and its centered text reads as before.
+        linkSpacing: {
           marginTop: theme.spacing.md,
         },
         error: {
@@ -425,13 +423,13 @@ export function SignInScreen(): React.ReactElement {
               cooldown={cooldown}
               submitting={submitting}
               onPress={onResend}
-              linkStyle={styles.link}
-              buttonStyle={styles.linkButton}
+              textStyle={styles.link}
+              containerStyle={styles.linkSpacing}
             />
-            <Pressable
+            <TouchTargetLink
               testID="signin_use_different_email_button"
-              accessibilityRole="button"
               accessibilityLabel="Use a different email"
+              label="Use a different email"
               disabled={submitting}
               onPress={() => {
                 setOtp("");
@@ -440,10 +438,9 @@ export function SignInScreen(): React.ReactElement {
                 setErrorMsg(null);
                 setInfoMsg(null);
               }}
-              style={styles.linkButton}
-            >
-              <Text style={styles.link}>Use a different email</Text>
-            </Pressable>
+              textStyle={styles.link}
+              containerStyle={styles.linkSpacing}
+            />
           </>
         )}
       </View>

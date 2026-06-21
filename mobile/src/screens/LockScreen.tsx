@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { TouchTargetLink } from "@/components/TouchTargetLink";
 import { useTheme } from "@/theme/useTheme";
 
 export interface LockScreenProps {
@@ -99,6 +100,10 @@ export function LockScreen({
           fontFamily: theme.typography.fonts.sans,
           fontSize: theme.typography.sizes.sm,
           textAlign: "center",
+        },
+        // Spacing only; the ≥48px target lives in TouchTargetLink. The parent
+        // `center` (alignItems:center) keeps the link centered as a block.
+        linkSpacing: {
           marginTop: theme.spacing.sm,
         },
       }),
@@ -132,15 +137,15 @@ export function LockScreen({
             <Text style={styles.buttonText}>Unlock</Text>
           )}
         </Pressable>
-        <Pressable
+        <TouchTargetLink
           testID="lock_signout_button"
-          accessibilityRole="button"
           accessibilityLabel="Sign in with a different email"
+          label="Sign in with a different email"
           disabled={busy}
           onPress={onSignOut}
-        >
-          <Text style={styles.link}>Sign in with a different email</Text>
-        </Pressable>
+          textStyle={styles.link}
+          containerStyle={styles.linkSpacing}
+        />
       </View>
     </View>
   );

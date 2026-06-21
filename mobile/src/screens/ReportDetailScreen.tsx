@@ -33,6 +33,8 @@ import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { ragForRow } from "../upload/reportInterpretation";
+import { TouchTargetLink } from "@/components/TouchTargetLink";
+
 import { removeReport } from "../upload/removeReport";
 import { formatMarkerValue } from "./markers/markerCatalog";
 import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
@@ -167,6 +169,11 @@ export function ReportDetailScreen(): React.ReactElement {
           color: redesign.tealDeep,
           fontSize: theme.typography.sizes.sm,
           ...fontStyle("body", 600, fontsLoaded),
+        },
+        // The parent column stretches its children; flex-start keeps the ≥48px
+        // TouchTargetLink box (and "Rename") hugging the left edge as before.
+        renameLinkContainer: {
+          alignSelf: "flex-start",
         },
         editBlock: { gap: theme.spacing.sm },
         nameInput: {
@@ -329,18 +336,17 @@ export function ReportDetailScreen(): React.ReactElement {
           {renameError && <Text style={styles.renameError}>{renameError}</Text>}
         </View>
       ) : (
-        <Pressable
+        <TouchTargetLink
           testID="report_detail_rename"
-          accessibilityRole="button"
           accessibilityLabel="Rename this report"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          label="Rename"
           onPress={() => {
             setDraftName(name);
             setEditing(true);
           }}
-        >
-          <Text style={styles.renameLink}>Rename</Text>
-        </Pressable>
+          textStyle={styles.renameLink}
+          containerStyle={styles.renameLinkContainer}
+        />
       )}
 
       <Text style={styles.caveat}>
