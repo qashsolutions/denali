@@ -50,6 +50,7 @@ import {
   clearTokens,
   getAccessToken,
   getSessionIssuedAt,
+  getSessionUserId,
 } from "./tokenStore";
 
 export interface CreateApiClientOptions {
@@ -168,6 +169,19 @@ class ApiClientImpl implements ApiClient {
     // partial/legacy write we must not trust. (HIPAA review finding M1.)
     if (issuedAt == null || isSessionExpired(issuedAt)) {
       await clearTokens();
+      return false;
+    }
+    // NAV-3A — cold-launch cross-user isolation. `user` here is the MOST-RECENT
+    // local profile (RootNavigator passes `getProfile()`), which on a shared
+    // device may belong to a different account than the stored token. Hydrating
+    // it would boot the token holder into another account's data (confirmed
+    // on-device 2026-06-20). Restore ONLY when the profile owns the token — the
+    // same ownership check SignInScreen's gate makes (`profile.id === userId`).
+    // We do NOT clear here: the token is still valid for ITS owner; we just
+    // refuse to restore a non-matching profile, falling through to SignIn. A
+    // null owner (legacy pre-NAV-3A session) is unverifiable → refuse.
+    const sessionUserId = await getSessionUserId();
+    if (sessionUserId == null || sessionUserId !== user.userId) {
       return false;
     }
     this.currentUser = user;

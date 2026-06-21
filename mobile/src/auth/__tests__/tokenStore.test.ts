@@ -32,6 +32,7 @@ import {
   getAccessToken,
   getRefreshToken,
   getSessionIssuedAt,
+  getSessionUserId,
   setTokens,
 } from "../tokenStore";
 
@@ -41,38 +42,44 @@ beforeEach(() => {
 });
 
 describe("tokenStore", () => {
-  it("setTokens(full bundle) persists all three keys", async () => {
+  it("setTokens(full bundle) persists all keys (incl. session_user_id)", async () => {
     await setTokens({
       access: "access-jwt",
       refresh: "refresh-jwt",
       sessionIssuedAt: 1_700_000_000_000,
+      sessionUserId: "owner-1",
     });
 
     expect(store.get("access_token")).toBe("access-jwt");
     expect(store.get("refresh_token")).toBe("refresh-jwt");
     expect(store.get("session_issued_at")).toBe("1700000000000");
+    expect(store.get("session_user_id")).toBe("owner-1");
   });
 
-  it("setTokens({access}) leaves refresh + session_issued_at untouched", async () => {
+  it("setTokens({access}) leaves refresh + session_issued_at + session_user_id untouched", async () => {
     // Prime existing values.
     await setTokens({
       access: "old-access",
       refresh: "existing-refresh",
       sessionIssuedAt: 1234,
+      sessionUserId: "owner-1",
     });
 
-    // Refresh-flow update: only access token rotates.
+    // Refresh-flow update: only access token rotates. The owner anchor (and
+    // refresh + cap) must survive — a token refresh does not change who owns it.
     await setTokens({ access: "new-access" });
 
     expect(store.get("access_token")).toBe("new-access");
     expect(store.get("refresh_token")).toBe("existing-refresh");
     expect(store.get("session_issued_at")).toBe("1234");
+    expect(store.get("session_user_id")).toBe("owner-1");
   });
 
   it("getters return null when nothing has been stored", async () => {
     expect(await getAccessToken()).toBeNull();
     expect(await getRefreshToken()).toBeNull();
     expect(await getSessionIssuedAt()).toBeNull();
+    expect(await getSessionUserId()).toBeNull();
   });
 
   it("getters round-trip stored values", async () => {
@@ -80,23 +87,27 @@ describe("tokenStore", () => {
       access: "a",
       refresh: "r",
       sessionIssuedAt: 99,
+      sessionUserId: "owner-1",
     });
     expect(await getAccessToken()).toBe("a");
     expect(await getRefreshToken()).toBe("r");
     expect(await getSessionIssuedAt()).toBe("99");
+    expect(await getSessionUserId()).toBe("owner-1");
   });
 
-  it("clearTokens removes all three keys", async () => {
+  it("clearTokens removes all keys (incl. session_user_id)", async () => {
     await setTokens({
       access: "a",
       refresh: "r",
       sessionIssuedAt: 99,
+      sessionUserId: "owner-1",
     });
     await clearTokens();
     expect(store.size).toBe(0);
     expect(await getAccessToken()).toBeNull();
     expect(await getRefreshToken()).toBeNull();
     expect(await getSessionIssuedAt()).toBeNull();
+    expect(await getSessionUserId()).toBeNull();
   });
 
   it("clearTokens swallows per-key delete errors (idempotent on absent keys)", async () => {

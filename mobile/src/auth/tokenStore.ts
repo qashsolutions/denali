@@ -30,6 +30,15 @@ const KEY_ACCESS = "access_token";
 const KEY_REFRESH = "refresh_token";
 /** SecureStore key for the epoch-millis string used by the 30-day session cap. */
 const KEY_SESSION_ISSUED_AT = "session_issued_at";
+/**
+ * SecureStore key for the id of the account that OWNS the stored token
+ * (`users.id`, the same value `profile.id` carries). Persisted at sign-in so
+ * cold-launch restore can verify the most-recent local profile actually belongs
+ * to the token owner before hydrating a session — without it, restore trusted
+ * `getProfile()` (most-recent row, ANY account) and could boot account B into
+ * account A's data on a shared device (NAV-3A). Opaque account id, not PHI.
+ */
+const KEY_SESSION_USER_ID = "session_user_id";
 
 /**
  * iOS Keychain accessibility: items become readable AFTER first device unlock
@@ -51,6 +60,8 @@ export interface TokenBundle {
   refresh: string;
   /** Epoch milliseconds for when the session was first established. */
   sessionIssuedAt: number;
+  /** `users.id` of the account this token belongs to (NAV-3A ownership anchor). */
+  sessionUserId: string;
 }
 
 export type PartialTokenBundle =
@@ -60,6 +71,7 @@ export type PartialTokenBundle =
       access: string;
       refresh?: undefined;
       sessionIssuedAt?: undefined;
+      sessionUserId?: undefined;
     };
 
 export async function getAccessToken(): Promise<string | null> {
@@ -77,6 +89,16 @@ export async function getRefreshToken(): Promise<string | null> {
  */
 export async function getSessionIssuedAt(): Promise<string | null> {
   return SecureStore.getItemAsync(KEY_SESSION_ISSUED_AT, SECURE_STORE_OPTIONS);
+}
+
+/**
+ * The `users.id` of the account that owns the stored token (NAV-3A). Cold-launch
+ * restore compares this to the local profile's id before hydrating a session.
+ * Null when absent (no token, or a legacy pre-NAV-3A session) — callers treat
+ * an unverifiable owner as a mismatch (refuse + re-auth), secure by default.
+ */
+export async function getSessionUserId(): Promise<string | null> {
+  return SecureStore.getItemAsync(KEY_SESSION_USER_ID, SECURE_STORE_OPTIONS);
 }
 
 /**
@@ -100,6 +122,13 @@ export async function setTokens(bundle: PartialTokenBundle): Promise<void> {
       SECURE_STORE_OPTIONS,
     );
   }
+  if (bundle.sessionUserId !== undefined) {
+    await SecureStore.setItemAsync(
+      KEY_SESSION_USER_ID,
+      bundle.sessionUserId,
+      SECURE_STORE_OPTIONS,
+    );
+  }
 }
 
 /**
@@ -115,6 +144,9 @@ export async function clearTokens(): Promise<void> {
     SecureStore.deleteItemAsync(KEY_ACCESS, SECURE_STORE_OPTIONS).catch(() => {}),
     SecureStore.deleteItemAsync(KEY_REFRESH, SECURE_STORE_OPTIONS).catch(() => {}),
     SecureStore.deleteItemAsync(KEY_SESSION_ISSUED_AT, SECURE_STORE_OPTIONS).catch(
+      () => {},
+    ),
+    SecureStore.deleteItemAsync(KEY_SESSION_USER_ID, SECURE_STORE_OPTIONS).catch(
       () => {},
     ),
   ]);

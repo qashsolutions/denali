@@ -101,6 +101,9 @@ export async function verifyOtp(
     access: body.access_token,
     refresh: body.refresh_token,
     sessionIssuedAt: Date.now(),
+    // NAV-3A: anchor the token to its owner so cold-launch restore can refuse a
+    // most-recent profile that belongs to a different account on a shared device.
+    sessionUserId: body.user.userId,
   });
 
   return {

@@ -79,10 +79,12 @@ vi.mock("../chatStream", () => ({
 // extension and to keep the import resolvable.
 const accessTokenRef = { current: null as string | null };
 const sessionIssuedAtRef = { current: null as string | null };
+const sessionUserIdRef = { current: null as string | null };
 vi.mock("../tokenStore", () => ({
   getAccessToken: vi.fn(async () => accessTokenRef.current),
   getRefreshToken: vi.fn(async () => null),
   getSessionIssuedAt: vi.fn(async () => sessionIssuedAtRef.current),
+  getSessionUserId: vi.fn(async () => sessionUserIdRef.current),
   setTokens: vi.fn(async () => undefined),
   clearTokens: vi.fn(async () => undefined),
 }));
@@ -98,6 +100,7 @@ beforeEach(() => {
   refreshSpy.mockReset();
   accessTokenRef.current = null;
   sessionIssuedAtRef.current = null;
+  sessionUserIdRef.current = null;
 });
 
 afterEach(() => {
@@ -158,10 +161,11 @@ describe("ApiClientImpl — restoreSession (cold-launch, 30-day cap)", () => {
     expect(client.isAuthenticated()).toBe(false);
   });
 
-  it("restores + hydrates currentUser for a token within the cap", async () => {
+  it("restores + hydrates currentUser when the profile OWNS the token (legitimate returning user)", async () => {
     const client = createApiClient();
     accessTokenRef.current = "stored.jwt.token";
     sessionIssuedAtRef.current = String(Date.now()); // issued just now
+    sessionUserIdRef.current = user.userId; // token owner == the restoring profile
     expect(await client.restoreSession(user)).toBe(true);
     expect(client.isAuthenticated()).toBe(true);
     expect(client.getCurrentUser()).toEqual(user);
@@ -183,6 +187,34 @@ describe("ApiClientImpl — restoreSession (cold-launch, 30-day cap)", () => {
     expect(await client.restoreSession(user)).toBe(false);
     expect(client.isAuthenticated()).toBe(false);
     expect(clearTokens).toHaveBeenCalled();
+  });
+
+  // NAV-3A — the cold-launch cross-user isolation guard. On a shared device the
+  // SQLCipher DB holds multiple accounts; getProfile() returns the MOST-RECENT
+  // row, which may not be the token owner. Restore must refuse to hydrate a
+  // profile that does not own the stored token, or account B boots into
+  // account A's health data (confirmed on-device 2026-06-20).
+  it("REFUSES restore when the most-recent profile is NOT the token owner", async () => {
+    const client = createApiClient();
+    accessTokenRef.current = "B.jwt.token";
+    sessionIssuedAtRef.current = String(Date.now()); // within the 30-day cap
+    sessionUserIdRef.current = "user-B"; // the stored token belongs to B
+    // RootNavigator passes the most-recent profile — here account A's row.
+    const profileA = { userId: "user-A", email: "a@example.com" };
+    expect(await client.restoreSession(profileA)).toBe(false);
+    expect(client.isAuthenticated()).toBe(false);
+    expect(client.getCurrentUser()).toBeNull();
+  });
+
+  // Secure-by-default: a legacy session written before NAV-3A has no owner
+  // anchor → unverifiable → refuse (one re-auth on upgrade), never trust.
+  it("REFUSES restore when no token-owner id is stored (legacy/unverifiable)", async () => {
+    const client = createApiClient();
+    accessTokenRef.current = "legacy.jwt.token";
+    sessionIssuedAtRef.current = String(Date.now());
+    sessionUserIdRef.current = null; // no owner anchor
+    expect(await client.restoreSession(user)).toBe(false);
+    expect(client.isAuthenticated()).toBe(false);
   });
 });
 
