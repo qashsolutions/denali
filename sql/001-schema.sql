@@ -2,48 +2,42 @@
 -- Denali baseline schema (sql/001-schema.sql)
 --
 -- Provenance:
---   Generated from pg_dump --schema-only against denali-prod RDS on 2026-04-21
---   Source: denali-prod.ca5m0qc8e5h8.us-east-1.rds.amazonaws.com / db=denali
---   Dumper: pg_dump 16.13 (Debian) against PostgreSQL 16.9
---   Flags:  --schema-only --no-owner --no-acl --no-publications
---           --no-subscriptions --no-security-labels --no-tablespaces
---           --if-exists --clean --schema=public
---   Run via: ECS Fargate task (denali-prod-pgdump:1) — read-only on prod
+--   Generated from pg_dump --schema-only against denali-STAGING RDS on 2026-06-29
+--   Source: denali-staging.ca5m0qc8e5h8.us-east-1.rds.amazonaws.com / db=denali
+--   Dumper: pg_dump 16.14 (Debian) against PostgreSQL 16.13
+--   Flags:  --schema-only --no-owner --no-acl --no-publications --schema=public
+--   Run via: ECS Fargate task (denali-staging-pgdump:1) — read-only on staging
+--
+-- Why staging (not prod): the mobile E2E CI gate validates develop-branch code,
+--   so CI mirrors the schema we develop/test against. Staging is a strict
+--   SUPERSET of prod as of this dump — the only differences were the
+--   backup_blobs table (ZK-backup, migrate-backup-blobs-2026-06-14, applied to
+--   staging but not yet prod) and three chat rate-limit functions whose source
+--   was reformatted but is behaviorally identical. Operator-ratified 2026-06-29.
 --
 -- Post-processing applied:
 --   - Stripped psql \restrict / \unrestrict directives (psql-only, not portable)
---   - Stripped 262 destructive DROP / ALTER...DROP CONSTRAINT statements
---     produced by --clean (we want a non-destructive bootstrap baseline)
---   - Stripped 10 session SET statements (statement_timeout, lock_timeout,
---     client_encoding, etc.) and the SELECT pg_catalog.set_config('search_path')
---     so the file is replay-safe inside an enclosing transaction
+--   - Stripped top-level session SET statements + SELECT set_config('search_path')
 --   - Stripped CREATE SCHEMA public + COMMENT ON SCHEMA public (public exists
 --     by default on a fresh PostgreSQL database)
---   - Prepended CREATE EXTENSION IF NOT EXISTS for prod-installed extensions
---     (pgcrypto, pg_trgm, btree_gin) since pg_dump --schema=public filters out
---     the CREATE EXTENSION statements; pgcrypto is required by 40+ uses of
---     gen_random_uuid() in this schema
---   - Wrapped entire body in a single BEGIN / COMMIT transaction so the load
---     is atomic
---
--- Replaces: a Supabase-era schema (51,833 bytes, 16 tables) that was never
---   the actual builder of prod. Prod was bootstrapped from an adapted version
---   that stripped Supabase auth.users FKs, RLS policies, and uuid-ossp — and
---   that adapted version was never committed. This dump captures the true
---   prod schema (41 tables, including counselor_cases, landing_content,
---   outcome_followups, pricing_plans, provider_practices, site_settings,
---   testimonials, and the flywheel_metrics matview) as the new baseline.
---
--- Verification: 0 Supabase residue (no auth.uid, no auth.users, no RLS
---   policies, no anon/authenticated/service_role grants, no Supabase
---   extensions). All identifiers public-schema-qualified.
+--   - Prepended CREATE EXTENSION IF NOT EXISTS for the schema's extensions
+--     (pgcrypto, pg_trgm, btree_gin) — pg_dump --schema=public filters out the
+--     CREATE EXTENSION statements
+--   - Wrapped the body in a single BEGIN / COMMIT so the load is atomic
+--   - No --clean/--if-exists this dump, so there were no destructive DROPs
 -- =============================================================================
-
-BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS btree_gin;
+
+BEGIN;
+
+--
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
+--
+
+
 
 --
 -- Name: add_appeal_credits(text, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -63,6 +57,7 @@ BEGIN
   END IF;
 END;
 $$;
+
 
 --
 -- Name: apply_outcome_incentive(text); Type: FUNCTION; Schema: public; Owner: -
@@ -91,6 +86,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: check_and_increment_chat(text, integer); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -98,26 +94,32 @@ $$;
 CREATE FUNCTION public.check_and_increment_chat(p_identifier text, p_daily_limit integer) RETURNS TABLE(allowed boolean, count integer)
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
-  DECLARE
-    v_count INT;
-    v_today DATE := CURRENT_DATE;
-  BEGIN
-    SELECT message_count INTO v_count
-    FROM chat_daily_usage
-    WHERE identifier = p_identifier AND usage_date = v_today;
-    v_count := COALESCE(v_count, 0);
-    IF p_daily_limit > 0 AND v_count >= p_daily_limit THEN
-      RETURN QUERY SELECT false, v_count;
-      RETURN;
-    END IF;
-    INSERT INTO chat_daily_usage (identifier, usage_date, message_count)
-    VALUES (p_identifier, v_today, 1)
-    ON CONFLICT (identifier, usage_date)
-    DO UPDATE SET message_count = chat_daily_usage.message_count + 1, updated_at = now();
-    RETURN QUERY SELECT true, v_count + 1;
+DECLARE
+  v_count INT;
+  v_today DATE := CURRENT_DATE;
+BEGIN
+  SELECT message_count INTO v_count
+  FROM chat_daily_usage
+  WHERE identifier = p_identifier AND usage_date = v_today;
+
+  v_count := COALESCE(v_count, 0);
+
+  IF p_daily_limit > 0 AND v_count >= p_daily_limit THEN
+    RETURN QUERY SELECT false, v_count;
     RETURN;
-  END;
-  $$;
+  END IF;
+
+  INSERT INTO chat_daily_usage (identifier, usage_date, message_count)
+  VALUES (p_identifier, v_today, 1)
+  ON CONFLICT (identifier, usage_date)
+  DO UPDATE SET message_count = chat_daily_usage.message_count + 1,
+               updated_at = now();
+
+  RETURN QUERY SELECT true, v_count + 1;
+  RETURN;
+END;
+$$;
+
 
 --
 -- Name: check_appeal_access(text); Type: FUNCTION; Schema: public; Owner: -
@@ -143,13 +145,26 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: check_rolling_chat_limit(text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.check_rolling_chat_limit(p_identifier text, p_max integer, p_window_days integer) RETURNS TABLE(allowed boolean, total integer, is_last boolean)
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$ DECLARE v_total INT; BEGIN SELECT COALESCE(SUM(message_count), 0) INTO v_total FROM chat_daily_usage WHERE identifier = p_identifier AND usage_date >= CURRENT_DATE - p_window_days; RETURN QUERY SELECT v_total < p_max, v_total, v_total = p_max - 1; END; $$;
+    AS $$
+DECLARE
+  v_total INT;
+BEGIN
+  SELECT COALESCE(SUM(message_count), 0) INTO v_total
+  FROM chat_daily_usage
+  WHERE identifier = p_identifier
+    AND usage_date >= CURRENT_DATE - p_window_days;
+
+  RETURN QUERY SELECT v_total < p_max, v_total, v_total = p_max - 1;
+END;
+$$;
+
 
 --
 -- Name: check_weekly_frequency(text, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -157,7 +172,40 @@ CREATE FUNCTION public.check_rolling_chat_limit(p_identifier text, p_max integer
 
 CREATE FUNCTION public.check_weekly_frequency(p_identifier text, p_max_days integer) RETURNS TABLE(allowed boolean, days_used integer)
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$ DECLARE v_week_start DATE; v_days INT; v_has_today BOOLEAN; BEGIN v_week_start := date_trunc('week', CURRENT_DATE)::DATE; SELECT COUNT(DISTINCT usage_date) INTO v_days FROM chat_daily_usage WHERE identifier = p_identifier AND usage_date >= v_week_start AND usage_date < v_week_start + 7; v_has_today := EXISTS (SELECT 1 FROM chat_daily_usage WHERE identifier = p_identifier AND usage_date = CURRENT_DATE); IF p_max_days = 0 THEN RETURN QUERY SELECT true, v_days; RETURN; END IF; IF v_has_today THEN RETURN QUERY SELECT v_days <= p_max_days, v_days; ELSE RETURN QUERY SELECT v_days < p_max_days, v_days; END IF; END; $$;
+    AS $$
+DECLARE
+  v_week_start DATE;
+  v_days INT;
+  v_has_today BOOLEAN;
+BEGIN
+  v_week_start := date_trunc('week', CURRENT_DATE)::DATE;
+
+  SELECT COUNT(DISTINCT usage_date) INTO v_days
+  FROM chat_daily_usage
+  WHERE identifier = p_identifier
+    AND usage_date >= v_week_start
+    AND usage_date < v_week_start + 7;
+
+  v_has_today := EXISTS (
+    SELECT 1 FROM chat_daily_usage
+    WHERE identifier = p_identifier AND usage_date = CURRENT_DATE
+  );
+
+  -- 0 = unlimited
+  IF p_max_days = 0 THEN
+    RETURN QUERY SELECT true, v_days;
+    RETURN;
+  END IF;
+
+  -- If user already chatted today, that day is counted — allow if within limit
+  IF v_has_today THEN
+    RETURN QUERY SELECT v_days <= p_max_days, v_days;
+  ELSE
+    RETURN QUERY SELECT v_days < p_max_days, v_days;
+  END IF;
+END;
+$$;
+
 
 --
 -- Name: claim_conversation(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -178,6 +226,7 @@ BEGIN
   RETURN v_updated;
 END;
 $$;
+
 
 --
 -- Name: claim_learning_job(); Type: FUNCTION; Schema: public; Owner: -
@@ -211,6 +260,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: complete_learning_job(uuid, boolean, text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -226,6 +276,7 @@ BEGIN
   WHERE id = p_job_id;
 END;
 $$;
+
 
 --
 -- Name: decrement_appeal_credit(text); Type: FUNCTION; Schema: public; Owner: -
@@ -250,6 +301,7 @@ BEGIN
   RETURN v_credits - 1;
 END;
 $$;
+
 
 --
 -- Name: delete_user_cascade(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -280,6 +332,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: fulfill_checkout(uuid, text, text, text, text, timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -288,14 +341,16 @@ CREATE FUNCTION public.fulfill_checkout(p_user_id uuid, p_email text, p_plan tex
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 BEGIN
-  -- Update user plan
   UPDATE public.users SET plan = p_plan WHERE id = p_user_id;
 
-  -- Upsert subscription. Mark trial_converted = true since payment proves the
-  -- user is no longer on trial — /api/trial keys "expired" off this flag once
-  -- the original trial_end has passed.
-  INSERT INTO public.subscriptions (user_id, plan, status, stripe_customer_id, stripe_subscription_id, current_period_start, current_period_end, trial_converted)
-  VALUES (p_user_id, p_plan, 'active', p_stripe_customer_id, p_stripe_subscription_id, p_period_start, p_period_end, true)
+  INSERT INTO public.subscriptions (
+    user_id, plan, status, stripe_customer_id, stripe_subscription_id,
+    current_period_start, current_period_end, trial_converted
+  )
+  VALUES (
+    p_user_id, p_plan, 'active', p_stripe_customer_id, p_stripe_subscription_id,
+    p_period_start, p_period_end, true
+  )
   ON CONFLICT (user_id) DO UPDATE SET
     plan = EXCLUDED.plan,
     status = 'active',
@@ -307,6 +362,7 @@ BEGIN
     updated_at = now();
 END;
 $$;
+
 
 --
 -- Name: generate_case_ref(uuid, text); Type: FUNCTION; Schema: public; Owner: -
@@ -322,6 +378,7 @@ BEGIN
   RETURN upper(p_initials) || '-' || to_char(now(), 'YYYYMM') || '-' || lpad((v_count + 1)::text, 4, '0');
 END;
 $$;
+
 
 --
 -- Name: get_appeal_context(text[], text[]); Type: FUNCTION; Schema: public; Owner: -
@@ -360,6 +417,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: get_appeal_count(text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -374,6 +432,7 @@ BEGIN
   RETURN COALESCE(v_count, 0);
 END;
 $$;
+
 
 --
 -- Name: get_counselor_stats(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -397,6 +456,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: get_denial_pattern_for_carc(text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -414,6 +474,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: get_denial_patterns_for_cpt(text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -430,6 +491,7 @@ BEGIN
   WHERE cpt_code_input = ANY(dp.common_cpts);
 END;
 $$;
+
 
 --
 -- Name: get_flywheel_context(text[], text[]); Type: FUNCTION; Schema: public; Owner: -
@@ -452,6 +514,7 @@ BEGIN
   GROUP BY fm.carc_code;
 END;
 $$;
+
 
 --
 -- Name: get_grouped_audit_logs(uuid, integer, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -476,6 +539,7 @@ BEGIN
   LIMIT p_limit OFFSET p_offset;
 END;
 $$;
+
 
 --
 -- Name: get_learning_context(text[], text[], text[], integer); Type: FUNCTION; Schema: public; Owner: -
@@ -517,6 +581,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: get_unreported_outcome(text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -524,6 +589,7 @@ $$;
 CREATE FUNCTION public.get_unreported_outcome(p_email text) RETURNS TABLE(appeal_id uuid, followup_id uuid, service_description text, denial_date text, appeal_level integer)
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$BEGIN RETURN QUERY SELECT a.id AS appeal_id,f.id AS followup_id,a.service_description,a.denial_date::TEXT,a.appeal_level FROM outcome_followups f JOIN appeals a ON a.id=f.appeal_id WHERE f.email=p_email AND f.status='pending' AND f.scheduled_at<=NOW() AND NOT EXISTS(SELECT 1 FROM appeal_outcomes ao WHERE ao.appeal_id=a.id) ORDER BY f.scheduled_at ASC LIMIT 1;END;$$;
+
 
 --
 -- Name: handle_subscription_change(text, text, timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
@@ -556,6 +622,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: increment_appeal_count(text, uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -582,6 +649,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: process_feedback(uuid, uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -598,6 +666,7 @@ BEGIN
   RETURN v_id;
 END;
 $$;
+
 
 --
 -- Name: prune_weak_mappings(real, integer, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -636,6 +705,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: queue_learning_job(text, jsonb, integer); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -652,6 +722,7 @@ BEGIN
   RETURN v_id;
 END;
 $$;
+
 
 --
 -- Name: record_appeal_outcome(uuid, text, text, text, text[], text[], integer); Type: FUNCTION; Schema: public; Owner: -
@@ -682,6 +753,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: refresh_flywheel_metrics(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -693,6 +765,7 @@ BEGIN
   REFRESH MATERIALIZED VIEW public.flywheel_metrics;
 END;
 $$;
+
 
 --
 -- Name: reset_monthly_appeal_credits(text, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -712,6 +785,7 @@ BEGIN
   END IF;
 END;
 $$;
+
 
 --
 -- Name: search_denial_codes(text); Type: FUNCTION; Schema: public; Owner: -
@@ -737,6 +811,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: track_user_event(text, text, jsonb, uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -753,6 +828,7 @@ BEGIN
   RETURN v_id;
 END;
 $$;
+
 
 --
 -- Name: update_conversation_pattern(text, text, jsonb, boolean); Type: FUNCTION; Schema: public; Owner: -
@@ -775,6 +851,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: update_coverage_path(text, text, text, text, text, text, text[]); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -791,6 +868,7 @@ BEGIN
       outcome = p_outcome;
 END;
 $$;
+
 
 --
 -- Name: update_procedure_mapping(text, text, text, real); Type: FUNCTION; Schema: public; Owner: -
@@ -810,6 +888,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: update_symptom_mapping(text, text, text, real); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -828,6 +907,7 @@ BEGIN
 END;
 $$;
 
+
 --
 -- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -840,6 +920,9 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+
 
 --
 -- Name: alert_log; Type: TABLE; Schema: public; Owner: -
@@ -859,6 +942,7 @@ CREATE TABLE public.alert_log (
     CONSTRAINT alert_log_status_check CHECK ((status = ANY (ARRAY['sent'::text, 'bounced'::text, 'failed'::text])))
 );
 
+
 --
 -- Name: alert_preferences; Type: TABLE; Schema: public; Owner: -
 --
@@ -872,6 +956,7 @@ CREATE TABLE public.alert_preferences (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT alert_preferences_alert_type_check CHECK ((alert_type = ANY (ARRAY['appeal_deadline'::text, 'med_refill'::text, 'new_denial'::text, 'data_refresh'::text])))
 );
+
 
 --
 -- Name: appeal_levels; Type: TABLE; Schema: public; Owner: -
@@ -888,6 +973,7 @@ CREATE TABLE public.appeal_levels (
     effective_date date DEFAULT '2025-12-10'::date NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
+
 
 --
 -- Name: appeal_levels_latest; Type: VIEW; Schema: public; Owner: -
@@ -907,6 +993,7 @@ CREATE VIEW public.appeal_levels_latest AS
   WHERE (effective_date = ( SELECT max(al.effective_date) AS max
            FROM public.appeal_levels al))
   ORDER BY level;
+
 
 --
 -- Name: appeal_outcomes; Type: TABLE; Schema: public; Owner: -
@@ -930,6 +1017,7 @@ CREATE TABLE public.appeal_outcomes (
     email text,
     CONSTRAINT appeal_outcomes_outcome_check CHECK ((outcome = ANY (ARRAY['approved'::text, 'denied'::text, 'partial'::text, 'pending'::text, 'unknown'::text])))
 );
+
 
 --
 -- Name: appeals; Type: TABLE; Schema: public; Owner: -
@@ -966,6 +1054,7 @@ CREATE TABLE public.appeals (
     CONSTRAINT appeals_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'sent'::text, 'approved'::text, 'denied'::text, 'pending'::text])))
 );
 
+
 --
 -- Name: audit_logs; Type: TABLE; Schema: public; Owner: -
 --
@@ -981,6 +1070,33 @@ CREATE TABLE public.audit_logs (
     user_agent text,
     created_at timestamp with time zone DEFAULT now()
 );
+
+
+--
+-- Name: backup_blobs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.backup_blobs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    version integer NOT NULL,
+    kek_salt text NOT NULL,
+    wrap_nonce text NOT NULL,
+    wrapped_dek text NOT NULL,
+    data_nonce text NOT NULL,
+    ciphertext text NOT NULL,
+    manifest jsonb NOT NULL,
+    size_bytes bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE backup_blobs; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.backup_blobs IS 'Zero-knowledge backup ciphertext (D16). Server-undecryptable; no plaintext PHI. Decryption key is on-device only.';
+
 
 --
 -- Name: blog_posts; Type: TABLE; Schema: public; Owner: -
@@ -1007,6 +1123,7 @@ CREATE TABLE public.blog_posts (
     CONSTRAINT blog_posts_category_check CHECK ((category = ANY (ARRAY['denial-codes'::text, 'coverage'::text, 'appeals'::text, 'prior-auth'::text])))
 );
 
+
 --
 -- Name: carc_codes; Type: TABLE; Schema: public; Owner: -
 --
@@ -1021,6 +1138,7 @@ CREATE TABLE public.carc_codes (
     is_active boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT now()
 );
+
 
 --
 -- Name: carc_codes_latest; Type: VIEW; Schema: public; Owner: -
@@ -1039,6 +1157,7 @@ CREATE VIEW public.carc_codes_latest AS
   WHERE (effective_date = ( SELECT max(cc.effective_date) AS max
            FROM public.carc_codes cc));
 
+
 --
 -- Name: chat_daily_usage; Type: TABLE; Schema: public; Owner: -
 --
@@ -1051,6 +1170,7 @@ CREATE TABLE public.chat_daily_usage (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
 
 --
 -- Name: consent_preferences; Type: TABLE; Schema: public; Owner: -
@@ -1068,6 +1188,7 @@ CREATE TABLE public.consent_preferences (
     updated_at timestamp with time zone DEFAULT now()
 );
 
+
 --
 -- Name: conversation_patterns; Type: TABLE; Schema: public; Owner: -
 --
@@ -1084,6 +1205,7 @@ CREATE TABLE public.conversation_patterns (
     CONSTRAINT conversation_patterns_intent_check CHECK ((intent = ANY (ARRAY['coverage_check'::text, 'appeal_help'::text, 'provider_lookup'::text, 'general'::text]))),
     CONSTRAINT conversation_patterns_success_rate_check CHECK (((success_rate >= (0)::double precision) AND (success_rate <= (1)::double precision)))
 );
+
 
 --
 -- Name: conversations; Type: TABLE; Schema: public; Owner: -
@@ -1103,6 +1225,7 @@ CREATE TABLE public.conversations (
     last_suggestions jsonb,
     CONSTRAINT conversations_status_check CHECK ((status = ANY (ARRAY['active'::text, 'completed'::text, 'archived'::text])))
 );
+
 
 --
 -- Name: counselor_cases; Type: TABLE; Schema: public; Owner: -
@@ -1130,6 +1253,7 @@ CREATE TABLE public.counselor_cases (
     CONSTRAINT counselor_cases_status_check CHECK ((status = ANY (ARRAY['open'::text, 'appeal_filed'::text, 'outcome_reported'::text, 'closed'::text])))
 );
 
+
 --
 -- Name: coverage_paths; Type: TABLE; Schema: public; Owner: -
 --
@@ -1148,6 +1272,7 @@ CREATE TABLE public.coverage_paths (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT coverage_paths_outcome_check CHECK ((outcome = ANY (ARRAY['approved'::text, 'denied'::text, 'conditional'::text])))
 );
+
 
 --
 -- Name: denial_patterns; Type: TABLE; Schema: public; Owner: -
@@ -1168,6 +1293,7 @@ CREATE TABLE public.denial_patterns (
     is_active boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT now()
 );
+
 
 --
 -- Name: denial_patterns_latest; Type: VIEW; Schema: public; Owner: -
@@ -1191,6 +1317,7 @@ CREATE VIEW public.denial_patterns_latest AS
   WHERE ((effective_date = ( SELECT max(dp.effective_date) AS max
            FROM public.denial_patterns dp)) AND (is_active = true));
 
+
 --
 -- Name: diabetes_insights; Type: TABLE; Schema: public; Owner: -
 --
@@ -1209,6 +1336,7 @@ CREATE TABLE public.diabetes_insights (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT diabetes_insights_classification_check CHECK ((classification = ANY (ARRAY['diabetic'::text, 'pre-diabetic'::text, 'at-risk'::text, 'none'::text])))
 );
+
 
 --
 -- Name: diabetes_log; Type: TABLE; Schema: public; Owner: -
@@ -1230,6 +1358,7 @@ CREATE TABLE public.diabetes_log (
     CONSTRAINT diabetes_log_glucose_context_check CHECK (((glucose_context IS NULL) OR (glucose_context = ANY (ARRAY['fasting'::text, 'before_meal'::text, 'after_meal'::text, 'bedtime'::text, 'other'::text]))))
 );
 
+
 --
 -- Name: diabetes_snapshots; Type: TABLE; Schema: public; Owner: -
 --
@@ -1245,6 +1374,7 @@ CREATE TABLE public.diabetes_snapshots (
     source text DEFAULT 'fhir'::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
 
 --
 -- Name: ehr_connections; Type: TABLE; Schema: public; Owner: -
@@ -1265,6 +1395,7 @@ CREATE TABLE public.ehr_connections (
     updated_at timestamp with time zone DEFAULT now()
 );
 
+
 --
 -- Name: eob_denial_mappings; Type: TABLE; Schema: public; Owner: -
 --
@@ -1278,6 +1409,7 @@ CREATE TABLE public.eob_denial_mappings (
     effective_date date NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
+
 
 --
 -- Name: eob_denial_mappings_latest; Type: VIEW; Schema: public; Owner: -
@@ -1295,6 +1427,7 @@ CREATE VIEW public.eob_denial_mappings_latest AS
   WHERE (effective_date = ( SELECT max(edm.effective_date) AS max
            FROM public.eob_denial_mappings edm));
 
+
 --
 -- Name: fhir_cache; Type: TABLE; Schema: public; Owner: -
 --
@@ -1307,6 +1440,7 @@ CREATE TABLE public.fhir_cache (
     cached_at timestamp with time zone DEFAULT now(),
     expires_at timestamp with time zone DEFAULT (now() + '24:00:00'::interval)
 );
+
 
 --
 -- Name: users; Type: TABLE; Schema: public; Owner: -
@@ -1331,11 +1465,18 @@ CREATE TABLE public.users (
     counselor_state text,
     counselor_id text,
     is_admin boolean DEFAULT false NOT NULL,
+    birth_year integer,
+    is_on_medicare boolean,
+    birth_year_modal_dismissed_at timestamp without time zone,
+    birth_year_modal_disabled boolean DEFAULT false NOT NULL,
+    sex_at_birth text,
+    gender_identity text,
     CONSTRAINT users_plan_check CHECK ((plan = ANY (ARRAY['trial'::text, 'starter'::text, 'plus'::text, 'unlimited'::text]))),
     CONSTRAINT users_role_check CHECK ((role = ANY (ARRAY['patient'::text, 'counselor'::text, 'provider'::text]))),
     CONSTRAINT users_text_size_check CHECK (((text_size >= (0.8)::double precision) AND (text_size <= (1.5)::double precision))),
     CONSTRAINT users_theme_check CHECK ((theme = ANY (ARRAY['auto'::text, 'light'::text, 'dark'::text])))
 );
+
 
 --
 -- Name: flywheel_metrics; Type: MATERIALIZED VIEW; Schema: public; Owner: -
@@ -1360,6 +1501,7 @@ CREATE MATERIALIZED VIEW public.flywheel_metrics AS
   GROUP BY a.cpt_codes, a.icd10_codes, a.lcd_refs, carc.carc_code, a.status, (EXTRACT(epoch FROM (a.outcome_reported_at - a.created_at)) / (86400)::numeric), u.counselor_state
   WITH NO DATA;
 
+
 --
 -- Name: health_reports; Type: TABLE; Schema: public; Owner: -
 --
@@ -1377,6 +1519,7 @@ CREATE TABLE public.health_reports (
     CONSTRAINT health_reports_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'generating'::text, 'ready'::text, 'failed'::text])))
 );
 
+
 --
 -- Name: landing_content; Type: TABLE; Schema: public; Owner: -
 --
@@ -1392,6 +1535,7 @@ CREATE TABLE public.landing_content (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
+
 
 --
 -- Name: learning_queue; Type: TABLE; Schema: public; Owner: -
@@ -1414,6 +1558,7 @@ CREATE TABLE public.learning_queue (
     CONSTRAINT learning_queue_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'processing'::text, 'completed'::text, 'failed'::text])))
 );
 
+
 --
 -- Name: messages; Type: TABLE; Schema: public; Owner: -
 --
@@ -1430,6 +1575,7 @@ CREATE TABLE public.messages (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT messages_role_check CHECK ((role = ANY (ARRAY['user'::text, 'assistant'::text, 'system'::text])))
 );
+
 
 --
 -- Name: outcome_followups; Type: TABLE; Schema: public; Owner: -
@@ -1451,6 +1597,7 @@ CREATE TABLE public.outcome_followups (
     CONSTRAINT outcome_followups_followup_type_check CHECK ((followup_type = ANY (ARRAY['day_30'::text, 'day_60'::text, 'incentive'::text]))),
     CONSTRAINT outcome_followups_outcome_check CHECK ((outcome = ANY (ARRAY['approved'::text, 'denied'::text, 'partial'::text, 'pending'::text])))
 );
+
 
 --
 -- Name: policy_cache; Type: TABLE; Schema: public; Owner: -
@@ -1474,6 +1621,7 @@ CREATE TABLE public.policy_cache (
     CONSTRAINT policy_cache_policy_type_check CHECK ((policy_type = ANY (ARRAY['ncd'::text, 'lcd'::text, 'article'::text])))
 );
 
+
 --
 -- Name: pricing_plans; Type: TABLE; Schema: public; Owner: -
 --
@@ -1491,6 +1639,7 @@ CREATE TABLE public.pricing_plans (
     created_at timestamp with time zone DEFAULT now()
 );
 
+
 --
 -- Name: procedure_mappings; Type: TABLE; Schema: public; Owner: -
 --
@@ -1506,6 +1655,7 @@ CREATE TABLE public.procedure_mappings (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT procedure_mappings_confidence_check CHECK (((confidence >= (0)::double precision) AND (confidence <= (1)::double precision)))
 );
+
 
 --
 -- Name: provider_practices; Type: TABLE; Schema: public; Owner: -
@@ -1527,6 +1677,7 @@ CREATE TABLE public.provider_practices (
     updated_at timestamp with time zone DEFAULT now()
 );
 
+
 --
 -- Name: rarc_codes; Type: TABLE; Schema: public; Owner: -
 --
@@ -1540,6 +1691,7 @@ CREATE TABLE public.rarc_codes (
     is_active boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT now()
 );
+
 
 --
 -- Name: rarc_codes_latest; Type: VIEW; Schema: public; Owner: -
@@ -1557,6 +1709,7 @@ CREATE VIEW public.rarc_codes_latest AS
   WHERE (effective_date = ( SELECT max(rc.effective_date) AS max
            FROM public.rarc_codes rc));
 
+
 --
 -- Name: site_settings; Type: TABLE; Schema: public; Owner: -
 --
@@ -1569,6 +1722,7 @@ CREATE TABLE public.site_settings (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
+
 
 --
 -- Name: subscriptions; Type: TABLE; Schema: public; Owner: -
@@ -1594,6 +1748,7 @@ CREATE TABLE public.subscriptions (
     CONSTRAINT subscriptions_status_check CHECK ((status = ANY (ARRAY['active'::text, 'cancelled'::text, 'past_due'::text, 'trialing'::text])))
 );
 
+
 --
 -- Name: symptom_mappings; Type: TABLE; Schema: public; Owner: -
 --
@@ -1609,6 +1764,7 @@ CREATE TABLE public.symptom_mappings (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT symptom_mappings_confidence_check CHECK (((confidence >= (0)::double precision) AND (confidence <= (1)::double precision)))
 );
+
 
 --
 -- Name: testimonials; Type: TABLE; Schema: public; Owner: -
@@ -1627,6 +1783,7 @@ CREATE TABLE public.testimonials (
     CONSTRAINT testimonials_rating_check CHECK (((rating >= 1) AND (rating <= 5)))
 );
 
+
 --
 -- Name: usage; Type: TABLE; Schema: public; Owner: -
 --
@@ -1644,6 +1801,27 @@ CREATE TABLE public.usage (
     appeal_credits integer DEFAULT 0 NOT NULL
 );
 
+
+--
+-- Name: user_conditions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_conditions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    condition_code text NOT NULL,
+    condition_category text NOT NULL,
+    source text NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    ended_at timestamp with time zone,
+    confidence numeric(3,2),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT user_conditions_category_check CHECK ((condition_category = ANY (ARRAY['prediabetes'::text, 'type1'::text, 'type2'::text, 'obesity'::text, 'hypertension'::text, 'dyslipidemia'::text, 'ckd'::text, 'cvd'::text, 'depression'::text]))),
+    CONSTRAINT user_conditions_source_check CHECK ((source = ANY (ARRAY['claims'::text, 'self_reported'::text, 'ehr'::text])))
+);
+
+
 --
 -- Name: user_events; Type: TABLE; Schema: public; Owner: -
 --
@@ -1659,6 +1837,7 @@ CREATE TABLE public.user_events (
     created_at timestamp with time zone DEFAULT now(),
     CONSTRAINT user_events_event_type_check CHECK ((event_type = ANY (ARRAY['print'::text, 'copy'::text, 'download'::text, 'share'::text, 'return_visit'::text, 'upgrade'::text, 'cancel'::text, 'feedback_positive'::text, 'feedback_negative'::text, 'appeal_started'::text, 'appeal_completed'::text, 'outcome_reported'::text])))
 );
+
 
 --
 -- Name: user_feedback; Type: TABLE; Schema: public; Owner: -
@@ -1676,6 +1855,7 @@ CREATE TABLE public.user_feedback (
     CONSTRAINT user_feedback_rating_check CHECK ((rating = ANY (ARRAY['up'::text, 'down'::text])))
 );
 
+
 --
 -- Name: user_topic_preferences; Type: TABLE; Schema: public; Owner: -
 --
@@ -1687,6 +1867,7 @@ CREATE TABLE public.user_topic_preferences (
     created_at timestamp with time zone DEFAULT now(),
     CONSTRAINT user_topic_preferences_topic_check CHECK ((topic = ANY (ARRAY['diabetes'::text, 'obesity'::text, 'medicare-general'::text])))
 );
+
 
 --
 -- Name: user_verification; Type: TABLE; Schema: public; Owner: -
@@ -1712,12 +1893,14 @@ CREATE TABLE public.user_verification (
     idme_gender text
 );
 
+
 --
 -- Name: alert_log alert_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.alert_log
     ADD CONSTRAINT alert_log_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: alert_preferences alert_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1726,12 +1909,14 @@ ALTER TABLE ONLY public.alert_log
 ALTER TABLE ONLY public.alert_preferences
     ADD CONSTRAINT alert_preferences_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: alert_preferences alert_preferences_user_id_alert_type_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.alert_preferences
     ADD CONSTRAINT alert_preferences_user_id_alert_type_key UNIQUE (user_id, alert_type);
+
 
 --
 -- Name: appeal_levels appeal_levels_level_effective_date_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1740,12 +1925,14 @@ ALTER TABLE ONLY public.alert_preferences
 ALTER TABLE ONLY public.appeal_levels
     ADD CONSTRAINT appeal_levels_level_effective_date_key UNIQUE (level, effective_date);
 
+
 --
 -- Name: appeal_levels appeal_levels_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.appeal_levels
     ADD CONSTRAINT appeal_levels_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: appeal_outcomes appeal_outcomes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1754,12 +1941,14 @@ ALTER TABLE ONLY public.appeal_levels
 ALTER TABLE ONLY public.appeal_outcomes
     ADD CONSTRAINT appeal_outcomes_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: appeals appeals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.appeals
     ADD CONSTRAINT appeals_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: audit_logs audit_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1768,12 +1957,22 @@ ALTER TABLE ONLY public.appeals
 ALTER TABLE ONLY public.audit_logs
     ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 
+
+--
+-- Name: backup_blobs backup_blobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backup_blobs
+    ADD CONSTRAINT backup_blobs_pkey PRIMARY KEY (id);
+
+
 --
 -- Name: blog_posts blog_posts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.blog_posts
     ADD CONSTRAINT blog_posts_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: blog_posts blog_posts_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1782,12 +1981,14 @@ ALTER TABLE ONLY public.blog_posts
 ALTER TABLE ONLY public.blog_posts
     ADD CONSTRAINT blog_posts_slug_key UNIQUE (slug);
 
+
 --
 -- Name: carc_codes carc_codes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.carc_codes
     ADD CONSTRAINT carc_codes_pkey PRIMARY KEY (code, effective_date);
+
 
 --
 -- Name: chat_daily_usage chat_daily_usage_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1796,12 +1997,14 @@ ALTER TABLE ONLY public.carc_codes
 ALTER TABLE ONLY public.chat_daily_usage
     ADD CONSTRAINT chat_daily_usage_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: consent_preferences consent_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.consent_preferences
     ADD CONSTRAINT consent_preferences_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: consent_preferences consent_preferences_user_id_consent_type_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1810,12 +2013,14 @@ ALTER TABLE ONLY public.consent_preferences
 ALTER TABLE ONLY public.consent_preferences
     ADD CONSTRAINT consent_preferences_user_id_consent_type_key UNIQUE (user_id, consent_type);
 
+
 --
 -- Name: conversation_patterns conversation_patterns_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.conversation_patterns
     ADD CONSTRAINT conversation_patterns_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: conversation_patterns conversation_patterns_trigger_phrase_intent_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1824,12 +2029,14 @@ ALTER TABLE ONLY public.conversation_patterns
 ALTER TABLE ONLY public.conversation_patterns
     ADD CONSTRAINT conversation_patterns_trigger_phrase_intent_key UNIQUE (trigger_phrase, intent);
 
+
 --
 -- Name: conversations conversations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.conversations
     ADD CONSTRAINT conversations_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: counselor_cases counselor_cases_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1838,12 +2045,14 @@ ALTER TABLE ONLY public.conversations
 ALTER TABLE ONLY public.counselor_cases
     ADD CONSTRAINT counselor_cases_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: coverage_paths coverage_paths_icd10_code_cpt_code_ncd_id_lcd_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.coverage_paths
     ADD CONSTRAINT coverage_paths_icd10_code_cpt_code_ncd_id_lcd_id_key UNIQUE (icd10_code, cpt_code, ncd_id, lcd_id);
+
 
 --
 -- Name: coverage_paths coverage_paths_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1852,12 +2061,14 @@ ALTER TABLE ONLY public.coverage_paths
 ALTER TABLE ONLY public.coverage_paths
     ADD CONSTRAINT coverage_paths_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: denial_patterns denial_patterns_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.denial_patterns
     ADD CONSTRAINT denial_patterns_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: diabetes_insights diabetes_insights_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1866,12 +2077,14 @@ ALTER TABLE ONLY public.denial_patterns
 ALTER TABLE ONLY public.diabetes_insights
     ADD CONSTRAINT diabetes_insights_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: diabetes_log diabetes_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.diabetes_log
     ADD CONSTRAINT diabetes_log_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: diabetes_snapshots diabetes_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1880,12 +2093,14 @@ ALTER TABLE ONLY public.diabetes_log
 ALTER TABLE ONLY public.diabetes_snapshots
     ADD CONSTRAINT diabetes_snapshots_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: ehr_connections ehr_connections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.ehr_connections
     ADD CONSTRAINT ehr_connections_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: ehr_connections ehr_connections_user_id_provider_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1894,12 +2109,14 @@ ALTER TABLE ONLY public.ehr_connections
 ALTER TABLE ONLY public.ehr_connections
     ADD CONSTRAINT ehr_connections_user_id_provider_key UNIQUE (user_id, provider);
 
+
 --
 -- Name: eob_denial_mappings eob_denial_mappings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.eob_denial_mappings
     ADD CONSTRAINT eob_denial_mappings_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: fhir_cache fhir_cache_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1908,12 +2125,14 @@ ALTER TABLE ONLY public.eob_denial_mappings
 ALTER TABLE ONLY public.fhir_cache
     ADD CONSTRAINT fhir_cache_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: fhir_cache fhir_cache_user_id_resource_type_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.fhir_cache
     ADD CONSTRAINT fhir_cache_user_id_resource_type_key UNIQUE (user_id, resource_type);
+
 
 --
 -- Name: health_reports health_reports_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1922,12 +2141,14 @@ ALTER TABLE ONLY public.fhir_cache
 ALTER TABLE ONLY public.health_reports
     ADD CONSTRAINT health_reports_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: landing_content landing_content_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.landing_content
     ADD CONSTRAINT landing_content_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: landing_content landing_content_section_key_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1936,12 +2157,14 @@ ALTER TABLE ONLY public.landing_content
 ALTER TABLE ONLY public.landing_content
     ADD CONSTRAINT landing_content_section_key_key UNIQUE (section_key);
 
+
 --
 -- Name: learning_queue learning_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.learning_queue
     ADD CONSTRAINT learning_queue_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: messages messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1950,12 +2173,14 @@ ALTER TABLE ONLY public.learning_queue
 ALTER TABLE ONLY public.messages
     ADD CONSTRAINT messages_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: outcome_followups outcome_followups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.outcome_followups
     ADD CONSTRAINT outcome_followups_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: outcome_followups outcome_followups_token_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1964,12 +2189,14 @@ ALTER TABLE ONLY public.outcome_followups
 ALTER TABLE ONLY public.outcome_followups
     ADD CONSTRAINT outcome_followups_token_key UNIQUE (token);
 
+
 --
 -- Name: policy_cache policy_cache_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.policy_cache
     ADD CONSTRAINT policy_cache_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: policy_cache policy_cache_policy_type_policy_id_contractor_id_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1978,12 +2205,14 @@ ALTER TABLE ONLY public.policy_cache
 ALTER TABLE ONLY public.policy_cache
     ADD CONSTRAINT policy_cache_policy_type_policy_id_contractor_id_key UNIQUE (policy_type, policy_id, contractor_id);
 
+
 --
 -- Name: pricing_plans pricing_plans_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.pricing_plans
     ADD CONSTRAINT pricing_plans_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: procedure_mappings procedure_mappings_phrase_cpt_code_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1992,12 +2221,14 @@ ALTER TABLE ONLY public.pricing_plans
 ALTER TABLE ONLY public.procedure_mappings
     ADD CONSTRAINT procedure_mappings_phrase_cpt_code_key UNIQUE (phrase, cpt_code);
 
+
 --
 -- Name: procedure_mappings procedure_mappings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_mappings
     ADD CONSTRAINT procedure_mappings_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: provider_practices provider_practices_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2006,12 +2237,14 @@ ALTER TABLE ONLY public.procedure_mappings
 ALTER TABLE ONLY public.provider_practices
     ADD CONSTRAINT provider_practices_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: rarc_codes rarc_codes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.rarc_codes
     ADD CONSTRAINT rarc_codes_pkey PRIMARY KEY (code, effective_date);
+
 
 --
 -- Name: site_settings site_settings_key_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2020,12 +2253,14 @@ ALTER TABLE ONLY public.rarc_codes
 ALTER TABLE ONLY public.site_settings
     ADD CONSTRAINT site_settings_key_key UNIQUE (key);
 
+
 --
 -- Name: site_settings site_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.site_settings
     ADD CONSTRAINT site_settings_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: subscriptions subscriptions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2034,12 +2269,14 @@ ALTER TABLE ONLY public.site_settings
 ALTER TABLE ONLY public.subscriptions
     ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: subscriptions subscriptions_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.subscriptions
     ADD CONSTRAINT subscriptions_user_id_key UNIQUE (user_id);
+
 
 --
 -- Name: symptom_mappings symptom_mappings_phrase_icd10_code_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2048,12 +2285,14 @@ ALTER TABLE ONLY public.subscriptions
 ALTER TABLE ONLY public.symptom_mappings
     ADD CONSTRAINT symptom_mappings_phrase_icd10_code_key UNIQUE (phrase, icd10_code);
 
+
 --
 -- Name: symptom_mappings symptom_mappings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.symptom_mappings
     ADD CONSTRAINT symptom_mappings_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: testimonials testimonials_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2062,12 +2301,14 @@ ALTER TABLE ONLY public.symptom_mappings
 ALTER TABLE ONLY public.testimonials
     ADD CONSTRAINT testimonials_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: usage usage_email_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.usage
     ADD CONSTRAINT usage_email_key UNIQUE (email);
+
 
 --
 -- Name: usage usage_phone_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2076,12 +2317,30 @@ ALTER TABLE ONLY public.usage
 ALTER TABLE ONLY public.usage
     ADD CONSTRAINT usage_phone_key UNIQUE (phone);
 
+
 --
 -- Name: usage usage_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.usage
     ADD CONSTRAINT usage_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_conditions user_conditions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_conditions
+    ADD CONSTRAINT user_conditions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_conditions user_conditions_unique_active; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_conditions
+    ADD CONSTRAINT user_conditions_unique_active UNIQUE (user_id, condition_category, started_at);
+
 
 --
 -- Name: user_events user_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2090,12 +2349,14 @@ ALTER TABLE ONLY public.usage
 ALTER TABLE ONLY public.user_events
     ADD CONSTRAINT user_events_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: user_feedback user_feedback_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_feedback
     ADD CONSTRAINT user_feedback_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: user_topic_preferences user_topic_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2104,12 +2365,14 @@ ALTER TABLE ONLY public.user_feedback
 ALTER TABLE ONLY public.user_topic_preferences
     ADD CONSTRAINT user_topic_preferences_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: user_verification user_verification_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_verification
     ADD CONSTRAINT user_verification_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: user_verification user_verification_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2118,12 +2381,14 @@ ALTER TABLE ONLY public.user_verification
 ALTER TABLE ONLY public.user_verification
     ADD CONSTRAINT user_verification_user_id_key UNIQUE (user_id);
 
+
 --
 -- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_email_key UNIQUE (email);
+
 
 --
 -- Name: users users_phone_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2132,6 +2397,7 @@ ALTER TABLE ONLY public.users
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_phone_key UNIQUE (phone);
 
+
 --
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
@@ -2139,11 +2405,13 @@ ALTER TABLE ONLY public.users
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 
+
 --
 -- Name: idx_alert_log_dedup; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_alert_log_dedup ON public.alert_log USING btree (user_id, alert_type, dedup_key);
+
 
 --
 -- Name: idx_appeal_outcomes_appeal; Type: INDEX; Schema: public; Owner: -
@@ -2151,11 +2419,13 @@ CREATE INDEX idx_alert_log_dedup ON public.alert_log USING btree (user_id, alert
 
 CREATE INDEX idx_appeal_outcomes_appeal ON public.appeal_outcomes USING btree (appeal_id);
 
+
 --
 -- Name: idx_appeal_outcomes_codes; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_appeal_outcomes_codes ON public.appeal_outcomes USING gin (icd10_codes);
+
 
 --
 -- Name: idx_appeal_outcomes_outcome; Type: INDEX; Schema: public; Owner: -
@@ -2163,11 +2433,13 @@ CREATE INDEX idx_appeal_outcomes_codes ON public.appeal_outcomes USING gin (icd1
 
 CREATE INDEX idx_appeal_outcomes_outcome ON public.appeal_outcomes USING btree (outcome);
 
+
 --
 -- Name: idx_appeal_outcomes_phone; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_appeal_outcomes_phone ON public.appeal_outcomes USING btree (phone);
+
 
 --
 -- Name: idx_appeals_conversation; Type: INDEX; Schema: public; Owner: -
@@ -2175,11 +2447,13 @@ CREATE INDEX idx_appeal_outcomes_phone ON public.appeal_outcomes USING btree (ph
 
 CREATE INDEX idx_appeals_conversation ON public.appeals USING btree (conversation_id);
 
+
 --
 -- Name: idx_appeals_deadline; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_appeals_deadline ON public.appeals USING btree (deadline) WHERE (deadline IS NOT NULL);
+
 
 --
 -- Name: idx_appeals_phone; Type: INDEX; Schema: public; Owner: -
@@ -2187,11 +2461,13 @@ CREATE INDEX idx_appeals_deadline ON public.appeals USING btree (deadline) WHERE
 
 CREATE INDEX idx_appeals_phone ON public.appeals USING btree (phone);
 
+
 --
 -- Name: idx_appeals_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_appeals_status ON public.appeals USING btree (status);
+
 
 --
 -- Name: idx_appeals_user; Type: INDEX; Schema: public; Owner: -
@@ -2199,11 +2475,13 @@ CREATE INDEX idx_appeals_status ON public.appeals USING btree (status);
 
 CREATE INDEX idx_appeals_user ON public.appeals USING btree (user_id) WHERE (user_id IS NOT NULL);
 
+
 --
 -- Name: idx_appeals_user_service_level; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_appeals_user_service_level ON public.appeals USING btree (user_id, service_description, appeal_level);
+
 
 --
 -- Name: idx_audit_logs_action; Type: INDEX; Schema: public; Owner: -
@@ -2211,11 +2489,20 @@ CREATE INDEX idx_appeals_user_service_level ON public.appeals USING btree (user_
 
 CREATE INDEX idx_audit_logs_action ON public.audit_logs USING btree (action, created_at DESC);
 
+
 --
 -- Name: idx_audit_logs_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_logs_user ON public.audit_logs USING btree (user_id, created_at DESC);
+
+
+--
+-- Name: idx_backup_blobs_user_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_backup_blobs_user_created ON public.backup_blobs USING btree (user_id, created_at DESC);
+
 
 --
 -- Name: idx_carc_codes_category; Type: INDEX; Schema: public; Owner: -
@@ -2223,11 +2510,13 @@ CREATE INDEX idx_audit_logs_user ON public.audit_logs USING btree (user_id, crea
 
 CREATE INDEX idx_carc_codes_category ON public.carc_codes USING btree (category);
 
+
 --
 -- Name: idx_carc_codes_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_carc_codes_date ON public.carc_codes USING btree (effective_date DESC);
+
 
 --
 -- Name: idx_carc_codes_description; Type: INDEX; Schema: public; Owner: -
@@ -2235,11 +2524,13 @@ CREATE INDEX idx_carc_codes_date ON public.carc_codes USING btree (effective_dat
 
 CREATE INDEX idx_carc_codes_description ON public.carc_codes USING gin (to_tsvector('english'::regconfig, description));
 
+
 --
 -- Name: idx_cases_counselor; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_counselor ON public.counselor_cases USING btree (counselor_id, status);
+
 
 --
 -- Name: idx_cases_ref; Type: INDEX; Schema: public; Owner: -
@@ -2247,11 +2538,13 @@ CREATE INDEX idx_cases_counselor ON public.counselor_cases USING btree (counselo
 
 CREATE INDEX idx_cases_ref ON public.counselor_cases USING btree (case_ref);
 
+
 --
 -- Name: idx_chat_daily_usage_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_chat_daily_usage_date ON public.chat_daily_usage USING btree (usage_date);
+
 
 --
 -- Name: idx_chat_daily_usage_unique; Type: INDEX; Schema: public; Owner: -
@@ -2259,11 +2552,13 @@ CREATE INDEX idx_chat_daily_usage_date ON public.chat_daily_usage USING btree (u
 
 CREATE UNIQUE INDEX idx_chat_daily_usage_unique ON public.chat_daily_usage USING btree (identifier, usage_date);
 
+
 --
 -- Name: idx_consent_prefs_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_consent_prefs_user ON public.consent_preferences USING btree (user_id);
+
 
 --
 -- Name: idx_conversation_patterns_intent; Type: INDEX; Schema: public; Owner: -
@@ -2271,11 +2566,13 @@ CREATE INDEX idx_consent_prefs_user ON public.consent_preferences USING btree (u
 
 CREATE INDEX idx_conversation_patterns_intent ON public.conversation_patterns USING btree (intent);
 
+
 --
 -- Name: idx_conversation_patterns_success; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_conversation_patterns_success ON public.conversation_patterns USING btree (success_rate DESC);
+
 
 --
 -- Name: idx_conversation_patterns_trigger; Type: INDEX; Schema: public; Owner: -
@@ -2283,11 +2580,13 @@ CREATE INDEX idx_conversation_patterns_success ON public.conversation_patterns U
 
 CREATE INDEX idx_conversation_patterns_trigger ON public.conversation_patterns USING gin (to_tsvector('english'::regconfig, trigger_phrase));
 
+
 --
 -- Name: idx_conversations_device; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_conversations_device ON public.conversations USING btree (device_fingerprint);
+
 
 --
 -- Name: idx_conversations_phone; Type: INDEX; Schema: public; Owner: -
@@ -2295,11 +2594,13 @@ CREATE INDEX idx_conversations_device ON public.conversations USING btree (devic
 
 CREATE INDEX idx_conversations_phone ON public.conversations USING btree (phone) WHERE (phone IS NOT NULL);
 
+
 --
 -- Name: idx_conversations_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_conversations_status ON public.conversations USING btree (status);
+
 
 --
 -- Name: idx_conversations_user_id; Type: INDEX; Schema: public; Owner: -
@@ -2307,11 +2608,13 @@ CREATE INDEX idx_conversations_status ON public.conversations USING btree (statu
 
 CREATE INDEX idx_conversations_user_id ON public.conversations USING btree (user_id) WHERE (user_id IS NOT NULL);
 
+
 --
 -- Name: idx_coverage_paths_codes; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_coverage_paths_codes ON public.coverage_paths USING btree (icd10_code, cpt_code);
+
 
 --
 -- Name: idx_coverage_paths_outcome; Type: INDEX; Schema: public; Owner: -
@@ -2319,11 +2622,13 @@ CREATE INDEX idx_coverage_paths_codes ON public.coverage_paths USING btree (icd1
 
 CREATE INDEX idx_coverage_paths_outcome ON public.coverage_paths USING btree (outcome);
 
+
 --
 -- Name: idx_denial_patterns_category; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_denial_patterns_category ON public.denial_patterns USING btree (category);
+
 
 --
 -- Name: idx_denial_patterns_common_cpts; Type: INDEX; Schema: public; Owner: -
@@ -2331,11 +2636,13 @@ CREATE INDEX idx_denial_patterns_category ON public.denial_patterns USING btree 
 
 CREATE INDEX idx_denial_patterns_common_cpts ON public.denial_patterns USING gin (common_cpts);
 
+
 --
 -- Name: idx_denial_patterns_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_denial_patterns_date ON public.denial_patterns USING btree (effective_date DESC);
+
 
 --
 -- Name: idx_denial_patterns_reason_codes; Type: INDEX; Schema: public; Owner: -
@@ -2343,11 +2650,13 @@ CREATE INDEX idx_denial_patterns_date ON public.denial_patterns USING btree (eff
 
 CREATE INDEX idx_denial_patterns_reason_codes ON public.denial_patterns USING gin (reason_codes);
 
+
 --
 -- Name: idx_diabetes_insights_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_diabetes_insights_user ON public.diabetes_insights USING btree (user_id);
+
 
 --
 -- Name: idx_diabetes_log_user_date; Type: INDEX; Schema: public; Owner: -
@@ -2355,11 +2664,13 @@ CREATE UNIQUE INDEX idx_diabetes_insights_user ON public.diabetes_insights USING
 
 CREATE INDEX idx_diabetes_log_user_date ON public.diabetes_log USING btree (user_id, logged_at DESC);
 
+
 --
 -- Name: idx_diabetes_snapshots_unique; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_diabetes_snapshots_unique ON public.diabetes_snapshots USING btree (user_id, loinc_code, observed_date);
+
 
 --
 -- Name: idx_diabetes_snapshots_user_date; Type: INDEX; Schema: public; Owner: -
@@ -2367,11 +2678,13 @@ CREATE UNIQUE INDEX idx_diabetes_snapshots_unique ON public.diabetes_snapshots U
 
 CREATE INDEX idx_diabetes_snapshots_user_date ON public.diabetes_snapshots USING btree (user_id, loinc_code, observed_date DESC);
 
+
 --
 -- Name: idx_ehr_connections_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_ehr_connections_user ON public.ehr_connections USING btree (user_id);
+
 
 --
 -- Name: idx_eob_mappings_carc; Type: INDEX; Schema: public; Owner: -
@@ -2379,11 +2692,13 @@ CREATE INDEX idx_ehr_connections_user ON public.ehr_connections USING btree (use
 
 CREATE INDEX idx_eob_mappings_carc ON public.eob_denial_mappings USING btree (carc_code);
 
+
 --
 -- Name: idx_eob_mappings_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_eob_mappings_date ON public.eob_denial_mappings USING btree (effective_date DESC);
+
 
 --
 -- Name: idx_eob_mappings_eob; Type: INDEX; Schema: public; Owner: -
@@ -2391,11 +2706,13 @@ CREATE INDEX idx_eob_mappings_date ON public.eob_denial_mappings USING btree (ef
 
 CREATE INDEX idx_eob_mappings_eob ON public.eob_denial_mappings USING btree (eob_code);
 
+
 --
 -- Name: idx_fhir_cache_user_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_fhir_cache_user_type ON public.fhir_cache USING btree (user_id, resource_type);
+
 
 --
 -- Name: idx_followups_email_unreported; Type: INDEX; Schema: public; Owner: -
@@ -2403,11 +2720,13 @@ CREATE INDEX idx_fhir_cache_user_type ON public.fhir_cache USING btree (user_id,
 
 CREATE INDEX idx_followups_email_unreported ON public.outcome_followups USING btree (email) WHERE (responded_at IS NULL);
 
+
 --
 -- Name: idx_followups_scheduled; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_followups_scheduled ON public.outcome_followups USING btree (scheduled_at) WHERE (sent_at IS NULL);
+
 
 --
 -- Name: idx_followups_token; Type: INDEX; Schema: public; Owner: -
@@ -2415,11 +2734,13 @@ CREATE INDEX idx_followups_scheduled ON public.outcome_followups USING btree (sc
 
 CREATE INDEX idx_followups_token ON public.outcome_followups USING btree (token);
 
+
 --
 -- Name: idx_health_reports_share_token; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_health_reports_share_token ON public.health_reports USING btree (share_token);
+
 
 --
 -- Name: idx_health_reports_user_id; Type: INDEX; Schema: public; Owner: -
@@ -2427,11 +2748,13 @@ CREATE UNIQUE INDEX idx_health_reports_share_token ON public.health_reports USIN
 
 CREATE INDEX idx_health_reports_user_id ON public.health_reports USING btree (user_id);
 
+
 --
 -- Name: idx_landing_content_display_order; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_landing_content_display_order ON public.landing_content USING btree (display_order);
+
 
 --
 -- Name: idx_landing_content_section_key; Type: INDEX; Schema: public; Owner: -
@@ -2439,11 +2762,13 @@ CREATE INDEX idx_landing_content_display_order ON public.landing_content USING b
 
 CREATE INDEX idx_landing_content_section_key ON public.landing_content USING btree (section_key);
 
+
 --
 -- Name: idx_learning_queue_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_learning_queue_status ON public.learning_queue USING btree (status, priority) WHERE (status = 'pending'::text);
+
 
 --
 -- Name: idx_learning_queue_type; Type: INDEX; Schema: public; Owner: -
@@ -2451,11 +2776,13 @@ CREATE INDEX idx_learning_queue_status ON public.learning_queue USING btree (sta
 
 CREATE INDEX idx_learning_queue_type ON public.learning_queue USING btree (job_type);
 
+
 --
 -- Name: idx_messages_conversation; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_messages_conversation ON public.messages USING btree (conversation_id);
+
 
 --
 -- Name: idx_messages_created; Type: INDEX; Schema: public; Owner: -
@@ -2463,11 +2790,13 @@ CREATE INDEX idx_messages_conversation ON public.messages USING btree (conversat
 
 CREATE INDEX idx_messages_created ON public.messages USING btree (created_at);
 
+
 --
 -- Name: idx_policy_cache_codes; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_policy_cache_codes ON public.policy_cache USING gin (covered_codes);
+
 
 --
 -- Name: idx_policy_cache_policy; Type: INDEX; Schema: public; Owner: -
@@ -2475,11 +2804,13 @@ CREATE INDEX idx_policy_cache_codes ON public.policy_cache USING gin (covered_co
 
 CREATE INDEX idx_policy_cache_policy ON public.policy_cache USING btree (policy_type, policy_id);
 
+
 --
 -- Name: idx_policy_cache_updated; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_policy_cache_updated ON public.policy_cache USING btree (last_changed_at DESC);
+
 
 --
 -- Name: idx_pricing_plans_display_order; Type: INDEX; Schema: public; Owner: -
@@ -2487,11 +2818,13 @@ CREATE INDEX idx_policy_cache_updated ON public.policy_cache USING btree (last_c
 
 CREATE INDEX idx_pricing_plans_display_order ON public.pricing_plans USING btree (display_order);
 
+
 --
 -- Name: idx_procedure_mappings_confidence; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_mappings_confidence ON public.procedure_mappings USING btree (confidence DESC);
+
 
 --
 -- Name: idx_procedure_mappings_phrase; Type: INDEX; Schema: public; Owner: -
@@ -2499,11 +2832,13 @@ CREATE INDEX idx_procedure_mappings_confidence ON public.procedure_mappings USIN
 
 CREATE INDEX idx_procedure_mappings_phrase ON public.procedure_mappings USING btree (phrase);
 
+
 --
 -- Name: idx_provider_practices_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_provider_practices_user ON public.provider_practices USING btree (user_id);
+
 
 --
 -- Name: idx_rarc_codes_date; Type: INDEX; Schema: public; Owner: -
@@ -2511,11 +2846,13 @@ CREATE INDEX idx_provider_practices_user ON public.provider_practices USING btre
 
 CREATE INDEX idx_rarc_codes_date ON public.rarc_codes USING btree (effective_date DESC);
 
+
 --
 -- Name: idx_rarc_codes_description; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_rarc_codes_description ON public.rarc_codes USING gin (to_tsvector('english'::regconfig, description));
+
 
 --
 -- Name: idx_site_settings_key; Type: INDEX; Schema: public; Owner: -
@@ -2523,11 +2860,13 @@ CREATE INDEX idx_rarc_codes_description ON public.rarc_codes USING gin (to_tsvec
 
 CREATE INDEX idx_site_settings_key ON public.site_settings USING btree (key);
 
+
 --
 -- Name: idx_subscriptions_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_subscriptions_status ON public.subscriptions USING btree (status);
+
 
 --
 -- Name: idx_subscriptions_stripe_customer; Type: INDEX; Schema: public; Owner: -
@@ -2535,11 +2874,13 @@ CREATE INDEX idx_subscriptions_status ON public.subscriptions USING btree (statu
 
 CREATE INDEX idx_subscriptions_stripe_customer ON public.subscriptions USING btree (stripe_customer_id);
 
+
 --
 -- Name: idx_symptom_mappings_confidence; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_symptom_mappings_confidence ON public.symptom_mappings USING btree (confidence DESC);
+
 
 --
 -- Name: idx_symptom_mappings_phrase; Type: INDEX; Schema: public; Owner: -
@@ -2547,11 +2888,13 @@ CREATE INDEX idx_symptom_mappings_confidence ON public.symptom_mappings USING bt
 
 CREATE INDEX idx_symptom_mappings_phrase ON public.symptom_mappings USING btree (phrase);
 
+
 --
 -- Name: idx_testimonials_featured; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_testimonials_featured ON public.testimonials USING btree (is_featured) WHERE (is_featured = true);
+
 
 --
 -- Name: idx_usage_device_fingerprint; Type: INDEX; Schema: public; Owner: -
@@ -2559,11 +2902,27 @@ CREATE INDEX idx_testimonials_featured ON public.testimonials USING btree (is_fe
 
 CREATE INDEX idx_usage_device_fingerprint ON public.usage USING btree (device_fingerprint) WHERE (device_fingerprint IS NOT NULL);
 
+
 --
 -- Name: idx_usage_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_usage_user_id ON public.usage USING btree (user_id) WHERE (user_id IS NOT NULL);
+
+
+--
+-- Name: idx_user_conditions_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_conditions_active ON public.user_conditions USING btree (user_id) WHERE (ended_at IS NULL);
+
+
+--
+-- Name: idx_user_conditions_user_category; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_conditions_user_category ON public.user_conditions USING btree (user_id, condition_category);
+
 
 --
 -- Name: idx_user_events_created; Type: INDEX; Schema: public; Owner: -
@@ -2571,11 +2930,13 @@ CREATE INDEX idx_usage_user_id ON public.usage USING btree (user_id) WHERE (user
 
 CREATE INDEX idx_user_events_created ON public.user_events USING btree (created_at DESC);
 
+
 --
 -- Name: idx_user_events_phone; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_events_phone ON public.user_events USING btree (phone) WHERE (phone IS NOT NULL);
+
 
 --
 -- Name: idx_user_events_type; Type: INDEX; Schema: public; Owner: -
@@ -2583,11 +2944,13 @@ CREATE INDEX idx_user_events_phone ON public.user_events USING btree (phone) WHE
 
 CREATE INDEX idx_user_events_type ON public.user_events USING btree (event_type);
 
+
 --
 -- Name: idx_user_feedback_message; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_feedback_message ON public.user_feedback USING btree (message_id);
+
 
 --
 -- Name: idx_user_feedback_rating; Type: INDEX; Schema: public; Owner: -
@@ -2595,11 +2958,13 @@ CREATE INDEX idx_user_feedback_message ON public.user_feedback USING btree (mess
 
 CREATE INDEX idx_user_feedback_rating ON public.user_feedback USING btree (rating);
 
+
 --
 -- Name: idx_user_topic_unique; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_user_topic_unique ON public.user_topic_preferences USING btree (user_id, topic);
+
 
 --
 -- Name: idx_user_verification_idme_uuid; Type: INDEX; Schema: public; Owner: -
@@ -2607,11 +2972,13 @@ CREATE UNIQUE INDEX idx_user_topic_unique ON public.user_topic_preferences USING
 
 CREATE UNIQUE INDEX idx_user_verification_idme_uuid ON public.user_verification USING btree (idme_uuid) WHERE (idme_uuid IS NOT NULL);
 
+
 --
 -- Name: idx_user_verification_otp_expires; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_verification_otp_expires ON public.user_verification USING btree (otp_expires_at) WHERE (otp_expires_at IS NOT NULL);
+
 
 --
 -- Name: idx_users_email; Type: INDEX; Schema: public; Owner: -
@@ -2619,11 +2986,13 @@ CREATE INDEX idx_user_verification_otp_expires ON public.user_verification USING
 
 CREATE INDEX idx_users_email ON public.users USING btree (email) WHERE (email IS NOT NULL);
 
+
 --
 -- Name: idx_users_role; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_users_role ON public.users USING btree (role) WHERE (role <> 'patient'::text);
+
 
 --
 -- Name: appeals update_appeals_updated_at; Type: TRIGGER; Schema: public; Owner: -
@@ -2631,11 +3000,13 @@ CREATE INDEX idx_users_role ON public.users USING btree (role) WHERE (role <> 'p
 
 CREATE TRIGGER update_appeals_updated_at BEFORE UPDATE ON public.appeals FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+
 --
 -- Name: subscriptions update_subscriptions_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_subscriptions_updated_at BEFORE UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
 
 --
 -- Name: usage update_usage_updated_at; Type: TRIGGER; Schema: public; Owner: -
@@ -2643,11 +3014,13 @@ CREATE TRIGGER update_subscriptions_updated_at BEFORE UPDATE ON public.subscript
 
 CREATE TRIGGER update_usage_updated_at BEFORE UPDATE ON public.usage FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+
 --
 -- Name: users update_users_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
 
 --
 -- Name: alert_log alert_log_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2656,12 +3029,14 @@ CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON public.users FOR EACH RO
 ALTER TABLE ONLY public.alert_log
     ADD CONSTRAINT alert_log_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
+
 --
 -- Name: alert_preferences alert_preferences_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.alert_preferences
     ADD CONSTRAINT alert_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
 
 --
 -- Name: appeal_outcomes appeal_outcomes_appeal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2670,12 +3045,14 @@ ALTER TABLE ONLY public.alert_preferences
 ALTER TABLE ONLY public.appeal_outcomes
     ADD CONSTRAINT appeal_outcomes_appeal_id_fkey FOREIGN KEY (appeal_id) REFERENCES public.appeals(id) ON DELETE CASCADE;
 
+
 --
 -- Name: appeals appeals_conversation_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.appeals
     ADD CONSTRAINT appeals_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
+
 
 --
 -- Name: appeals appeals_prior_appeal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2684,12 +3061,14 @@ ALTER TABLE ONLY public.appeals
 ALTER TABLE ONLY public.appeals
     ADD CONSTRAINT appeals_prior_appeal_id_fkey FOREIGN KEY (prior_appeal_id) REFERENCES public.appeals(id);
 
+
 --
 -- Name: appeals appeals_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.appeals
     ADD CONSTRAINT appeals_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
 
 --
 -- Name: audit_logs audit_logs_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2698,12 +3077,22 @@ ALTER TABLE ONLY public.appeals
 ALTER TABLE ONLY public.audit_logs
     ADD CONSTRAINT audit_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
+
+--
+-- Name: backup_blobs backup_blobs_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backup_blobs
+    ADD CONSTRAINT backup_blobs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
 --
 -- Name: consent_preferences consent_preferences_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.consent_preferences
     ADD CONSTRAINT consent_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
 
 --
 -- Name: conversations conversations_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2712,12 +3101,14 @@ ALTER TABLE ONLY public.consent_preferences
 ALTER TABLE ONLY public.conversations
     ADD CONSTRAINT conversations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
+
 --
 -- Name: counselor_cases counselor_cases_appeal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.counselor_cases
     ADD CONSTRAINT counselor_cases_appeal_id_fkey FOREIGN KEY (appeal_id) REFERENCES public.appeals(id);
+
 
 --
 -- Name: counselor_cases counselor_cases_conversation_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2726,12 +3117,14 @@ ALTER TABLE ONLY public.counselor_cases
 ALTER TABLE ONLY public.counselor_cases
     ADD CONSTRAINT counselor_cases_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id);
 
+
 --
 -- Name: counselor_cases counselor_cases_counselor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.counselor_cases
     ADD CONSTRAINT counselor_cases_counselor_id_fkey FOREIGN KEY (counselor_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
 
 --
 -- Name: diabetes_insights diabetes_insights_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2740,12 +3133,14 @@ ALTER TABLE ONLY public.counselor_cases
 ALTER TABLE ONLY public.diabetes_insights
     ADD CONSTRAINT diabetes_insights_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
+
 --
 -- Name: diabetes_log diabetes_log_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.diabetes_log
     ADD CONSTRAINT diabetes_log_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
 
 --
 -- Name: diabetes_snapshots diabetes_snapshots_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2754,12 +3149,14 @@ ALTER TABLE ONLY public.diabetes_log
 ALTER TABLE ONLY public.diabetes_snapshots
     ADD CONSTRAINT diabetes_snapshots_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
+
 --
 -- Name: ehr_connections ehr_connections_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.ehr_connections
     ADD CONSTRAINT ehr_connections_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
 
 --
 -- Name: eob_denial_mappings eob_denial_mappings_carc_code_effective_date_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2768,12 +3165,14 @@ ALTER TABLE ONLY public.ehr_connections
 ALTER TABLE ONLY public.eob_denial_mappings
     ADD CONSTRAINT eob_denial_mappings_carc_code_effective_date_fkey FOREIGN KEY (carc_code, effective_date) REFERENCES public.carc_codes(code, effective_date);
 
+
 --
 -- Name: eob_denial_mappings eob_denial_mappings_rarc_code_effective_date_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.eob_denial_mappings
     ADD CONSTRAINT eob_denial_mappings_rarc_code_effective_date_fkey FOREIGN KEY (rarc_code, effective_date) REFERENCES public.rarc_codes(code, effective_date);
+
 
 --
 -- Name: fhir_cache fhir_cache_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2782,12 +3181,14 @@ ALTER TABLE ONLY public.eob_denial_mappings
 ALTER TABLE ONLY public.fhir_cache
     ADD CONSTRAINT fhir_cache_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
+
 --
 -- Name: health_reports health_reports_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.health_reports
     ADD CONSTRAINT health_reports_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
 
 --
 -- Name: messages messages_conversation_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2796,12 +3197,14 @@ ALTER TABLE ONLY public.health_reports
 ALTER TABLE ONLY public.messages
     ADD CONSTRAINT messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
 
+
 --
 -- Name: outcome_followups outcome_followups_appeal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.outcome_followups
     ADD CONSTRAINT outcome_followups_appeal_id_fkey FOREIGN KEY (appeal_id) REFERENCES public.appeals(id) ON DELETE CASCADE;
+
 
 --
 -- Name: provider_practices provider_practices_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2810,12 +3213,14 @@ ALTER TABLE ONLY public.outcome_followups
 ALTER TABLE ONLY public.provider_practices
     ADD CONSTRAINT provider_practices_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
+
 --
 -- Name: subscriptions subscriptions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.subscriptions
     ADD CONSTRAINT subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
 
 --
 -- Name: usage usage_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2824,12 +3229,22 @@ ALTER TABLE ONLY public.subscriptions
 ALTER TABLE ONLY public.usage
     ADD CONSTRAINT usage_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
+
+--
+-- Name: user_conditions user_conditions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_conditions
+    ADD CONSTRAINT user_conditions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
 --
 -- Name: user_events user_events_appeal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_events
     ADD CONSTRAINT user_events_appeal_id_fkey FOREIGN KEY (appeal_id) REFERENCES public.appeals(id) ON DELETE SET NULL;
+
 
 --
 -- Name: user_events user_events_conversation_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2838,12 +3253,14 @@ ALTER TABLE ONLY public.user_events
 ALTER TABLE ONLY public.user_events
     ADD CONSTRAINT user_events_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE SET NULL;
 
+
 --
 -- Name: user_feedback user_feedback_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_feedback
     ADD CONSTRAINT user_feedback_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.messages(id) ON DELETE CASCADE;
+
 
 --
 -- Name: user_feedback user_feedback_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -2852,6 +3269,7 @@ ALTER TABLE ONLY public.user_feedback
 ALTER TABLE ONLY public.user_feedback
     ADD CONSTRAINT user_feedback_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
+
 --
 -- Name: user_topic_preferences user_topic_preferences_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
@@ -2859,11 +3277,17 @@ ALTER TABLE ONLY public.user_feedback
 ALTER TABLE ONLY public.user_topic_preferences
     ADD CONSTRAINT user_topic_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
+
 --
 -- Name: user_verification user_verification_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_verification
     ADD CONSTRAINT user_verification_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- PostgreSQL database dump complete
+--
 
 COMMIT;

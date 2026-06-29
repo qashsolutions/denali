@@ -137,20 +137,18 @@ jobs:
           (cd mobile && npm ci)
           (cd app && npm ci)
 
-      # SCHEMA — OPERATOR-BLOCKED. There is NO single from-zero migrate script in
-      # app/scripts (only partial migrate-idme*.sql). 4a sub-decision 3 is
-      # unresolved. Provide the from-zero schema bootstrap, then enable below.
-      - name: Apply schema to ephemeral Postgres (PLACEHOLDER)
+      # SCHEMA — the committed authoritative snapshot: a schema-only pg_dump of
+      # STAGING (sql/001-schema.sql, BEGIN/COMMIT-wrapped, extensions prepended).
+      # CI applies ONLY this file — no migrations stitched, no RDS access at
+      # runtime, no data backfills. Refresh it by re-dumping staging, not by
+      # editing it. ON_ERROR_STOP fails the job on any schema error.
+      - name: Apply schema to ephemeral Postgres
         env:
           PGHOST: localhost
           PGUSER: denali
           PGPASSWORD: denali
           PGDATABASE: denali_e2e
-        run: |
-          echo "::warning::schema bootstrap is a PLACEHOLDER — provide the from-zero schema source (4a sub-decision 3)"
-          # TODO(operator): apply the canonical schema, e.g.
-          #   psql -f app/scripts/<SCHEMA_BOOTSTRAP>.sql
-          #   for f in app/scripts/migrate-*.sql; do psql -f "$f"; done   # in order
+        run: psql -v ON_ERROR_STOP=1 -f sql/001-schema.sql
 
       # SEED — OPERATOR-BLOCKED. Two Cognito users (static password) + the DB
       # rows the bypass needs. A's HEALTH data is created ON-DEVICE by the flow,
