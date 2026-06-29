@@ -175,17 +175,23 @@ jobs:
         working-directory: app
         env:
           NODE_ENV: development
-          # TODO(operator): match the env db.ts actually reads (DATABASE_URL vs PG*).
-          DATABASE_URL: "postgres://denali:denali@localhost:5432/denali_e2e"
+          # db.ts reads discrete DB_* vars (src/lib/db.ts:33-37), not DATABASE_URL.
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_NAME: denali_e2e
+          DB_USER: denali
+          DB_PASSWORD: denali
           # The four E2E_TEST_OTP_* vars (STATIC_PASSWORD injected + masked above).
           E2E_TEST_OTP_ENABLED: "true"
           E2E_TEST_OTP_EMAILS: "${{ env.E2E_EMAIL_A }},${{ env.E2E_EMAIL_B }}"
           E2E_TEST_OTP_CODE: "${{ env.E2E_OTP_CODE }}"
-          # TODO(operator): Cognito client env the backend needs to talk to the
-          # e2e pool (region, pool id, app client id) — wire to E2E_COGNITO_*.
+          # Cognito client env (auth-server.ts:26-27,111) → point at the e2e pool.
+          COGNITO_USER_POOL_ID: "${{ env.E2E_COGNITO_POOL_ID }}"
+          COGNITO_CLIENT_ID: "${{ env.E2E_COGNITO_APP_CLIENT_ID }}"
+          AWS_REGION: us-east-1
         run: |
-          # TODO(operator): confirm the dev script name. next dev binds 127.0.0.1,
-          # which the emulator reaches at 10.0.2.2 — no 0.0.0.0 needed.
+          # `dev` = `next dev` (package.json:6); binds 127.0.0.1, which the
+          # emulator reaches at 10.0.2.2 — no 0.0.0.0 needed.
           npm run dev > /tmp/next-dev.log 2>&1 &
           echo $! > /tmp/next-dev.pid
 
