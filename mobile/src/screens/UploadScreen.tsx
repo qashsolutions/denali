@@ -44,7 +44,12 @@ import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { storeBlob } from "../upload/blobStore";
-import { removeReport } from "../upload/removeReport";
+import {
+  SESSION_STARTED_AT,
+  claimOrphanSweep,
+  reconcileOrphanedReports,
+  removeReport,
+} from "../upload/removeReport";
 import { fetchHealthDataAiConsent } from "../upload/consentClient";
 import { extractText } from "../upload/extract";
 import { pickImage, pickPdf, type PickedFile } from "../upload/picker";
@@ -114,6 +119,14 @@ export function UploadScreen(): React.ReactElement {
         // Refresh the saved-reports list (so a just-saved report appears).
         const user = api.getCurrentUser();
         if (user && dal) {
+          // Phase 3: once per launch, sweep orphaned in-flight reports (row +
+          // leaked blob) a dead prior process left behind (hard kill mid-review).
+          // Fire-and-forget — orphans aren't in the visible list below, so this
+          // doesn't gate the render; the predates-session filter never touches a
+          // report being uploaded this session.
+          if (claimOrphanSweep()) {
+            void reconcileOrphanedReports(dal, user.userId, SESSION_STARTED_AT);
+          }
           try {
             const list = await dal.listReports(user.userId);
             // CU-3: show reports the user chose to keep — values saved
