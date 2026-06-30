@@ -67,6 +67,27 @@ History: [Chunk 3 (demographics capture, 2026-06-02)](docs/history/chunk-3-demog
 
 Phase 1 mobile (in progress): spec at [docs/design/phase-1-45plus.md](docs/design/phase-1-45plus.md); path-scoped rules in [mobile/CLAUDE.md](mobile/CLAUDE.md) (auto-loaded under `mobile/`); agent topology in `.claude/agents/mobile-*.md`; decisions in [docs/history/phase-1-mobile-decisions.md](docs/history/phase-1-mobile-decisions.md).
 
+**Open TODOs (parked work — come back to these):** [Open TODOs](#open-todos) — currently: arm the mobile E2E gate (Phase 4).
+
+---
+## Open TODOs
+
+Deliberately-deferred work to return to. Not forgotten — each is parked with its reason and the come-back trigger.
+
+### Arm the mobile E2E gate (Phase 4) — parked 2026-06-30, until the `develop → main` promotion
+
+**Status: built + provisioned, NOT yet running.** The Maestro gate (`.github/workflows/mobile-e2e.yml`), the flows (`crisis_988`, `onboarding_positive_relaunch`, `cross_user_isolation`), the Option-A in-job ephemeral-backend scaffold, and the staging schema snapshot (`sql/001-schema.sql`) are all on `develop`. AWS is provisioned: dedicated `denali-e2e` Cognito pool + app client, the static-password secret, the `denali-e2e-ci-role` (OIDC), and the six `E2E_*` GitHub repo variables.
+
+**What it tests:** STAGING only — develop's mobile app against an in-job ephemeral Postgres (seeded from `sql/001-schema.sql`) + the `denali-e2e` Cognito pool. **Zero prod** (no prod RDS / Cognito / service).
+
+**Why parked:** a `workflow_dispatch` workflow is only dispatchable once its file is on the default branch (`main`), and *any* push to `main` triggers the prod deploy (`deploy.yml` — no path filter). We're staying on `develop` until the Phase-1 mobile features are fully implemented + tested, so we deferred touching `main`.
+
+**Come back to it when promoting `develop → main`:** (1) the gate registers for dispatch; (2) get one green run of `crisis_988` + `onboarding_positive_relaunch` + `cross_user_isolation`; (3) run a proving period; (4) promote those checks to required-on-PR. Per the blocker freeze, **NAV-3B** (DAL-wide user-scoping + removing the per-caller defensive filters) is staged AFTER the gate is armed — the gate is what guards that regression.
+
+**Prod-free early-validation option** (if you want to smoke-test the harness before promotion): temporarily add `on: push: [develop]` to `mobile-e2e.yml` so it runs on develop against the ephemeral staging backend (no `main`, no prod), then revert to `workflow_dispatch` after one green run. Tradeoff: it runs the ~30–60-min emulator job on each develop push.
+
+See also: [mobile/CLAUDE.md](mobile/CLAUDE.md), `mobile/maestro/README.md`, `STAGING-LOCKDOWN.md`.
+
 ---
 ## Critical Rules
 
