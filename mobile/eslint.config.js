@@ -36,6 +36,8 @@ import eslintComments from "@eslint-community/eslint-plugin-eslint-comments";
 import reactHooks from "eslint-plugin-react-hooks";
 import tsParser from "@typescript-eslint/parser";
 
+import touchTargetSize from "./eslint-rules/touch-target-size.mjs";
+
 /**
  * Inline custom rule: forbid emoji / pictographic characters in source.
  *
@@ -86,7 +88,7 @@ const noEmojiRule = {
 };
 
 const localPlugin = {
-  rules: { "no-emoji": noEmojiRule },
+  rules: { "no-emoji": noEmojiRule, "touch-target-size": touchTargetSize },
 };
 
 export default [
@@ -138,6 +140,10 @@ export default [
 
       // No emoji in source.
       "local/no-emoji": "error",
+
+      // A11Y-04: raw interactive text-link touchables must guarantee a >=48px
+      // target (the recurring sub-48 defect a numeric source scan can't see).
+      "local/touch-target-size": "error",
 
       // Soft refactor candidates — warnings, not errors.
       "max-lines-per-function": [

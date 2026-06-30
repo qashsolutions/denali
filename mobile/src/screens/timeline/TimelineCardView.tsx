@@ -607,6 +607,11 @@ function sessionStyles(
       flexDirection: "row",
       alignItems: "center",
       gap: theme.spacing.xs,
+      // minHeight 48 (D35): the "Show/Hide details" toggle was a flat ~22px tap
+      // target (xs padding only), below the 45+ floor — surfaced by the
+      // local/touch-target-size lint rule. alignItems:center keeps the row
+      // centered within the taller box.
+      minHeight: 48,
       paddingVertical: theme.spacing.xs,
       paddingHorizontal: theme.spacing.sm,
     },
