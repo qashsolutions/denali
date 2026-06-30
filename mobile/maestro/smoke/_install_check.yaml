@@ -1,0 +1,12 @@
+# Maestro toolchain install check — Phase 1 / step 1.
+#
+# Drives ONE assertion against the already-running emulator + already-
+# installed app. Used only to prove Maestro is wired correctly; not
+# part of the CI flow set (those live in mobile/maestro/flows/).
+appId: health.denali.mobile
+---
+- launchApp:
+    clearState: false  # Reuse the already-launched session.
+- takeScreenshot: install_check
+- assertVisible:
+    text: ".*"   # Any visible text proves Maestro is rendering the view tree.

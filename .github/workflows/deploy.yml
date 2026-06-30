@@ -94,6 +94,30 @@ jobs:
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build-image.outputs.image }}
 
+      # Phase-2 prod-isolation gate (operator delta 4 — MANDATORY).
+      #
+      # The E2E test-OTP bypass is staging-only. If any task def env key
+      # starts with `E2E_TEST_OTP`, FAIL the prod deploy here, BEFORE
+      # ECS sees the revision. The runtime guards + module-load
+      # assertion in `app/src/lib/e2e-test-otp.ts` are the in-process
+      # backstop; this gate keeps the misconfiguration from ever
+      # reaching the prod cluster.
+      - name: Prod task-def gate — refuse any E2E_TEST_OTP env var
+        run: |
+          set -euo pipefail
+          TD='${{ steps.task-def.outputs.task-definition }}'
+          # The render-task-definition step writes the rendered task
+          # def to a file path; jq reads it directly.
+          LEAKS=$(jq -r '[.containerDefinitions[].environment[]?
+                          | select(.name | startswith("E2E_TEST_OTP"))
+                          | .name] | join(", ")' "$TD")
+          if [ -n "$LEAKS" ]; then
+            echo "::error::Refusing to deploy: prod task def contains E2E_TEST_OTP env vars: $LEAKS"
+            echo "These env vars are staging-only. Remove them from the prod task def env block."
+            exit 1
+          fi
+          echo "Prod task-def gate: clean (no E2E_TEST_OTP env keys)"
+
       - name: Deploy new task definition to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@fc8fc60f3a60ffd500fcb13b209c59d221ac8c8c  # v2
         with:

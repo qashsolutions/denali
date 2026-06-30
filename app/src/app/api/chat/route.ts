@@ -141,6 +141,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // --- Mobile no-persist branch (D9 gate, Wave 3) ---
+    // When `X-Client-Type: mobile` is present, route through a strict
+    // no-persist path: zero writes to conversations / messages / learning
+    // tables, no body logging, audit metadata is metadata-only. See
+    // `docs/history/phase-1-mobile-decisions.md` § D9 for the rationale and
+    // `app/src/app/api/chat/__tests__/no-persist.test.ts` for the
+    // regression assertions. Web path (header absent) is unchanged.
+    if (request.headers.get("X-Client-Type") === "mobile") {
+      return handleMobileChat(request, body, authUser);
+    }
+
     let chatLimit: number = PRICING.CHAT_LIMITS.TRIAL;
     let weeklyLimit: number = PRICING.WEEKLY_LIMITS.TRIAL;
     const chatIdentifier: string = authUser.userId;
@@ -826,6 +837,238 @@ export async function GET() {
     status: "ok",
     hasBedrockAccess: true, // IAM auth via ECS task role
     timestamp: new Date().toISOString(),
+  });
+}
+
+// ─── Mobile no-persist branch (D9 gate, Wave 3) ──────────────────────────
+//
+// The mobile path returns the SAME `text/event-stream` shape as the web
+// path (event: delta / event: done / event: error), so the existing client
+// in `mobile/src/auth/chatStream.ts` consumes it without changes.
+//
+// Load-bearing constraints (enforced by
+// `app/src/app/api/chat/__tests__/no-persist.test.ts`):
+//
+//   1. Only allowed `query()` calls on the mobile path:
+//        - SELECT consent_preferences (for health_data_ai gate)
+//        - audit_logs INSERT          (via logAudit — audit-only)
+//      No users.plan read — mobile model routing is not plan-gated (see 3).
+//      No INSERT/UPDATE/DELETE of conversations / messages / learning_*
+//      / health_reports / fhir_cache / appeal_* tables on this path.
+//
+//   2. No body logging. `logAudit` and `logClaudeMetric` carry metadata
+//      only (durationMs, messageCount, outcome, iterations, model) — no
+//      prompt content, no response content. Console logging in this
+//      function MUST NOT echo body content either.
+//
+//   3. Model: mobile chat uses Sonnet 4.6 (API_CONFIG.claude.model) for ALL
+//      mobile users, trial included — decided 2026-06-11 from a Haiku-vs-
+//      Sonnet head-to-head on real 45+ health prompts: Sonnet surfaced 988
+//      crisis resources on a distress signal where Haiku stayed silent, and
+//      kept non-Medicare scope where Haiku leaked Medicare/Part D framing.
+//      The per-token cost delta is negligible at current trial volume.
+//      Appeal routing (Opus) doesn't apply — appeals are Medicare-only and
+//      mobile is the 45+ non-Medicare cohort (Phase 1).
+//
+//   4. Conversation context is CLIENT-SUPPLIED via `body.messages`. The
+//      mobile path does NOT load conversation rows from RDS — the device
+//      is the system of record (mobile/CLAUDE.md § Invariant 1).
+/**
+ * Mobile-only response-style nudge appended to the chat system prompt.
+ *
+ * Fixes a real gap: the brevity rules in BASE_CORE_PROMPT are scoped to the
+ * clarifying-question phase, so FINAL answers on mobile ran long (observed
+ * 2026-06-11). This keeps replies short and scannable on a phone and
+ * front-loads a 1–2 sentence summary, which the mobile chat bubble shows
+ * before a collapsible "details" section. STYLE ONLY — it adds no clinical
+ * content and relaxes none of the no-medical-advice / non-Medicare-scope
+ * guardrails already carried by the base prompt. The third bullet carries
+ * an explicit safety carve-out so "stay on topic" can never suppress a
+ * crisis-resource or see-your-doctor referral (clinical-boundary review,
+ * 2026-06-11) — this protects the spontaneous 988 surfacing that the
+ * Sonnet head-to-head relied on.
+ */
+const MOBILE_CHAT_BREVITY = `## Response style (mobile app)
+
+Your answer renders in a small chat bubble on a phone. Be brief and scannable:
+- Open with a direct 1–2 sentence answer to exactly what was asked. This opening IS the summary the user sees first.
+- Then add only the few supporting points that genuinely help — a short bullet list is fine. No exhaustive lists, no walls of text.
+- Stay on the question asked; don't branch into adjacent topics unprompted. EXCEPTION: if the message hints at a safety concern, always surface the relevant resource — e.g. the 988 Suicide & Crisis Lifeline, or talking with their doctor — even when it wasn't asked. Safety asides always override brevity.
+
+This brevity applies to FINAL answers, not only to clarifying questions.`;
+
+async function handleMobileChat(
+  request: NextRequest,
+  body: ChatRequestBody,
+  authUser: { userId: string; email: string },
+): Promise<Response> {
+  const startedAt = Date.now();
+  const messageCount = body.messages.length;
+
+  // 0. Defensive runtime assertion. The frozen contract at
+  //    `mobile/src/contracts/ApiClient.ts` types `ChatTurnInput.noPersist`
+  //    as the literal `true`, so a compliant client always sends it.
+  //    Treat any other shape (missing field, false, etc.) as a
+  //    misconfigured client and reject — better a clean 400 than a silent
+  //    fallthrough that might persist if the field is ever interpreted as
+  //    "may persist" downstream. Keep the body shape implicit: an
+  //    unknown-shaped `noPersist` key is the only signal we need.
+  const rawBody = body as unknown as { noPersist?: unknown };
+  if (rawBody.noPersist !== true) {
+    return NextResponse.json(
+      {
+        error:
+          "Mobile chat requires noPersist:true in the request body.",
+        code: "MOBILE_NO_PERSIST_REQUIRED",
+      },
+      { status: 400 },
+    );
+  }
+
+  // 1. Consent gate — health_data_ai must be granted. Same shape as the
+  //    parse-report consent check.
+  const consentResult = await query<{ granted: boolean }>(
+    `SELECT granted FROM consent_preferences
+     WHERE user_id = $1 AND consent_type = 'health_data_ai'`,
+    [authUser.userId],
+  );
+  const hasConsent = consentResult.rows.some((r) => r.granted === true);
+  if (!hasConsent) {
+    return NextResponse.json(
+      {
+        error: "AI chat is disabled. Enable health_data_ai in Settings.",
+        code: "HEALTH_DATA_AI_DISABLED",
+      },
+      { status: 403 },
+    );
+  }
+
+  // 2. Model: Sonnet 4.6 for ALL mobile users (no plan read — see the
+  //    handler docblock, point 3, for the 2026-06-11 head-to-head rationale).
+  //    `undefined` → `chat()` uses API_CONFIG.claude.model (Sonnet).
+  const modelOverride: string | undefined = undefined;
+
+  // 3. Build a minimal session state from the client-supplied messages.
+  //    No FHIR / conditions / labs / Medicare cohort signals on mobile —
+  //    Phase 1 mobile is the 45+ non-Medicare cohort and the local
+  //    observation store is the source of truth (mobile/CLAUDE.md § D7).
+  let sessionState = createDefaultSessionState();
+  sessionState = extractUserInfo(body.messages, sessionState);
+  sessionState.isOnMedicare = false; // mobile cohort is 45+ non-Medicare
+
+  // 4. Triggers — derive from messages only. No FHIR / health cache reads.
+  const triggers = detectTriggers(body.messages, sessionState);
+
+  // 5. System prompt — use the synchronous base path (no learning context,
+  //    no FHIR injection). This avoids RDS reads against learning tables.
+  //    Append the mobile brevity/summary nudge (see MOBILE_CHAT_BREVITY).
+  const systemPrompt =
+    buildSystemPromptForUser(triggers, sessionState) +
+    "\n\n---\n\n" +
+    MOBILE_CHAT_BREVITY;
+
+  // 6. Tool selection. Filter out `generate_appeal_letter` because
+  //    appeals are Medicare-only (mobile cohort is non-Medicare). The
+  //    model never sees the tool — matches the web cohort filter at
+  //    chat/route.ts:524-528.
+  const toolDefinitions = getToolDefinitions().filter(
+    (t) => t.name !== "generate_appeal_letter",
+  );
+  const toolExecutors = createToolExecutorMap();
+
+  // 7. Format messages + stream via the standard SSE shape.
+  const formattedMessages = formatMessages(body.messages, undefined);
+  const encoder = new TextEncoder();
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+
+  const writeSSE = (event: string, data: unknown) => {
+    writer
+      .write(
+        encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+      )
+      .catch(() => {});
+  };
+
+  (async () => {
+    const model = modelOverride || API_CONFIG.claude.model;
+    try {
+      const result = await chat(
+        {
+          messages: formattedMessages,
+          systemPrompt,
+          tools: toolDefinitions,
+          sessionState,
+          modelOverride,
+        },
+        toolExecutors,
+        undefined, // maxIterations (default)
+        {
+          onDelta: (text) => writeSSE("delta", { text }),
+          // No tool progress events on mobile — strictly delta/done/error.
+        },
+      );
+      const totalMs = Date.now() - startedAt;
+      logClaudeMetric({
+        model,
+        iterations: result.iterations,
+        totalMs,
+        timedOut: false,
+        toolsUsed: result.toolsUsed,
+      });
+      // Audit — metadata only, no body content.
+      logAudit("CHAT_INVOKED_MOBILE", {
+        userId: authUser.userId,
+        request,
+        metadata: {
+          userId: authUser.userId,
+          durationMs: totalMs,
+          messageCount,
+          outcome: "ok",
+        },
+      }).catch(() => {});
+
+      // Final `done` event — minimal payload, no prompt / response content
+      // echoed beyond what already streamed via delta frames.
+      writeSSE("done", {
+        iterations: result.iterations,
+        model,
+        totalMs,
+      });
+      await writer.close();
+    } catch (error) {
+      const totalMs = Date.now() - startedAt;
+      const timedOut =
+        error instanceof Error && error.message.includes("timed out");
+      logClaudeMetric({
+        model,
+        iterations: 0,
+        totalMs,
+        timedOut,
+        toolsUsed: [],
+      });
+      logAudit("CHAT_INVOKED_MOBILE", {
+        userId: authUser.userId,
+        request,
+        metadata: {
+          userId: authUser.userId,
+          durationMs: totalMs,
+          messageCount,
+          outcome: timedOut ? "timeout" : "error",
+        },
+      }).catch(() => {});
+      writeSSE("error", { message: SYSTEM.CHAT_ERROR });
+      await writer.close();
+    }
+  })();
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
   });
 }
 

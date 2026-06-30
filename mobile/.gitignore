@@ -1,0 +1,29 @@
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Native build artefacts
+ios/Pods/
+android/.gradle/
+android/build/
+android/app/build/
+
+# Local env overrides (no secrets in the repo)
+.env
+.env.local
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Test + coverage
+coverage/
+
+# Maestro flow screenshots (CLI writes the named screenshot file into cwd)
+install_check.png
+maestro/screenshots/
+.maestro/
+
+# OS / editor
+.DS_Store
+*.log

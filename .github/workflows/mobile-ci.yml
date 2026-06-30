@@ -1,0 +1,64 @@
+name: Mobile CI
+
+# Quality gate for the Phase-1 React Native app under mobile/. Runs on
+# every PR (any base) and on every push to develop and main. Independent
+# of deploy.yml (prod) and deploy-staging.yml (staging) — this workflow
+# never builds containers, never touches AWS, never pushes images.
+#
+# Required-check friendly: no `paths` filter, because skipped runs from a
+# paths filter never satisfy a required-status-check, which would block
+# PRs that don't touch mobile/. The full suite is fast enough (~2-3 min)
+# that the trade is fine.
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+# Cancel an earlier in-flight run on the same ref when a new commit
+# lands. Scoped to this workflow only — won't touch the deploy
+# workflows' concurrency.
+concurrency:
+  group: mobile-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: tsc + eslint + vitest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      # SHA-pinned per the repo's existing supply-chain convention in
+      # deploy.yml — pinning by SHA is what protects us if a tag gets
+      # rewritten.
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript — strict (no emit)
+        run: npx tsc --noEmit
+
+      # `--max-warnings=0` is intentionally NOT set: per the lint config's
+      # design, `max-lines-per-function` and `complexity` are WARNINGS
+      # (informational refactor signals). The error-severity rules
+      # (`react-hooks/*`, `local/no-emoji`, `eslint-comments/no-restricted-
+      # disable`) still fail CI on their own.
+      - name: ESLint
+        run: npx eslint .
+
+      - name: Vitest — full suite
+        run: npx vitest run

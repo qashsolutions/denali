@@ -24,7 +24,7 @@ vi.mock("@/lib/audit", () => ({
 }));
 
 import { NextRequest } from "next/server";
-import { GET, PUT } from "../route";
+import { GET, PUT, PATCH } from "../route";
 import { AUTH, VALIDATION, SYSTEM } from "@/config/messages";
 
 function makeRequest(method: string, body?: unknown): NextRequest {
@@ -204,5 +204,46 @@ describe("PUT /api/consent", () => {
 
     expect(res.status).toBe(500);
     expect(body.error).toBe(SYSTEM.SAVE_PREFERENCE);
+  });
+});
+
+describe("PATCH /api/consent (mobile alias for PUT)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockQuery.mockResolvedValue({ rows: [] });
+  });
+
+  it("is wired (the mobile ApiClient sends PATCH; was HTTP 405 before)", () => {
+    expect(typeof PATCH).toBe("function");
+  });
+
+  it("upserts identically to PUT — same handler, auth + validation + audit", async () => {
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+
+    const req = makeRequest("PATCH", { consentType: "health_data_ai", granted: true });
+    const res = await PATCH(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toEqual({ success: true, consentType: "health_data_ai", granted: true });
+    const params = mockQuery.mock.calls[0][1] as unknown[];
+    expect(params[1]).toBe("health_data_ai");
+    expect(params[2]).toBe(true);
+  });
+
+  it("still enforces auth (401 when unauthenticated)", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+
+    const res = await PATCH(makeRequest("PATCH", { consentType: "analytics", granted: true }));
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBe(AUTH.SIGN_IN_REQUIRED);
+  });
+
+  it("still rejects an invalid consent type (400)", async () => {
+    mockGetAuthUser.mockResolvedValue(MOCK_USER);
+
+    const res = await PATCH(makeRequest("PATCH", { consentType: "bogus", granted: true }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe(VALIDATION.INVALID_PREFERENCE);
   });
 });

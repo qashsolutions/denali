@@ -153,7 +153,7 @@ NEXT_PUBLIC_APP_URL=https://denali.health  # or https://staging.denali.health
 ### ECS Deployment Gotchas
 
 - **Execution role needs explicit Secrets Manager permissions.** `AmazonECSTaskExecutionRolePolicy` only covers ECR + CloudWatch. Add inline policy `denali-secrets-access` to `denali-ecs-execution-role` covering `denali/*` and `rds!db-...-*` secret ARNs.
-- **RDS managed secret (`rds!db-...`) only has `username` + `password`** — no `host`/`dbname`/`port`. Use `denali/prod/db` (self-managed) for all DB connection fields.
+- **RDS managed secret (`rds!db-...`) only has `username` + `password`** — no `host`/`dbname`/`port`. Those come from plain task-def env vars `DB_HOST`/`DB_NAME`/`DB_PORT` (see next bullet). The legacy self-managed `denali/prod/db` and `denali/staging/db` secrets were deleted 2026-06-10 (30-day recovery window) — nothing references them.
 - **Audit task def secrets before every manual deployment**: `aws ecs describe-task-definition --task-definition denali:N --query "taskDefinition.containerDefinitions[0].secrets[*].valueFrom" --region us-east-1 --output json | sort -u`
 - **DB credentials**: DB_USER/DB_PASSWORD reference `rds!db-...:username::` / `rds!db-...:password::` (auto-rotates every 7 days). DB_HOST/DB_NAME/DB_PORT are plain env vars.
 - **Current task def**: denali:124, deployed 2026-04-10. Revision 124: removed RESEND_API_KEY and RESEND_FROM_EMAIL secret references after SES migration completion. See `memory/aws-ecs.md` and `memory/aws-infra.md` for full details.
@@ -220,7 +220,7 @@ All 5 alarms → `denali-monitor-alerts` SNS topic. Logs Insights queries in `in
 | ECS Fargate        | denali-web                          | 0.5 vCPU, 1GB RAM, task def :30                                           | ~$18.40           |
 | ALB                | denali-alb                          | Application, internet-facing                                              | ~$16.20           |
 | EIP                | 3× (ALB-attached)                   | All associated, no idle charge                                            | $0                |
-| Secrets Manager    | 3 secrets                           | denali/prod/db, denali/prod/app, rds!db-...                               | ~$1.20            |
+| Secrets Manager    | 2 secrets (prod)                    | denali/prod/app, rds!db-... (denali/prod/db deleted 2026-06-10)           | ~$0.80            |
 | CloudWatch Logs    | /ecs/denali                         | 3-day retention, ~8KB stored                                              | ~$0               |
 | S3                 | denali-cloudtrail-logs              | CloudTrail storage, 30-day lifecycle                                      | ~$0.05            |
 | CloudTrail         | denali-audit-trail                  | Multi-region, management events                                           | $0 (free tier)    |

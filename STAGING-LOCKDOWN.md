@@ -23,8 +23,100 @@ The staging URL is publicly reachable on the internet (no IP restriction — acc
 | Cognito user pool `denali-staging-users` | Self-service sign-up disabled (`AllowAdminCreateUserOnly: true`) | Console → Cognito → User pools → Sign-up tab |
 | Cognito user pool `denali-staging-users` | MFA enforcement = OFF (cannot be set to Required — see Known gaps) | Console → same pool → Sign-in tab → MFA |
 | ECS task definition `denali-staging` | Env var `STAGING_EMAIL_ALLOWLIST` added (rev 58) | Console → ECS → Task definitions |
+| ECS task definition `denali-staging` | **The E2E test-OTP env vars MUST NOT be set here.** `E2E_TEST_OTP_ENABLED=true` is fatal on any *deployed* service: `next start` forces `NODE_ENV=production`, and the module-load assertion in `e2e-test-otp.ts` throws on `flag && NODE_ENV==="production"`, crashing `verify-otp` (breaks sign-in). The bypass runs only in a `NODE_ENV !== "production"` backend (local `next dev` / CI) — see "E2E test-OTP bypass" below. The prod deploy gate independently refuses any task def carrying `E2E_TEST_OTP*` keys. | n/a — never on a deployed task def |
+| Cognito user pool `denali-staging-users` | Test account `e2e@denali.health` created with a permanent password equal to the static-password secret. A **local/CI backend** (NODE_ENV ≠ production) can point at this staging pool and mint real sessions via `ADMIN_USER_PASSWORD_AUTH` — the pool's app client has `ALLOW_ADMIN_USER_PASSWORD_AUTH` enabled. The pool is environment-agnostic; the `NODE_ENV` constraint is on the *backend process* running `verify-otp`, not on which pool it talks to. | Console → Cognito + RDS seed |
 
 These are not currently in source control. Future automation should capture them in Terraform or similar.
+
+## E2E test-OTP bypass — operating instructions
+
+The bypass lives in `app/src/lib/e2e-test-otp.ts` and is invoked from
+`app/src/app/api/auth/verify-otp/route.ts`. The five-guard stack (see
+the module docstring) is structurally unreachable in production.
+
+### ⛔ Where it can and cannot run (read first)
+
+**The bypass runs ONLY in a backend process where `NODE_ENV !== "production"`** —
+i.e. a local `next dev` server or a CI job, never a *deployed* ECS
+service. Two independent code paths enforce this:
+
+- **Guard G2** denies every bypass attempt when `process.env.NODE_ENV === "production"`.
+- The **module-load assertion** `assertProdAndFlagNeverCoexist()` *throws*
+  when `E2E_TEST_OTP_ENABLED=true` AND `NODE_ENV === "production"` — so the
+  `verify-otp` route module fails to import and the auth route 500s.
+
+`next start` (every deployed service, **staging included**) forces
+`NODE_ENV=production`. Therefore **the `E2E_TEST_OTP_*` env vars must
+never be set on the deployed `denali-staging` (or prod) ECS task def** —
+doing so breaks sign-in for everyone on that service. (Confirmed the hard
+way 2026-06-10: setting the flag on a staging task-def revision was the
+fatal combination; reverted immediately.)
+
+The `NODE_ENV` constraint is on the **backend process**, not the data
+plane. A local/CI backend (NODE_ENV ≠ production) may freely point at the
+staging Cognito pool, staging RDS, and the Blue Button sandbox — that's
+the intended setup for E2E.
+
+### Setup for a local / CI backend
+
+1. **Process env** (e.g. `app/.env.local` for `next dev`, or the CI job's
+   env block — **not** a deployed task def):
+
+   ```
+   E2E_TEST_OTP_ENABLED=true
+   E2E_TEST_OTP_EMAILS=e2e@denali.health
+   E2E_TEST_OTP_CODE=999999
+   E2E_TEST_OTP_STATIC_PASSWORD=<static-password>
+   ```
+
+2. **Cognito user** in whichever pool that backend authenticates against
+   (the staging pool works). Permanent password == the static password;
+   app client needs `ALLOW_ADMIN_USER_PASSWORD_AUTH`.
+
+   ```bash
+   aws cognito-idp admin-create-user \
+     --user-pool-id <pool-id> \
+     --username e2e@denali.health \
+     --user-attributes Name=email,Value=e2e@denali.health \
+                       Name=email_verified,Value=true \
+     --message-action SUPPRESS
+   aws cognito-idp admin-set-user-password \
+     --user-pool-id <pool-id> \
+     --username e2e@denali.health \
+     --password "<static-password>" --permanent
+   ```
+
+3. **DB row**: the bypass path still requires an existing `users` +
+   `user_verification` row for the email (verify-otp returns
+   `OTP_NOT_FOUND` otherwise). In the staging pool/RDS these are created
+   the first time `send-otp` is called for the address.
+
+### Known caveats (current code — reconcile before relying on the flow)
+
+- **Email allowlist.** If the backend has `STAGING_EMAIL_ALLOWLIST` set,
+  `e2e@denali.health` must be on it — both `send-otp` and `verify-otp`
+  return 403 before the bypass runs otherwise. A plain local `next dev`
+  usually leaves this unset (no-op).
+- **`send-otp` rotates the Cognito password.** Every `send-otp` call runs
+  `setCognitoPassword(email, "Otp.<otp>!")`, but the bypass authenticates
+  with the *static* password. So a flow that taps "send code" before
+  "verify" (the current Maestro `signin_onboarding.yaml` does) leaves the
+  Cognito password ≠ the static password, and the bypass's
+  `ADMIN_USER_PASSWORD_AUTH` then fails. This is an **unresolved gap** in
+  the current code: a working local E2E run must either re-assert the
+  static password after `send-otp`, or pre-seed the `user_verification`
+  row and skip the send-otp tap. (A code fix is deferred — see the
+  redesign option in the 2026-06-10 session notes.)
+
+### Prod safety (unchanged)
+
+- **Prod deploy gate**: `.github/workflows/deploy.yml` step `Prod task-def
+  gate — refuse any E2E_TEST_OTP env var` fails the prod deploy if any env
+  key starts with `E2E_TEST_OTP`. Belt-and-braces alongside the in-process
+  startup assertion above.
+- **Removal** (if ever set on a deployed service by mistake): delete the
+  `E2E_TEST_OTP_*` env vars from the task def and redeploy; the helper
+  denies at G1 and the real OTP path is untouched.
 
 ## Code-side changes (develop branch)
 

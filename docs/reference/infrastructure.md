@@ -35,9 +35,19 @@ Staging repo: `staging-` keep last 10, untagged expire after 1 day.
 
 ### Prod alarms → `denali-prod-alerts` SNS (admin@denali.health, ramanac@gmail.com)
 
-- `denali-prod-ecs-running-below-desired` — running < desired for 2× 1-min periods (ECS/ContainerInsights)
+- `denali-prod-healthy-hosts-below-1` — ALB HealthyHostCount < 1 for 3× 1-min periods (AWS/ApplicationELB, free metric). Replaced `denali-prod-ecs-running-below-desired` on 2026-06-10 when Container Insights was disabled on both clusters (was ~$14/mo of custom metrics). Metric goes missing overnight when the scheduler deregisters targets — treat-missing=notBreaching, so no false alarms.
 - `denali-prod-alb-5xx-rate-high` — 5xx > 5% over 5 min, volume gate at 20 req/5min
 - `denali-prod-ecs-task-failed-to-start` — EventBridge rule on TaskFailedToStart stopCode
+
+### Cost-containment schedule (2026-06-10)
+
+Implemented via CFN stack `denali-scheduler` (`infra/cfn-scheduler.json` + `deploy-scheduler.sh`) for prod, raw EventBridge rules for staging. All crons UTC-pinned to CDT (drift 1h earlier in winter).
+
+- **Prod** (`denali`/`denali-web` + RDS `denali-prod`): up 8:55am–10:00pm CT **weekdays only**; off all weekend. Manual weekend start: `aws lambda invoke --invocation-type Event --function-name denali-startup /tmp/out.json`. Shutdown rule runs daily as a no-op safety net. Temporary policy until staging is fully ready.
+- **Staging** (`denali-staging`/`denali-staging-web` + RDS `denali-staging`): up 8:55am–11:00pm CT **every day** incl. weekends.
+- **RDS backup windows moved into running hours** (prod 14:30–15:00 UTC; staging same): the old 03:52–04:22 UTC prod window overlapped the shutdown cron, so the stop was skipped nightly (`status=backing-up`) and prod RDS silently ran 24/7. Stopped instances take no automated backups — keep backup windows inside running hours.
+- `denali-safety-stop` (rate 6 days) re-stops **prod** RDS after AWS's forced 7-day restart; staging's backstop is its own nightly shutdown rule — never disable `denali-staging-shutdown-nightly`.
+- `denali-monitor` runs 14:30 UTC + 02:00 UTC; reads the free Budgets API (`denali-monthly` budget), not Cost Explorer. `denali-daily-alerts` runs 14:30 UTC weekdays only.
 
 ### Protected tags + base image
 

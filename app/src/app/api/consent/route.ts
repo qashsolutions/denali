@@ -1,8 +1,9 @@
 /**
  * Consent Preferences API
  *
- * GET  /api/consent — return user's consent preferences
- * PUT  /api/consent — update consent preference
+ * GET   /api/consent — return user's consent preferences
+ * PUT   /api/consent — update consent preference
+ * PATCH /api/consent — mobile alias for PUT (same handler, added 2026-06-10)
  *
  * CMS criteria: Section I.5 (patient consent preferences)
  * Auth via Cognito JWT; data from RDS PostgreSQL.
@@ -126,3 +127,8 @@ async function _PUT(request: NextRequest) {
 
 export const GET = withMetrics(_GET, "/api/consent");
 export const PUT = withMetrics(_PUT, "/api/consent");
+// PATCH is an alias for PUT (same upsert handler) so the mobile ApiClient,
+// whose frozen contract exposes apiPatch but no apiPut, can save consent.
+// Web continues to use PUT; both verbs hit the identical auth + validation
+// + audit path. Added 2026-06-10 to fix mobile consent-save (was HTTP 405).
+export const PATCH = withMetrics(_PUT, "/api/consent");

@@ -1,0 +1,150 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Flow 3 — 988 crisis safety surface  ⚠️  LOAD-BEARING
+#
+#   Drives the onboarding mood path into PHQ-9, answers item 9 with a
+#   positive (> 0) value, and asserts the Crisis988Modal appears with its
+#   call / text / acknowledge affordances. Taps acknowledge and confirms
+#   the flow continues.
+#
+#   This is the single most important assertion in the suite. The
+#   product rule is: "Never silently record a positive PHQ-9 item 9
+#   without surfacing 988." (InstrumentsScreen + Crisis988Modal). If the
+#   modal does NOT appear after a positive item-9 response, this flow
+#   MUST fail — that is the entire point of authoring it. Do not relax
+#   the crisis988_modal assertion.
+#
+#   NOTE: we assert only that the call/text affordances are PRESENT
+#   (crisis988_call_button / crisis988_text_button). We deliberately do
+#   NOT tap them — tel:988 / sms:988 would hand off to the dialer/SMS
+#   app, which is out of scope for the in-app assertion and not safe to
+#   trigger in automation.
+#
+# GATE — needs an E2E test-OTP backend running NODE_ENV != production.
+# See signin_onboarding.yaml / ./README.md for setup. The bypass works
+# ONLY in a NODE_ENV != production backend (local next dev / CI), never
+# the deployed staging service. Point the mobile build's API_BASE_URL at it.
+#
+# Selectors are the testID / accessibilityLabel inventory in ../README.md.
+# This flow is intentionally self-contained (it does NOT runFlow
+# signin_onboarding.yaml) because that flow consumes the mood path with a
+# negative PHQ-2 and lands on MainTabs — we need to drive the mood path
+# ourselves, positively, to reach PHQ-9 item 9.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+- launchApp:
+    clearState: true
+
+# ── SignIn — test-OTP bypass ────────────────────────────────────────────
+- assertVisible:
+    id: "signin_email_input"
+- tapOn:
+    id: "signin_email_input"
+- inputText: "e2e@denali.health"
+- tapOn:
+    id: "signin_send_code_button"
+- assertVisible:
+    id: "signin_otp_input"
+- tapOn:
+    id: "signin_otp_input"
+- inputText: "999999"
+- tapOn:
+    id: "signin_verify_button"
+
+# ── PrivacyNotice ───────────────────────────────────────────────────────
+- assertVisible:
+    id: "privacy_acknowledge_button"
+- tapOn:
+    id: "privacy_acknowledge_button"
+
+# ── CohortOnboarding ────────────────────────────────────────────────────
+- assertVisible:
+    id: "cohort_step1_birth_year_input"
+- tapOn:
+    id: "cohort_step1_birth_year_input"
+- inputText: "1965"
+- tapOn:
+    id: "oneitem_continue_button"
+- tapOn:
+    id: "cohort_step2_option_male"
+- tapOn:
+    id: "cohort_step3_option_yes"
+- tapOn:
+    id: "cohort_step4_option_male"
+
+# Step 5: confirm permanent details (D33) → Continue writes the profile.
+- assertVisible:
+    id: "cohort_confirm_summary"
+- tapOn:
+    id: "oneitem_continue_button"
+
+# ── Intake — finish straight through ────────────────────────────────────
+- assertVisible:
+    id: "intake_finish_button"
+- tapOn:
+    id: "intake_finish_button"
+
+# ── Mood path — answer PHQ-2 POSITIVELY to expand into PHQ-9 ─────────────
+# PHQ-2 expands to the full PHQ-9 when items 1 + 2 sum to ≥ 3 (Kroenke
+# 2003 positive-screen threshold). Value 2 ("More than half the days") on
+# both → 4, which trips the expansion. Both items auto-advance on tap.
+- assertVisible:
+    id: "instruments_mood_item1_option_2"
+- tapOn:
+    id: "instruments_mood_item1_option_2"
+- assertVisible:
+    id: "instruments_mood_item2_option_2"
+- tapOn:
+    id: "instruments_mood_item2_option_2"
+
+# Now in PHQ-9. Answer items 3–8 (value 0 is fine — these don't gate the
+# 988 surface). Each auto-advances.
+- assertVisible:
+    id: "instruments_mood_item3_option_0"
+- tapOn:
+    id: "instruments_mood_item3_option_0"
+- tapOn:
+    id: "instruments_mood_item4_option_0"
+- tapOn:
+    id: "instruments_mood_item5_option_0"
+- tapOn:
+    id: "instruments_mood_item6_option_0"
+- tapOn:
+    id: "instruments_mood_item7_option_0"
+- tapOn:
+    id: "instruments_mood_item8_option_0"
+
+# ── PHQ-9 item 9 — the crisis trigger ───────────────────────────────────
+# Item 9 ("thoughts that you would be better off dead…") uses its own
+# distinguished testID. Select a POSITIVE option (value 1) — any value > 0
+# must defer the record and open the Crisis988Modal.
+- assertVisible:
+    id: "instruments_phq9_item9_option_1"
+- tapOn:
+    id: "instruments_phq9_item9_option_1"
+
+# ── LOAD-BEARING 988 ASSERTION ──────────────────────────────────────────
+# The modal MUST appear with all three affordances. If any of these
+# assertions fail, the safety surface regressed — that is a release
+# blocker, not a flaky test.
+- assertVisible:
+    id: "crisis988_modal"
+- assertVisible:
+    id: "crisis988_call_button"
+- assertVisible:
+    id: "crisis988_text_button"
+- assertVisible:
+    id: "crisis988_acknowledge_button"
+
+# Acknowledge — the only exit from the modal. (We never tap call/text.)
+- tapOn:
+    id: "crisis988_acknowledge_button"
+
+# ── Flow continues after acknowledgement ────────────────────────────────
+# Acknowledging records the deferred item-9 response and completes the
+# mood path, which lands on the optional check-in menu (instruments_finish
+# _button present). The modal is gone.
+- assertNotVisible:
+    id: "crisis988_modal"
+- assertVisible:
+    id: "instruments_finish_button"
