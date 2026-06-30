@@ -121,8 +121,10 @@ describe("alarm tokens — intentional additions beyond the mockup :root", () =>
   it("--alarm-wash is absent from the mockup :root", () => {
     expect(() => readVar(mockupRoot, "alarm-wash")).toThrow();
   });
-  it("alarm carries the pre-redesign error red", () => {
-    expect(redesign.alarm).toBe("#C44536");
+  it("alarm is the error red, darkened to clear WCAG AA on alarmWash", () => {
+    // Was #C44536 (4.18:1 on alarmWash); darkened for the severe pill. Not a
+    // mockup token, so pinned directly here rather than via the drift test.
+    expect(redesign.alarm).toBe("#B53A2C");
   });
   it("alarmWash follows the *-wash construction (valid pale hex)", () => {
     expect(redesign.alarmWash).toMatch(/^#[0-9A-F]{6}$/i);
@@ -192,28 +194,41 @@ describe("Alpine-night dark palette — derived from the light vocabulary", () =
     expect(tokens.colors.dark.success).toBe(redesignDark.teal);
   });
 
-  // Clinical-surface legibility: the disclaimer copy and every severity pill
-  // must clear WCAG AA (4.5:1) in dark, or a band could read wrong at night.
-  const CLINICAL_PAIRS: ReadonlyArray<readonly [string, string, string]> = [
-    ["disclaimer (ink3 on paper)", redesignDark.ink3, redesignDark.paper],
-    ["body (ink on paper)", redesignDark.ink, redesignDark.paper],
-    ["ok pill (tealDeep on tealWash)", redesignDark.tealDeep, redesignDark.tealWash],
-    ["watch pill (amber on amberWash)", redesignDark.amber, redesignDark.amberWash],
-    ["severe pill (alarm on alarmWash)", redesignDark.alarm, redesignDark.alarmWash],
+  // Clinical-surface legibility: the disclaimer, every severity pill, the
+  // crisis button, the trend-chart band labels, AND the primary CTA must clear
+  // WCAG AA (4.5:1) in BOTH appearances. Light is the DEFAULT scheme, so a
+  // light-only failure ships to most users — pre-fix, the light disclaimer was
+  // 2.46:1, the watch pill 3.20:1 and the white-on-teal CTA 4.11:1, and this
+  // dark-only matrix never caught them. Run the same matrix against each palette.
+  const clinicalPairs = (
+    p: typeof redesign | typeof redesignDark,
+  ): ReadonlyArray<readonly [string, string, string]> => [
+    ["disclaimer (ink3 on paper)", p.ink3, p.paper],
+    ["body (ink on paper)", p.ink, p.paper],
+    ["ok pill (tealDeep on tealWash)", p.tealDeep, p.tealWash],
+    ["watch pill (amber on amberWash)", p.amber, p.amberWash],
+    ["severe pill (alarm on alarmWash)", p.alarm, p.alarmWash],
     // Crisis-988 "Call 988" button: surface-colored label on the alarm fill.
-    // The crisis surface must stay legible in dark — flagged by clinical review.
-    ["crisis 988 button (surface on alarm)", redesignDark.surface, redesignDark.alarm],
+    ["crisis 988 button (surface on alarm)", p.surface, p.alarm],
+    // Primary CTA: white/surface label on the teal-deep button fill (the
+    // bare-teal fill at 4.11:1 was the pre-fix failure).
+    ["primary CTA (surface on tealDeep)", p.surface, p.tealDeep],
     // Trend-chart band labels (ink) on each severity band fill — a band label
     // unreadable on its fill could let "severe" read as "minimal".
-    ["band label (ink on bandOk)", redesignDark.ink, redesignDark.bandOk],
-    ["band label (ink on bandSoft)", redesignDark.ink, redesignDark.bandSoft],
-    ["band label (ink on bandWatch)", redesignDark.ink, redesignDark.bandWatch],
-    ["band label (ink on bandAlarm)", redesignDark.ink, redesignDark.bandAlarm],
+    ["band label (ink on bandOk)", p.ink, p.bandOk],
+    ["band label (ink on bandSoft)", p.ink, p.bandSoft],
+    ["band label (ink on bandWatch)", p.ink, p.bandWatch],
+    ["band label (ink on bandAlarm)", p.ink, p.bandAlarm],
   ];
-  for (const [name, fg, bg] of CLINICAL_PAIRS) {
-    it(`${name} clears WCAG AA (>= 4.5:1)`, () => {
-      expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
-    });
+  for (const [mode, palette] of [
+    ["light", redesign],
+    ["dark", redesignDark],
+  ] as const) {
+    for (const [name, fg, bg] of clinicalPairs(palette)) {
+      it(`${mode}: ${name} clears WCAG AA (>= 4.5:1)`, () => {
+        expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+      });
+    }
   }
 
   it("keeps the three severity washes distinct (no two identical)", () => {

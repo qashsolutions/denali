@@ -26,6 +26,7 @@ import { IntakeOnboardingScreen } from "@/screens/IntakeOnboardingScreen";
 import { LockScreen } from "@/screens/LockScreen";
 import { LogMarkerScreen } from "@/screens/markers/LogMarkerScreen";
 import { MarkerDetailScreen } from "@/screens/MarkerDetailScreen";
+import { ReportDetailScreen } from "@/screens/ReportDetailScreen";
 import { RestoreBackupScreen } from "@/screens/RestoreBackupScreen";
 import { SignInScreen } from "@/screens/SignInScreen";
 import { TimelineScreen } from "@/screens/TimelineScreen";
@@ -176,6 +177,11 @@ export function RootNavigator() {
        * detail screen renders its own back affordance since the stack is
        * headerless. Chart lands in increment 2.
        */}
+      <Stack.Screen
+        name="ReportDetail"
+        component={ReportDetailScreen}
+        options={{ headerShown: true, title: "Report" }}
+      />
       <Stack.Screen name="DomainDetail" component={DomainDetailScreen} />
       {/* D28: per-marker history drill-down (tap a Latest-readings card). */}
       <Stack.Screen name="MarkerDetail" component={MarkerDetailScreen} />

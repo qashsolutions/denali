@@ -29,9 +29,11 @@ import {
   TextInput,
   View,
 } from "react-native";
+import type { StyleProp, TextStyle } from "react-native";
 
-import { useApiClient } from "@/auth";
+import { HttpError, useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
+import { useDal } from "@/db/DalProvider";
 import type { RootStackParamList } from "@/navigation/types";
 import { useTheme } from "@/theme/useTheme";
 
@@ -41,9 +43,83 @@ type Step = "email" | "otp";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Step-aware sign-in subtitle. The OTP step surfaces the 10-minute code expiry
+ * (the email states it, but users wait on this screen, not their inbox).
+ * Pure helper of live `step` per the mobile pure-helper rule.
+ */
+export function signInSubtitle(step: Step): string {
+  return step === "email"
+    ? "We’ll email you a 6-digit code. No passwords."
+    : "Enter the 6-digit code we just emailed you. It expires in 10 minutes.";
+}
+
+/** Seconds the "Resend code" action stays disabled after a send, so rapid taps
+ * can't trip the server's per-email send cap (3 / 15 min). */
+const RESEND_COOLDOWN_SEC = 30;
+
+/**
+ * Map a send/resend failure to a user-facing message. A 429 (the server's
+ * per-email / per-IP send cap) is called out so the user waits rather than
+ * retrying into the same wall; everything else uses `fallback`. Never surfaces
+ * raw server text (which could carry token-bearing payloads).
+ */
+export function otpSendErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof HttpError && err.status === 429) {
+    return "Too many code requests. Please wait a few minutes, then try again.";
+  }
+  return fallback;
+}
+
+/** "Resend code" link with in-flight + cooldown disabled states. */
+function ResendButton({
+  cooldown,
+  submitting,
+  onPress,
+  linkStyle,
+}: {
+  cooldown: number;
+  submitting: boolean;
+  onPress: () => void;
+  linkStyle: StyleProp<TextStyle>;
+}): React.ReactElement {
+  const disabled = submitting || cooldown > 0;
+  const label =
+    cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code";
+  return (
+    <Pressable
+      testID="signin_resend_code_button"
+      accessibilityRole="button"
+      accessibilityLabel="Resend code"
+      disabled={disabled}
+      onPress={onPress}
+    >
+      <Text style={[linkStyle, disabled && { opacity: 0.5 }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/** One status line — an error takes precedence over an info confirmation. */
+function StatusMessage({
+  error,
+  info,
+  errorStyle,
+  infoStyle,
+}: {
+  error: string | null;
+  info: string | null;
+  errorStyle: StyleProp<TextStyle>;
+  infoStyle: StyleProp<TextStyle>;
+}): React.ReactElement | null {
+  if (error) return <Text style={errorStyle}>{error}</Text>;
+  if (info) return <Text style={infoStyle}>{info}</Text>;
+  return null;
+}
+
 export function SignInScreen(): React.ReactElement {
   const api = useApiClient();
   const navigation = useNavigation<Nav>();
+  const dal = useDal();
   const { active, theme } = useTheme();
 
   const [step, setStep] = React.useState<Step>("email");
@@ -51,6 +127,8 @@ export function SignInScreen(): React.ReactElement {
   const [otp, setOtp] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const [infoMsg, setInfoMsg] = React.useState<string | null>(null);
+  const [cooldown, setCooldown] = React.useState(0);
 
   const styles = React.useMemo(
     () =>
@@ -89,14 +167,14 @@ export function SignInScreen(): React.ReactElement {
           paddingVertical: theme.spacing.sm,
           fontFamily: theme.typography.fonts.sans,
           fontSize: theme.typography.sizes.base,
-          minHeight: 44,
+          minHeight: 48,
           marginBottom: theme.spacing.md,
         },
         button: {
           backgroundColor: active.accentPrimary,
           borderRadius: theme.radii.md,
           paddingVertical: theme.spacing.md,
-          minHeight: 44,
+          minHeight: 48,
           alignItems: "center",
           justifyContent: "center",
         },
@@ -122,6 +200,12 @@ export function SignInScreen(): React.ReactElement {
           fontSize: theme.typography.sizes.sm,
           marginBottom: theme.spacing.sm,
         },
+        info: {
+          color: active.textSecondary,
+          fontFamily: theme.typography.fonts.sans,
+          fontSize: theme.typography.sizes.sm,
+          marginBottom: theme.spacing.sm,
+        },
       }),
     [active, theme],
   );
@@ -130,8 +214,18 @@ export function SignInScreen(): React.ReactElement {
   const emailValid = EMAIL_RE.test(trimmedEmail);
   const otpValid = /^\d{6}$/.test(otp);
 
+  // Tick the resend cooldown down. setTimeout (not setInterval) keeps the dep
+  // array exhaustive-deps-clean: each new `cooldown` value schedules the next
+  // decrement, and reaching 0 schedules nothing.
+  React.useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const id = setTimeout(() => setCooldown(cooldown - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
+
   const onSendOtp = React.useCallback(async () => {
     setErrorMsg(null);
+    setInfoMsg(null);
     if (!emailValid) {
       setErrorMsg("Enter a valid email address.");
       return;
@@ -140,10 +234,13 @@ export function SignInScreen(): React.ReactElement {
     try {
       await api.sendOtp(trimmedEmail);
       setStep("otp");
-    } catch {
-      // Intentionally generic — server returns localized messages but we
-      // never want to mistakenly surface token-bearing payloads.
-      setErrorMsg("Couldn't send your code. Please try again.");
+      setCooldown(RESEND_COOLDOWN_SEC);
+    } catch (err) {
+      // Generic by default; never surface raw server text (token-bearing
+      // payloads). A 429 send cap is called out so the user knows to wait.
+      setErrorMsg(
+        otpSendErrorMessage(err, "Couldn't send your code. Please try again."),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -151,6 +248,7 @@ export function SignInScreen(): React.ReactElement {
 
   const onVerifyOtp = React.useCallback(async () => {
     setErrorMsg(null);
+    setInfoMsg(null);
     if (!otpValid) {
       setErrorMsg("Enter the 6-digit code from your email.");
       return;
@@ -158,21 +256,49 @@ export function SignInScreen(): React.ReactElement {
     setSubmitting(true);
     try {
       await api.verifyOtp(trimmedEmail, otp);
-      // Wave 2: route through PrivacyNotice first (mobile-onboarding-builder
-      // added the data-locality notice as the pre-cohort acknowledgement
-      // screen — see PrivacyNoticeScreen.tsx). Wave 3 will further refine to
-      // skip the whole interstitial chain when a local profile is already
-      // present via LocalDataDAL.getProfile().
+      // Returning-user short-circuit: if a COMPLETED local profile already
+      // exists (the permanent birth-year + sex fields are written at the
+      // cohort confirm step), the user has onboarded before — skip the whole
+      // interstitial chain and go straight to the app, mirroring RootNavigator's
+      // cold-launch restore. Re-walking PrivacyNotice → the 5-step cohort
+      // (re-confirming fields Settings locks) → Intake → PHQ-2 reads as "the
+      // app forgot me". A fresh user (no profile) still onboards.
+      const profile = dal ? await dal.getProfile() : null;
+      const onboarded =
+        profile != null &&
+        profile.birth_year != null &&
+        profile.sex_at_birth != null;
       navigation.reset({
         index: 0,
-        routes: [{ name: "PrivacyNotice" }],
+        routes: [{ name: onboarded ? "MainTabs" : "PrivacyNotice" }],
       });
     } catch {
       setErrorMsg("That code didn't work. Please try again.");
     } finally {
       setSubmitting(false);
     }
-  }, [api, navigation, otp, otpValid, trimmedEmail]);
+  }, [api, dal, navigation, otp, otpValid, trimmedEmail]);
+
+  // Re-send a code to the SAME email without leaving the OTP step — covers the
+  // 10-minute expiry, where the only prior recourse was "Use a different email"
+  // + retyping. Clears any stale code and confirms via infoMsg.
+  const onResend = React.useCallback(async () => {
+    setErrorMsg(null);
+    setInfoMsg(null);
+    setOtp("");
+    setSubmitting(true);
+    try {
+      await api.sendOtp(trimmedEmail);
+      setInfoMsg("New code sent — check your email.");
+      setCooldown(RESEND_COOLDOWN_SEC);
+    } catch (err) {
+      setErrorMsg(
+        otpSendErrorMessage(err, "Couldn't resend your code. Please try again."),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }, [api, trimmedEmail]);
 
   return (
     <KeyboardAvoidingView
@@ -181,11 +307,14 @@ export function SignInScreen(): React.ReactElement {
     >
       <View style={styles.screen}>
         <Text style={styles.title}>Sign in to Denali</Text>
-        <Text style={styles.subtitle}>
-          We&rsquo;ll email you a 6-digit code. No passwords.
-        </Text>
+        <Text style={styles.subtitle}>{signInSubtitle(step)}</Text>
 
-        {errorMsg && <Text style={styles.error}>{errorMsg}</Text>}
+        <StatusMessage
+          error={errorMsg}
+          info={infoMsg}
+          errorStyle={styles.error}
+          infoStyle={styles.info}
+        />
 
         {step === "email" ? (
           <>
@@ -265,6 +394,12 @@ export function SignInScreen(): React.ReactElement {
                 <Text style={styles.buttonText}>Verify code</Text>
               )}
             </PressableScale>
+            <ResendButton
+              cooldown={cooldown}
+              submitting={submitting}
+              onPress={onResend}
+              linkStyle={styles.link}
+            />
             <Pressable
               testID="signin_use_different_email_button"
               accessibilityRole="button"
@@ -272,8 +407,10 @@ export function SignInScreen(): React.ReactElement {
               disabled={submitting}
               onPress={() => {
                 setOtp("");
+                setEmail("");
                 setStep("email");
                 setErrorMsg(null);
+                setInfoMsg(null);
               }}
             >
               <Text style={styles.link}>Use a different email</Text>

@@ -678,6 +678,123 @@ spinner; the real (Low) nit was spinner-vs-skeleton, now fixed.
 
 ---
 
+## D35 — A11y 45+ floor + one-attention-item (design reconciliation) (2026-06-17)
+
+**Decision:** Operator handed a longitudinal-health design proposal; we reconciled it against the codebase (Phases 1–3) and adopted only the measured wins. Most principles were already satisfied (≤5 tabs, status text+color via pills, plain-language readouts, AA contrast tested, one primary action). Three adopted, on branch `feat/mobile-a11y-45plus`:
+
+- **Touch targets → ≥48px (principle 8).** Audited every interactive `minHeight`/`minWidth` and bumped the ~25 remaining `44`s to `48` across 14 files (back chips, CTAs, list rows, cards). Non-interactive dims (14/50/52) untouched. Guarded by a source-scan test (`a11y.test.ts`).
+- **Body base 16 → 17px (principle 8).** One token (`tokens.ts` `sizes.base`). Dynamic Type still respected (MAX_FONT_SCALE caps chrome only). Does NOT touch the colors-only token-drift test. On-device visual pass: no layout breakage.
+- **One attention card on Today (principle 7).** A single compact callout (one row, fixed area) at the top: a **light-grey (`pillSoft`) card with a thin red (`alarm`) border, no icon** (the red border alone signals severity — operator review iterated off earlier left-accent-bar / alarm-wash / alert-icon versions) holding up to **4 severe domain names as borderless, individually-tappable red text chips**, with a "+N" (a11y-labelled "N more in the severe range") when more than 4 are severe. The row **never wraps to a second line** — `attentionChips` is `flexWrap: "nowrap"`, each chip is `numberOfLines={1}` + `flexShrink: 1`, so names truncate (they never do at 4 short domain names) rather than spill. It NEVER stacks N cards (the pile-up principle 7 forbids); the other severe domains stay in the grid with their own pills. `severeDomains` returns ALL `alarm`-tint domains and the render `slice(0, 4)`s them, reusing the cards' own `lookupInterpretation` + `tintClassForBand` so callout and card can never disagree. NO new clinical copy (the chip is the versioned domain name; the band pill is read via lookup); each chip → its domain detail where the full reading + any 988 path live. Chips use vertical `hitSlop` to reach the 48px tap floor without horizontal overlap. Grid NOT reordered. Markers (watch tint) never trigger it. **On-device (Maestro):** verified at 2/3/4 severe domains (Mood/Anxiety/Sleep/Alcohol via all-max check-ins) — all one row, no wrap; chip-tap routes to the domain detail.
+- **Refactor:** `tintClassForBand` extracted to RN-free `bandTint.ts` (pill.ts re-exports it) so the node-only attention helper + test don't drag in react-native. Byte-identical logic; all callers unchanged.
+
+**Rejected (with rationale):** dedicated Trends tab (our sparkline-glance + per-domain drill-down already cover it for a many-domain IA); Meds archetype (Phase 1 isn't a med manager); trend event-annotations (sparse self-reported events; defer).
+
+**Verification:** tsc 0, eslint 0 errors, **1103 tests** (new `a11y` acceptance + `dashboardAttention` pins). On-device: severe check-in → the callout surfaces at the top; body bump renders without breakage.
+
+**Encoded in code:** `src/theme/tokens.ts` (base 17), ~14 screens (targets 48), `src/screens/timeline/{dashboardAttention,bandTint}.ts` (+ tests), `src/screens/HealthDashboardScreen.tsx` (callout), `src/screens/timeline/pill.ts` (re-export), `src/theme/__tests__/a11y.test.ts`.
+
+## D36 — Upload analysis: report-only interpretation + free-form + post-parse naming (2026-06-17)
+
+**Decision:** Reworked the upload→parse→review surface around "interpret only what the report prints; never diagnose," plus free-form upload and post-parse naming.
+
+- **No-diagnosis summary.** `/api/parse-report` summary prompt forbids diagnosis; the review screen shows a deterministic report-only `summarizeReport()` and the model's free-text summary is sealed off the client wire type. Stored report summary is a factual count.
+- **Sourced RAG chips.** New `reference_range` + `abnormal_flag` parse fields the model COPIES from the report (never infers); `ragForObservation` (`src/upload/reportInterpretation.ts`) maps the report's own flag → ok/watch/alarm chip via the band `tintByClass`, with a source_text flag-word fallback; no flag stated → no chip. Caveat composed from `STANDING_DISCLAIMER`.
+- **Free-form upload.** Removed the lab/ehr/visit picker — the per-observation `category` already classifies each value; report-level `type` is invisible metadata, defaulted.
+- **Post-parse naming (additive contract change).** Naming moved to the review screen, pre-filled from the report's own dominant date (`suggestNameFromObservations`), persisted via a NEW DAL method **`renameReport(id, name)`** — report METADATA only (same mutation surface as `updateReportParseStatus`; observations stay append-only). Contract edited via the documented rm-marker → additive-edit → re-touch procedure; test fakes (`smoke.test.ts`, `backupService.test.ts`) updated.
+- **Post-save results summary.** After Save the review screen shows a "✓ Saved to your record" recap (kept values + RAG chips + the name) instead of silently popping back.
+
+**Reviewed:** clinical-boundary-reviewer PASS (no blockers) on the analysis diff; two WARNs (latent model-summary field; bespoke caveat) fixed.
+
+**Open follow-up:** the parser still extracts narrative DIAGNOSES as `condition` observations (e.g. "Unspecified liver disease due to alcohol") — a backend extraction-prompt fix that needs a staging deploy. Users can Skip such rows in review meanwhile.
+
+**Verification:** app tsc 0 + 21 parse-report tests; mobile tsc 0, eslint 0, **1117 tests**. On-device: upload → report-only summary + sourced chips → name → Save → saved recap.
+
+---
+
+## D37 — Settings account deletion + legal links (2026-06-18)
+
+**Decision:** Add the App Store / Play Store-required **account deletion** flow and the three legal links to mobile Settings. Tapping "Delete account" raises a destructive-confirm `Alert` ("Delete your account?" / body "This permanently deletes your account and all your health data — on this device and on our servers. This can't be undone." / Cancel + destructive Delete). On confirm: `DELETE /api/account/delete` (server cascade + Cognito `AdminDeleteUser`) runs FIRST, then the full local wipe (D38), then `navigation.reset` to `SignIn`. Server-first ordering means a failed server delete never silently wipes the device while the account still exists upstream.
+
+**Admin self-delete is blocked server-side.** The route does `SELECT is_admin FROM users WHERE id = $1` and returns 403 `{error:'Admin accounts cannot be deleted through the app.'}` for admins — mirroring the web app's "admins can't self-delete" rule (CLAUDE.md § Privacy). Surfaced in-app as **"This account can't be deleted from the app."** (the 403 is caught and mapped to that copy; the local wipe does NOT run on a 403).
+
+**Legal section** — three links, all pinned to the PROD host `https://denali.health` regardless of the API base (the API base may be staging, but the legal pages are prod-canonical and all three return 200 on prod):
+- Terms → `https://denali.health/terms`
+- Privacy → `https://denali.health/privacy`
+- Notice of Privacy Practices → `https://denali.health/hipaa`
+
+**Why:** account deletion is a hard App Store / Play Store submission requirement; the legal links are the standard store-review compliance set. Both are net-new mobile-only surfaces — the web app already had the delete cascade route.
+
+**Encoded in code:** `src/screens/SettingsScreen.tsx` (Delete-account row + confirm Alert + legal links), `src/db/wipe.ts` (`wipeAllLocalData`, D38). Commit `e717540`.
+
+---
+
+## D38 — Local account-delete wipe: best-effort, and the WAL-checkpoint finding (2026-06-18)
+
+**Decision:** `mobile/src/db/wipe.ts` `wipeAllLocalData()` performs the on-device side of account deletion (D37). It is **FULLY best-effort / never-throws** — every step is try/catch-guarded so a transient on-device failure can't strand the user *after the server account is already gone* (D37 runs the server delete first). Commits `e717540` + `051deaf`; unit-tested in `8640315`.
+
+**Steps, in order:**
+1. `PRAGMA secure_delete = ON` — overwrite freed pages rather than just unlink.
+2. `DELETE FROM "<table>"` for **every user table** (quoted identifier; the table list excludes `sqlite_%` internal tables and `schema_migrations`).
+3. `VACUUM` — rebuild the DB to physically reclaim/overwrite the deleted pages.
+4. `PRAGMA wal_checkpoint(TRUNCATE)` — flush the WAL into the main DB and truncate the `-wal` file to 0 (the load-bearing step, below).
+5. `clearAllReportBlobs` — delete the entire encrypted reports blob directory.
+6. `clearBlobKeyCache` — clear the in-memory derived blob key.
+7. `clearTokens` — clear the auth tokens from SecureStore.
+
+**What is intentionally KEPT:** the DB file, the SQLCipher key, and `schema_migrations`. The live connection stays valid for a clean re-onboard, and an **empty encrypted DB holds no PHI** — so retaining the file + key is safe and avoids tearing down / re-deriving the connection.
+
+**Load-bearing finding (verified on-device; the reason `051deaf` exists):** in **WAL mode** the `DELETE`s and the `VACUUM`'s rebuild all land in the `-wal` file — the main DB stayed at a single 4 KB page. SQLite only **auto-checkpoints once the WAL passes ~1000 pages**, and a small DB never reaches that, so **without an explicit checkpoint the `-wal` sat at ~1.4 MB of pre-wipe encrypted frames EVEN AFTER a cold app restart**. Because the SQLCipher key is retained by design (above), those leftover WAL frames are recoverable residue — a real PHI-remanence hole. `PRAGMA wal_checkpoint(TRUNCATE)` flushes the WAL into the main DB and truncates the `-wal` to 0. **Verified on-device: `-wal` 1,466,752 B → 0 B**, report blobs gone, SecureStore tokens cleared (5665 B → 826 B).
+
+**Takeaway for any future wipe path:** `secure_delete` + `VACUUM` alone are **INSUFFICIENT** in WAL mode — the `wal_checkpoint(TRUNCATE)` is **mandatory** to evict pre-wipe frames from the `-wal`.
+
+**Test-account note (verification evidence):** `ceeveear@yahoo.com` was the sacrificial **non-admin** account used to prove the wipe end-to-end on **staging**, and is now **DELETED** there. Both operator test accounts (ramanac, ceeveear) were found to be `is_admin = TRUE` on **STAGING** — staging's flags had diverged from the prod values documented in the root CLAUDE.md, and the on-device **403** (D37's admin block) confirmed it. ceeveear's staging `is_admin` was set **FALSE** (via a one-off `denali-staging-dbinit` Fargate task) to reach the server-200 → wipe path, then the account was deleted. (Prod flags are unchanged; this note is staging-only.)
+
+**Encoded in code:** `src/db/wipe.ts` (`wipeAllLocalData`), `src/db/__tests__/wipe.test.ts`. Commits `e717540` + `051deaf`; tests `8640315`.
+
+---
+
+## D39 — Sign-in OTP UX polish (2026-06-18)
+
+**Decision:** Five sign-in OTP improvements, all verified on-device via Maestro. Commits `820a0d3`, `45e200a`, `4b2f0e2`.
+
+1. **Step-aware subtitle surfacing the 10-minute code expiry.** The OTP step shows "Enter the 6-digit code we just emailed you. It expires in 10 minutes." (the email step keeps its own subtitle).
+2. **"Resend code" link on the OTP step.** Re-sends to the same email without leaving the step; confirms with "New code sent — check your email."
+3. **"Use a different email" now CLEARS the email field.** It previously kept the old value, so re-entry **appended** onto the stale string — a bug fix.
+4. **30-second cooldown on Resend.** "Resend code in Ns" countdown, link disabled during it, so rapid taps can't trip the server's send cap.
+5. **429-specific message.** "Too many code requests. Please wait a few minutes, then try again." — because `app/src/app/api/auth/send-otp/route.ts` rate-limits to **3 sends per email / 15 min** (and 10 per IP), returning 429.
+
+**Why:** the OTP step gave the user no expiry signal, no recovery if the code never arrived, and a stale-value bug on email re-entry; the cooldown + 429 copy keep the user from hammering (and being confused by) the server send cap.
+
+**Encoded in code:** `src/screens/SignInScreen.tsx` (step subtitle, Resend link + cooldown, different-email clear, 429 mapping). Commits `820a0d3`, `45e200a`, `4b2f0e2`. Maestro-verified on-device.
+
+---
+
+## D40 — MRS severity-scale calibration anchors (operator-accepted deviation, 2026-06-19)
+
+**Decision:** Add a short italic CALIBRATION hint under each MRS severity option so a user knows which level to self-rate (the bare labels "Mild"/"Moderate"/… don't say *mild what?*). The 0-4 anchors:
+
+| Level | Anchor |
+|---|---|
+| None | *not present at all* |
+| Mild | *slight, easy to ignore* |
+| Moderate | *noticeable, sometimes bothersome* |
+| Severe | *strong, frequently bothersome* |
+| Very severe | *intense, very distressing* |
+
+**This is a DELIBERATE deviation from the verbatim validated instrument.** The published MRS (Heinemann 2003) has NO per-level anchors — respondents self-rate against the bare labels, and the score-band cutoffs Denali uses (`MRS_BANDS`, `tableV1.ts`) were derived from data gathered *without* anchors. Denali-authored anchors can shift how a user self-rates, so **pre-clinical-review MRS scores collected with these anchors may not be comparable to published norms.** The clinical-boundary review (2026-06-18) returned this as a BLOCKER pending a named operator decision; the operator (Venkata) **accepted the deviation** in favor of the usability gain. This entry IS that recorded decision.
+
+**Why accepted:** the anchors are pure perceived-INTENSITY descriptors — no diagnosis, no condition name, no recommendation (clinical-boundary review confirmed the wording is clean) — and the calibration value to a 45+ self-rater outweighs the norm-comparability cost while the score bands remain provisional (‡) anyway.
+
+**Guardrails / follow-ups:**
+- Marked `helperTextProvisional: true` on every anchor; a governance test (`instruments/__tests__/helperTextGovernance.test.ts`) fails if any `helperText` ships without an explicit provisional flag, mirroring `InterpretationBand.provisional`.
+- **Clinician-gated clearance (prod sign-off mechanism).** `ResponseOption.helperTextReviewedBy: string | null` mirrors `tableV1`'s `lastClinicallyReviewedBy`. The governance test forbids `helperTextProvisional: false` while `helperTextReviewedBy` is empty — so the ‡ can ONLY clear with a named clinician on record; **CC never clears it.** To clear: a credentialed clinician reviews the wording, then someone sets `helperTextReviewedBy` to that attestation (e.g. `"J. Smith, MD — 2026-06-20"`) AND flips `helperTextProvisional: false` per anchor. Currently `helperTextReviewedBy` is unset on all five (unreviewed).
+- The reviewer specifically flagged "very distressing" (level 4) for that clinical review's scope, since MRS items 4 (depressive mood) and 6 (anxiety) carry more loaded affect than the somatic items.
+- Scope is MRS only — the other instruments (PHQ-9/GAD-7/Epworth/AUDIT-C) use self-explanatory frequency/quantity labels and carry no anchors.
+
+**Encoded in code:** `src/onboarding/instruments/mrs.ts` (anchors), `src/onboarding/instruments/types.ts` (`ResponseOption.helperText` + `helperTextProvisional`), `src/onboarding/inputs/LikertInput.tsx` (italic helper render), `src/onboarding/instruments/__tests__/helperTextGovernance.test.ts`. On-device verified (Maestro hierarchy + screenshot, female cohort, MRS item 7).
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

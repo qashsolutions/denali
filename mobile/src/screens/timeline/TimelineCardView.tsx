@@ -653,7 +653,7 @@ function sessionStyles(
     itemBarFill: {
       height: 6,
       borderRadius: theme.radii.sm,
-      backgroundColor: redesign.teal,
+      backgroundColor: redesign.tealDeep,
     },
     itemValue: {
       color: redesign.ink,

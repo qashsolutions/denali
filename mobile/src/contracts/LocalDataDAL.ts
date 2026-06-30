@@ -244,6 +244,14 @@ export interface LocalDataDAL {
     status: ReportParseStatus,
     summary?: string,
   ): Promise<void>;
+  /**
+   * Rename a report (its `original_filename`) — e.g. when the user names it on
+   * the review screen after the parse. Report METADATA only; never touches a
+   * stored health value, so the observations append-only invariant is intact
+   * (same mutation surface as updateReportParseStatus). Additive, post-Wave-0
+   * (2026-06-17).
+   */
+  renameReport(id: string, name: string): Promise<void>;
 
   // Profile
   getProfile(): Promise<ProfileRow | null>;

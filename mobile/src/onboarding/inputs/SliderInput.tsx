@@ -151,7 +151,7 @@ export function SliderInput({
         },
         trackFill: {
           height: TRACK_HEIGHT,
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           borderRadius: theme.radii.sm,
         },
         thumb: {
@@ -159,7 +159,7 @@ export function SliderInput({
           width: THUMB_SIZE,
           height: THUMB_SIZE,
           borderRadius: THUMB_SIZE / 2,
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           borderColor: redesign.paper,
           borderWidth: 2,
         },

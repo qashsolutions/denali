@@ -106,9 +106,13 @@ appId: health.denali.mobile
     id: "instruments_mood_item2_option_0"
 
 # A negative PHQ-2 lands on the optional check-in menu. Skip the optional
-# instruments and go straight to the app.
-- assertVisible:
-    id: "instruments_finish_button"
+# instruments and go straight to the app. The finish button sits below the
+# menu cards, so scroll it into view first — a bare assertVisible does NOT
+# auto-scroll and fails once the menu is long enough to push it off-screen.
+- scrollUntilVisible:
+    element:
+      id: "instruments_finish_button"
+    direction: DOWN
 - tapOn:
     id: "instruments_finish_button"
 

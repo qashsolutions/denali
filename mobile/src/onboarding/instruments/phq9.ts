@@ -7,8 +7,11 @@
  * reproduction-permitted without permission.
  *
  * LOINC panel: 44249-1 ("Patient Health Questionnaire 9 item (PHQ-9)
- * total score [Reported]"). Per-item LOINC codes from the LOINC PHQ-9
- * panel: 44250-9 (Q1) through 44258-2 (Q9).
+ * total score [Reported]"). Per-item LOINC codes are the PHQ-9 panel
+ * members, mapped to each item by CONCEPT — verified verbatim against
+ * loinc.org (2026-06-17). They are NOT contiguous-by-position: Q6 self-worth
+ * is 44258-2, Q7 concentration 44252-5, Q8 psychomotor 44253-3, Q9 self-harm
+ * 44260-8 (an earlier scramble had Q6-Q9 rotated).
  *
  * Item wording is verbatim from the published instrument. DO NOT
  * paraphrase. The lead-in "Over the last 2 weeks, how often have you
@@ -65,21 +68,21 @@ export const PHQ9: InstrumentDefinition = {
     },
     {
       number: 6,
-      itemCode: "44252-5",
+      itemCode: "44258-2", // verbatim loinc.org: "Feeling bad about yourself…"
       text:
         "Feeling bad about yourself — or that you are a failure or " +
         "have let yourself or your family down.",
     },
     {
       number: 7,
-      itemCode: "44253-3",
+      itemCode: "44252-5", // verbatim loinc.org: "Trouble concentrating…"
       text:
         "Trouble concentrating on things, such as reading the newspaper " +
         "or watching television.",
     },
     {
       number: 8,
-      itemCode: "44260-8",
+      itemCode: "44253-3", // verbatim loinc.org: "Moving or speaking so slowly…"
       text:
         "Moving or speaking so slowly that other people could have noticed? " +
         "Or the opposite — being so fidgety or restless that you have " +
@@ -87,7 +90,11 @@ export const PHQ9: InstrumentDefinition = {
     },
     {
       number: 9,
-      itemCode: "44258-2",
+      // verbatim loinc.org: "Thoughts that you would be better off dead…" —
+      // the self-harm item. Was wrongly 44258-2 (which is the item-6 self-worth
+      // code); the 988 path keys off index 8, not this code, so triggering was
+      // unaffected, but the STORED observation code was mislabeled.
+      itemCode: "44260-8",
       text:
         "Thoughts that you would be better off dead, or of hurting yourself " +
         "in some way.",

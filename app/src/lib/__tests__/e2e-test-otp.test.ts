@@ -478,3 +478,60 @@ describe("constantTimeEqual", () => {
     expect(__TEST_ONLY.constantTimeEqual("999999", "")).toBe(false);
   });
 });
+
+// ─── N8 — send-otp rotation-skip guard (G1-G3 subset, no code / password) ──
+// send-otp runs BEFORE any code is entered, so its rotation-skip guard checks
+// only G1-G3. It must deny in prod exactly like the full bypass, so the static
+// test password is kept (rotation skipped) ONLY in a NODE_ENV != production env.
+describe("N8: assertE2eTestSendBypassAllowed (send-otp rotation skip)", () => {
+  const SEND = { email: "e2e@denali.health", host: STAGING_HOST };
+
+  it("returns true when G1-G3 pass", async () => {
+    setStagingEnv();
+    vi.resetModules();
+    const { assertE2eTestSendBypassAllowed } = await import("../e2e-test-otp");
+    expect(await assertE2eTestSendBypassAllowed(SEND)).toBe(true);
+  });
+
+  it("returns false (G1) when the flag is unset", async () => {
+    setStagingEnv();
+    vi.stubEnv("E2E_TEST_OTP_ENABLED", "");
+    vi.resetModules();
+    const { assertE2eTestSendBypassAllowed } = await import("../e2e-test-otp");
+    expect(await assertE2eTestSendBypassAllowed(SEND)).toBe(false);
+  });
+
+  it("returns false (G2) when NODE_ENV is production", async () => {
+    // Boot in a safe state (the startup assertion refuses to boot when flag +
+    // prod coexist), then flip NODE_ENV at request time — same as the N1 tests.
+    setStagingEnv();
+    vi.resetModules();
+    const { assertE2eTestSendBypassAllowed } = await import("../e2e-test-otp");
+    vi.stubEnv("NODE_ENV", "production");
+    expect(await assertE2eTestSendBypassAllowed(SEND)).toBe(false);
+  });
+
+  it("returns false (G2) when host is a prod host", async () => {
+    setStagingEnv();
+    vi.resetModules();
+    const { assertE2eTestSendBypassAllowed } = await import("../e2e-test-otp");
+    expect(
+      await assertE2eTestSendBypassAllowed({
+        email: "e2e@denali.health",
+        host: "denali.health",
+      }),
+    ).toBe(false);
+  });
+
+  it("returns false (G3) when the email is not allowlisted", async () => {
+    setStagingEnv();
+    vi.resetModules();
+    const { assertE2eTestSendBypassAllowed } = await import("../e2e-test-otp");
+    expect(
+      await assertE2eTestSendBypassAllowed({
+        email: "attacker@evil.com",
+        host: STAGING_HOST,
+      }),
+    ).toBe(false);
+  });
+});

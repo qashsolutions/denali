@@ -225,6 +225,49 @@ export async function assertE2eTestBypassAllowed(args: {
   return { allowed: true, staticPassword };
 }
 
+/**
+ * G1+G2+G3 SUBSET of {@link assertE2eTestBypassAllowed}, for the send-otp
+ * route — which runs BEFORE any code is entered, so G4 (code match) and G5
+ * (static password) don't apply yet. When this returns `true`, send-otp SKIPS
+ * the Cognito password rotation so the static test password stays intact for
+ * the subsequent verify-otp bypass (otherwise sending a code rotates the
+ * password away from the static value and breaks the bypass even locally —
+ * the unresolved gap in STAGING-LOCKDOWN.md).
+ *
+ * Gating is IDENTICAL to the full bypass for G1-G3 (same env vars + host
+ * allowlist), so it can NEVER fire in production: G1 (flag off) or G2
+ * (NODE_ENV=production / prod host) deny it and rotation proceeds as normal.
+ * Returns a plain boolean — NO static password is handed out here; this only
+ * decides whether to skip a rotation and never authenticates anyone.
+ */
+export async function assertE2eTestSendBypassAllowed(args: {
+  email: string;
+  host: string;
+}): Promise<boolean> {
+  // G1 — explicit env flag (no log; would be noisy in prod).
+  if (process.env.E2E_TEST_OTP_ENABLED !== "true") return false;
+  // G2 — independent env + host guard (no log).
+  if (process.env.NODE_ENV === "production") return false;
+  if (PROD_HOST_ALLOWLIST.has(args.host)) return false;
+  // G3 — email allowlist (logged from here, like the full stack).
+  const allowlist = (process.env.E2E_TEST_OTP_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e.length > 0);
+  if (allowlist.length === 0 || !allowlist.includes(args.email)) {
+    logE2eEvent({
+      tag: "E2E_TEST_OTP",
+      outcome: "denied_guard_fail",
+      email: args.email,
+      deniedGuard: "G3",
+      host: args.host,
+      ts: new Date().toISOString(),
+    });
+    return false;
+  }
+  return true;
+}
+
 // ─── Test-only exports ──────────────────────────────────────────────────
 
 /**

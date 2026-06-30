@@ -1,0 +1,156 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Flow — Account delete (local wipe → reset to SignIn)
+#
+#   SignIn (test-OTP bypass) → PrivacyNotice → CohortOnboarding → Intake
+#   → Instruments (PHQ-2 negative) → MainTabs → Settings → "Delete account"
+#   → confirm Alert → reset to SignIn.
+#
+# GATE — needs an E2E test-OTP backend running NODE_ENV != production.
+# This flow signs in via the E2E test-OTP bypass (email e2e@denali.health,
+# code 999999), gated behind a five-guard stack that is structurally
+# unreachable in production. Because guard G2 + the module-load assertion
+# key on NODE_ENV, the bypass works ONLY in a NODE_ENV != production
+# backend (local `next dev` or CI) — NOT the deployed staging service,
+# which runs NODE_ENV=production (setting the flag there crashes verify-otp).
+# Before this flow can pass, stand up that backend per STAGING-LOCKDOWN.md
+# "E2E test-OTP bypass — operating instructions" (process env + Cognito
+# user + DB row; note the send-otp / static-password caveat), then point
+# the mobile build's API_BASE_URL at it — not deployed staging or prod.
+#
+# REQUIRES A NON-ADMIN ACCOUNT on the test-OTP backend: an admin account
+# returns 403 from account/delete and the wipe never runs (the app would
+# not reset to SignIn and this flow fails at the final assert). The
+# e2e@denali.health test user must be seeded with is_admin=FALSE.
+#
+# NOT IDEMPOTENT — this flow DELETES the account. Re-running it requires
+# the backend to reseed the e2e@denali.health user (Cognito user + DB row)
+# between runs; without reseeding the second sign-in has no account.
+#
+# Behind the 200 path, "Delete account" exercises the on-device local wipe:
+# secure_delete + VACUUM + wal_checkpoint(TRUNCATE) on the SQLCipher DB plus
+# encrypted blob / Keychain key / Cognito token erasure — so the device is
+# left with no readable health data after the reset.
+#
+# Selectors are the testID / accessibilityLabel inventory in
+# ../README.md. No coordinate-based taps.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+# Cold start — clear state so we always begin at the SignIn route.
+- launchApp:
+    clearState: true
+
+# ── SignIn — test-OTP bypass ────────────────────────────────────────────
+- assertVisible:
+    id: "signin_email_input"
+- tapOn:
+    id: "signin_email_input"
+- inputText: "e2e@denali.health"
+- tapOn:
+    id: "signin_send_code_button"
+
+# OTP field appears once the (bypassed) send-code call returns.
+- assertVisible:
+    id: "signin_otp_input"
+- tapOn:
+    id: "signin_otp_input"
+- inputText: "999999"
+- tapOn:
+    id: "signin_verify_button"
+
+# ── PrivacyNotice — data-locality acknowledgement ───────────────────────
+- assertVisible:
+    id: "privacy_acknowledge_button"
+- tapOn:
+    id: "privacy_acknowledge_button"
+
+# ── CohortOnboarding — one item per screen ──────────────────────────────
+# Step 1: birth year — explicit Continue button (NOT auto-advance).
+- assertVisible:
+    id: "cohort_step1_birth_year_input"
+- tapOn:
+    id: "cohort_step1_birth_year_input"
+- inputText: "1965"
+- tapOn:
+    id: "oneitem_continue_button"
+
+# Step 2: sex at birth — auto-advance.
+- assertVisible:
+    id: "cohort_step2_option_male"
+- tapOn:
+    id: "cohort_step2_option_male"
+
+# Step 3: Medicare enrollment — auto-advance.
+- assertVisible:
+    id: "cohort_step3_option_yes"
+- tapOn:
+    id: "cohort_step3_option_yes"
+
+# Step 4: gender identity (optional) — auto-advance on selection.
+- assertVisible:
+    id: "cohort_step4_option_male"
+- tapOn:
+    id: "cohort_step4_option_male"
+
+# Step 5: confirm the permanent fields, then write the profile.
+- assertVisible:
+    id: "cohort_confirm_summary"
+- tapOn:
+    id: "oneitem_continue_button"
+
+# ── Intake — every section optional; finish straight through ────────────
+- assertVisible:
+    id: "intake_finish_button"
+- tapOn:
+    id: "intake_finish_button"
+
+# ── Instruments — PHQ-2 negative so we skip PHQ-9 + the 988 surface ─────
+- assertVisible:
+    id: "instruments_mood_item1_option_0"
+- tapOn:
+    id: "instruments_mood_item1_option_0"
+- assertVisible:
+    id: "instruments_mood_item2_option_0"
+- tapOn:
+    id: "instruments_mood_item2_option_0"
+
+# Finish button sits below the optional check-in menu — scroll it in.
+- scrollUntilVisible:
+    element:
+      id: "instruments_finish_button"
+    direction: DOWN
+- tapOn:
+    id: "instruments_finish_button"
+
+# ── MainTabs — confirm we landed, then open Settings ────────────────────
+- assertVisible:
+    text: "Your health"
+- tapOn:
+    text: "Settings tab"
+
+# ── Settings — scroll to and tap "Delete account" ───────────────────────
+# The destructive row sits at the bottom of Settings, below "Your details"
+# and the consent toggles — scroll it into view before tapping.
+- scrollUntilVisible:
+    element:
+      text: "Delete account"
+    direction: DOWN
+- tapOn:
+    text: "Delete account"
+
+# ── Confirm Alert — "Delete your account?" with Cancel / Delete ─────────
+# Assert the native confirmation dialog and both choices before confirming.
+- assertVisible:
+    text: "Delete your account?"
+- assertVisible:
+    text: "Cancel"
+- assertVisible:
+    text: "Delete"
+- tapOn:
+    text: "Delete"
+
+# ── Reset to SignIn — the local wipe completed and the app reset ────────
+# After the 200 delete + local wipe, the app resets to the SignIn route.
+# Asserting the email input proves we are back at the unauthenticated start.
+- assertVisible:
+    id: "signin_email_input"

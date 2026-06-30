@@ -13,6 +13,9 @@
  *     status reflects ongoing pipeline state, not a corrected health value.
  *     The pipeline writes the extracted observations (which ARE append-
  *     only) into the observations table linked by `report_id`.
+ *   - renameReport: update `original_filename` when the user names the report
+ *     on the review screen. Metadata only — same surface as the status update,
+ *     never a health value.
  *
  * Contract: mobile/src/contracts/LocalDataDAL.ts (frozen).
  */
@@ -105,4 +108,19 @@ export async function updateReportParseStatus(
       [status, parsedAt, id],
     );
   }
+}
+
+/**
+ * Rename a report (its `original_filename`). Metadata only — never a health
+ * value. Used when the user names the report on the review screen.
+ */
+export async function renameReport(
+  db: SqliteAdapter,
+  id: string,
+  name: string,
+): Promise<void> {
+  await db.runAsync(`UPDATE reports SET original_filename = ? WHERE id = ?`, [
+    name,
+    id,
+  ]);
 }

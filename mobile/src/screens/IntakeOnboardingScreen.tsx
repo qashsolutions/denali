@@ -501,7 +501,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
           ...fontStyle("body", 600, fontsLoaded),
         },
         primaryAction: {
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           paddingVertical: theme.spacing.md,
           paddingHorizontal: theme.spacing.lg,
           borderRadius: theme.radii.xl - 2,
@@ -521,7 +521,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
           paddingHorizontal: theme.spacing.md,
           borderRadius: theme.radii.md,
           alignSelf: "flex-start",
-          minHeight: 44,
+          minHeight: 48,
           justifyContent: "center",
         },
         addLabel: {

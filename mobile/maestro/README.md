@@ -48,6 +48,7 @@ case, lowercase. Maestro flows reference these IDs verbatim.
 | `signin_send_code_button` | SignIn "Send code" Pressable |
 | `signin_otp_input` | SignIn 6-digit OTP TextInput |
 | `signin_verify_button` | SignIn "Verify code" Pressable |
+| `signin_resend_code_button` | SignIn "Resend code" Pressable (shows a "Resend code in Ns" cooldown countdown while disabled) |
 | `signin_use_different_email_button` | SignIn "Use a different email" Pressable |
 | `privacy_acknowledge_button` | PrivacyNotice "Acknowledge and continue" Pressable |
 
@@ -145,6 +146,18 @@ reads the accessibility tree, same effect:
 | `timeline_card_details_toggle` | "Show details" / "Hide details" Pressable |
 | `timeline_card_disclaimer` | Standing disclaimer line |
 | `timeline_card_provisional_footnote` | "‡ Interpretation pending clinical review." (instrument-session cards only when band is provisional) |
+
+## Flows (`flows/`)
+
+Each flow is gated on a NODE_ENV != production E2E test-OTP backend (email
+`e2e@denali.health`, code `999999`) — see the per-file header comment for
+the full gate.
+
+| Flow | Path exercised |
+|---|---|
+| `signin_onboarding.yaml` | Sign-in (test-OTP bypass) → PrivacyNotice → CohortOnboarding → Intake → PHQ-2 negative → MainTabs Timeline ("Your health") |
+| `account_delete.yaml` | Onboarding happy path → Settings → "Delete account" → confirm Alert ("Delete your account?" / Cancel / Delete) → local wipe → reset to SignIn. Needs a NON-ADMIN account (admin → 403, no wipe); DELETES the account so it is not idempotent without backend reseeding |
+| `signin_resend.yaml` | SignIn email → Send code → OTP step: assert "It expires in 10 minutes." + "Resend code" + the active `Resend code in Ns` cooldown countdown → "Use a different email" → email step with an empty field (placeholder "you@example.com" visible). Cooldown is time-sensitive (~30s window) |
 
 ## Selector policy
 

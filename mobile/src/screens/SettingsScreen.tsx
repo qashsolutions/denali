@@ -12,10 +12,17 @@
 import { CommonActions, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React from "react";
-import { Check, ChevronDown, ChevronUp, Lock } from "lucide-react-native";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Lock,
+} from "lucide-react-native";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -27,12 +34,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { ConsentGetResponse } from "@/api/routeContracts";
-import { isBiometricAvailable, useApiClient } from "@/auth";
+import { HttpError, isBiometricAvailable, useApiClient } from "@/auth";
 import { BackupSettingsCard } from "@/backup/ui/BackupSettingsCard";
 import { PressableScale } from "@/components/PressableScale";
 import { Skeleton } from "@/components/Skeleton";
 import type { GenderIdentity, ProfileRow } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
+import { wipeAllLocalData } from "@/db/wipe";
 import { hapticSelection } from "@/feedback/haptics";
 import {
   birthYearLabel,
@@ -53,6 +61,15 @@ import {
 import { useReminders } from "@/notifications/useReminders";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+// Legal pages live on the public production site (same content on every env);
+// the API base can be staging, so the legal links are pinned to prod.
+const LEGAL_BASE = "https://denali.health";
+const LEGAL_LINKS: ReadonlyArray<{ label: string; path: string }> = [
+  { label: "Terms of Service", path: "/terms" },
+  { label: "Privacy Policy", path: "/privacy" },
+  { label: "Notice of Privacy Practices", path: "/hipaa" },
+];
 
 // The consent map shape comes from the network contract — see
 // src/api/routeContracts.ts. Single source of truth across mobile.
@@ -118,7 +135,9 @@ export function SettingsScreen(): React.ReactElement {
 
   const [consent, setConsent] = React.useState<ConsentSnapshot | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [retrying, setRetrying] = React.useState(false);
   const [signingOut, setSigningOut] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
   // Read-only demographics for the "Your details" section (D31). Loaded from
   // the LOCAL profile (set during onboarding); never written here.
   const dal = useDal();
@@ -169,23 +188,47 @@ export function SettingsScreen(): React.ReactElement {
       ? "Off — set up Face ID or a passcode in your device settings to lock Denali."
       : "Off — set up a fingerprint or screen lock in your device settings to lock Denali.";
 
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  // Consent load is a single mount-time GET, but resilient: it retries
+  // transient failures (5xx cold-start / scaling, network blips) before
+  // surfacing an error, and the error state offers "Try again" — so a longer
+  // outage (e.g. staging's morning cold-start) doesn't strand the user on a
+  // permanent-looking error until they kill the app.
+  const mountedRef = React.useRef(true);
+  const loadConsent = React.useCallback(async () => {
+    setLoadError(null);
+    setRetrying(true);
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         const res = await api.apiGet<ConsentGetResponse>("/api/consent");
-        if (cancelled) return;
+        if (!mountedRef.current) return;
         setConsent(res.consent);
+        setRetrying(false);
+        return;
       } catch (err) {
-        if (cancelled) return;
-        setLoadError("Couldn't load your settings. Try again later.");
-        console.warn("[Settings] consent GET failed", err);
+        // 5xx + network errors (no HttpError thrown) are transient; a 4xx
+        // (e.g. a real 401 after refresh) is terminal — don't keep retrying.
+        const transient = !(err instanceof HttpError) || err.status >= 500;
+        if (!transient || attempt === MAX_ATTEMPTS) {
+          if (!mountedRef.current) return;
+          setLoadError("Couldn't load your settings.");
+          setRetrying(false);
+          console.warn("[Settings] consent GET failed", err);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+        if (!mountedRef.current) return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    }
   }, [api]);
+
+  React.useEffect(() => {
+    mountedRef.current = true;
+    void loadConsent();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [loadConsent]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -244,6 +287,46 @@ export function SettingsScreen(): React.ReactElement {
       );
     }
   }, [api, navigation]);
+
+  // Account deletion (App Store / Play Store requirement). Server delete first
+  // (Cognito + server-side rows via /api/account/delete), then a full local
+  // wipe, then reset to SignIn. Admin self-delete is blocked server-side (403).
+  const doDeleteAccount = React.useCallback(async () => {
+    setDeleting(true);
+    try {
+      await api.apiDelete<unknown>("/api/account/delete");
+      await wipeAllLocalData();
+      navigation.dispatch(
+        CommonActions.reset({ index: 0, routes: [{ name: "SignIn" }] }),
+      );
+    } catch (err) {
+      setDeleting(false);
+      const msg =
+        err instanceof HttpError && err.status === 403
+          ? "This account can't be deleted from the app."
+          : "Couldn't delete your account. Please try again.";
+      Alert.alert("Delete failed", msg);
+      console.warn("[Settings] account delete failed", err);
+    }
+  }, [api, navigation]);
+
+  const onDeleteAccount = React.useCallback(() => {
+    Alert.alert(
+      "Delete your account?",
+      "This permanently deletes your account and all your health data — on " +
+        "this device and on our servers. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void doDeleteAccount();
+          },
+        },
+      ],
+    );
+  }, [doDeleteAccount]);
 
   const styles = React.useMemo(
     () => {
@@ -352,7 +435,7 @@ export function SettingsScreen(): React.ReactElement {
           alignItems: "center",
           justifyContent: "space-between",
           paddingVertical: theme.spacing.sm,
-          minHeight: 44,
+          minHeight: 48,
         },
         optionLabel: {
           color: redesign.ink2,
@@ -414,10 +497,60 @@ export function SettingsScreen(): React.ReactElement {
           fontSize: theme.typography.sizes.base,
           ...fontStyle("body", 600, fontsLoaded),
         },
+        legalRow: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          paddingVertical: theme.spacing.sm,
+          minHeight: 48,
+        },
+        legalRowBorder: {
+          borderTopWidth: 1,
+          borderTopColor: redesign.line,
+        },
+        legalLabel: {
+          color: redesign.ink,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        deleteBtn: {
+          backgroundColor: redesign.alarmWash,
+          borderColor: redesign.alarm,
+          borderWidth: 1,
+          borderRadius: theme.radii.xl - 2,
+          paddingVertical: theme.spacing.md,
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 48,
+          marginTop: theme.spacing.sm,
+        },
+        deleteText: {
+          color: redesign.alarm,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
+        deleteHint: {
+          color: redesign.ink3,
+          fontSize: theme.typography.sizes.xs,
+          textAlign: "center",
+          marginTop: theme.spacing.xs,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
         loadError: {
           color: redesign.alarm,
           fontSize: theme.typography.sizes.sm,
           ...fontStyle("body", 400, fontsLoaded),
+        },
+        loadErrorRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: theme.spacing.md,
+        },
+        loadRetry: {
+          color: redesign.tealDeep,
+          fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 600, fontsLoaded),
         },
         // Appearance segmented control — pill-track of three equal segments,
         // the active one tinted teal-wash with teal-deep text.
@@ -432,7 +565,7 @@ export function SettingsScreen(): React.ReactElement {
         },
         segment: {
           flex: 1,
-          minHeight: 44,
+          minHeight: 48,
           alignItems: "center",
           justifyContent: "center",
           borderRadius: redesign.rChip - 2,
@@ -721,7 +854,23 @@ export function SettingsScreen(): React.ReactElement {
           <Text style={styles.toggleBody}>{lockStatusCopy}</Text>
         </View>
       )}
-      {loadError != null && <Text style={styles.loadError}>{loadError}</Text>}
+      {loadError != null && (
+        <View style={styles.loadErrorRow}>
+          <Text style={styles.loadError}>{loadError}</Text>
+          <Pressable
+            testID="settings_consent_retry"
+            accessibilityRole="button"
+            accessibilityLabel="Try loading settings again"
+            disabled={retrying}
+            hitSlop={{ top: 9, bottom: 9, left: 9, right: 9 }}
+            onPress={() => void loadConsent()}
+          >
+            <Text style={styles.loadRetry}>
+              {retrying ? "Trying…" : "Try again"}
+            </Text>
+          </Pressable>
+        </View>
+      )}
       {consent != null &&
         (Object.keys(TOGGLE_COPY) as ConsentType[])
           .filter((type) => type !== "health_data_storage")
@@ -762,6 +911,24 @@ export function SettingsScreen(): React.ReactElement {
         />
       )}
 
+      <Text style={styles.sectionLabel}>Legal</Text>
+      <View style={styles.accountCard}>
+        {LEGAL_LINKS.map((l, i) => (
+          <Pressable
+            key={l.path}
+            accessibilityRole="link"
+            accessibilityLabel={l.label}
+            onPress={() => {
+              void Linking.openURL(`${LEGAL_BASE}${l.path}`);
+            }}
+            style={[styles.legalRow, i > 0 && styles.legalRowBorder]}
+          >
+            <Text style={styles.legalLabel}>{l.label}</Text>
+            <ChevronRight size={18} color={redesign.ink3} />
+          </Pressable>
+        ))}
+      </View>
+
       <PressableScale
         accessibilityRole="button"
         disabled={signingOut}
@@ -774,6 +941,27 @@ export function SettingsScreen(): React.ReactElement {
           <Text style={styles.signOutText}>Sign out</Text>
         )}
       </PressableScale>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Delete account"
+        disabled={deleting}
+        onPress={onDeleteAccount}
+        style={({ pressed }) => [
+          styles.deleteBtn,
+          (deleting || pressed) && { opacity: 0.6 },
+        ]}
+      >
+        {deleting ? (
+          <ActivityIndicator color={redesign.alarm} />
+        ) : (
+          <Text style={styles.deleteText}>Delete account</Text>
+        )}
+      </Pressable>
+      <Text style={styles.deleteHint}>
+        Permanently deletes your account and all your data. This can&rsquo;t be
+        undone.
+      </Text>
     </ScrollView>
   );
 }

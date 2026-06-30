@@ -95,7 +95,7 @@ export function StructuredFamilyHistoryInput({
           borderColor: redesign.line,
           borderWidth: 1,
           backgroundColor: redesign.surface,
-          minHeight: 44,
+          minHeight: 48,
           justifyContent: "center",
         },
         chipSelected: {

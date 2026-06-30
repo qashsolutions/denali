@@ -155,7 +155,7 @@ function makeStyles(
       ...fontStyle("body", 400, fontsLoaded),
     },
     submitBtn: {
-      backgroundColor: redesign.teal,
+      backgroundColor: redesign.tealDeep,
       borderRadius: theme.radii.lg,
       paddingVertical: theme.spacing.md,
       alignItems: "center",

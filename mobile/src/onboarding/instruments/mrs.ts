@@ -30,12 +30,44 @@ export const MRS_LEAD_IN =
   "appropriate box for each symptom. For symptoms that do not apply, please " +
   "mark 'none'.";
 
+// The 0-4 severity scale is verbatim MRS. The `helperText` italic hints are a
+// Denali-authored CALIBRATION aid (NOT part of the validated instrument) so a
+// user knows which level to pick when self-rating. They describe perceived
+// INTENSITY only — no diagnosis, no recommendation. This deviates from the
+// verbatim instrument (which has no per-level anchors) and may shift self-
+// rating vs. published norms — accepted + recorded as decision D40, and marked
+// `helperTextProvisional: true` until a named clinician clears the wording.
 const MRS_RESPONSE_OPTIONS = [
-  { value: 0, label: "None" },
-  { value: 1, label: "Mild" },
-  { value: 2, label: "Moderate" },
-  { value: 3, label: "Severe" },
-  { value: 4, label: "Very severe" },
+  {
+    value: 0,
+    label: "None",
+    helperText: "not present at all",
+    helperTextProvisional: true,
+  },
+  {
+    value: 1,
+    label: "Mild",
+    helperText: "slight, easy to ignore",
+    helperTextProvisional: true,
+  },
+  {
+    value: 2,
+    label: "Moderate",
+    helperText: "noticeable, sometimes bothersome",
+    helperTextProvisional: true,
+  },
+  {
+    value: 3,
+    label: "Severe",
+    helperText: "strong, frequently bothersome",
+    helperTextProvisional: true,
+  },
+  {
+    value: 4,
+    label: "Very severe",
+    helperText: "intense, very distressing",
+    helperTextProvisional: true,
+  },
 ] as const;
 
 export const MRS: InstrumentDefinition = {

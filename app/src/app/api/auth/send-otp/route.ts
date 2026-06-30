@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { createOrGetCognitoUser, isEmailAllowed, setCognitoPassword } from "@/lib/auth-server";
+import { assertE2eTestSendBypassAllowed } from "@/lib/e2e-test-otp";
 import { sendEmail } from "@/lib/email";
 import { normalizeEmail } from "@/lib/normalize-email";
 import { withMetrics } from "@/lib/metrics";
@@ -113,7 +114,19 @@ async function _POST(request: NextRequest) {
     // 3. Set Cognito password to the OTP value
     //    Format: "Otp.{code}!" — satisfies Cognito's default complexity policy:
     //    uppercase (O), lowercase (tp), digits (code), special (.!)
-    await setCognitoPassword(email, `Otp.${otp}!`);
+    //
+    //    E2E test-OTP: when the gated bypass is active (the SAME G1-G3 guards
+    //    as verify-otp — NODE_ENV != production, flag set, allowlisted email +
+    //    non-prod host), do NOT rotate. verify-otp's bypass authenticates with
+    //    the STATIC test password, and rotating here would break it even
+    //    locally. Identically gated, so rotation can never be skipped in prod.
+    const e2eSkipRotation = await assertE2eTestSendBypassAllowed({
+      email,
+      host: request.headers.get("host") ?? "",
+    });
+    if (!e2eSkipRotation) {
+      await setCognitoPassword(email, `Otp.${otp}!`);
+    }
 
     // 4. Upsert user record (no-op if already exists)
     await query(

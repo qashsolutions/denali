@@ -133,7 +133,7 @@ function makeStyles(
       ...fontStyle("body", 500, fontsLoaded),
     },
     confirmBtn: {
-      backgroundColor: redesign.teal,
+      backgroundColor: redesign.tealDeep,
       borderRadius: theme.radii.lg,
       paddingVertical: theme.spacing.md,
       alignItems: "center",

@@ -85,7 +85,7 @@ export function PrivacyNoticeScreen(): React.ReactElement {
           ...fontStyle("body", 600, fontsLoaded),
         },
         button: {
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           paddingVertical: theme.spacing.md,
           paddingHorizontal: theme.spacing.lg,
           borderRadius: theme.radii.xl - 2,

@@ -42,11 +42,18 @@ import {
   buildInsertsForReport,
   computeParseStatus,
 } from "../upload/reviewCommit";
+import {
+  ragForObservation,
+  suggestNameFromObservations,
+  summarizeReport,
+} from "../upload/reportInterpretation";
 import type {
   ExtractedObservation,
   ParseReportResponse,
   ReviewRowState,
 } from "../upload/types";
+import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
+import { tintByClass } from "./timeline/pill";
 import { takeParsePayload } from "./UploadScreen";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "UploadReview">;
@@ -76,6 +83,50 @@ export function UploadReviewScreen(): React.ReactElement {
   );
   const [committing, setCommitting] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  // After a successful save we show a results summary (the kept rows) instead
+  // of silently popping back — confirmation + a recap of what was stored.
+  const [saved, setSaved] = React.useState<ReviewRowState[] | null>(null);
+  // How many kept values were already in the record (deduped, not re-saved).
+  const [savedSkipped, setSavedSkipped] = React.useState<number>(0);
+
+  // The user names the report HERE, after the parse — pre-filled from the
+  // report's own content (its dominant date), editable, persisted on save.
+  const [reportName, setReportName] = React.useState<string>("");
+  const [nameEdited, setNameEdited] = React.useState<boolean>(false);
+  const suggestedName = React.useMemo(
+    () =>
+      payload
+        ? suggestNameFromObservations(payload.observations, new Date())
+        : "",
+    [payload],
+  );
+  const nameValue = nameEdited ? reportName : suggestedName;
+
+  const onDone = React.useCallback(() => {
+    navigation.popToTop();
+  }, [navigation]);
+
+  // Abandon guard. The report row is created at upload time (parse_status
+  // "parsing"); confirm/skip move it to a terminal state. If the user LEAVES
+  // review without finalizing (e.g. the native back chevron), the row would
+  // linger as a "parsing" ghost in the Upload list with no committed
+  // observations — so on an un-finalized leave, mark it rejected. (No
+  // observations exist yet, so this is safe vs. the append-only invariant.)
+  // Fire-and-forget; navigation is never blocked.
+  const finalizedRef = React.useRef(false);
+  React.useEffect(() => {
+    const unsub = navigation.addListener("beforeRemove", () => {
+      if (finalizedRef.current || !dal) return;
+      void dal
+        .updateReportParseStatus(
+          reportId,
+          "rejected",
+          "Left review without saving.",
+        )
+        .catch(() => {});
+    });
+    return unsub;
+  }, [navigation, dal, reportId]);
 
   // Sync rows when payload arrives. This handles the case where the screen
   // is reached without the in-process stash (cold launch, deep link).
@@ -109,6 +160,42 @@ export function UploadReviewScreen(): React.ReactElement {
           fontSize: theme.typography.sizes.base,
           lineHeight: theme.typography.sizes.base * 1.5,
           ...fontStyle("body", 400, fontsLoaded),
+        },
+        // Always-on AI caveat — this screen shows machine-read values.
+        caveat: {
+          color: redesign.ink3,
+          fontSize: theme.typography.sizes.sm,
+          lineHeight: theme.typography.sizes.sm * 1.4,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        // Post-save confirmation header.
+        savedHeader: {
+          color: redesign.tealDeep,
+          fontSize: theme.typography.sizes["2xl"],
+          letterSpacing: -0.5,
+          ...fontStyle("display", 700, fontsLoaded),
+        },
+        savedValue: {
+          color: redesign.ink2,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 400, fontsLoaded),
+        },
+        // Right-aligned header cluster: RAG chip + confidence.
+        headerRight: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: theme.spacing.sm,
+          flexShrink: 0,
+        },
+        // Sourced RAG chip — colors injected from the band tint system.
+        ragChip: {
+          paddingHorizontal: theme.spacing.sm,
+          paddingVertical: theme.spacing.xs / 2,
+          borderRadius: theme.radii.lg,
+        },
+        ragChipText: {
+          fontSize: theme.typography.sizes.xs,
+          ...fontStyle("body", 600, fontsLoaded),
         },
         // White r-18 surface card per row.
         row: {
@@ -157,7 +244,7 @@ export function UploadReviewScreen(): React.ReactElement {
           paddingHorizontal: theme.spacing.sm,
           paddingVertical: theme.spacing.xs,
           fontSize: theme.typography.sizes.base,
-          minHeight: 44,
+          minHeight: 48,
           ...fontStyle("body", 400, fontsLoaded),
         },
         sourceText: {
@@ -177,13 +264,13 @@ export function UploadReviewScreen(): React.ReactElement {
           borderRadius: theme.radii.md,
           alignItems: "center",
           justifyContent: "center",
-          minHeight: 44,
+          minHeight: 48,
           borderWidth: 1,
           borderColor: redesign.line,
           backgroundColor: redesign.paper,
         },
         toggleActive: {
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           borderColor: redesign.teal,
         },
         toggleText: {
@@ -196,7 +283,7 @@ export function UploadReviewScreen(): React.ReactElement {
         },
         // Mockup .cta + .cta.ghost.
         button: {
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           borderRadius: theme.radii.xl - 2,
           paddingVertical: theme.spacing.md - 1,
           minHeight: 48,
@@ -291,22 +378,39 @@ export function UploadReviewScreen(): React.ReactElement {
         return;
       }
 
+      const acceptedRows = rows.filter((r) => r.accepted);
       const inserts = buildInsertsForReport(rows, report.user_id, reportId);
-      for (const insert of inserts) {
-        await dal.insertObservation(insert);
+      // Track which rows ACTUALLY inserted. A value already in the record
+      // (same code + effective_at) is a no-op (inserted:false) — it isn't
+      // linked to this report, so it must not be counted as newly saved.
+      const savedRows: ReviewRowState[] = [];
+      for (let i = 0; i < inserts.length; i += 1) {
+        const res = await dal.insertObservation(inserts[i]);
+        if (res.inserted) savedRows.push(acceptedRows[i]);
+      }
+
+      // Persist the name the user gave the report (metadata only).
+      const finalName = nameValue.trim();
+      if (finalName.length > 0) {
+        await dal.renameReport(reportId, finalName);
       }
 
       const status = computeParseStatus(rows);
-      const acceptedCount = rows.filter((r) => r.accepted).length;
+      // Store a FACTUAL summary — the count of values ACTUALLY saved to this
+      // report (matches what its detail will list), never the model's text.
       const summary =
-        payload?.summary ??
-        (acceptedCount > 0
-          ? `${acceptedCount} value${acceptedCount === 1 ? "" : "s"} saved.`
-          : "No values saved.");
+        savedRows.length > 0
+          ? `${savedRows.length} value${savedRows.length === 1 ? "" : "s"} saved.`
+          : "No new values saved.";
       await dal.updateReportParseStatus(reportId, status, summary);
+      // Finalized — the abandon guard must not re-mark this on the later
+      // Done → popToTop.
+      finalizedRef.current = true;
 
-      // Navigate back to the upload flow's home (the Upload tab).
-      navigation.popToTop();
+      // Recap only the rows that actually landed in the record; note any that
+      // were already present (deduped).
+      setSavedSkipped(acceptedRows.length - savedRows.length);
+      setSaved(savedRows);
     } catch (err) {
       setErrorMsg(
         "Couldn't save your review. Please try Confirm again.",
@@ -315,7 +419,7 @@ export function UploadReviewScreen(): React.ReactElement {
     } finally {
       setCommitting(false);
     }
-  }, [dal, navigation, payload, reportId, rows]);
+  }, [dal, reportId, rows, nameValue]);
 
   const onSkip = React.useCallback(async () => {
     setCommitting(true);
@@ -329,6 +433,7 @@ export function UploadReviewScreen(): React.ReactElement {
         "rejected",
         "Skipped on review.",
       );
+      finalizedRef.current = true;
       navigation.popToTop();
     } catch (err) {
       setErrorMsg("Couldn't skip — please try again.");
@@ -341,6 +446,10 @@ export function UploadReviewScreen(): React.ReactElement {
   const renderRow = (row: ReviewRowState, idx: number) => {
     const obs = row.edited;
     const confidencePct = Math.round(obs.confidence * 100);
+    // RAG reflects the REPORT'S OWN flag (from row.original — editing a value
+    // doesn't change what the report printed). null = report stated no flag.
+    const rag = ragForObservation(row.original);
+    const ragColors = rag ? tintByClass(redesign, rag.tint) : null;
     return (
       <View
         key={idx}
@@ -350,9 +459,18 @@ export function UploadReviewScreen(): React.ReactElement {
           <Text style={styles.rowTitle} numberOfLines={2}>
             {obs.display || obs.code}
           </Text>
-          <Text style={styles.rowConfidence}>
-            {Number.isFinite(confidencePct) ? `${confidencePct}%` : "—"}
-          </Text>
+          <View style={styles.headerRight}>
+            {rag && ragColors && (
+              <View style={[styles.ragChip, { backgroundColor: ragColors.bg }]}>
+                <Text style={[styles.ragChipText, { color: ragColors.fg }]}>
+                  {rag.label}
+                </Text>
+              </View>
+            )}
+            <Text style={styles.rowConfidence}>
+              {Number.isFinite(confidencePct) ? `${confidencePct}%` : "—"}
+            </Text>
+          </View>
         </View>
 
         <View>
@@ -449,6 +567,74 @@ export function UploadReviewScreen(): React.ReactElement {
     );
   };
 
+  if (saved != null) {
+    return (
+      <ScrollView
+        contentContainerStyle={styles.content}
+        style={styles.screen}
+      >
+        <Text style={styles.savedHeader}>✓ Saved to your record</Text>
+        {nameValue.trim().length > 0 && (
+          <Text style={styles.rowTitle}>{nameValue.trim()}</Text>
+        )}
+        <Text style={styles.summary}>
+          {`${saved.length} value${saved.length === 1 ? "" : "s"} added to your health record.`}
+        </Text>
+        {savedSkipped > 0 && (
+          <Text style={styles.caveat}>
+            {`${savedSkipped} ${savedSkipped === 1 ? "value was" : "values were"} already in your record.`}
+          </Text>
+        )}
+        <Text style={styles.caveat}>
+          {`AI-generated from your report. ${STANDING_DISCLAIMER} Check with your doctor.`}
+        </Text>
+        {saved.map((r, i) => {
+          const obs = r.edited;
+          const rag = ragForObservation(r.original);
+          const ragColors = rag ? tintByClass(redesign, rag.tint) : null;
+          const value =
+            obs.value_num != null
+              ? String(obs.value_num)
+              : (obs.value_text ?? "");
+          return (
+            <View key={i} style={styles.row}>
+              <View style={styles.rowHeader}>
+                <Text style={styles.rowTitle} numberOfLines={2}>
+                  {obs.display || obs.code}
+                </Text>
+                {rag && ragColors && (
+                  <View
+                    style={[styles.ragChip, { backgroundColor: ragColors.bg }]}
+                  >
+                    <Text
+                      style={[styles.ragChipText, { color: ragColors.fg }]}
+                    >
+                      {rag.label}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {value.length > 0 && (
+                <Text style={styles.savedValue} numberOfLines={2}>
+                  {obs.unit ? `${value} ${obs.unit}` : value}
+                </Text>
+              )}
+            </View>
+          );
+        })}
+        <PressableScale
+          testID="upload_review_done"
+          haptic
+          accessibilityRole="button"
+          onPress={onDone}
+          style={styles.button}
+        >
+          <Text style={styles.buttonText}>Done</Text>
+        </PressableScale>
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView
       contentContainerStyle={styles.content}
@@ -456,8 +642,33 @@ export function UploadReviewScreen(): React.ReactElement {
       keyboardShouldPersistTaps="handled"
     >
       <Text style={styles.title}>Review extracted values</Text>
-      {payload?.summary && (
-        <Text style={styles.summary}>{payload.summary}</Text>
+      {payload && payload.observations.length > 0 && (
+        <Text style={styles.summary}>
+          {summarizeReport(payload.observations)}
+        </Text>
+      )}
+      <Text style={styles.caveat}>
+        {`AI-generated from your report. ${STANDING_DISCLAIMER} Check with your doctor.`}
+      </Text>
+
+      {payload && payload.observations.length > 0 && (
+        <View>
+          <Text style={styles.fieldLabel}>Name this report</Text>
+          <TextInput
+            testID="upload_review_name"
+            accessibilityLabel="Report name"
+            editable={!committing}
+            maxLength={120}
+            onChangeText={(text) => {
+              setReportName(text);
+              setNameEdited(true);
+            }}
+            placeholder="Name this report"
+            placeholderTextColor={redesign.ink3}
+            style={styles.input}
+            value={nameValue}
+          />
+        </View>
       )}
 
       {errorMsg && (
@@ -480,6 +691,7 @@ export function UploadReviewScreen(): React.ReactElement {
       )}
 
       <PressableScale
+        testID="upload_review_confirm"
         haptic
         accessibilityRole="button"
         disabled={committing || !reportLoaded}
@@ -499,6 +711,7 @@ export function UploadReviewScreen(): React.ReactElement {
       </PressableScale>
 
       <Pressable
+        testID="upload_review_skip"
         accessibilityRole="button"
         disabled={committing}
         onPress={onSkip}

@@ -35,11 +35,46 @@ export interface InstrumentItem {
   text: string;
   /** Stable per-item code used for the per-item observation. */
   itemCode: string;
+  /**
+   * Per-item response options that OVERRIDE the instrument's shared
+   * `responseOptions` for this item — for validated screeners whose VERBATIM
+   * option labels differ per item while the 0..N scoring is identical (e.g.
+   * AUDIT-C: frequency labels on Q1/Q3, quantity labels on Q2). Falls back to
+   * the shared set when absent.
+   */
+  responseOptions?: ReadonlyArray<ResponseOption>;
 }
 
 export interface ResponseOption {
   value: number;
   label: string;
+  /**
+   * Optional short italic hint shown under the label to calibrate a
+   * self-rating scale (e.g. what "Mild" vs "Severe" means). This is
+   * Denali-authored CALIBRATION copy — NOT part of a verbatim validated
+   * instrument — so it must only describe perceived intensity, never a
+   * diagnosis or recommendation, and its wording is clinical-review gated.
+   */
+  helperText?: string;
+  /**
+   * Governance flag for `helperText`: `true` while the calibration copy is
+   * pending a named clinical reviewer's sign-off; `false` once cleared.
+   * REQUIRED whenever `helperText` is set — enforced by
+   * `instruments/__tests__/helperTextGovernance.test.ts` so no un-reviewed
+   * calibration copy ships silently (mirrors InterpretationBand.provisional).
+   */
+  helperTextProvisional?: boolean;
+  /**
+   * Named clinical reviewer who signed off on `helperText` (e.g.
+   * "J. Smith, MD — 2026-06-20"), or null/absent while unreviewed. CC NEVER
+   * sets this — it records a human attestation only. The governance test
+   * forbids flipping `helperTextProvisional` to `false` while this is empty,
+   * so the ‡ can only clear with a named reviewer on record (mirrors
+   * `tableV1`'s `lastClinicallyReviewedBy`). To clear: a credentialed clinician
+   * reviews the wording, then set this to their attestation AND
+   * `helperTextProvisional: false`.
+   */
+  helperTextReviewedBy?: string | null;
 }
 
 export interface InstrumentDefinition {

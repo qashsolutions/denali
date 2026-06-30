@@ -46,6 +46,11 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabsParamList> | undefined;
   UploadReview: { reportId: string };
   /**
+   * Read-only detail of a saved uploaded report (its values + the report's own
+   * flags). Reached by tapping a report in the list on the Upload tab.
+   */
+  ReportDetail: { reportId: string };
+  /**
    * Phase-3 increment 1: per-domain detail screen reached by tapping a
    * DomainCard on HealthDashboardScreen. Renders the domain's history
    * (reusing TimelineCardView) and a header. Chart lands in

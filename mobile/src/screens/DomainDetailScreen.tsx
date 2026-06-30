@@ -380,8 +380,8 @@ export function DomainDetailScreen(): React.ReactElement {
           // Mockup .navh .back is a 34×34 teal-wash chip; we keep the
           // 44×44 minimum tap target by padding the Pressable and round
           // the chip look onto it. Pairs with hitSlop for forgiveness.
-          minWidth: 44,
-          minHeight: 44,
+          minWidth: 48,
+          minHeight: 48,
           borderRadius: redesign.rChip,
           backgroundColor: redesign.tealWash,
           alignItems: "center",
@@ -437,8 +437,11 @@ export function DomainDetailScreen(): React.ReactElement {
           marginHorizontal: theme.spacing.space5,
           marginTop: theme.spacing.xs,
           paddingVertical: theme.spacing.md - 1,
+          // Horizontal breathing room so the label never sits edge-to-edge
+          // when the empty-state (styles.center) shrinks the pill to content.
+          paddingHorizontal: theme.spacing.lg,
           borderRadius: theme.radii.xl - 2,
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           alignItems: "center",
           justifyContent: "center",
           minHeight: 48,
@@ -450,13 +453,20 @@ export function DomainDetailScreen(): React.ReactElement {
         },
         ctaLabel: {
           color: redesign.surface,
-          fontSize: theme.typography.sizes.base,
+          // Chrome CTA label — fixed 16, intentionally NOT the body `sizes.base`
+          // (17). The 45+ body-floor bump is for content text; tying this label
+          // to it crowded the pill (the label sat edge-to-edge). The 48px touch
+          // target is preserved by `cta.minHeight`, so a11y is unaffected.
+          fontSize: 16,
           ...fontStyle("body", 600, fontsLoaded),
         },
         ctaSecondary: {
           marginHorizontal: theme.spacing.space5,
           marginTop: theme.spacing.sm,
           paddingVertical: theme.spacing.md - 1,
+          // Match the primary `cta` so the two check-in CTAs ("Start a
+          // check-in" / "Check in again") render identically.
+          paddingHorizontal: theme.spacing.lg,
           borderRadius: theme.radii.xl - 2,
           backgroundColor: redesign.surface,
           borderColor: redesign.line,
@@ -467,7 +477,9 @@ export function DomainDetailScreen(): React.ReactElement {
         },
         ctaSecondaryLabel: {
           color: redesign.tealDeep,
-          fontSize: theme.typography.sizes.base,
+          // Fixed 16 to match `ctaLabel` (see note there) — the check-in CTAs
+          // stay the same size across the empty + has-data states.
+          fontSize: 16,
           ...fontStyle("body", 600, fontsLoaded),
         },
         // "Saved" pill (teal-wash chip, centered) — transient confirmation.

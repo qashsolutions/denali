@@ -1,0 +1,932 @@
+{
+  "generated_by": "generate_fixtures.py",
+  "fixtures": [
+    {
+      "file": "male_diabetes.pdf",
+      "report_type": "lab",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "Hemoglobin A1c",
+          "code_system": "LOINC",
+          "code": "4548-4",
+          "value": 7.8,
+          "unit": "%"
+        },
+        {
+          "display": "Fasting glucose",
+          "code_system": "LOINC",
+          "code": "1558-6",
+          "value": 162,
+          "unit": "mg/dL"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_diabetes.pdf",
+      "report_type": "lab",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "Hemoglobin A1c",
+          "code_system": "LOINC",
+          "code": "4548-4",
+          "value": 7.8,
+          "unit": "%"
+        },
+        {
+          "display": "Fasting glucose",
+          "code_system": "LOINC",
+          "code": "1558-6",
+          "value": 162,
+          "unit": "mg/dL"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_cardiac.pdf",
+      "report_type": "lab",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "Total cholesterol",
+          "code_system": "LOINC",
+          "code": "2093-3",
+          "value": 248,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "LDL cholesterol",
+          "code_system": "LOINC",
+          "code": "18262-6",
+          "value": 166,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "HDL cholesterol",
+          "code_system": "LOINC",
+          "code": "2085-9",
+          "value": 37,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "Triglycerides",
+          "code_system": "LOINC",
+          "code": "2571-8",
+          "value": 214,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "hs-CRP",
+          "code_system": "LOINC",
+          "code": "30522-7",
+          "value": 3.6,
+          "unit": "mg/L"
+        },
+        {
+          "display": "BP systolic",
+          "code_system": "LOINC",
+          "code": "8480-6",
+          "value": 148,
+          "unit": "mmHg"
+        },
+        {
+          "display": "BP diastolic",
+          "code_system": "LOINC",
+          "code": "8462-4",
+          "value": 92,
+          "unit": "mmHg"
+        },
+        {
+          "display": "Heart rate",
+          "code_system": "LOINC",
+          "code": "8867-4",
+          "value": 78,
+          "unit": "bpm"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_cardiac.pdf",
+      "report_type": "lab",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "Total cholesterol",
+          "code_system": "LOINC",
+          "code": "2093-3",
+          "value": 248,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "LDL cholesterol",
+          "code_system": "LOINC",
+          "code": "18262-6",
+          "value": 166,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "HDL cholesterol",
+          "code_system": "LOINC",
+          "code": "2085-9",
+          "value": 49,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "Triglycerides",
+          "code_system": "LOINC",
+          "code": "2571-8",
+          "value": 214,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "hs-CRP",
+          "code_system": "LOINC",
+          "code": "30522-7",
+          "value": 3.6,
+          "unit": "mg/L"
+        },
+        {
+          "display": "BP systolic",
+          "code_system": "LOINC",
+          "code": "8480-6",
+          "value": 148,
+          "unit": "mmHg"
+        },
+        {
+          "display": "BP diastolic",
+          "code_system": "LOINC",
+          "code": "8462-4",
+          "value": 92,
+          "unit": "mmHg"
+        },
+        {
+          "display": "Heart rate",
+          "code_system": "LOINC",
+          "code": "8867-4",
+          "value": 78,
+          "unit": "bpm"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_obesity.pdf",
+      "report_type": "visit",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "Body height",
+          "code_system": "LOINC",
+          "code": "8302-2",
+          "value": 178,
+          "unit": "cm"
+        },
+        {
+          "display": "Body weight",
+          "code_system": "LOINC",
+          "code": "29463-7",
+          "value": 109,
+          "unit": "kg"
+        },
+        {
+          "display": "Waist circumference",
+          "code_system": "LOINC",
+          "code": "8280-0",
+          "value": 114,
+          "unit": "cm"
+        },
+        {
+          "display": "Body mass index",
+          "code_system": "LOINC",
+          "code": "39156-5",
+          "value": 34.4,
+          "unit": "kg/m2"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_obesity.pdf",
+      "report_type": "visit",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "Body height",
+          "code_system": "LOINC",
+          "code": "8302-2",
+          "value": 163,
+          "unit": "cm"
+        },
+        {
+          "display": "Body weight",
+          "code_system": "LOINC",
+          "code": "29463-7",
+          "value": 104,
+          "unit": "kg"
+        },
+        {
+          "display": "Waist circumference",
+          "code_system": "LOINC",
+          "code": "8280-0",
+          "value": 108,
+          "unit": "cm"
+        },
+        {
+          "display": "Body mass index",
+          "code_system": "LOINC",
+          "code": "39156-5",
+          "value": 39.1,
+          "unit": "kg/m2"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_bonedensity.pdf",
+      "report_type": "lab",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "Bone density hip T-score",
+          "code_system": "LOINC",
+          "code": "38264-8",
+          "value": -1.6,
+          "unit": "T-score"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_bonedensity.pdf",
+      "report_type": "lab",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "Bone density hip T-score",
+          "code_system": "LOINC",
+          "code": "38264-8",
+          "value": -2.7,
+          "unit": "T-score"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_thyroid.pdf",
+      "report_type": "lab",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "TSH",
+          "code_system": "LOINC",
+          "code": "3016-3",
+          "value": 6.9,
+          "unit": "mIU/L"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_thyroid.pdf",
+      "report_type": "lab",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "TSH",
+          "code_system": "LOINC",
+          "code": "3016-3",
+          "value": 6.9,
+          "unit": "mIU/L"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_liver.pdf",
+      "report_type": "lab",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "ALT",
+          "code_system": "LOINC",
+          "code": "1742-6",
+          "value": 74,
+          "unit": "U/L"
+        },
+        {
+          "display": "AST",
+          "code_system": "LOINC",
+          "code": "1920-8",
+          "value": 68,
+          "unit": "U/L"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_liver.pdf",
+      "report_type": "lab",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "ALT",
+          "code_system": "LOINC",
+          "code": "1742-6",
+          "value": 74,
+          "unit": "U/L"
+        },
+        {
+          "display": "AST",
+          "code_system": "LOINC",
+          "code": "1920-8",
+          "value": 68,
+          "unit": "U/L"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_kidney.pdf",
+      "report_type": "lab",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "Creatinine",
+          "code_system": "LOINC",
+          "code": "2160-0",
+          "value": 1.5,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "eGFR",
+          "code_system": "LOINC",
+          "code": "98979-8",
+          "value": 51,
+          "unit": "mL/min/1.73m2"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_kidney.pdf",
+      "report_type": "lab",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "Creatinine",
+          "code_system": "LOINC",
+          "code": "2160-0",
+          "value": 1.3,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "eGFR",
+          "code_system": "LOINC",
+          "code": "98979-8",
+          "value": 46,
+          "unit": "mL/min/1.73m2"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_anemia.pdf",
+      "report_type": "lab",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "Ferritin",
+          "code_system": "LOINC",
+          "code": "2276-4",
+          "value": 14,
+          "unit": "ng/mL"
+        },
+        {
+          "display": "Hemoglobin",
+          "code_system": "LOINC",
+          "code": "718-7",
+          "value": 12.1,
+          "unit": "g/dL"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_anemia.pdf",
+      "report_type": "lab",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "Ferritin",
+          "code_system": "LOINC",
+          "code": "2276-4",
+          "value": 8,
+          "unit": "ng/mL"
+        },
+        {
+          "display": "Hemoglobin",
+          "code_system": "LOINC",
+          "code": "718-7",
+          "value": 10.8,
+          "unit": "g/dL"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_vitamind.pdf",
+      "report_type": "lab",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "Vitamin D 25-OH",
+          "code_system": "LOINC",
+          "code": "62292-8",
+          "value": 17,
+          "unit": "ng/mL"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_vitamind.pdf",
+      "report_type": "lab",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "Vitamin D 25-OH",
+          "code_system": "LOINC",
+          "code": "62292-8",
+          "value": 17,
+          "unit": "ng/mL"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_alcohol.pdf",
+      "report_type": "visit",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "GGT",
+          "code_system": "LOINC",
+          "code": "2324-2",
+          "value": 96,
+          "unit": "U/L"
+        },
+        {
+          "display": "AST",
+          "code_system": "LOINC",
+          "code": "1920-8",
+          "value": 71,
+          "unit": "U/L"
+        },
+        {
+          "display": "AUDIT-C score",
+          "code_system": "internal",
+          "code": "audit_c_score",
+          "value": 7,
+          "unit": "points"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_alcohol.pdf",
+      "report_type": "visit",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "GGT",
+          "code_system": "LOINC",
+          "code": "2324-2",
+          "value": 96,
+          "unit": "U/L"
+        },
+        {
+          "display": "AST",
+          "code_system": "LOINC",
+          "code": "1920-8",
+          "value": 71,
+          "unit": "U/L"
+        },
+        {
+          "display": "AUDIT-C score",
+          "code_system": "internal",
+          "code": "audit_c_score",
+          "value": 6,
+          "unit": "points"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_mentalhealth.pdf",
+      "report_type": "visit",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "PHQ-9 total score",
+          "code_system": "LOINC",
+          "code": "44261-6",
+          "value": 16,
+          "unit": "points"
+        },
+        {
+          "display": "GAD-7 total score",
+          "code_system": "LOINC",
+          "code": "70274-6",
+          "value": 13,
+          "unit": "points"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_mentalhealth.pdf",
+      "report_type": "visit",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "PHQ-9 total score",
+          "code_system": "LOINC",
+          "code": "44261-6",
+          "value": 16,
+          "unit": "points"
+        },
+        {
+          "display": "GAD-7 total score",
+          "code_system": "LOINC",
+          "code": "70274-6",
+          "value": 13,
+          "unit": "points"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_sleep.pdf",
+      "report_type": "visit",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "Epworth Sleepiness Scale",
+          "code_system": "internal",
+          "code": "epworth_score",
+          "value": 14,
+          "unit": "points"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_sleep.pdf",
+      "report_type": "visit",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "Epworth Sleepiness Scale",
+          "code_system": "internal",
+          "code": "epworth_score",
+          "value": 14,
+          "unit": "points"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_comprehensive.pdf",
+      "report_type": "lab",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "Hemoglobin A1c",
+          "code_system": "LOINC",
+          "code": "4548-4",
+          "value": 6.1,
+          "unit": "%"
+        },
+        {
+          "display": "Fasting glucose",
+          "code_system": "LOINC",
+          "code": "1558-6",
+          "value": 108,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "Creatinine",
+          "code_system": "LOINC",
+          "code": "2160-0",
+          "value": 1.0,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "eGFR",
+          "code_system": "LOINC",
+          "code": "98979-8",
+          "value": 82,
+          "unit": "mL/min/1.73m2"
+        },
+        {
+          "display": "Total cholesterol",
+          "code_system": "LOINC",
+          "code": "2093-3",
+          "value": 212,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "LDL cholesterol",
+          "code_system": "LOINC",
+          "code": "18262-6",
+          "value": 138,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "HDL cholesterol",
+          "code_system": "LOINC",
+          "code": "2085-9",
+          "value": 41,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "Triglycerides",
+          "code_system": "LOINC",
+          "code": "2571-8",
+          "value": 168,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "TSH",
+          "code_system": "LOINC",
+          "code": "3016-3",
+          "value": 2.3,
+          "unit": "mIU/L"
+        },
+        {
+          "display": "Vitamin D 25-OH",
+          "code_system": "LOINC",
+          "code": "62292-8",
+          "value": 28,
+          "unit": "ng/mL"
+        },
+        {
+          "display": "BP systolic",
+          "code_system": "LOINC",
+          "code": "8480-6",
+          "value": 132,
+          "unit": "mmHg"
+        },
+        {
+          "display": "BP diastolic",
+          "code_system": "LOINC",
+          "code": "8462-4",
+          "value": 84,
+          "unit": "mmHg"
+        },
+        {
+          "display": "Heart rate",
+          "code_system": "LOINC",
+          "code": "8867-4",
+          "value": 72,
+          "unit": "bpm"
+        },
+        {
+          "display": "Body height",
+          "code_system": "LOINC",
+          "code": "8302-2",
+          "value": 177,
+          "unit": "cm"
+        },
+        {
+          "display": "Body weight",
+          "code_system": "LOINC",
+          "code": "29463-7",
+          "value": 92,
+          "unit": "kg"
+        },
+        {
+          "display": "Body mass index",
+          "code_system": "LOINC",
+          "code": "39156-5",
+          "value": 29.4,
+          "unit": "kg/m2"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_comprehensive.pdf",
+      "report_type": "lab",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "Hemoglobin A1c",
+          "code_system": "LOINC",
+          "code": "4548-4",
+          "value": 6.1,
+          "unit": "%"
+        },
+        {
+          "display": "Fasting glucose",
+          "code_system": "LOINC",
+          "code": "1558-6",
+          "value": 108,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "Creatinine",
+          "code_system": "LOINC",
+          "code": "2160-0",
+          "value": 1.0,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "eGFR",
+          "code_system": "LOINC",
+          "code": "98979-8",
+          "value": 63,
+          "unit": "mL/min/1.73m2"
+        },
+        {
+          "display": "Total cholesterol",
+          "code_system": "LOINC",
+          "code": "2093-3",
+          "value": 212,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "LDL cholesterol",
+          "code_system": "LOINC",
+          "code": "18262-6",
+          "value": 138,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "HDL cholesterol",
+          "code_system": "LOINC",
+          "code": "2085-9",
+          "value": 55,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "Triglycerides",
+          "code_system": "LOINC",
+          "code": "2571-8",
+          "value": 168,
+          "unit": "mg/dL"
+        },
+        {
+          "display": "TSH",
+          "code_system": "LOINC",
+          "code": "3016-3",
+          "value": 2.3,
+          "unit": "mIU/L"
+        },
+        {
+          "display": "Vitamin D 25-OH",
+          "code_system": "LOINC",
+          "code": "62292-8",
+          "value": 28,
+          "unit": "ng/mL"
+        },
+        {
+          "display": "BP systolic",
+          "code_system": "LOINC",
+          "code": "8480-6",
+          "value": 132,
+          "unit": "mmHg"
+        },
+        {
+          "display": "BP diastolic",
+          "code_system": "LOINC",
+          "code": "8462-4",
+          "value": 84,
+          "unit": "mmHg"
+        },
+        {
+          "display": "Heart rate",
+          "code_system": "LOINC",
+          "code": "8867-4",
+          "value": 72,
+          "unit": "bpm"
+        },
+        {
+          "display": "Body height",
+          "code_system": "LOINC",
+          "code": "8302-2",
+          "value": 162,
+          "unit": "cm"
+        },
+        {
+          "display": "Body weight",
+          "code_system": "LOINC",
+          "code": "29463-7",
+          "value": 79,
+          "unit": "kg"
+        },
+        {
+          "display": "Body mass index",
+          "code_system": "LOINC",
+          "code": "39156-5",
+          "value": 30.1,
+          "unit": "kg/m2"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_prostate.pdf",
+      "report_type": "visit",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "PSA total",
+          "code_system": "LOINC",
+          "code": "2857-1",
+          "value": 5.8,
+          "unit": "ng/mL"
+        },
+        {
+          "display": "IPSS score",
+          "code_system": "internal",
+          "code": "ipss_score",
+          "value": 18,
+          "unit": "points"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "male_hormonal.pdf",
+      "report_type": "visit",
+      "sex": "Male",
+      "expected_observations": [
+        {
+          "display": "Testosterone total",
+          "code_system": "LOINC",
+          "code": "2986-8",
+          "value": 232,
+          "unit": "ng/dL"
+        },
+        {
+          "display": "ADAM screen",
+          "code_system": "internal",
+          "code": "adam_positive",
+          "value": 1,
+          "unit": "boolean"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "female_menopause.pdf",
+      "report_type": "visit",
+      "sex": "Female",
+      "expected_observations": [
+        {
+          "display": "FSH",
+          "code_system": "LOINC",
+          "code": "15067-2",
+          "value": 68,
+          "unit": "mIU/mL"
+        },
+        {
+          "display": "Estradiol",
+          "code_system": "LOINC",
+          "code": "2243-4",
+          "value": 14,
+          "unit": "pg/mL"
+        },
+        {
+          "display": "Menopause Rating Scale",
+          "code_system": "internal",
+          "code": "mrs_score",
+          "value": 22,
+          "unit": "points"
+        }
+      ],
+      "expected_no_pii": true
+    },
+    {
+      "file": "negative_nonmedical.pdf",
+      "report_type": "other",
+      "sex": "n/a",
+      "expected_observations": [],
+      "expected_no_pii": true,
+      "note": "Non-medical PDF -> parser should return 0 observations (empty-parse review state)."
+    },
+    {
+      "file": "negative_scanned_notextlayer.pdf",
+      "report_type": "lab",
+      "sex": "n/a",
+      "expected_observations": [],
+      "expected_no_pii": true,
+      "note": "Image-only PDF (no text layer) -> extract.ts rejects with reason 'pdf_has_no_text_layer'. (Rasterized image still shows the synthetic identity; never reaches the parser.)"
+    }
+  ]
+}

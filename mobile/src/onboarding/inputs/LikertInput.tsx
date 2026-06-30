@@ -27,6 +27,14 @@ export interface LikertOption {
   /** Optional supporting copy under the label (e.g. score range). */
   helperText?: string;
   /**
+   * When `helperText` is Denali-authored calibration copy pending a named
+   * clinician's sign-off (mirrors ResponseOption.helperTextProvisional, D40),
+   * the hint renders with a ‡ and the group shows a "‡ Wording pending
+   * clinical review." footnote — so the provisional flag is SURFACED, not
+   * silently dropped at the render boundary.
+   */
+  helperTextProvisional?: boolean;
+  /**
    * Optional stable identifier surfaced to Maestro / accessibility
    * tooling as `testID` on the Pressable. Use a screen-scoped slug
    * like `cohort_step2_option_male`. Phase-1 testIDs are documented
@@ -85,6 +93,13 @@ export function LikertInput({
           fontSize: theme.typography.sizes.sm,
           color: redesign.ink2,
           ...fontStyle("body", 400, fontsLoaded),
+          fontStyle: "italic", // calibration hint reads as a soft italic aside
+        },
+        provisionalFootnote: {
+          fontSize: theme.typography.sizes.xs,
+          color: redesign.ink3,
+          marginTop: theme.spacing.xs,
+          ...fontStyle("body", 400, fontsLoaded),
         },
       }),
     [theme, redesign, fontsLoaded],
@@ -120,11 +135,19 @@ export function LikertInput({
           >
             <Text style={styles.label}>{opt.label}</Text>
             {opt.helperText ? (
-              <Text style={styles.helper}>{opt.helperText}</Text>
+              <Text style={styles.helper}>
+                {opt.helperText}
+                {opt.helperTextProvisional ? " ‡" : ""}
+              </Text>
             ) : null}
           </Pressable>
         );
       })}
+      {options.some((o) => o.helperText != null && o.helperTextProvisional) ? (
+        <Text testID="likert_provisional_footnote" style={styles.provisionalFootnote}>
+          ‡ Wording pending clinical review.
+        </Text>
+      ) : null}
     </View>
   );
 }

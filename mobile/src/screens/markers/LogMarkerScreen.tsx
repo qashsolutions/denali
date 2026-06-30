@@ -666,7 +666,7 @@ function makeStyles(
     unitToggle: { flexDirection: "row", gap: theme.spacing.xs },
     unitChip: {
       paddingHorizontal: theme.spacing.md,
-      minHeight: 44,
+      minHeight: 48,
       borderRadius: redesign.rChip,
       backgroundColor: redesign.pillSoft,
       alignItems: "center",
@@ -698,7 +698,7 @@ function makeStyles(
     },
     saveBtn: {
       marginTop: theme.spacing.sm,
-      backgroundColor: redesign.teal,
+      backgroundColor: redesign.tealDeep,
       borderRadius: theme.radii.xl - 2,
       minHeight: 50,
       alignItems: "center",

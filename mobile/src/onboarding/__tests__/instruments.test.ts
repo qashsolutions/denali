@@ -139,8 +139,9 @@ describe("Epworth — Johns 1991", () => {
     expect(EPWORTH.items).toHaveLength(8);
   });
 
-  it("uses LOINC 89204-2", () => {
-    expect(EPWORTH.loincCode).toBe("89204-2");
+  it("uses an internal code (no verified Epworth LOINC; 89204-2 was PHQ-9-Teen)", () => {
+    expect(EPWORTH.loincCode).toBe("denali.EPWORTH.v1");
+    expect(EPWORTH.codeSystem).toBe("internal");
   });
 });
 

@@ -37,9 +37,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
-import type { LocalDataDAL, ReportType } from "@/contracts";
+import type { LocalDataDAL, ReportRow, ReportType } from "@/contracts";
 import { useDal } from "@/db/DalProvider";
-import { hapticSelection } from "@/feedback/haptics";
 import type { RootStackParamList } from "@/navigation/types";
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
@@ -53,11 +52,13 @@ import type { ParseReportResponse } from "../upload/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "MainTabs">;
 
-const REPORT_TYPES: ReadonlyArray<{ value: ReportType; label: string; hint: string }> = [
-  { value: "lab", label: "Lab results", hint: "A1c, glucose, lipid panel, etc." },
-  { value: "ehr", label: "EHR export", hint: "Records from your patient portal." },
-  { value: "visit", label: "Visit summary", hint: "After-visit summary or discharge papers." },
-];
+// Free-form upload: the user uploads ANY health report; we read it on-device
+// and the parser categorizes every value individually (each observation gets
+// its own category: biomarker / vital / condition / …). The report-level type
+// (lab/ehr/visit) is invisible metadata, so we default it rather than make the
+// user pick — removing all upfront friction. (Auto-classifying the report-level
+// type is a follow-up; it needs the row inserted after parse.)
+const DEFAULT_REPORT_TYPE: ReportType = "lab";
 
 type SourceKind = "pdf" | "image";
 
@@ -84,11 +85,19 @@ export function UploadScreen(): React.ReactElement {
   const fontsLoaded = useFontsLoaded();
   const insets = useSafeAreaInsets();
 
-  const [reportType, setReportType] = React.useState<ReportType>("lab");
-  const [reportName, setReportName] = React.useState<string>("");
+  // Naming happens AFTER the parse, on the review screen (the report is
+  // inserted here with its original filename as a placeholder). Keeps the
+  // upload step friction-free.
   const [phase, setPhase] = React.useState<Phase>("idle");
   const [error, setError] = React.useState<ErrorState | null>(null);
   const [consentReady, setConsentReady] = React.useState<boolean | null>(null);
+  // Saved reports list — loaded on focus so it refreshes after each save.
+  const [reports, setReports] = React.useState<ReportRow[]>([]);
+  // ACTUAL value count per report (the stored summary_text can be stale after
+  // dedup). Keyed by report id.
+  const [reportCounts, setReportCounts] = React.useState<Map<string, number>>(
+    new Map(),
+  );
 
   // Re-check consent on every screen FOCUS (not just mount). The Upload
   // tab stays mounted in the bottom-tab navigator, so a mount-only effect
@@ -101,11 +110,29 @@ export function UploadScreen(): React.ReactElement {
       (async () => {
         const ok = await fetchHealthDataAiConsent(api);
         if (!cancelled) setConsentReady(ok);
+        // Refresh the saved-reports list (so a just-saved report appears).
+        const user = api.getCurrentUser();
+        if (user && dal) {
+          try {
+            const list = await dal.listReports(user.userId);
+            if (!cancelled) setReports(list);
+            // Count the ACTUAL linked observations per report so the list
+            // agrees with each report's detail (stored summary can be stale).
+            const counts = new Map<string, number>();
+            for (const r of list) {
+              const obs = await dal.listObservations({ report_id: r.id });
+              counts.set(r.id, obs.length);
+            }
+            if (!cancelled) setReportCounts(counts);
+          } catch {
+            // Non-fatal: the list just stays as-is.
+          }
+        }
       })();
       return () => {
         cancelled = true;
       };
-    }, [api]),
+    }, [api, dal]),
   );
 
   const styles = React.useMemo(
@@ -139,31 +166,6 @@ export function UploadScreen(): React.ReactElement {
           textTransform: "uppercase",
           ...fontStyle("body", 600, fontsLoaded),
         },
-        // White r-18 surface card; selected = teal border on teal-wash.
-        typeCard: {
-          backgroundColor: redesign.surface,
-          borderColor: redesign.line,
-          borderWidth: 1,
-          borderRadius: redesign.rCard,
-          padding: theme.spacing.md,
-          marginBottom: theme.spacing.sm,
-          minHeight: 44,
-          gap: theme.spacing.xs,
-        },
-        typeCardActive: {
-          borderColor: redesign.teal,
-          backgroundColor: redesign.tealWash,
-        },
-        typeLabel: {
-          color: redesign.ink,
-          fontSize: theme.typography.sizes.base,
-          ...fontStyle("body", 600, fontsLoaded),
-        },
-        typeHint: {
-          color: redesign.ink2,
-          fontSize: theme.typography.sizes.sm,
-          ...fontStyle("body", 400, fontsLoaded),
-        },
         input: {
           backgroundColor: redesign.surface,
           color: redesign.ink,
@@ -173,12 +175,12 @@ export function UploadScreen(): React.ReactElement {
           paddingHorizontal: theme.spacing.md,
           paddingVertical: theme.spacing.sm,
           fontSize: theme.typography.sizes.base,
-          minHeight: 44,
+          minHeight: 48,
           ...fontStyle("body", 400, fontsLoaded),
         },
         // Mockup .cta: teal primary; .cta.ghost: surface + teal border.
         button: {
-          backgroundColor: redesign.teal,
+          backgroundColor: redesign.tealDeep,
           borderRadius: theme.radii.xl - 2,
           paddingVertical: theme.spacing.md - 1,
           minHeight: 48,
@@ -231,6 +233,31 @@ export function UploadScreen(): React.ReactElement {
           flexDirection: "row",
           alignItems: "center",
           gap: theme.spacing.sm,
+        },
+        reportsSection: {
+          marginTop: theme.spacing.space3,
+          gap: theme.spacing.sm,
+        },
+        reportCard: {
+          backgroundColor: redesign.surface,
+          borderColor: redesign.line,
+          borderWidth: 1,
+          borderRadius: redesign.rCard,
+          padding: theme.spacing.md,
+          minHeight: 48,
+          gap: theme.spacing.xs / 2,
+        },
+        reportName: {
+          color: redesign.ink,
+          fontSize: theme.typography.sizes.base,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
+        // Date + summary, grey italics — the "underneath" line.
+        reportMeta: {
+          color: redesign.ink3,
+          fontSize: theme.typography.sizes.sm,
+          fontStyle: "italic",
+          ...fontStyle("body", 400, fontsLoaded),
         },
       }),
     [theme, redesign, fontsLoaded, insets.top],
@@ -285,10 +312,8 @@ export function UploadScreen(): React.ReactElement {
       }
 
       const reportId = Crypto.randomUUID();
-      const fileName =
-        reportName.trim().length > 0
-          ? reportName.trim()
-          : picked.file.name;
+      // Placeholder name (the picked filename); the user names it on review.
+      const fileName = picked.file.name;
 
       // c) Insert reports row (pending), then encrypt + store the blob.
       let blobUri: string;
@@ -303,7 +328,7 @@ export function UploadScreen(): React.ReactElement {
         await dal.insertReport({
           id: reportId,
           user_id: user.userId,
-          type: reportType,
+          type: DEFAULT_REPORT_TYPE,
           file_blob_ref: blobUri,
           original_filename: fileName,
           parse_status: "parsing",
@@ -345,7 +370,7 @@ export function UploadScreen(): React.ReactElement {
       let parsed: ParseReportResponse;
       try {
         parsed = await parseReport(api, {
-          reportType,
+          reportType: DEFAULT_REPORT_TYPE,
           extractedText: extracted.text,
         });
       } catch (err) {
@@ -370,7 +395,7 @@ export function UploadScreen(): React.ReactElement {
       setPhase("done");
       navigation.navigate("UploadReview", { reportId });
     },
-    [api, dal, navigation, reportName, reportType],
+    [api, dal, navigation],
   );
 
   const renderConsentBanner = () => {
@@ -429,58 +454,19 @@ export function UploadScreen(): React.ReactElement {
     >
       <Text style={styles.title}>Upload a report</Text>
       <Text style={styles.subtitle}>
-        Pick a PDF or photo from your phone. Your file stays on this device
-        — only the typed-out text is sent to the AI for parsing, and nothing
-        is stored on our servers.
+        Upload any health report — we read it here and pull out the values.
+      </Text>
+      <Text style={styles.subtitle}>
+        Your file never leaves your phone; only the text is sent for parsing.
       </Text>
 
       {renderConsentBanner()}
-
-      <View>
-        <Text style={styles.sectionLabel}>What kind of report?</Text>
-        {REPORT_TYPES.map((opt) => {
-          const isActive = opt.value === reportType;
-          return (
-            <Pressable
-              key={opt.value}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive }}
-              disabled={busy}
-              onPress={() => {
-                hapticSelection();
-                setReportType(opt.value);
-              }}
-              style={({ pressed }) => [
-                styles.typeCard,
-                isActive && styles.typeCardActive,
-                pressed && styles.buttonDisabled,
-              ]}
-            >
-              <Text style={styles.typeLabel}>{opt.label}</Text>
-              <Text style={styles.typeHint}>{opt.hint}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <View>
-        <Text style={styles.sectionLabel}>Name (optional)</Text>
-        <TextInput
-          accessibilityLabel="Report name"
-          editable={!busy}
-          maxLength={120}
-          onChangeText={setReportName}
-          placeholder="e.g. May 2026 A1c"
-          placeholderTextColor={redesign.ink3}
-          style={styles.input}
-          value={reportName}
-        />
-      </View>
 
       {renderProgress()}
       {renderError()}
 
       <PressableScale
+        testID="upload_pick_pdf"
         haptic
         accessibilityRole="button"
         disabled={busy || consentReady !== true}
@@ -494,6 +480,7 @@ export function UploadScreen(): React.ReactElement {
       </PressableScale>
 
       <PressableScale
+        testID="upload_pick_image"
         accessibilityRole="button"
         disabled={busy || consentReady !== true}
         onPress={() => runPipeline("image")}
@@ -507,8 +494,55 @@ export function UploadScreen(): React.ReactElement {
           Pick a photo
         </Text>
       </PressableScale>
+
+      {reports.length > 0 && (
+        <View style={styles.reportsSection}>
+          <Text style={styles.sectionLabel}>Your reports</Text>
+          {reports.map((r) => (
+            <Pressable
+              key={r.id}
+              testID={`upload_report_row_${r.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={`${r.original_filename}. Open report.`}
+              onPress={() =>
+                navigation.navigate("ReportDetail", { reportId: r.id })
+              }
+              style={({ pressed }) => [
+                styles.reportCard,
+                pressed && styles.buttonDisabled,
+              ]}
+            >
+              <Text style={styles.reportName} numberOfLines={1}>
+                {r.original_filename}
+              </Text>
+              <Text style={styles.reportMeta} numberOfLines={1}>
+                {formatReportMeta(r, reportCounts.get(r.id))}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
+}
+
+/**
+ * "Added Jun 17, 2026 · 4 values" — the grey-italics list subtitle. The count
+ * is the ACTUAL linked-observation count (passed in), not the stored summary,
+ * so it always agrees with the report's detail. undefined = still counting.
+ */
+function formatReportMeta(r: ReportRow, count: number | undefined): string {
+  const d = new Date(r.uploaded_at);
+  const date = Number.isNaN(d.getTime())
+    ? r.uploaded_at
+    : d.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+  if (count === undefined) return `Added ${date}`;
+  if (count === 0) return `Added ${date} · no values`;
+  return `Added ${date} · ${count} value${count === 1 ? "" : "s"}`;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────

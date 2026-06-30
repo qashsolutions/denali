@@ -54,16 +54,23 @@ import {
   PREVENTIVE_RECOMMENDATIONS,
   type DueScreening,
 } from "@/preventive/uspstf";
-import { fontStyle, useFontsLoaded } from "@/theme/fonts";
+import { fontStyle, MAX_FONT_SCALE, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
 
 import { checkInAvailable } from "./instrumentsFocus";
 import { QuickAddSheet, type QuickAddOption } from "./QuickAddSheet";
 import { DomainCard } from "./timeline/DomainCard";
+import {
+  severeDomains,
+  type AttentionItem,
+} from "./timeline/dashboardAttention";
 import { dateKeyOf, formatGroupHeader } from "./timeline/groupObservations";
 import { groupByInstrumentSession } from "./timeline/grouping";
 import { rollupCardsByDomain, type DomainRollup } from "./timeline/rollup";
-import { STANDING_DISCLAIMER } from "./timeline/displayMapping";
+import {
+  getDomainName,
+  STANDING_DISCLAIMER,
+} from "./timeline/displayMapping";
 
 import type { IntakeSection, RootStackParamList } from "@/navigation/types";
 
@@ -72,6 +79,9 @@ type Nav = NativeStackNavigationProp<RootStackParamList, "MainTabs">;
 const PAGE_SIZE = 200;
 
 type ListItem =
+  /** Single "needs attention" callout, pinned at the very top (D35). Carries
+   *  every severe domain; the callout shows the first + a "+N more" line. */
+  | { kind: "attention"; severe: ReadonlyArray<AttentionItem> }
   | { kind: "section-header"; title: string }
   | { kind: "rollup"; rollup: DomainRollup }
   | { kind: "due-for"; due: ReadonlyArray<DueScreening> }
@@ -236,6 +246,13 @@ export function HealthDashboardScreen(): React.ReactElement {
     ];
 
     const out: ListItem[] = [];
+    // ONE attention item, pinned above everything (principle 7): the single
+    // domain whose latest check-in is in a severe band. The grid below is NOT
+    // reordered. Null → no callout. Reuses the cards' own band logic.
+    const severe = severeDomains(rollups, userSexAtBirth, userAgeYears);
+    if (severe.length > 0) {
+      out.push({ kind: "attention", severe });
+    }
     // "Due for…" preventive layer — sex/age-filtered, hidden when nothing is
     // due. PREVENTIVE_RECOMMENDATIONS ships empty (reviewer/USPSTF-gated), so
     // `due` is [] today and no card renders; the wiring lights up when the set
@@ -288,9 +305,9 @@ export function HealthDashboardScreen(): React.ReactElement {
         },
         headerTextBlock: { flexShrink: 1 },
         addBtn: {
-          // 44px min touch target (WCAG 2.5.5 / iOS HIG).
-          width: 44,
-          height: 44,
+          // 48×48 touch target — 45+ a11y floor (D35).
+          width: 48,
+          height: 48,
           borderRadius: redesign.rChip,
           backgroundColor: redesign.tealWash,
           alignItems: "center",
@@ -310,7 +327,47 @@ export function HealthDashboardScreen(): React.ReactElement {
           marginTop: theme.spacing.xs,
           ...fontStyle("body", 400, fontsLoaded),
         },
-        // Mockup .eyebrow: body 600, 11px, .15em tracking, uppercase, ink-3.
+        // ONE attention callout (D35) — light-grey card with a thin RED border
+        // (the red border alone signals severity), pinned at the top. Holds up
+        // to 3 individually tappable severe-domain names in a single row.
+        attentionCard: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: theme.spacing.sm,
+          marginHorizontal: theme.spacing.space5,
+          marginTop: theme.spacing.space3,
+          paddingVertical: theme.spacing.sm + 1,
+          paddingHorizontal: theme.spacing.md,
+          borderRadius: redesign.rCard,
+          borderWidth: 1,
+          borderColor: redesign.alarm,
+          backgroundColor: redesign.pillSoft,
+        },
+        attentionChips: {
+          flex: 1,
+          flexDirection: "row",
+          flexWrap: "nowrap", // never spill onto a second row
+          alignItems: "center",
+          gap: theme.spacing.sm,
+        },
+        // Tappable severe-domain name — borderless red text. Compact visual;
+        // vertical hitSlop (render) lifts the tap target to the 48px floor
+        // without overlapping the next name horizontally.
+        attentionChip: {
+          flexShrink: 1,
+          paddingVertical: 7,
+          justifyContent: "center",
+        },
+        attentionChipText: {
+          color: redesign.alarm,
+          fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
+        attentionMore: {
+          color: redesign.alarm,
+          fontSize: theme.typography.sizes.sm,
+          ...fontStyle("body", 600, fontsLoaded),
+        },
         sectionHeader: {
           paddingHorizontal: theme.spacing.space5,
           paddingTop: theme.spacing.space5,
@@ -370,6 +427,56 @@ export function HealthDashboardScreen(): React.ReactElement {
       return (
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionHeaderText}>{item.title}</Text>
+        </View>
+      );
+    }
+    if (item.kind === "attention") {
+      // ONE compact callout (principle 7) — up to the top 4 severe domains as
+      // individually tappable red chips in a single non-wrapping row on a
+      // light-grey (pillSoft) card with a thin alarm border; a "+N" overflow
+      // when more than 4 are severe (never N stacked cards). No new clinical
+      // copy — each chip is the versioned domain name; the red conveys the
+      // alarm-band severity; tap → that domain's detail (full reading + any
+      // 988 path). The row never wraps: nowrap + chip numberOfLines=1/flexShrink.
+      const shown = item.severe.slice(0, 4);
+      const moreCount = item.severe.length - shown.length;
+      return (
+        <View
+          testID="dashboard_attention"
+          accessibilityLabel="Checks in the severe range"
+          style={styles.attentionCard}
+        >
+          <View style={styles.attentionChips}>
+            {shown.map((s) => (
+              <Pressable
+                key={s.domainId}
+                testID={`dashboard_attention_${s.domainId}`}
+                accessibilityRole="button"
+                accessibilityLabel={`${getDomainName(s.domainId)}, ${s.band.pill}. Open details.`}
+                onPress={() =>
+                  navigation.navigate("DomainDetail", { domainId: s.domainId })
+                }
+                hitSlop={{ top: 9, bottom: 9 }}
+                style={styles.attentionChip}
+              >
+                <Text
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                  numberOfLines={1}
+                  style={styles.attentionChipText}
+                >
+                  {getDomainName(s.domainId)}
+                </Text>
+              </Pressable>
+            ))}
+            {moreCount > 0 ? (
+              <Text
+                style={styles.attentionMore}
+                accessibilityLabel={`${moreCount} more in the severe range`}
+              >
+                +{moreCount}
+              </Text>
+            ) : null}
+          </View>
         </View>
       );
     }
@@ -474,6 +581,8 @@ export function HealthDashboardScreen(): React.ReactElement {
           style={{ flex: 1 }}
           data={items}
           keyExtractor={(item) => {
+            if (item.kind === "attention")
+              return `a:${item.severe[0].domainId}`;
             if (item.kind === "section-header") return `s:${item.title}`;
             if (item.kind === "rollup") return `r:${item.rollup.domainId}`;
             if (item.kind === "due-for") return "due-for";

@@ -71,6 +71,10 @@ interface ExtractedObservation {
   effective_at: string;
   confidence: number;
   source_text: string;
+  /** The report's own printed reference interval, verbatim, or null. */
+  reference_range: string | null;
+  /** The report's OWN abnormal flag, copied — never inferred. */
+  abnormal_flag: "normal" | "low" | "high" | "critical" | null;
 }
 
 interface ParseResponseBody {
@@ -103,22 +107,31 @@ function buildSystemPrompt(reportType: ReportType, locale?: string): string {
     '      "unit": string | null,',
     '      "effective_at": ISO8601 date or date-time string,',
     '      "confidence": number,           // 0..1',
-    '      "source_text": string           // short excerpt for citation',
+    '      "source_text": string,          // short excerpt for citation',
+    '      "reference_range": string | null, // the report\'s printed reference interval, verbatim (e.g. "8-61"), or null',
+    '      "abnormal_flag": "normal" | "low" | "high" | "critical" | null  // the report\'s OWN flag, copied — never inferred',
     "    }",
     "  ],",
-    '  "summary": "1-2 sentence plain-language summary"',
+    '  "summary": "ONE short factual sentence — see the summary rule below"',
     "}",
     "",
     "Rules:",
     "- For lab values, use LOINC codes. Example: HbA1c → 4548-4.",
-    "- For diagnoses / conditions, use ICD-10 codes.",
+    "- For diagnoses / conditions, use ICD-10 codes. ONLY extract a condition the report EXPLICITLY states as a diagnosis/problem (ideally with its own code). Use the condition name EXACTLY as written — do NOT add severity, complications, staging, or specificity the report does not state (e.g. never turn 'alcohol-related liver effect' into 'alcohol-related liver disease with fibrosis and cirrhosis').",
+    "- Extract DISCRETE values (a measured lab/vital/anthropometric, a screener score, an explicitly-listed condition) only. Do NOT extract narrative sentences, clinical impressions, interpretations, 'consistent with' / 'suggests' statements, or assessments as observations — those are the report author's reasoning, not a value.",
     "- For values you can't confidently code, set code_system='internal' and code to a stable slug (e.g. 'bp_systolic').",
     "- Always include unit when present (mg/dL, mmHg, kg, etc.).",
     "- effective_at: use the date the observation is ABOUT (lab collected date, visit date), not now().",
     "- confidence reflects how sure you are about both the value and the code mapping.",
     "- Skip any value you cannot confidently extract — quality over quantity.",
     "- source_text: a short verbatim excerpt (one line) the user can reference in the review UI.",
+    "- reference_range: copy the report's printed reference interval verbatim if shown (e.g. '8-61'); else null.",
+    "- abnormal_flag: copy the report's OWN flag — its H/High→\"high\", L/Low→\"low\", Critical/Panic→\"critical\", Normal/in-range→\"normal\" column. If the report shows NO flag for a value, use null. NEVER infer or compute a flag the report does not itself state.",
     "- Do NOT include patient identifiers (name, DOB, MRN, address) anywhere in the output.",
+    "",
+    // CLINICAL BOUNDARY: the summary must NOT diagnose. We interpret only what
+    // the report literally prints — never a condition, cause, risk, or advice.
+    "- summary: ONE short, factual sentence about WHAT THE REPORT CONTAINS only — e.g. how many values it lists and how many it flags outside the reference range. Do NOT diagnose, NOT name a disease or condition, NOT infer a cause, NOT assess risk, NOT recommend anything. Good: \"This lab report lists 8 values; 3 are flagged outside the reference range.\" Bad: \"Findings consistent with <disease>\" or \"positive screen for <risk>\".",
     "",
     "Output JSON only. No surrounding text.",
     localeNote,
@@ -277,6 +290,15 @@ function parseEnvelope(text: string): ParseResponseBody | null {
         effective_at: r.effective_at,
         confidence: typeof r.confidence === "number" ? r.confidence : 0,
         source_text: typeof r.source_text === "string" ? r.source_text : "",
+        reference_range:
+          typeof r.reference_range === "string" ? r.reference_range : null,
+        abnormal_flag:
+          r.abnormal_flag === "normal" ||
+          r.abnormal_flag === "low" ||
+          r.abnormal_flag === "high" ||
+          r.abnormal_flag === "critical"
+            ? r.abnormal_flag
+            : null,
       });
     }
     return { observations, summary: obj.summary };
