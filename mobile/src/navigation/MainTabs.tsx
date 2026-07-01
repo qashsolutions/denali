@@ -55,7 +55,12 @@ function SettingsTabIcon({ color, size }: TabIconProps): React.ReactElement {
 
 export function MainTabs() {
   // Redesign step-1 tab bar (mockup .tabbar): white surface, hairline top
-  // border, teal active tint, ink-3 inactive, small medium-weight labels.
+  // border, teal-deep active tint, ink-3 inactive, small medium-weight labels.
+  // The active tint colors the selected tab's LABEL (10.5px text) as well as
+  // its icon, so it must clear WCAG AA (4.5:1) as text: bare `teal` on the white
+  // surface is 4.11:1 (sub-AA), `tealDeep` is 6.35:1 light / 8.20:1 dark. Same
+  // contrast rule as the A11Y-01/02/1b teal-text consumers. Pinned in
+  // src/theme/__tests__/tokens.test.ts (A11Y #6).
   const { redesign } = useTheme();
   const fontsLoaded = useFontsLoaded();
   return (
@@ -63,7 +68,7 @@ export function MainTabs() {
       screenOptions={{
         headerShown: false,
         tabBarIconStyle: { width: TAB_ICON_SIZE, height: TAB_ICON_SIZE },
-        tabBarActiveTintColor: redesign.teal,
+        tabBarActiveTintColor: redesign.tealDeep,
         tabBarInactiveTintColor: redesign.ink3,
         tabBarStyle: {
           backgroundColor: redesign.surface,

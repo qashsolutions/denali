@@ -344,3 +344,26 @@ describe("sub-AA teal-on-surface text uses tealDeep (A11Y-1b pins)", () => {
     ).toMatch(/color:\s*redesign\.tealDeep/);
   });
 });
+
+// A11Y (#6, MainTabs active tab): React Navigation's `tabBarActiveTintColor`
+// tints the ACTIVE tab's LABEL (10.5px text) as well as its icon. On the white
+// tab surface, bare `teal` is 4.11:1 — sub-AA for text — so the SELECTED tab's
+// label failed WCAG AA; `tealDeep` is 6.35:1 light / 8.20:1 dark. The active
+// tint must be tealDeep. (The clinical-contrast matrix above proves
+// tealDeep-on-surface is AA; THIS pins the consumer so a revert to `teal`
+// fails CI. Same discipline as the A11Y-1b pins above.)
+describe("MainTabs active-tab tint uses tealDeep (A11Y #6 pin)", () => {
+  const SRC = resolve(__dirname, "../..");
+  const mainTabs = readFileSync(
+    resolve(SRC, "navigation/MainTabs.tsx"),
+    "utf8",
+  );
+
+  it("tabBarActiveTintColor is redesign.tealDeep (AA on the tab surface)", () => {
+    expect(mainTabs).toMatch(/tabBarActiveTintColor:\s*redesign\.tealDeep/);
+  });
+
+  it("does NOT tint the active tab with the sub-AA bare teal", () => {
+    expect(mainTabs).not.toMatch(/tabBarActiveTintColor:\s*redesign\.teal\b/);
+  });
+});
