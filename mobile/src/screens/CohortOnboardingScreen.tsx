@@ -374,7 +374,7 @@ export function CohortOnboardingScreen(): React.ReactElement {
           totalSteps={TOTAL_STEPS}
           sectionLabel="About you"
           question="What year were you born?"
-          helperText="Many reference ranges and risk-stratification cutoffs depend on age."
+          helperText="Some health guidelines change with age — this helps us show the right ones for you."
           canContinue={
             birthYear != null &&
             birthYear >= 1900 &&
@@ -407,7 +407,7 @@ export function CohortOnboardingScreen(): React.ReactElement {
           totalSteps={TOTAL_STEPS}
           sectionLabel="About you"
           question="What was your sex at birth?"
-          helperText="Used to interpret lab results accurately — reference ranges for things like hemoglobin and cardiac markers differ by sex at birth."
+          helperText="Normal ranges for some blood and heart tests differ by sex at birth — this helps us read your results correctly."
           autoAdvance
           onBack={goBack}
           errorMessage={errorMsg}
@@ -481,16 +481,14 @@ export function CohortOnboardingScreen(): React.ReactElement {
           onBack={goBack}
           errorMessage={errorMsg}
         >
-          {/* Crisp, scannable lines (not one paragraph). */}
+          {/* Crisp, scannable lines (not one paragraph). Keeps the D33 consent
+              facts: permanence after Continue + changing later = starting over,
+              and that gender/Medicare remain editable. */}
           <View style={styles.confirmIntro}>
             <Text style={styles.confirmLead}>
-              These guide how we read your results.
-            </Text>
-            <Text style={styles.confirmLead}>
-              Fix them now — after Continue they can’t be changed.
-            </Text>
-            <Text style={styles.confirmMuted}>
-              Changing them later means starting over and losing your data.
+              These guide how we read your results. After Continue, your year of
+              birth and sex at birth can’t be changed — changing them later means
+              starting over and losing your data.
             </Text>
             <Text style={styles.confirmMuted}>
               Gender and Medicare stay editable anytime in Settings.

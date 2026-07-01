@@ -30,6 +30,7 @@ import {
   View,
 } from "react-native";
 import type { StyleProp, TextStyle, ViewStyle } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HttpError, useApiClient } from "@/auth";
 import { PressableScale } from "@/components/PressableScale";
@@ -129,6 +130,7 @@ export function SignInScreen(): React.ReactElement {
   const navigation = useNavigation<Nav>();
   const dal = useDal();
   const { active, theme } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [step, setStep] = React.useState<Step>("email");
   const [email, setEmail] = React.useState("");
@@ -141,22 +143,29 @@ export function SignInScreen(): React.ReactElement {
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
+        // Top-aligned so the header sits at the top of the screen (a modern
+        // sign-in layout), not vertically centered. The View adds a safe-area
+        // paddingTop inline so the title clears the status bar / notch.
         screen: {
           flex: 1,
           backgroundColor: active.bgPrimary,
           padding: theme.spacing.lg,
-          justifyContent: "center",
+          justifyContent: "flex-start",
         },
+        // Header is centered (title + subtitle); the form below keeps its
+        // left-aligned labels — the standard centered-header / left-form pattern.
         title: {
           color: active.textPrimary,
           fontFamily: theme.typography.fonts.serif,
           fontSize: theme.typography.sizes["3xl"],
+          textAlign: "center",
           marginBottom: theme.spacing.sm,
         },
         subtitle: {
           color: active.textSecondary,
           fontFamily: theme.typography.fonts.sans,
           fontSize: theme.typography.sizes.base,
+          textAlign: "center",
           marginBottom: theme.spacing.xl,
         },
         label: {
@@ -330,7 +339,7 @@ export function SignInScreen(): React.ReactElement {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={{ flex: 1, backgroundColor: active.bgPrimary }}
     >
-      <View style={styles.screen}>
+      <View style={[styles.screen, { paddingTop: insets.top + theme.spacing.xl }]}>
         <Text style={styles.title}>Sign in to Denali</Text>
         <Text style={styles.subtitle}>{signInSubtitle(step)}</Text>
 

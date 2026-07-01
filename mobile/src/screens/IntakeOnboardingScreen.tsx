@@ -671,7 +671,7 @@ export function IntakeOnboardingScreen(): React.ReactElement {
           totalSteps={2}
           sectionLabel="What brings you in?"
           question="What's most on your mind today?"
-          helperText="Pick the closest match. Tap 'Use my own wording' if nothing fits."
+          helperText="Start typing to see suggestions — or tap 'Use my own wording' if nothing fits."
           canContinue={complaintSelection != null}
           onContinue={() => setComplaintStep(2)}
           onBack={leaveSection}

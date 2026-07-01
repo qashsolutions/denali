@@ -111,10 +111,17 @@ export function OneItemScreen({
     () =>
       StyleSheet.create({
         screen: { flex: 1, backgroundColor: redesign.paper },
+        // flexGrow lets a short screen stretch to full height so the footer
+        // spacer can push the CTA down to the bottom (thumb reach); a tall
+        // screen scrolls normally and the spacer collapses to its minHeight.
         scroll: {
           padding: theme.spacing.space5,
           paddingTop: insets.top + theme.spacing.space5,
+          // Bottom inset so the now bottom-pinned footer clears the gesture-nav
+          // pill / home indicator (this shell renders headerless + edge-to-edge).
+          paddingBottom: insets.bottom + theme.spacing.space5,
           gap: theme.spacing.lg,
+          flexGrow: 1,
         },
         // Progress now sits BELOW the options (operator review 2026-06-12):
         // centered + clear of the status-bar clock.
@@ -174,13 +181,17 @@ export function OneItemScreen({
           color: redesign.alarm,
           ...fontStyle("body", 400, fontsLoaded),
         },
+        // Wraps so that when Back + Skip + a full-width Continue can't fit on one
+        // row (the 3-action intake steps), Continue drops to its own full-width
+        // line below instead of squeezing until its label wraps. 1–2 action rows
+        // (cohort steps) still fit inline.
         footer: {
           flexDirection: "row",
           alignItems: "center",
+          flexWrap: "wrap",
           gap: theme.spacing.sm,
           marginTop: theme.spacing.lg,
         },
-        footerCentered: { justifyContent: "center" },
         // Ghost back/skip: surface card + hairline.
         backButton: {
           minHeight: 48,
@@ -199,7 +210,9 @@ export function OneItemScreen({
           color: redesign.ink,
           ...fontStyle("body", 500, fontsLoaded),
         },
-        spacer: { flex: 1 },
+        // Fills the vertical gap above the footer so the CTA bottom-pins on
+        // short screens; collapses to a small gap when content fills the height.
+        spacer: { flex: 1, minHeight: theme.spacing.lg },
         skipButton: {
           minHeight: 48,
           paddingHorizontal: theme.spacing.md,
@@ -216,8 +229,15 @@ export function OneItemScreen({
           color: redesign.ink2,
           ...fontStyle("body", 500, fontsLoaded),
         },
-        // Mockup .cta: teal primary, white label.
+        // Mockup .cta: teal primary, white label. `flex: 1` makes the primary
+        // CTA fill the footer's remaining width (full-width when it's the only
+        // action, or beside a fixed-width Back/Skip) — one consistent, prominent
+        // primary button across every step, instead of a small centered pill.
         continueButton: {
+          flexGrow: 1,
+          // Never let the primary shrink below a one-line "Continue"; when the
+          // row can't give it this much, the footer wraps it to its own line.
+          minWidth: 150,
           minHeight: 48,
           paddingHorizontal: theme.spacing.lg,
           paddingVertical: theme.spacing.md,
@@ -235,7 +255,7 @@ export function OneItemScreen({
           ...fontStyle("body", 600, fontsLoaded),
         },
       }),
-    [theme, redesign, fontsLoaded, insets.top],
+    [theme, redesign, fontsLoaded, insets.top, insets.bottom],
   );
 
   const continueDisabled = disabled || !canContinue;
@@ -243,9 +263,6 @@ export function OneItemScreen({
   const showBack = !hideBack && onBack != null;
   const showSkip = onSkipSection != null;
   const showContinue = !autoAdvance && onContinue != null;
-  // When Continue is the ONLY footer action (e.g. a required single-field
-  // step with no Back/Skip), center it instead of pinning it to the right.
-  const onlyContinue = showContinue && !showBack && !showSkip;
 
   return (
     <KeyboardAvoidingView
@@ -286,7 +303,10 @@ export function OneItemScreen({
           <Text style={styles.errorText}>{errorMessage}</Text>
         ) : null}
 
-        <View style={[styles.footer, onlyContinue && styles.footerCentered]}>
+        {/* Push the footer to the bottom on short screens (thumb reach). */}
+        <View style={styles.spacer} />
+
+        <View style={styles.footer}>
           {showBack ? (
             <Pressable
               testID="oneitem_back_button"
@@ -299,7 +319,6 @@ export function OneItemScreen({
               <Text style={styles.backLabel}>Back</Text>
             </Pressable>
           ) : null}
-          {onlyContinue ? null : <View style={styles.spacer} />}
           {showSkip ? (
             <Pressable
               testID="oneitem_skip_button"

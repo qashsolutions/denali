@@ -894,7 +894,7 @@ export function InstrumentsScreen(): React.ReactElement {
                   done ? styles.statusDone : styles.statusTap,
                 ]}
               >
-                {done ? "Saved" : "Tap to contribute"}
+                {done ? "Saved" : "Tap to add"}
               </Text>
             </Pressable>
           );
