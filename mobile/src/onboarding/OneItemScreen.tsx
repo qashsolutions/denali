@@ -23,7 +23,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -33,6 +32,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fontStyle, useFontsLoaded } from "@/theme/fonts";
 import { useTheme } from "@/theme/useTheme";
+
+import { StepFooter } from "./StepFooter";
 
 export interface OneItemScreenProps {
   /** 1-based step index (e.g., 3 for "3 of 9"). */
@@ -181,82 +182,10 @@ export function OneItemScreen({
           color: redesign.alarm,
           ...fontStyle("body", 400, fontsLoaded),
         },
-        // Column: the secondary actions (Back / Skip) form a compact row on top,
-        // and the full-width primary (Continue) sits below, separated by a clear
-        // gap so the primary never crowds the secondary buttons. One layout for
-        // every step (Continue-only, Back-only, Back+Continue, Back+Skip+Continue).
-        footer: {
-          gap: theme.spacing.lg,
-          marginTop: theme.spacing.lg,
-        },
-        // Back + Skip together. Left-aligned when they sit ABOVE a full-width
-        // Continue (intake / confirm); centered (secondaryRowSolo) when they are
-        // the ONLY footer content — auto-advance steps (operator: centered there).
-        secondaryRow: {
-          flexDirection: "row",
-          alignItems: "center",
-          columnGap: theme.spacing.sm,
-        },
-        secondaryRowSolo: {
-          justifyContent: "center",
-        },
-        // Secondary buttons: compact, centered light outlines — clearly
-        // subordinate to the filled primary. Visual height ~40 (smaller than the
-        // primary); the ≥48px TAP target is restored via vertical hitSlop on the
-        // Pressables (JSX below), so the 45+ a11y floor still holds.
-        backButton: {
-          paddingHorizontal: theme.spacing.md,
-          paddingVertical: theme.spacing.sm,
-          borderRadius: theme.radii.lg,
-          backgroundColor: "transparent",
-          borderColor: redesign.line,
-          borderWidth: 1,
-          justifyContent: "center",
-          alignItems: "center",
-        },
-        backLabel: {
-          fontSize: theme.typography.sizes.base,
-          color: redesign.ink2,
-          ...fontStyle("body", 500, fontsLoaded),
-        },
-        // Fills the vertical gap above the footer so the CTA bottom-pins on
-        // short screens; collapses to a small gap when content fills the height.
+        // Fills the vertical gap above the footer so it bottom-pins on short
+        // screens; collapses to a small gap when content fills the height.
+        // (The footer itself is the StepFooter component.)
         spacer: { flex: 1, minHeight: theme.spacing.lg },
-        skipButton: {
-          paddingHorizontal: theme.spacing.md,
-          paddingVertical: theme.spacing.sm,
-          borderRadius: theme.radii.lg,
-          backgroundColor: "transparent",
-          borderColor: redesign.line,
-          borderWidth: 1,
-          justifyContent: "center",
-          alignItems: "center",
-        },
-        skipLabel: {
-          fontSize: theme.typography.sizes.base,
-          color: redesign.ink2,
-          ...fontStyle("body", 500, fontsLoaded),
-        },
-        // Mockup .cta: teal primary, white label. Full-width (alignSelf stretch
-        // in the column footer) — one consistent, prominent primary on every step.
-        continueButton: {
-          alignSelf: "stretch",
-          minHeight: 48,
-          paddingHorizontal: theme.spacing.lg,
-          paddingVertical: theme.spacing.md,
-          borderRadius: theme.radii.xl - 2,
-          backgroundColor: redesign.tealDeep,
-          justifyContent: "center",
-          alignItems: "center",
-        },
-        continueDisabled: {
-          backgroundColor: redesign.ink3,
-        },
-        continueLabel: {
-          fontSize: theme.typography.sizes.base,
-          color: redesign.surface,
-          ...fontStyle("body", 600, fontsLoaded),
-        },
       }),
     [theme, redesign, fontsLoaded, insets.top, insets.bottom],
   );
@@ -309,59 +238,17 @@ export function OneItemScreen({
         {/* Push the footer to the bottom on short screens (thumb reach). */}
         <View style={styles.spacer} />
 
-        <View style={styles.footer}>
-          {showBack || showSkip ? (
-            <View
-              style={[
-                styles.secondaryRow,
-                !showContinue && styles.secondaryRowSolo,
-              ]}
-            >
-              {showBack ? (
-                <Pressable
-                  testID="oneitem_back_button"
-                  style={styles.backButton}
-                  hitSlop={{ top: 8, bottom: 8 }}
-                  onPress={onBack}
-                  disabled={disabled}
-                  accessibilityRole="button"
-                  accessibilityLabel="Back"
-                >
-                  <Text style={styles.backLabel}>Back</Text>
-                </Pressable>
-              ) : null}
-              {showSkip ? (
-                <Pressable
-                  testID="oneitem_skip_button"
-                  style={styles.skipButton}
-                  hitSlop={{ top: 8, bottom: 8 }}
-                  onPress={onSkipSection}
-                  disabled={disabled}
-                  accessibilityRole="button"
-                  accessibilityLabel={skipLabel}
-                >
-                  <Text style={styles.skipLabel}>{skipLabel}</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : null}
-          {showContinue ? (
-            <Pressable
-              testID="oneitem_continue_button"
-              style={[
-                styles.continueButton,
-                continueDisabled && styles.continueDisabled,
-              ]}
-              onPress={handleContinue}
-              disabled={continueDisabled}
-              accessibilityRole="button"
-              accessibilityLabel="Continue"
-              accessibilityState={{ disabled: continueDisabled }}
-            >
-              <Text style={styles.continueLabel}>Continue</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        <StepFooter
+          showBack={showBack}
+          onBack={onBack}
+          showSkip={showSkip}
+          onSkip={onSkipSection}
+          skipLabel={skipLabel}
+          showContinue={showContinue}
+          onContinue={handleContinue}
+          continueDisabled={continueDisabled}
+          disabled={disabled}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
