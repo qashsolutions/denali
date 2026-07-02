@@ -181,25 +181,34 @@ export function OneItemScreen({
           color: redesign.alarm,
           ...fontStyle("body", 400, fontsLoaded),
         },
-        // Wraps so that when Back + Skip + a full-width Continue can't fit on one
-        // row (the 3-action intake steps), Continue drops to its own full-width
-        // line below instead of squeezing until its label wraps. 1–2 action rows
-        // (cohort steps) still fit inline.
+        // Column: the secondary actions (Back / Skip) form a compact row on top,
+        // and the full-width primary (Continue) sits below, separated by a clear
+        // gap so the primary never crowds the secondary buttons. One layout for
+        // every step (Continue-only, Back-only, Back+Continue, Back+Skip+Continue).
         footer: {
-          flexDirection: "row",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: theme.spacing.sm,
+          gap: theme.spacing.lg,
           marginTop: theme.spacing.lg,
         },
-        // Ghost back/skip: surface card + hairline.
+        // Back + Skip together. Left-aligned when they sit ABOVE a full-width
+        // Continue (intake / confirm); centered (secondaryRowSolo) when they are
+        // the ONLY footer content — auto-advance steps (operator: centered there).
+        secondaryRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          columnGap: theme.spacing.sm,
+        },
+        secondaryRowSolo: {
+          justifyContent: "center",
+        },
+        // Secondary buttons: compact, centered light outlines — clearly
+        // subordinate to the filled primary. Visual height ~40 (smaller than the
+        // primary); the ≥48px TAP target is restored via vertical hitSlop on the
+        // Pressables (JSX below), so the 45+ a11y floor still holds.
         backButton: {
-          minHeight: 48,
-          minWidth: 64,
           paddingHorizontal: theme.spacing.md,
           paddingVertical: theme.spacing.sm,
           borderRadius: theme.radii.lg,
-          backgroundColor: redesign.surface,
+          backgroundColor: "transparent",
           borderColor: redesign.line,
           borderWidth: 1,
           justifyContent: "center",
@@ -207,18 +216,17 @@ export function OneItemScreen({
         },
         backLabel: {
           fontSize: theme.typography.sizes.base,
-          color: redesign.ink,
+          color: redesign.ink2,
           ...fontStyle("body", 500, fontsLoaded),
         },
         // Fills the vertical gap above the footer so the CTA bottom-pins on
         // short screens; collapses to a small gap when content fills the height.
         spacer: { flex: 1, minHeight: theme.spacing.lg },
         skipButton: {
-          minHeight: 48,
           paddingHorizontal: theme.spacing.md,
           paddingVertical: theme.spacing.sm,
           borderRadius: theme.radii.lg,
-          backgroundColor: redesign.surface,
+          backgroundColor: "transparent",
           borderColor: redesign.line,
           borderWidth: 1,
           justifyContent: "center",
@@ -229,15 +237,10 @@ export function OneItemScreen({
           color: redesign.ink2,
           ...fontStyle("body", 500, fontsLoaded),
         },
-        // Mockup .cta: teal primary, white label. `flex: 1` makes the primary
-        // CTA fill the footer's remaining width (full-width when it's the only
-        // action, or beside a fixed-width Back/Skip) — one consistent, prominent
-        // primary button across every step, instead of a small centered pill.
+        // Mockup .cta: teal primary, white label. Full-width (alignSelf stretch
+        // in the column footer) — one consistent, prominent primary on every step.
         continueButton: {
-          flexGrow: 1,
-          // Never let the primary shrink below a one-line "Continue"; when the
-          // row can't give it this much, the footer wraps it to its own line.
-          minWidth: 150,
+          alignSelf: "stretch",
           minHeight: 48,
           paddingHorizontal: theme.spacing.lg,
           paddingVertical: theme.spacing.md,
@@ -307,29 +310,40 @@ export function OneItemScreen({
         <View style={styles.spacer} />
 
         <View style={styles.footer}>
-          {showBack ? (
-            <Pressable
-              testID="oneitem_back_button"
-              style={styles.backButton}
-              onPress={onBack}
-              disabled={disabled}
-              accessibilityRole="button"
-              accessibilityLabel="Back"
+          {showBack || showSkip ? (
+            <View
+              style={[
+                styles.secondaryRow,
+                !showContinue && styles.secondaryRowSolo,
+              ]}
             >
-              <Text style={styles.backLabel}>Back</Text>
-            </Pressable>
-          ) : null}
-          {showSkip ? (
-            <Pressable
-              testID="oneitem_skip_button"
-              style={styles.skipButton}
-              onPress={onSkipSection}
-              disabled={disabled}
-              accessibilityRole="button"
-              accessibilityLabel={skipLabel}
-            >
-              <Text style={styles.skipLabel}>{skipLabel}</Text>
-            </Pressable>
+              {showBack ? (
+                <Pressable
+                  testID="oneitem_back_button"
+                  style={styles.backButton}
+                  hitSlop={{ top: 8, bottom: 8 }}
+                  onPress={onBack}
+                  disabled={disabled}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back"
+                >
+                  <Text style={styles.backLabel}>Back</Text>
+                </Pressable>
+              ) : null}
+              {showSkip ? (
+                <Pressable
+                  testID="oneitem_skip_button"
+                  style={styles.skipButton}
+                  hitSlop={{ top: 8, bottom: 8 }}
+                  onPress={onSkipSection}
+                  disabled={disabled}
+                  accessibilityRole="button"
+                  accessibilityLabel={skipLabel}
+                >
+                  <Text style={styles.skipLabel}>{skipLabel}</Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
           {showContinue ? (
             <Pressable
