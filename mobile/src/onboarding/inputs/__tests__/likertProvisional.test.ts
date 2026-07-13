@@ -1,18 +1,21 @@
 /**
- * LikertInput provisional-mark render decisions (MRS-render gap).
+ * LikertInput provisional-mark render decisions.
  *
  * `helperTextGovernance.test.ts` proves the DATA is flagged provisional. This
  * proves the RENDER turns that flag into the ‡ marker + footnote: it pins the
- * two pure predicates `LikertInput` uses, and feeds MRS's REAL responseOptions
- * through them so a regression that drops the ‡ (or shows it for non-provisional
- * copy) fails here — without needing to mount the RN component.
+ * two pure predicates `LikertInput` uses — without mounting the RN component.
+ *
+ * 2026-07 licensing removal: MRS was the only instrument shipping helperText,
+ * and it is gone. These tests now use a SYNTHETIC fixture representing a future
+ * instrument that re-introduces Denali-authored calibration hints, so the ‡ /
+ * footnote path stays covered.
  */
 import { describe, expect, it } from "vitest";
 
-import { MRS } from "../../instruments/index";
 import {
   PROVISIONAL_FOOTNOTE,
   PROVISIONAL_MARK,
+  type ProvisionalHelper,
   helperSuffix,
   shouldShowProvisionalFootnote,
 } from "../likertProvisional";
@@ -43,7 +46,7 @@ describe("shouldShowProvisionalFootnote", () => {
   it("true when ANY option carries a provisional hint", () => {
     expect(
       shouldShowProvisionalFootnote([
-        { label: "a" } as never,
+        { helperText: "a" },
         { helperText: "Severe", helperTextProvisional: true },
       ]),
     ).toBe(true);
@@ -64,19 +67,29 @@ describe("shouldShowProvisionalFootnote", () => {
   });
 });
 
-describe("MRS render decision (data → render)", () => {
-  it("the footnote fires for MRS's real options", () => {
-    // MRS ships 5 provisional calibration anchors (D40); the render MUST show
-    // the footnote. Pinned end-to-end against the actual instrument definition.
-    expect(shouldShowProvisionalFootnote(MRS.responseOptions)).toBe(true);
+describe("provisional calibration copy (synthetic future instrument)", () => {
+  // Represents a FUTURE instrument that adds Denali-authored calibration hints
+  // on top of a validated scale. Proves the render decisions fire for it, the
+  // way they did for MRS before its 2026-07 removal.
+  const OPTIONS: ReadonlyArray<ProvisionalHelper> = [
+    { helperText: "not present", helperTextProvisional: true },
+    { helperText: "slight", helperTextProvisional: true },
+    { helperText: "cleared", helperTextProvisional: false },
+  ];
+
+  it("the footnote fires when any hint is provisional", () => {
+    expect(shouldShowProvisionalFootnote(OPTIONS)).toBe(true);
   });
 
-  it("every MRS option with a hint gets the ‡ marker", () => {
-    const withHints = MRS.responseOptions.filter((o) => o.helperText != null);
-    expect(withHints.length).toBeGreaterThan(0);
-    expect(withHints.every((o) => helperSuffix(o) === PROVISIONAL_MARK)).toBe(
+  it("every provisional-hint option gets the ‡ marker; a cleared hint does not", () => {
+    const provisional = OPTIONS.filter((o) => o.helperTextProvisional === true);
+    expect(provisional.length).toBeGreaterThan(0);
+    expect(provisional.every((o) => helperSuffix(o) === PROVISIONAL_MARK)).toBe(
       true,
     );
+    const cleared = OPTIONS.find((o) => o.helperTextProvisional === false);
+    expect(cleared).toBeDefined();
+    expect(helperSuffix(cleared!)).toBe("");
   });
 
   it("the footnote copy stays the clinical-review wording", () => {

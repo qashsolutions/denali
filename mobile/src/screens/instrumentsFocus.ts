@@ -22,14 +22,13 @@ import type { SexAtBirth } from "@/contracts";
 
 import type { DomainId } from "./timeline/domains/registry";
 
-/** Menu-section keys — shared with InstrumentsScreen's menu composition. */
-export type MenuKey =
-  | "anxiety"
-  | "alcohol"
-  | "sleep"
-  | "urinary"
-  | "hormonalFemale"
-  | "hormonalMale";
+/**
+ * Menu-section keys — shared with InstrumentsScreen's menu composition.
+ * Post-2026-07 licensing removal, only the public-domain scored screeners
+ * remain (GAD-7, AUDIT-C); the mood path (PHQ-2/PHQ-9) is separate. Sleep /
+ * urinary / menopause / hormonal moved to the symptom tracker.
+ */
+export type MenuKey = "anxiety" | "alcohol";
 
 export type FocusResolution =
   /** No focus param — onboarding behavior, byte-identical. */
@@ -42,14 +41,18 @@ export type FocusResolution =
   | { kind: "unavailable" };
 
 /**
- * Resolve a focus param against the user's cohort. Sex-gated domains
- * (urinary/IPSS male, menopause/MRS female, hormonal/ADAM male) resolve
- * to "unavailable" on any mismatch INCLUDING unknown/intersex/null —
- * the same strictness as `instrumentsFor`.
+ * Resolve a focus param against the user's cohort. Only the public-domain
+ * scored screeners remain as instrument check-ins (mood / anxiety / alcohol).
+ * The sleep / urinary / menopause / hormonal domains lost their proprietary
+ * instruments (2026-07 licensing removal); their repeat-entry CTA is the
+ * symptom tracker (a separate flow), so they resolve "unavailable" here.
+ *
+ * `sexAtBirth` is retained for signature stability + forward use (symptom
+ * routing may re-gate on it); it no longer branches instrument focus.
  */
 export function resolveFocus(
   focus: DomainId | undefined,
-  sexAtBirth: SexAtBirth | null,
+  _sexAtBirth: SexAtBirth | null,
 ): FocusResolution {
   if (focus == null) return { kind: "none" };
   switch (focus) {
@@ -59,21 +62,12 @@ export function resolveFocus(
       return { kind: "menu", menuKey: "anxiety" };
     case "alcohol":
       return { kind: "menu", menuKey: "alcohol" };
+    // Instrument-less domains (symptom-tracked or umbrella): no scored
+    // check-in to launch from focus mode.
     case "sleep":
-      return { kind: "menu", menuKey: "sleep" };
     case "urinary":
-      return sexAtBirth === "male"
-        ? { kind: "menu", menuKey: "urinary" }
-        : { kind: "unavailable" };
     case "menopause":
-      return sexAtBirth === "female"
-        ? { kind: "menu", menuKey: "hormonalFemale" }
-        : { kind: "unavailable" };
     case "hormonal":
-      return sexAtBirth === "male"
-        ? { kind: "menu", menuKey: "hormonalMale" }
-        : { kind: "unavailable" };
-    // Umbrella domains carry no instrument.
     case "health_markers":
     case "health_history":
       return { kind: "unavailable" };

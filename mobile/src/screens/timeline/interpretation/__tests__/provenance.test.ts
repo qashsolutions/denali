@@ -26,8 +26,15 @@ import {
 const instruments = Object.entries(INTERPRETATION_TABLE_V1.instruments);
 
 describe("provenance — instrument entries (table v1.2)", () => {
-  it("ships 8 instrument entries", () => {
-    expect(instruments).toHaveLength(8);
+  it("ships 4 instrument entries (public-domain only, post-2026-07 removal)", () => {
+    // Was 8; Epworth / IPSS / MRS / ADAM removed (audit/LICENSING_BRIEF.md).
+    expect(instruments).toHaveLength(4);
+    expect(instruments.map(([id]) => id).sort()).toEqual([
+      "AUDIT-C",
+      "GAD-7",
+      "PHQ-2",
+      "PHQ-9",
+    ]);
   });
 
   it.each(instruments.map(([id]) => [id]))(

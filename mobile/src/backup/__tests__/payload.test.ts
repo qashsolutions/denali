@@ -23,6 +23,7 @@ const profile: ProfileRow = {
   is_on_medicare: false,
   sex_at_birth: "female",
   gender_identity: "female",
+  pcos_history: null,
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
 };

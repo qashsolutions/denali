@@ -15,15 +15,14 @@
  * `value_num = score`.
  */
 
+// 2026-07 licensing decision: only public-domain instruments ship. Epworth/ESS,
+// MRS, IPSS, ADAM removed (proprietary — see audit/LICENSING_BRIEF.md). Sex-specific
+// symptom coverage moved to the unlicensed symptom tracker (src/screens/symptoms/*).
 export type InstrumentId =
   | "PHQ-9"
   | "PHQ-2"
   | "GAD-7"
-  | "AUDIT-C"
-  | "Epworth"
-  | "MRS"
-  | "ADAM"
-  | "IPSS";
+  | "AUDIT-C";
 
 /** Per-instrument response shape. */
 export type InstrumentResponses = ReadonlyArray<number | null>;

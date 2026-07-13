@@ -1,71 +1,30 @@
 /**
  * Validated instruments — selection + barrel.
  *
- * `instrumentsFor(sexAtBirth)` returns the canonical battery for a given
- * sex_at_birth, using the contract type guard for safety:
- *   - All: PHQ-9, GAD-7, AUDIT-C, Epworth
- *   - "female": + MRS
- *   - "male":   + ADAM, IPSS
- *   - "intersex" / "unknown" / null: only the unisex set (PHQ-9 / GAD-7 /
- *     AUDIT-C / Epworth). The agent spec only branches MRS and ADAM/IPSS
- *     on female/male; intersex + unknown receive the unisex set per the
- *     "branch on sex_at_birth" hard rule.
+ * `instrumentsFor()` returns the canonical battery for every cohort.
+ *
+ * 2026-07 LICENSING DECISION (audit/LICENSING_BRIEF.md): only public-domain
+ * instruments ship. Epworth/ESS (MAPI licence), MRS (ZEG Berlin licence),
+ * IPSS (Wolters Kluwer/MAPI), and ADAM (Saint Louis University, not clearly
+ * free) were REMOVED. What ships:
+ *   - All cohorts: PHQ-9 (PHQ-2 gate), GAD-7, AUDIT-C — all public domain.
+ * Sex-specific coverage (menopause / urinary / hormonal symptoms) moved to
+ * the unlicensed symptom tracker (src/screens/symptoms/*): plain trackable
+ * observations with a trend, never a scored proprietary questionnaire.
  */
 import type { SexAtBirth } from "@/contracts";
 
-/**
- * Local type guard for SexAtBirth. The web's user-demographics module
- * exports an equivalent helper but the frozen mobile contracts re-export
- * types only (no runtime values) — see mobile/src/contracts/index.ts.
- * Mirror the discriminator here.
- */
-const SEX_AT_BIRTH_VALUES: ReadonlyArray<SexAtBirth> = [
-  "male",
-  "female",
-  "intersex",
-  "unknown",
-];
-
-function isValidSexAtBirth(v: unknown): v is SexAtBirth {
-  return (
-    typeof v === "string" &&
-    (SEX_AT_BIRTH_VALUES as readonly string[]).includes(v)
-  );
-}
-
-import { ADAM } from "./adam";
 import { AUDIT_C } from "./auditC";
-import { EPWORTH } from "./epworth";
 import { GAD7 } from "./gad7";
-import { IPSS } from "./ipss";
-import { MRS } from "./mrs";
 import { PHQ2 } from "./phq2";
 import { PHQ9 } from "./phq9";
 import type { InstrumentDefinition, InstrumentId } from "./types";
 
-export {
-  ADAM,
-  AUDIT_C,
-  EPWORTH,
-  GAD7,
-  IPSS,
-  MRS,
-  PHQ2,
-  PHQ9,
-};
-export { isAdamPositive } from "./adam";
-export {
-  IPSS_QOL_ITEM,
-  IPSS_QOL_RESPONSE_OPTIONS,
-} from "./ipss";
+export { AUDIT_C, GAD7, PHQ2, PHQ9 };
 export { PHQ9_LEAD_IN } from "./phq9";
 export { PHQ2_LEAD_IN } from "./phq2";
 export { GAD7_LEAD_IN } from "./gad7";
 export { AUDIT_C_LEAD_IN } from "./auditC";
-export { EPWORTH_LEAD_IN } from "./epworth";
-export { MRS_LEAD_IN } from "./mrs";
-export { ADAM_LEAD_IN } from "./adam";
-export { IPSS_LEAD_IN } from "./ipss";
 export { CRISIS_988_COPY, shouldShow988, PHQ9_ITEM_9_INDEX } from "./safety";
 export type {
   InstrumentDefinition,
@@ -76,29 +35,19 @@ export type {
 } from "./types";
 
 /**
- * Return the validated-instrument battery for the cohort's sex_at_birth.
+ * Return the validated-instrument battery. Post-2026-07 this is the same
+ * public-domain set for every cohort — sex no longer branches the scored
+ * instruments (the removed sex-specific instruments were proprietary).
  *
- * The unisex set ships to everyone. Sex-specific instruments only attach
- * when sex_at_birth strictly matches via `isValidSexAtBirth`.
- *
- * The order is the order shown in the screen: PHQ-9 first (because the
- * 988 surface is most-critical to encounter early), then GAD-7, AUDIT-C,
- * Epworth, then any sex-specific instruments at the end.
+ * The `sexAtBirth` param is retained for call-site compatibility
+ * (`domainsForCohort` passes it) and forward flexibility; it does not
+ * currently branch. Order is the screen order: PHQ-9 first (988 surface
+ * encountered early), then GAD-7, AUDIT-C.
  */
 export function instrumentsFor(
-  sexAtBirth: SexAtBirth | null | undefined,
+  _sexAtBirth?: SexAtBirth | null | undefined,
 ): ReadonlyArray<InstrumentDefinition> {
-  const unisex: ReadonlyArray<InstrumentDefinition> = [
-    PHQ9,
-    GAD7,
-    AUDIT_C,
-    EPWORTH,
-  ];
-  if (!isValidSexAtBirth(sexAtBirth)) return unisex;
-  if (sexAtBirth === "female") return [...unisex, MRS];
-  if (sexAtBirth === "male") return [...unisex, ADAM, IPSS];
-  // intersex, unknown — unisex only.
-  return unisex;
+  return [PHQ9, GAD7, AUDIT_C];
 }
 
 /**
@@ -106,7 +55,8 @@ export function instrumentsFor(
  * each observation's `metadata.instrument`). Used by the display layer to
  * recover an instrument's response SCALE (min/max) when rendering a
  * per-item visual — display reads the scale, never re-derives clinical
- * wording. Returns undefined for an unknown id.
+ * wording. Returns undefined for an unknown id (including the removed
+ * instruments' historical rows, which then fall back to generic display).
  */
 const INSTRUMENTS_BY_ID: Readonly<Record<InstrumentId, InstrumentDefinition>> =
   {
@@ -114,10 +64,6 @@ const INSTRUMENTS_BY_ID: Readonly<Record<InstrumentId, InstrumentDefinition>> =
     "PHQ-2": PHQ2,
     "GAD-7": GAD7,
     "AUDIT-C": AUDIT_C,
-    Epworth: EPWORTH,
-    MRS,
-    ADAM,
-    IPSS,
   };
 
 export function getInstrumentById(

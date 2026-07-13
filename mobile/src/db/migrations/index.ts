@@ -205,8 +205,20 @@ CREATE INDEX IF NOT EXISTS reports_user_uploaded_idx
   ON reports (user_id, uploaded_at DESC);
 `;
 
+/**
+ * 003-profile-pcos-history — add the local-only self-reported PCOS-history flag
+ * (2026-07-04). Health data → LOCAL ONLY (invariant 1), never sent to the web
+ * /api/profile. 0 | 1 | NULL, marshalled by the profile DAL.
+ *
+ * MIRROR of `src/db/migrations/003-profile-pcos-history.sql`. Edit both.
+ */
+const M003_PROFILE_PCOS = `
+ALTER TABLE profile ADD COLUMN pcos_history INTEGER;
+`;
+
 /** Ordered registry. Append-only. Never reorder. Never edit a shipped entry. */
 export const MIGRATIONS: ReadonlyArray<Migration> = [
   { version: 1, name: "001-init", sql: M001_INIT },
   { version: 2, name: "002-reports-kept-status", sql: M002_REPORTS_KEPT },
+  { version: 3, name: "003-profile-pcos-history", sql: M003_PROFILE_PCOS },
 ];

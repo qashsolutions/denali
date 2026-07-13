@@ -37,16 +37,10 @@ const ALL_DOMAINS: ReadonlyArray<DomainId> = [
   "health_history",
 ];
 
-const ALL_INSTRUMENT_IDS = [
-  "PHQ-2",
-  "PHQ-9",
-  "GAD-7",
-  "Epworth",
-  "AUDIT-C",
-  "IPSS",
-  "MRS",
-  "ADAM",
-] as const;
+// Only the public-domain instruments remain mapped (2026-07 licensing removal).
+// The former sex-gated instrument domains (sleep/urinary/menopause/hormonal)
+// are now backed by the symptom tracker, not INSTRUMENT_TO_DOMAIN.
+const ALL_INSTRUMENT_IDS = ["PHQ-2", "PHQ-9", "GAD-7", "AUDIT-C"] as const;
 
 const ALL_CATEGORIES: ReadonlyArray<ObservationCategory> = [
   "questionnaire",
@@ -113,41 +107,26 @@ describe("domainsForCohort", () => {
     }
   });
 
-  it("returns unisex screener domains + universals for unknown sex", () => {
-    const ds = domainsForCohort("unknown");
-    // The 4 unisex instruments per onboarding/instruments/index.ts are
-    // PHQ-9, GAD-7, AUDIT-C, Epworth → mood, anxiety, alcohol, sleep.
-    expect(ds).toContain("mood");
-    expect(ds).toContain("anxiety");
-    expect(ds).toContain("alcohol");
-    expect(ds).toContain("sleep");
-    // Female-only / male-only NOT included.
-    expect(ds).not.toContain("menopause");
-    expect(ds).not.toContain("urinary");
-    expect(ds).not.toContain("hormonal");
-  });
-
-  it("returns female-only MRS plus the unisex set for sex=female", () => {
-    const ds = domainsForCohort("female");
-    expect(ds).toContain("mood");
-    expect(ds).toContain("anxiety");
-    expect(ds).toContain("alcohol");
-    expect(ds).toContain("sleep");
-    expect(ds).toContain("menopause");
-    // Male-only NOT included.
-    expect(ds).not.toContain("urinary");
-    expect(ds).not.toContain("hormonal");
-  });
-
-  it("returns male-only IPSS + ADAM plus the unisex set for sex=male", () => {
-    const ds = domainsForCohort("male");
-    expect(ds).toContain("mood");
-    expect(ds).toContain("anxiety");
-    expect(ds).toContain("alcohol");
-    expect(ds).toContain("sleep");
-    expect(ds).toContain("urinary");
-    expect(ds).toContain("hormonal");
-    expect(ds).not.toContain("menopause");
+  it("surfaces instrument domains (all cohorts) + symptom domains (Step-4 tracker)", () => {
+    // Instruments (mood/anxiety/alcohol) are universal. Symptom domains add
+    // sleep + urinary universally, menopause (female-only), hormonal (male-only)
+    // — the unlicensed replacement for the removed scored instruments.
+    for (const sex of ["male", "female", "intersex", "unknown", null] as const) {
+      const ds = domainsForCohort(sex);
+      expect(ds).toContain("mood");
+      expect(ds).toContain("anxiety");
+      expect(ds).toContain("alcohol");
+      expect(ds).toContain("sleep");
+      expect(ds).toContain("urinary");
+    }
+    expect(domainsForCohort("female")).toContain("menopause");
+    expect(domainsForCohort("female")).not.toContain("hormonal");
+    expect(domainsForCohort("male")).toContain("hormonal");
+    expect(domainsForCohort("male")).not.toContain("menopause");
+    for (const sex of ["intersex", "unknown", null] as const) {
+      expect(domainsForCohort(sex)).not.toContain("menopause");
+      expect(domainsForCohort(sex)).not.toContain("hormonal");
+    }
   });
 
   it("emits domains in DOMAIN_ORDER (mood first if present)", () => {
@@ -204,5 +183,50 @@ describe("domainForRow", () => {
     expect(
       domainForRow({ category: "questionnaire", metadataInstrument: null }),
     ).toBe("health_history");
+  });
+
+  it("routes a tracked symptom row to its symptom domain BY CODE (Step-4)", () => {
+    expect(
+      domainForRow({
+        category: "symptom",
+        metadataInstrument: null,
+        code: "denali.symptom.menopause.hot_flashes",
+      }),
+    ).toBe("menopause");
+    expect(
+      domainForRow({
+        category: "symptom",
+        metadataInstrument: null,
+        code: "denali.symptom.urinary.urgency",
+      }),
+    ).toBe("urinary");
+    expect(
+      domainForRow({
+        category: "symptom",
+        metadataInstrument: null,
+        code: "denali.symptom.hormonal.low_energy",
+      }),
+    ).toBe("hormonal");
+    expect(
+      domainForRow({
+        category: "symptom",
+        metadataInstrument: null,
+        code: "denali.symptom.sleep.daytime_sleepiness",
+      }),
+    ).toBe("sleep");
+  });
+
+  it("a GENERAL (untracked) symptom falls through to health_history", () => {
+    // Intake chief-complaint / family-history symptoms aren't in the tracker map.
+    expect(
+      domainForRow({
+        category: "symptom",
+        metadataInstrument: null,
+        code: "denali.symptom.fatigue",
+      }),
+    ).toBe("health_history");
+    expect(domainForRow({ category: "symptom", metadataInstrument: null })).toBe(
+      "health_history",
+    );
   });
 });

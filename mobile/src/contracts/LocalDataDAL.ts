@@ -96,6 +96,13 @@ export interface ProfileRow {
   is_on_medicare: boolean | null;
   sex_at_birth: SexAtBirth | null;
   gender_identity: GenderIdentity | null;
+  /**
+   * Self-reported history of PCOS (polycystic ovary syndrome). LOCAL-ONLY:
+   * this is health data, so it stays on-device (invariant 1) and is NEVER sent
+   * to the web /api/profile. Adjusts FRAMING only — not a diagnostic feature.
+   * `null` = not answered. Additive, post-Wave-0 (2026-07-04).
+   */
+  pcos_history: boolean | null;
   created_at: string;                 // ISO8601
   updated_at: string;                 // ISO8601
 }

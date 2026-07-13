@@ -1,0 +1,589 @@
+# =============================================================================
+# denali.health — Preventive Screening & Immunization Rules
+# Layer 3 of the longitudinal model: (age × sex_at_birth × organ_inventory × risk)
+#                                     -> surfaced eligibility flag + citation
+# =============================================================================
+#
+# WHAT THIS FILE IS
+#   The single source of truth for "is this user due for screening/immunization X".
+#   The deterministic engine reads this; the RAG layer only *explains* what this
+#   file already decided. Determinism lives here, not in the model.
+#
+# SOURCE-OF-TRUTH CONTRACT (read before editing)
+#   - Every rule carries provenance: source, guideline_year, url, grade, confidence.
+#   - `verified: true`   -> value checked against the PRIMARY guideline on verified_date.
+#   - `verified: false`  -> best-available value; MUST be confirmed before it is
+#                           surfaced to an end user in production.
+#   - The engine MUST NOT surface a rule with `verified: false` to an end user
+#     unless `allow_unverified_in_staging: true` AND the environment is non-prod.
+#   - When a guideline changes: bump guideline_year/guideline_version, RESET
+#     `verified` to false, record the change in CHANGELOG. Never silently edit a
+#     threshold — a stale-but-cited number is a liability in a live medical product.
+#
+# CONFIDENCE LEGEND (author's calibration at last_reviewed)
+#   high   : verified today against primary source, stable definition
+#   medium : recalled from a known guideline, NOT re-verified today -> verify before prod
+#   low    : directionally correct but contested / in flux -> do not surface without review
+#
+# -----------------------------------------------------------------------------
+schema_version: "1.0.0"
+last_reviewed: "2026-07-02"
+jurisdiction: "US"
+allow_unverified_in_staging: true
+
+disclaimer: >
+  Decision-support only; not medical advice. A surfaced eligibility flag prompts a
+  conversation with a clinician — it is NOT a screening order and NOT a recommendation
+  to screen. Shared-decision items must never be auto-recommended. Rules exclude
+  higher-than-average-risk individuals (family history, genetic syndromes, prior
+  disease), who follow separate surveillance pathways not modeled here.
+
+# ---- Evaluation semantics the engine MUST honor -----------------------------
+evaluation_contract:
+  # For anatomy-based screening, a present/absent organ BEATS sex_at_birth.
+  # (e.g., natal female post-total-hysterectomy w/ cervix removed -> cervical screen off;
+  #        natal male who retains a prostate -> prostate rule evaluable.)
+  organ_inventory_overrides_sex: true
+  sex_field_for_screening: "sex_at_birth"                 # + organ_inventory
+  sex_field_for_symptoms:  "gender_identity + reported_anatomy"   # PROMs only
+  age_boundaries: "inclusive"                             # min/max inclusive; null max = no upper bound
+  # Order in which surfaced items are ranked/handled:
+  precedence: ["safety_escalation", "hard_contraindication", "eligibility", "shared_decision"]
+
+# =============================================================================
+# SCREENINGS
+# =============================================================================
+rules:
+
+  # ---------------------------------------------------------------------------
+  - id: crc_screening
+    label: "Colorectal cancer screening"
+    category: screening
+    eligibility:
+      age: { min: 45, max: 75 }
+      sex_at_birth: any
+      organ_inventory_required: ["colon"]     # total colectomy -> not eligible
+      risk_gate: null
+    cadence: "modality-dependent (FIT annual; FIT-DNA 1–3y; colonoscopy 10y; CT colonography 5y)"
+    grade_windows:
+      - { age: { min: 45, max: 49 }, grade: "B", strength: "recommend" }
+      - { age: { min: 50, max: 75 }, grade: "A", strength: "recommend" }
+      - { age: { min: 76, max: 85 }, grade: "C", strength: "individualize" }
+    stop_after_age: 85
+    shared_decision: false
+    provenance:
+      source: "USPSTF"
+      title: "Colorectal Cancer: Screening"
+      guideline_year: 2021
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/colorectal-cancer-screening"
+      grade: "A/B/C (by sub-window)"
+      verified: true
+      verified_date: "2026-07-02"
+      confidence: high
+    notes: >
+      45–49 grade B; 50–75 grade A; 76–85 selective (C) per health/prior-screening/
+      preference; discontinue after 85. Serum/urine/capsule tests are NOT included.
+
+  # ---------------------------------------------------------------------------
+  - id: breast_mammography
+    label: "Breast cancer screening (mammography)"
+    category: screening
+    eligibility:
+      age: { min: 40, max: 74 }
+      sex_at_birth: female                     # organ_inventory governs edge cases below
+      organ_inventory_required: ["breast_tissue"]
+      risk_gate: null
+    cadence: "biennial (every 2 years)"
+    grade_windows:
+      - { age: { min: 40, max: 74 }, grade: "B", strength: "recommend" }
+      - { age: { min: 75, max: null }, grade: "I", strength: "insufficient_evidence" }
+    shared_decision: false
+    provenance:
+      source: "USPSTF"
+      title: "Breast Cancer: Screening"
+      guideline_year: 2024
+      guideline_version: "final 2024-04-30"
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/breast-cancer-screening"
+      grade: "B (40–74); I (75+)"
+      verified: true
+      verified_date: "2026-07-02"
+      confidence: high
+    notes: >
+      Lowered start age 50->40 in the 2024 final statement; biennial through 74.
+      75+ is an I statement (insufficient evidence), NOT a recommendation against —
+      surface as "discuss," not "eligible." Several societies (ACR/ACS) recommend
+      annual and/or risk assessment at 25–30; denali follows USPSTF unless product
+      elects a society standard (see CHANGELOG decision hook). Trans women on long-term
+      hormone therapy: eligibility keyed off breast_tissue organ flag, not sex_at_birth.
+
+  # ---------------------------------------------------------------------------
+  - id: cervical_screening
+    label: "Cervical cancer screening"
+    category: screening
+    eligibility:
+      age: { min: 45, max: 65 }                # full USPSTF window is 21–65; 45+ app slice shown
+      sex_at_birth: female
+      organ_inventory_required: ["cervix"]     # post-total-hysterectomy w/o cervix (benign) -> off
+      risk_gate: null
+    cadence: "hrHPV every 5y (preferred 30–65); or co-test every 5y; or cytology every 3y"
+    grade_windows:
+      - { age: { min: 45, max: 65 }, grade: "A", strength: "recommend" }
+      - { age: { min: 66, max: null }, grade: "D", strength: "recommend_against_if_adequate_prior" }
+    shared_decision: false
+    provenance:
+      source: "USPSTF"
+      title: "Cervical Cancer: Screening"
+      guideline_year: 2018
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/cervical-cancer-screening"
+      grade: "A (in-window); D (>65 w/ adequate prior screening)"
+      verified: false
+      verified_date: null
+      confidence: medium
+    notes: >
+      VERIFY: a 2024/2025 update introducing self-collected hrHPV was anticipated —
+      confirm current modality wording and whether the interval/age changed before prod.
+      Stop at 65 only if adequate prior negative screening and not otherwise high-risk.
+
+  # ---------------------------------------------------------------------------
+  - id: lung_ldct
+    label: "Lung cancer screening (low-dose CT)"
+    category: screening
+    eligibility:
+      age: { min: 50, max: 80 }
+      sex_at_birth: any
+      organ_inventory_required: ["lungs"]
+      risk_gate:
+        type: "smoking_pack_years"
+        min_pack_years: 20
+        current_or_quit_within_years: 15       # currently smoking OR quit < 15y ago
+    cadence: "annual"
+    grade_windows:
+      - { age: { min: 50, max: 80 }, grade: "B", strength: "recommend" }
+    stop_condition: >
+      Discontinue once 15 years have passed since quitting, or a health problem
+      substantially limits life expectancy or willingness/ability to have curative lung surgery.
+    shared_decision: false
+    provenance:
+      source: "USPSTF"
+      title: "Lung Cancer: Screening"
+      guideline_year: 2021
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/lung-cancer-screening"
+      grade: "B"
+      verified: true
+      verified_date: "2026-07-02"
+      confidence: high
+    notes: >
+      2021 expansion: age 55->50, pack-years 30->20. Requires a pack-year calculator
+      (packs/day × years) and a years-since-quit field in the profile.
+
+  # ---------------------------------------------------------------------------
+  - id: aaa_ultrasound
+    label: "Abdominal aortic aneurysm — one-time ultrasound"
+    category: screening
+    eligibility:
+      age: { min: 65, max: 75 }
+      sex_at_birth: male
+      organ_inventory_required: []
+      risk_gate:
+        type: "ever_smoked"                    # >=100 cigarettes lifetime (USPSTF def)
+    cadence: "one-time"
+    grade_windows:
+      - { age: { min: 65, max: 75 }, grade: "B", strength: "recommend" }
+    shared_decision: false
+    provenance:
+      source: "USPSTF"
+      title: "Abdominal Aortic Aneurysm: Screening"
+      guideline_year: 2019
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/abdominal-aortic-aneurysm-screening"
+      grade: "B (men 65–75 ever-smoked); C (men 65–75 never-smoked, selective)"
+      verified: false
+      verified_date: null
+      confidence: medium
+    notes: >
+      VERIFY wording before prod. Men 65–75 who never smoked = selective (C).
+      Women who never smoked / no family history = D (do not screen); women 65–75
+      with smoking or family history = I. Model as male-only routine; expose the
+      C/I nuance in the clinician-facing note, not the consumer prompt.
+
+  # ---------------------------------------------------------------------------
+  - id: osteoporosis_dxa
+    label: "Osteoporosis screening (bone density / DXA)"
+    category: screening
+    eligibility:
+      age: { min: 65, max: null }
+      sex_at_birth: female
+      organ_inventory_required: []
+      risk_gate: null
+    cadence: "per clinician (interval not fixed by USPSTF)"
+    grade_windows:
+      - { age: { min: 65, max: null }, grade: "B", strength: "recommend" }
+    additional_pathways:
+      - id: osteoporosis_postmeno_under65
+        label: "Postmenopausal <65 at increased risk (FRAX-gated)"
+        eligibility:
+          age: { min: 50, max: 64 }
+          sex_at_birth: female
+          risk_gate: { type: "fracture_risk_frax", note: "risk >= that of a 65yo white woman" }
+        grade: "B"
+    shared_decision: false
+    provenance:
+      source: "USPSTF"
+      title: "Osteoporosis to Prevent Fractures: Screening"
+      guideline_year: 2025
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/osteoporosis-screening"
+      grade: "B (women 65+ and higher-risk postmenopausal <65)"
+      verified: false
+      verified_date: null
+      confidence: medium
+    notes: >
+      IMPORTANT ASYMMETRY: USPSTF addresses WOMEN. For MEN the historical USPSTF
+      position is I (insufficient evidence) — do NOT auto-surface DXA to men from a
+      USPSTF basis. Specialty societies (e.g., Endocrine Society / NOF) suggest men
+      70+ or younger with risk factors; if the product wants a male pathway, cite the
+      society, set source accordingly, and keep it shared-decision. A 2025 USPSTF
+      refresh was expected — verify grade/age and any men's statement before prod.
+
+  # ---------------------------------------------------------------------------
+  - id: psa_prostate
+    label: "Prostate cancer screening (PSA) — shared decision"
+    category: screening
+    eligibility:
+      age: { min: 55, max: 69 }
+      sex_at_birth: male
+      organ_inventory_required: ["prostate"]
+      risk_gate: null
+    cadence: "per shared decision (commonly 1–2y if elected)"
+    grade_windows:
+      - { age: { min: 55, max: 69 }, grade: "C", strength: "shared_decision" }
+      - { age: { min: 70, max: null }, grade: "D", strength: "recommend_against" }
+    shared_decision: true      # HARD: never auto-recommend; present balanced info only
+    provenance:
+      source: "USPSTF"
+      title: "Prostate Cancer: Screening"
+      guideline_year: 2018
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/prostate-cancer-screening"
+      grade: "C (55–69 shared decision); D (70+)"
+      verified: false
+      verified_date: null
+      confidence: medium
+    notes: >
+      VERIFY before prod. This is the canonical "never auto-recommend" item: surface
+      as an offer to discuss benefits/harms, 55–69 only. 70+ is recommend-against (D).
+      Higher-risk (Black men, BRCA/family history) may warrant earlier discussion —
+      route via risk pathway, not this baseline rule.
+
+  # ---------------------------------------------------------------------------
+  - id: hepatitis_c
+    label: "Hepatitis C — one-time screening"
+    category: screening
+    eligibility:
+      age: { min: 45, max: 79 }                # USPSTF full window 18–79; 45+ slice
+      sex_at_birth: any
+      organ_inventory_required: []
+      risk_gate: null
+    cadence: "one-time (periodic if ongoing risk)"
+    grade_windows:
+      - { age: { min: 45, max: 79 }, grade: "B", strength: "recommend" }
+    shared_decision: false
+    provenance:
+      source: "USPSTF"
+      title: "Hepatitis C Virus Infection in Adolescents and Adults: Screening"
+      guideline_year: 2020
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/hepatitis-c-screening"
+      grade: "B"
+      verified: false
+      verified_date: null
+      confidence: medium
+    notes: "VERIFY window. Effectively all 45+ adults are eligible once."
+
+  # ---------------------------------------------------------------------------
+  - id: hypertension_bp
+    label: "High blood pressure screening"
+    category: screening
+    eligibility:
+      age: { min: 45, max: null }              # USPSTF: all adults 18+
+      sex_at_birth: any
+      organ_inventory_required: []
+      risk_gate: null
+    cadence: "annual for 40+ (and any age with elevated risk); confirm dx outside clinic"
+    grade_windows:
+      - { age: { min: 45, max: null }, grade: "A", strength: "recommend" }
+    shared_decision: false
+    provenance:
+      source: "USPSTF"
+      title: "Hypertension in Adults: Screening"
+      guideline_year: 2021
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/hypertension-in-adults-screening"
+      grade: "A"
+      verified: false
+      verified_date: null
+      confidence: medium
+    notes: >
+      Highest-value objective stream for 45+. USPSTF requires confirmation with
+      out-of-office (home/ABPM) measurement before diagnosis — pairs directly with
+      the home-BP capture in Layer 2.
+
+  # ---------------------------------------------------------------------------
+  - id: diabetes_screening
+    label: "Prediabetes / type 2 diabetes screening"
+    category: screening
+    eligibility:
+      age: { min: 45, max: 70 }                # USPSTF window 35–70
+      sex_at_birth: any
+      organ_inventory_required: []
+      risk_gate:
+        type: "bmi_overweight"
+        bmi_min: 25                            # consider >=23 for some Asian-ancestry adults (USPSTF note)
+    cadence: "every 3 years if normal"
+    grade_windows:
+      - { age: { min: 45, max: 70 }, grade: "B", strength: "recommend" }
+    shared_decision: false
+    provenance:
+      source: "USPSTF"
+      title: "Prediabetes and Type 2 Diabetes: Screening"
+      guideline_year: 2021
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/screening-for-prediabetes-and-type-2-diabetes"
+      grade: "B"
+      verified: false
+      verified_date: null
+      confidence: medium
+    notes: "VERIFY. Screen earlier/at lower BMI for higher-risk populations per USPSTF note."
+
+  # ---------------------------------------------------------------------------
+  - id: ascvd_statin_assessment
+    label: "Cardiovascular risk assessment (lipids + ASCVD risk for statin primary prevention)"
+    category: screening
+    eligibility:
+      age: { min: 45, max: 75 }                # USPSTF statin window 40–75
+      sex_at_birth: any
+      organ_inventory_required: []
+      risk_gate:
+        type: "ascvd_risk"
+        requires: ["lipid_panel", "bp", "smoking_status", "diabetes_status"]
+    cadence: "periodic risk re-estimation"
+    grade_windows:
+      - { age: { min: 45, max: 75 }, grade: "B", strength: "recommend_if_>=1_riskfactor_and_10yr_risk_>=10pct" }
+      - { age: { min: 45, max: 75 }, grade: "C", strength: "selective_if_10yr_risk_7.5_to_10pct" }
+    shared_decision: true
+    provenance:
+      source: "USPSTF"
+      title: "Statin Use for Primary Prevention of CVD in Adults"
+      guideline_year: 2022
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/statin-use-in-adults-preventive-medication"
+      grade: "B / C by 10-yr ASCVD risk"
+      verified: false
+      verified_date: null
+      confidence: medium
+    notes: >
+      There is no standalone USPSTF "lipid screening age"; lipids are an INPUT to
+      ASCVD risk, which drives the statin discussion. Model as a risk-assessment
+      prompt, not a pass/fail screen. Requires a validated ASCVD risk engine.
+
+  # ---------------------------------------------------------------------------
+  - id: depression_screening
+    label: "Depression screening"
+    category: screening_prom          # both a screen and a PROM (PHQ-9)
+    instrument: "PHQ-9 (PHQ-2 gate)"
+    eligibility:
+      age: { min: 45, max: null }
+      sex_at_birth: any
+      organ_inventory_required: []
+      risk_gate: null
+    cadence: "per clinician judgment; app allows self-initiated check-ins"
+    grade_windows:
+      - { age: { min: 45, max: null }, grade: "B", strength: "recommend" }
+    shared_decision: false
+    safety_escalation:
+      trigger: "PHQ-9 item 9 > 0  OR  total >= 20"
+      action: "deterministic_crisis_pathway"   # fires BEFORE any RAG narrative
+      must_precede_rag: true
+    provenance:
+      source: "USPSTF"
+      title: "Depression and Suicide Risk in Adults: Screening"
+      guideline_year: 2023
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/screening-depression-suicide-risk-adults"
+      grade: "B (depression, all adults incl. 65+); I (suicide-risk screening specifically)"
+      verified: false
+      verified_date: null
+      confidence: medium
+    notes: >
+      Depression screening is B for ALL adults including 65+. Screening for suicide
+      risk as a standalone is an I statement — but PHQ-9 item 9 still surfaces ideation,
+      so the crisis pathway is mandatory regardless of the I statement.
+
+  # ---------------------------------------------------------------------------
+  - id: anxiety_screening
+    label: "Anxiety screening"
+    category: screening_prom
+    instrument: "GAD-7 (GAD-2 gate)"
+    eligibility:
+      age: { min: 45, max: 64 }                # NOTE the upper bound — see grade_windows
+      sex_at_birth: any
+      organ_inventory_required: []
+      risk_gate: null
+    cadence: "per clinician judgment; self-initiated check-ins allowed"
+    grade_windows:
+      - { age: { min: 45, max: 64 }, grade: "B", strength: "recommend" }
+      - { age: { min: 65, max: null }, grade: "I", strength: "insufficient_evidence" }
+    shared_decision: false
+    provenance:
+      source: "USPSTF"
+      title: "Anxiety Disorders in Adults: Screening"
+      guideline_year: 2023
+      url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/anxiety-adults-screening"
+      grade: "B (<=64); I (65+)"
+      verified: false
+      verified_date: null
+      confidence: medium
+    notes: >
+      Age asymmetry matters for a 45+ app: routine screening is B for 45–64 but an
+      I statement for 65+. Don't hide the GAD-7 tile from 65+, but don't present it as
+      "recommended" — frame as optional self-check for that band.
+
+# =============================================================================
+# IMMUNIZATIONS
+# -----------------------------------------------------------------------------
+# GOVERNANCE WARNING (as of 2026-07): The adult immunization schedule is contested.
+# Through 2025 the ACIP was reconstituted and several actions were litigated; by
+# early 2026 a federal court had issued injunctive relief touching ACIP appointments
+# and schedule changes, and professional societies (ACP, AAFP, AAP) began publishing
+# their own schedules that DIVERGE from the CDC/ACIP schedule on some items.
+# CONSEQUENCE FOR DENALI: pick an explicit source-of-truth policy — CDC/ACIP vs. a
+# named society — record it here, and pin every immunization rule to a dated source.
+# Do NOT surface immunization "due" prompts from model recall. Confidence is capped
+# at medium for these, and low where a society/CDC split exists.
+# =============================================================================
+immunization_source_policy:
+  primary: "CDC/ACIP"            # CHANGE if product elects a society standard
+  fallback: null
+  note: "Verify against the live schedule build before each release; landscape is unstable."
+
+immunizations:
+
+  # ---------------------------------------------------------------------------
+  - id: zoster_rzv
+    label: "Shingles (recombinant zoster vaccine, RZV)"
+    eligibility:
+      age: { min: 50, max: null }
+      sex_at_birth: any
+      series: "2 doses (2–6 months apart)"
+      risk_gate: null
+    also_recommended:
+      - "immunocompromised adults 19+ (2 doses)"
+    provenance:
+      source: "CDC/ACIP"
+      guideline_year: 2025
+      url: "https://www.cdc.gov/vaccines/hcp/imz-schedules/adult-age.html"
+      verified: false
+      confidence: medium
+    notes: "Long-standing 50+ recommendation; delay during an acute zoster episode."
+
+  # ---------------------------------------------------------------------------
+  - id: pneumococcal
+    label: "Pneumococcal (PCV15 / PCV20 / PCV21, ± PPSV23)"
+    eligibility:
+      age: { min: 50, max: null }              # universal 50+ if no prior PCV / unknown history
+      sex_at_birth: any
+      risk_gate: null
+    also_recommended:
+      - "adults 19–49 with risk conditions"
+    provenance:
+      source: "CDC/ACIP"
+      guideline_year: 2025
+      guideline_version: "≥50 universal (2024 expansion, adopted into 2025 schedule)"
+      url: "https://www.cdc.gov/vaccines/hcp/imz-schedules/adult-notes.html"
+      verified: true
+      verified_date: "2026-07-02"
+      confidence: medium
+    notes: >
+      Verified that universal age is 50+ (lowered from 65 via the 2024 PCV expansion).
+      Exact product/sequencing logic (PCV15+PPSV23 vs PCV20/PCV21 alone, prior-dose
+      handling) is complex — delegate sequencing to CDC's PneumoRecs logic, not this file.
+
+  # ---------------------------------------------------------------------------
+  - id: rsv
+    label: "Respiratory syncytial virus (RSV) vaccine"
+    eligibility_tiers:
+      - { age: { min: 75, max: null }, basis: "universal (single dose if not previously vaccinated)" }
+      - { age: { min: 60, max: 74 }, basis: "risk-based (increased risk of severe RSV; self-attest allowed)" }
+      - { age: { min: 50, max: 59 }, basis: "risk-based (added June 2025)" }
+    dose: "single dose only; no additional doses currently recommended"
+    sex_at_birth: any
+    provenance:
+      source: "CDC/ACIP"
+      guideline_year: 2025
+      url: "https://www.cdc.gov/acip/vaccine-recommendations/index.html"
+      verified: true
+      verified_date: "2026-07-02"
+      confidence: medium
+    notes: >
+      Verified tiers: 75+ universal; 60–74 and 50–59 risk-based. Single dose only.
+      This is exactly the kind of row that has been edited repeatedly — re-verify each release.
+
+  # ---------------------------------------------------------------------------
+  - id: influenza
+    label: "Seasonal influenza"
+    eligibility:
+      age: { min: 45, max: null }              # ACIP: all persons 6 months+
+      sex_at_birth: any
+    cadence: "annual"
+    provenance:
+      source: "CDC/ACIP"
+      guideline_year: 2025
+      guideline_version: "2025–26 season"
+      url: "https://www.cdc.gov/acip/vaccine-recommendations/index.html"
+      verified: false
+      confidence: medium
+    notes: "Universal annual. Product/formulation nuances (high-dose 65+, thimerosal) vary by season."
+
+  # ---------------------------------------------------------------------------
+  - id: covid19
+    label: "COVID-19 vaccine"
+    eligibility:
+      age: { min: 45, max: null }
+      sex_at_birth: any
+      risk_gate: "CONTESTED — see governance warning"
+    provenance:
+      source: "CDC/ACIP + HHS directives"
+      guideline_year: 2025
+      url: "https://www.cdc.gov/acip/vaccine-recommendations/index.html"
+      verified: false
+      confidence: low
+    notes: >
+      LOW confidence by design: COVID recommendations shifted via HHS directive in
+      2025 and remain in flux. Do NOT surface a fixed "due" prompt — link to the live
+      CDC page or defer to the user's clinician.
+
+  # ---------------------------------------------------------------------------
+  - id: tdap_td
+    label: "Tetanus/diphtheria (Td) with pertussis (Tdap)"
+    eligibility:
+      age: { min: 45, max: null }
+      sex_at_birth: any
+    cadence: "Td or Tdap booster every 10 years (one lifetime Tdap if not previously received)"
+    provenance:
+      source: "CDC/ACIP"
+      guideline_year: 2025
+      url: "https://www.cdc.gov/vaccines/hcp/imz-schedules/adult-notes.html"
+      verified: false
+      confidence: medium
+    notes: "Stable, long-standing 10-year booster interval."
+
+# =============================================================================
+# CHANGELOG  (append-only; every threshold change gets an entry)
+# =============================================================================
+changelog:
+  - date: "2026-07-02"
+    author: "initial build"
+    change: >
+      Initial rule set. Verified today against primary sources: breast (40–74 biennial,
+      B, 2024-04-30), colorectal (45–49 B / 50–75 A / 76–85 C, 2021), lung LDCT (50–80,
+      ≥20 pack-yr, quit<15y, B, 2021), pneumococcal (≥50 universal), RSV (75+ universal;
+      60–74 & 50–59 risk-based). All other rules carry verified:false pending a
+      verification pass. Flagged the 2025–26 immunization governance instability.
+  # DECISION HOOKS (resolve before go-live):
+  #  - [ ] Breast: follow USPSTF (biennial 40–74) or a society standard (annual)? -> set policy.
+  #  - [ ] Osteoporosis in MEN: adopt a society pathway (cite it) or omit? USPSTF = I for men.
+  #  - [ ] Immunization source-of-truth: CDC/ACIP vs. ACP/AAFP where they diverge?
+  #  - [ ] Verify all verified:false rules (cervical, AAA, PSA, HepC, HTN, diabetes,
+  #        ASCVD/statin, depression, anxiety, zoster, flu, COVID, Tdap).

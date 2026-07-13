@@ -146,7 +146,7 @@ export function SettingsScreen(): React.ReactElement {
   // Which editable demographic row is expanded (gender / Medicare only —
   // year-of-birth + sex-at-birth are permanent, set at sign-up, D32).
   const [editingField, setEditingField] = React.useState<
-    "gender" | "medicare" | null
+    "gender" | "medicare" | "pcos" | null
   >(null);
 
   // Persist an editable demographic locally (no sign-out; the encrypted DB
@@ -155,7 +155,8 @@ export function SettingsScreen(): React.ReactElement {
     async (
       patch:
         | { gender_identity: GenderIdentity }
-        | { is_on_medicare: boolean },
+        | { is_on_medicare: boolean }
+        | { pcos_history: boolean | null },
     ) => {
       if (!dal || !profile) return;
       setEditingField(null);
@@ -173,6 +174,10 @@ export function SettingsScreen(): React.ReactElement {
     },
     [dal, profile],
   );
+  // PCOS-history is a FEMALE-only self-reported flag (framing only). Yes / No /
+  // Prefer-not-to-say map to true / false / null.
+  const pcosLabel = (v: boolean | null | undefined): string =>
+    v === true ? "Yes" : v === false ? "No" : "Prefer not to say";
   // App-lock status is read-only: it reflects whether the DEVICE has a
   // biometric/credential enrolled, which is what the always-on launch gate
   // (biometricGate.ts, decision D15) keys off. null = still checking; we
@@ -757,6 +762,65 @@ export function SettingsScreen(): React.ReactElement {
               );
             })}
           </View>
+        ) : null}
+
+        {/* Editable — PCOS history (FEMALE-only; framing only). Health data →
+            LOCAL-only, never sent to the server (invariant 1). */}
+        {profile?.sex_at_birth === "female" ? (
+          <>
+            <PressableScale
+              testID="settings_edit_pcos"
+              accessibilityRole="button"
+              accessibilityLabel={`PCOS history: ${pcosLabel(profile?.pcos_history)}. Tap to change.`}
+              onPress={() =>
+                setEditingField((f) => (f === "pcos" ? null : "pcos"))
+              }
+              style={styles.detailRow}
+            >
+              <Text style={styles.accountLabel}>PCOS history</Text>
+              <View style={styles.detailEditRight}>
+                <Text style={styles.detailValueEditable}>
+                  {pcosLabel(profile?.pcos_history)}
+                </Text>
+                {editingField === "pcos" ? (
+                  <ChevronUp color={redesign.tealDeep} size={16} />
+                ) : (
+                  <ChevronDown color={redesign.tealDeep} size={16} />
+                )}
+              </View>
+            </PressableScale>
+            {editingField === "pcos" ? (
+              <View style={styles.optionList}>
+                {([true, false, null] as const).map((b) => {
+                  const selected = (profile?.pcos_history ?? null) === b;
+                  const key =
+                    b === true ? "yes" : b === false ? "no" : "unknown";
+                  return (
+                    <PressableScale
+                      key={key}
+                      testID={`settings_pcos_option_${key}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={pcosLabel(b)}
+                      onPress={() => onEditDemographic({ pcos_history: b })}
+                      style={styles.optionRow}
+                    >
+                      <Text
+                        style={[
+                          styles.optionLabel,
+                          selected && styles.optionLabelSelected,
+                        ]}
+                      >
+                        {pcosLabel(b)}
+                      </Text>
+                      {selected ? (
+                        <Check color={redesign.teal} size={16} />
+                      ) : null}
+                    </PressableScale>
+                  );
+                })}
+              </View>
+            ) : null}
+          </>
         ) : null}
 
         <Text style={styles.detailNote}>

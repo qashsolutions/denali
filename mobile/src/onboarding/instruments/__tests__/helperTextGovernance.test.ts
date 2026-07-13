@@ -1,35 +1,26 @@
 /**
  * helperText governance — no un-reviewed calibration copy ships silently.
  *
- * `ResponseOption.helperText` is Denali-authored CALIBRATION copy added on top
- * of validated instruments (e.g. the MRS severity anchors, D40). It is
- * clinical-adjacent, so every helperText string MUST declare its review status
- * via `helperTextProvisional` (true = pending a named clinician; false =
- * cleared) — mirroring `InterpretationBand.provisional`. This test fails if any
- * option carries helperText without an explicit provisional flag, so a future
- * helperText addition can't bypass clinical governance by omission.
+ * `ResponseOption.helperText` is Denali-authored CALIBRATION copy layered on
+ * top of a validated instrument. It is clinical-adjacent, so every helperText
+ * string MUST declare its review status via `helperTextProvisional` (true =
+ * pending a named clinician; false = cleared, with a named reviewer) —
+ * mirroring `InterpretationBand.provisional`. These tests fail if any option
+ * carries helperText without that governance, so a future helperText addition
+ * can't bypass clinical review by omission.
+ *
+ * 2026-07 licensing removal: MRS was the only instrument shipping helperText,
+ * and it is gone. The rules below now hold vacuously across the shipped set —
+ * the final test pins that state so a future addition trips the guard.
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  ADAM,
-  AUDIT_C,
-  EPWORTH,
-  GAD7,
-  IPSS,
-  MRS,
-  PHQ2,
-  PHQ9,
-} from "../index";
+import { AUDIT_C, GAD7, PHQ2, PHQ9 } from "../index";
 import type { InstrumentDefinition } from "../types";
 
 const ALL_INSTRUMENTS: ReadonlyArray<InstrumentDefinition> = [
-  ADAM,
   AUDIT_C,
-  EPWORTH,
   GAD7,
-  IPSS,
-  MRS,
   PHQ2,
   PHQ9,
 ];
@@ -72,15 +63,17 @@ describe("helperText governance", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("the MRS severity anchors are present, provisional, and unreviewed", () => {
-    const withHints = MRS.responseOptions.filter((o) => o.helperText != null);
-    // All 5 levels carry a calibration hint (D40).
-    expect(withHints).toHaveLength(5);
-    // Every one is provisional + has no named reviewer yet — the ‡ stands
-    // until a credentialed clinician signs off (helperTextReviewedBy).
-    expect(withHints.every((o) => o.helperTextProvisional === true)).toBe(true);
-    expect(withHints.every((o) => !hasNamedReviewer(o.helperTextReviewedBy))).toBe(
-      true,
-    );
+  it("no shipped instrument currently ships helperText (post-2026-07 removal)", () => {
+    // The only helperText consumer was MRS's severity anchors (D40), removed
+    // with the proprietary instruments. Pin the empty state: a future addition
+    // must go through the two governance rules above (deliberately, not by
+    // silently reintroducing un-flagged calibration copy).
+    const withHelper: string[] = [];
+    for (const inst of ALL_INSTRUMENTS) {
+      for (const opt of inst.responseOptions) {
+        if (opt.helperText != null) withHelper.push(`${inst.id}:${opt.value}`);
+      }
+    }
+    expect(withHelper).toEqual([]);
   });
 });

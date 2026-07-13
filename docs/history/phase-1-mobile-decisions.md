@@ -855,6 +855,49 @@ incl. the cross-user case), `src/screens/SignInScreen.tsx`, `src/navigation/Root
 
 ---
 
+## D41 — Instrument licensing removal + gender-specific additions (2026-07-04)
+
+**Context.** A licensing brief (`audit/LICENSING_BRIEF.md`) found four shipped
+screeners were NOT free for commercial use: **Epworth/ESS** (MAPI licence), **MRS**
+(ZEG Berlin), **IPSS** (Wolters Kluwer/MAPI), **ADAM** (Saint Louis University —
+not clearly free). Operator decision: **keep it simple, no licences.**
+
+**Removed** all four from the build — modules, `instrumentsFor` battery,
+`InstrumentId` union, the `InstrumentsScreen` menu, `INSTRUMENT_TO_DOMAIN`
+entries, the `tableV1` interpretation entries/bands/sources, `computeAdamOutcome`,
+and their display names. Only the **public-domain** screeners remain: PHQ-9
+(PHQ-2 gate), GAD-7, AUDIT-C.
+
+**Replaced** the lost coverage with an **unlicensed symptom tracker**
+(`src/screens/symptoms/*`): generic plain-language symptom names + a
+Denali-authored 0–3 severity (None/Mild/Moderate/Severe), each tracked
+individually as an append-only observation with a **band-less** trend — NO
+proprietary item set/scale, NO summed score, NO interpretation. Domains
+sleep/urinary (universal), menopause (female), hormonal (male) are symptom-backed
+(`SYMPTOM_CODE_TO_DOMAIN` routing + `symptomDomainsFor` surfacing); symptom cards
+drill into the code-agnostic `MarkerDetail` for the trend. New `SymptomLog` screen.
+
+**Added markers** (band-less, NLM-verified LOINC, `provisional:true`): FSH +
+estradiol (female-gated), free testosterone + SHBG + DHEA-S (universal androgen
+panel), plus CBC/CMP + B12/folate/ACR **display names** (fixed a wrong calcium
+code `2160-1` → `17861-6`). No interpretation ranges hardcoded — a reading renders
+against the report's own printed range.
+
+**Additive contract change (Wave-0 marker lifted + restored).** Added
+`ProfileRow.pcos_history: boolean | null` + migration `003-profile-pcos-history` +
+profile-DAL marshalling. **PCOS-history is health data → LOCAL-ONLY** (invariant 1):
+in the SQLCipher profile, **never** sent to the web `/api/profile`. Captured in
+Settings (female-only editable row). Framing input only — not a hard gate.
+
+**Encoded in code:** `src/onboarding/instruments/*`, `src/screens/symptoms/*`,
+`src/screens/SymptomLogScreen.tsx`, `src/screens/markers/markerCatalog.ts`,
+`src/screens/timeline/{displayMapping,rollup,interpretation/tableV1,domains/registry}.ts`,
+`src/db/{migrations/003-profile-pcos-history,dal/profile}.ts`,
+`src/contracts/LocalDataDAL.ts`, `src/screens/SettingsScreen.tsx`. See
+`audit/LICENSING_BRIEF.md`, `audit/ADDITIONS_PLAN.md`.
+
+---
+
 ## See also
 
 - Spec: `docs/design/phase-1-45plus.md` (the full Phase 1 build prompt v2).

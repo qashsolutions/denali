@@ -67,6 +67,7 @@ import { TrendChart } from "./timeline/trend/TrendChart";
 import { TrendRangeControl } from "./timeline/trend/TrendRangeControl";
 import { deriveBmiTrend } from "./markers/bmi";
 import { latestPerCode } from "./markers/latestPerCode";
+import { isSymptomDomain } from "./symptoms/symptomCatalog";
 
 import type { RootStackParamList } from "@/navigation/types";
 
@@ -249,15 +250,22 @@ export function DomainDetailScreen(): React.ReactElement {
     //     so it KEEPS the date-bucketed, all-entries list.
     const isMarkers =
       mine.kind === "single-domain" && domainId === "health_markers";
+    // Symptom domains (sleep / urinary / menopause / hormonal) consolidate like
+    // markers: one "latest" card per symptom + a band-less trend drill-down.
+    const isSymptoms =
+      mine.kind === "single-domain" && isSymptomDomain(domainId);
     const isInstrument = mine.kind === "instrument-domain";
     const out: ListItem[] = [];
 
-    if (isMarkers) {
+    if (isMarkers || isSymptoms) {
       // latestPerCode is fed the same rows; the BMI chart below still gets the
-      // FULL unfiltered history (mine.rows) for its dots.
+      // FULL unfiltered history (mine.rows) for its dots (markers only).
       const latest = latestPerCode(mine.rows); // newest-first, one per code
       if (latest.length > 0) {
-        out.push({ kind: "label", text: "Latest readings" });
+        out.push({
+          kind: "label",
+          text: isSymptoms ? "Latest symptoms" : "Latest readings",
+        });
         for (const row of latest) {
           out.push({ kind: "card", card: { kind: "single", row } });
         }
@@ -542,6 +550,9 @@ export function DomainDetailScreen(): React.ReactElement {
 
   const Icon = getDomainIcon(domainId);
   const friendlyName = getDomainName(domainId);
+  // Symptom domains offer "Log a symptom" (the 2026-07 tracker) instead of the
+  // removed instruments' "Start a check-in".
+  const canLogSymptom = isSymptomDomain(domainId);
 
   const renderItem: ListRenderItem<ListItem> = ({ item }) => {
     if (item.kind === "header") {
@@ -592,14 +603,18 @@ export function DomainDetailScreen(): React.ReactElement {
     // consolidated screen opens the full history instead of expanding inline.
     //   - markers single card → MarkerDetail (that marker's chart + readings)
     //   - latest instrument card (navigableHistory) → InstrumentHistory
-    const markerCode =
-      domainId === "health_markers" && item.card.kind === "single"
+    // Markers AND symptom rows drill down to MarkerDetail — it's code-agnostic
+    // (band-less trend + all readings for any code). A symptom code carries the
+    // 0–3 severity, so its trend charts band-less exactly like a raw marker.
+    const detailCode =
+      (domainId === "health_markers" || isSymptomDomain(domainId)) &&
+      item.card.kind === "single"
         ? item.card.row.code
         : null;
     const onCardPress = item.navigableHistory
       ? () => navigation.navigate("InstrumentHistory", { domainId })
-      : markerCode != null
-        ? () => navigation.navigate("MarkerDetail", { code: markerCode })
+      : detailCode != null
+        ? () => navigation.navigate("MarkerDetail", { code: detailCode })
         : undefined;
     return (
       <TimelineCardView
@@ -699,6 +714,20 @@ export function DomainDetailScreen(): React.ReactElement {
           </PressableScale>
         </>
       ) : null}
+      {/* Symptom domains: log another symptom (the 2026-07 tracker). Status +
+          navigation chrome only — no clinical claim. */}
+      {items.length > 0 && canLogSymptom ? (
+        <PressableScale
+          testID="domain_detail_log_symptom"
+          haptic
+          accessibilityRole="button"
+          accessibilityLabel="Log a symptom"
+          onPress={() => navigation.navigate("SymptomLog", { domainId })}
+          style={styles.ctaSecondary}
+        >
+          <Text style={styles.ctaSecondaryLabel}>Log a symptom</Text>
+        </PressableScale>
+      ) : null}
       {items.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>No data yet</Text>
@@ -733,6 +762,16 @@ export function DomainDetailScreen(): React.ReactElement {
                 <Text style={styles.ctaSecondaryLabel}>Upload a report</Text>
               </Pressable>
             </>
+          ) : canLogSymptom ? (
+            <Pressable
+              testID="domain_detail_log_symptom_empty"
+              accessibilityRole="button"
+              accessibilityLabel="Log a symptom"
+              onPress={() => navigation.navigate("SymptomLog", { domainId })}
+              style={styles.cta}
+            >
+              <Text style={styles.ctaLabel}>Log a symptom</Text>
+            </Pressable>
           ) : null}
         </View>
       ) : (

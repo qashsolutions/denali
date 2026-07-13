@@ -89,6 +89,7 @@ class FakeDal implements LocalDataDAL {
       is_on_medicare: input.is_on_medicare ?? null,
       sex_at_birth: input.sex_at_birth ?? null,
       gender_identity: input.gender_identity ?? null,
+      pcos_history: input.pcos_history ?? null,
       created_at: this.profile?.created_at ?? NOW,
       updated_at: NOW,
     };

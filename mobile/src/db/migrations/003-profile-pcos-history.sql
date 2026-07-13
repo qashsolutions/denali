@@ -1,0 +1,18 @@
+-- 003-profile-pcos-history — add the local-only self-reported PCOS-history flag.
+--
+-- PCOS (polycystic ovary syndrome) history is a single self-reported profile
+-- flag used to ADJUST FRAMING only — NOT a diagnostic feature (PCOS is a
+-- reproductive-age Rotterdam-criteria diagnosis, uninterpretable post-menopause).
+--
+-- PRIVACY: this is health data, so it lives ONLY in the local SQLCipher profile
+-- (invariant 1 — no readable health data server-side). It is NEVER sent to the
+-- web /api/profile, unlike the demographic cohort fields.
+--
+-- Storage: 0 | 1 | NULL (NULL = not answered), mirroring is_on_medicare. The DAL
+-- marshals JS boolean → 0/1. No CHECK is added in ALTER (SQLite ADD COLUMN CHECK
+-- support varies across versions; the DAL is the single writer and only ever
+-- stores 0/1/NULL).
+--
+-- MIRROR of the M003 string in src/db/migrations/index.ts. If you edit one, edit
+-- both. Append-only: never edit a shipped migration, never reorder.
+ALTER TABLE profile ADD COLUMN pcos_history INTEGER;

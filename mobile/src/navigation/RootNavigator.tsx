@@ -33,6 +33,7 @@ import { MarkerDetailScreen } from "@/screens/MarkerDetailScreen";
 import { ReportDetailScreen } from "@/screens/ReportDetailScreen";
 import { RestoreBackupScreen } from "@/screens/RestoreBackupScreen";
 import { SignInScreen } from "@/screens/SignInScreen";
+import { SymptomLogScreen } from "@/screens/SymptomLogScreen";
 import { TimelineScreen } from "@/screens/TimelineScreen";
 import { UploadReviewScreen } from "@/screens/UploadReviewScreen";
 import { useTheme } from "@/theme/useTheme";
@@ -209,6 +210,9 @@ export function RootNavigator() {
         component={InstrumentHistoryScreen}
       />
       <Stack.Screen name="LogMarker" component={LogMarkerScreen} />
+      {/* 2026-07 symptom tracker: log a symptom severity from a symptom
+       * DomainDetail (sleep / urinary / menopause / hormonal). */}
+      <Stack.Screen name="SymptomLog" component={SymptomLogScreen} />
       {/*
        * The legacy chronological feed remains reachable via a footer entry
        * on the dashboard, gated behind `EXPO_PUBLIC_LEGACY_TIMELINE=true`.

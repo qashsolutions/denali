@@ -48,10 +48,8 @@ export const INSTRUMENT_FRIENDLY_NAME: Readonly<Record<string, string>> = {
   "PHQ-9": "Mood check-in",
   "GAD-7": "Anxiety check-in",
   "AUDIT-C": "Drinking check-in",
-  Epworth: "Daytime sleepiness check",
-  IPSS: "Urinary symptoms check",
-  MRS: "Menopause check",
-  ADAM: "Low-testosterone screen",
+  // Epworth / IPSS / MRS / ADAM removed (2026-07 licensing). Historical rows
+  // fall back to the stored display string.
 };
 
 export function getInstrumentName(instrumentId: string): string {
@@ -65,10 +63,8 @@ const INSTRUMENT_ICON: Readonly<Record<string, LucideIcon>> = {
   "PHQ-9": Heart,
   "GAD-7": CloudDrizzle,
   "AUDIT-C": Wine,
-  Epworth: Moon,
-  IPSS: Droplets,
-  MRS: ThermometerSun,
-  ADAM: User2,
+  // Epworth / IPSS / MRS / ADAM removed (2026-07 licensing). Moon / Droplets /
+  // ThermometerSun / User2 icons remain in use by DOMAIN_ICON below.
 };
 
 export function getInstrumentIcon(instrumentId: string): LucideIcon {
@@ -144,7 +140,9 @@ export const LAB_FRIENDLY_NAME: Readonly<Record<string, string>> = {
   "718-7": "Hemoglobin",
   "2823-3": "Potassium",
   "2951-2": "Sodium",
-  "2160-1": "Calcium",
+  // Corrected 2026-07-04: was "2160-1" (not a valid calcium code — 2160-x is the
+  // creatinine root); the standard total serum calcium is 17861-6 (NLM-verified).
+  "17861-6": "Calcium",
   "2885-2": "Total protein",
   // Body markers — NLM-verified 2026-06-15
   "8302-2": "Height",
@@ -152,6 +150,32 @@ export const LAB_FRIENDLY_NAME: Readonly<Record<string, string>> = {
   "39156-5": "BMI",
   // Bone health — NLM-verified 2026-06-15
   "38264-8": "Bone density (DXA hip T-score)",
+  // Hormones — NLM-verified 2026-07-04
+  "15067-2": "FSH (follicle-stimulating hormone)",
+  "2243-4": "Estradiol",
+  "2991-8": "Free testosterone",
+  "13967-5": "SHBG (sex hormone binding globulin)",
+  "2191-5": "DHEA-S",
+  // Complete blood count (CBC) — NLM-verified 2026-07-04. Display-only: an
+  // uploaded CBC/CMP value is already captured by the parse path (analyte-
+  // agnostic); these entries just give it a plain-language name on the timeline.
+  "4544-3": "Hematocrit",
+  "6690-2": "White blood cells (WBC)",
+  "777-3": "Platelets",
+  "789-8": "Red blood cells (RBC)",
+  // Comprehensive metabolic panel (CMP) — NLM-verified 2026-07-04
+  "2075-0": "Chloride",
+  "2028-9": "Carbon dioxide (CO₂)",
+  "3094-0": "Blood urea nitrogen (BUN)",
+  "1751-7": "Albumin",
+  "1975-2": "Total bilirubin",
+  "6768-6": "Alkaline phosphatase (ALP)",
+  "1742-6": "Liver enzyme (ALT)",
+  "1920-8": "Liver enzyme (AST)",
+  // Nutrients — NLM-verified 2026-07-04
+  "2132-9": "Vitamin B12",
+  "2284-8": "Folate",
+  "9318-7": "Urine albumin-to-creatinine ratio (ACR)",
 };
 
 /**
@@ -268,11 +292,13 @@ export const DOMAIN_ICON: Readonly<Record<DomainId, LucideIcon>> = {
 export const DOMAIN_PROMPT: Readonly<Record<DomainId, string>> = {
   mood: "Start a mood check-in to see how you're doing over time.",
   anxiety: "Start an anxiety check-in to see how you're doing over time.",
-  sleep: "Start a sleep check-in to see how you're doing over time.",
+  // sleep / urinary / menopause / hormonal are now the symptom tracker (2026-07):
+  // track individual symptoms' severity over time, not a scored check-in.
+  sleep: "Track sleep symptoms like trouble sleeping or daytime sleepiness to see how they change over time.",
   alcohol: "Start a drinking check-in to see how you're doing over time.",
-  urinary: "Start a urinary-symptoms check-in to see how you're doing over time.",
-  menopause: "Start a menopause check-in to see how you're doing over time.",
-  hormonal: "Start a hormonal check-in to see how you're doing over time.",
+  urinary: "Track urinary symptoms like urgency or nighttime urination to see how they change over time.",
+  menopause: "Track menopause symptoms like hot flashes or night sweats to see how they change over time.",
+  hormonal: "Track symptoms like low energy or low mood to see how they change over time.",
   health_markers:
     "Markers commonly tracked at your age and sex appear here as you upload labs or log values. Talking with your doctor about which markers matter for you could help.",
   health_history:

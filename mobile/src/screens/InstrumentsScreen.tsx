@@ -48,20 +48,12 @@ import type { RootStackParamList } from "@/navigation/types";
 import { Crisis988Modal } from "@/onboarding/Crisis988Modal";
 import { assembleNextResponses, LikertInput } from "@/onboarding/inputs";
 import {
-  ADAM,
-  ADAM_LEAD_IN,
   AUDIT_C,
   AUDIT_C_LEAD_IN,
-  EPWORTH,
-  EPWORTH_LEAD_IN,
   GAD7,
   GAD7_LEAD_IN,
-  IPSS,
-  IPSS_LEAD_IN,
   type InstrumentDefinition,
   type InstrumentId,
-  MRS,
-  MRS_LEAD_IN,
   PHQ2,
   PHQ9,
   PHQ9_ITEM_9_INDEX,
@@ -90,10 +82,6 @@ type InstrumentsRoute = RouteProp<RootStackParamList, "Instruments">;
 const MENU_LEAD_IN: Partial<Record<InstrumentId, string>> = {
   "GAD-7": GAD7_LEAD_IN,
   "AUDIT-C": AUDIT_C_LEAD_IN,
-  Epworth: EPWORTH_LEAD_IN,
-  MRS: MRS_LEAD_IN,
-  ADAM: ADAM_LEAD_IN,
-  IPSS: IPSS_LEAD_IN,
 };
 
 // ─── Section identification ──────────────────────────────────────────────
@@ -184,7 +172,12 @@ export function InstrumentsScreen(): React.ReactElement {
   // ─── Menu composition ─────────────────────────────────────────────────
 
   const menu: ReadonlyArray<MenuItem> = React.useMemo(() => {
-    const base: MenuItem[] = [
+    // Only public-domain screeners ship as scored check-ins (2026-07 licensing
+    // decision — audit/LICENSING_BRIEF.md). The removed sex-specific instruments
+    // (Epworth/sleep, IPSS/urinary, ADAM+MRS/hormonal) are replaced by the
+    // unlicensed symptom tracker, not scored questionnaires — so this menu no
+    // longer branches on sex.
+    return [
       {
         key: "anxiety",
         title: "Anxiety",
@@ -197,38 +190,8 @@ export function InstrumentsScreen(): React.ReactElement {
         blurb: "Three short questions about your drinking.",
         instrument: AUDIT_C,
       },
-      {
-        key: "sleep",
-        title: "Sleep",
-        blurb: "How likely you are to doze off during the day.",
-        instrument: EPWORTH,
-      },
     ];
-    if (sexAtBirth === "male") {
-      base.push(
-        {
-          key: "urinary",
-          title: "Urinary symptoms",
-          blurb: "Common with age — common to ignore.",
-          instrument: IPSS,
-        },
-        {
-          key: "hormonalMale",
-          title: "Hormonal changes",
-          blurb: "Energy, mood, and other shifts.",
-          instrument: ADAM,
-        },
-      );
-    } else if (sexAtBirth === "female") {
-      base.push({
-        key: "hormonalFemale",
-        title: "Menopausal symptoms",
-        blurb: "Hot flashes, sleep, mood — and more.",
-        instrument: MRS,
-      });
-    }
-    return base;
-  }, [sexAtBirth]);
+  }, []);
 
   // ─── Persistence helpers ──────────────────────────────────────────────
 
@@ -479,17 +442,7 @@ export function InstrumentsScreen(): React.ReactElement {
     setMenuResponses((m) => {
       if (m[key] != null) return m;
       const itemCount =
-        key === "anxiety"
-          ? GAD7.items.length
-          : key === "alcohol"
-            ? AUDIT_C.items.length
-            : key === "sleep"
-              ? EPWORTH.items.length
-              : key === "urinary"
-                ? IPSS.items.length
-                : key === "hormonalFemale"
-                  ? MRS.items.length
-                  : ADAM.items.length;
+        key === "anxiety" ? GAD7.items.length : AUDIT_C.items.length;
       return { ...m, [key]: Array.from({ length: itemCount }, () => null) };
     });
     setErrorMsg(null);

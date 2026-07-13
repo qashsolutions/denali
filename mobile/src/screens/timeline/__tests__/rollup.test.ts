@@ -144,32 +144,24 @@ describe("rollupCardsByDomain — basic routing", () => {
 });
 
 describe("rollupCardsByDomain — cohort gating", () => {
-  it("includes male-only domains for sex=male, excludes female-only", () => {
-    const out = rollupCardsByDomain([], "male");
-    const ids = out.map((r) => r.domainId);
-    expect(ids).toContain("urinary"); // male
-    expect(ids).toContain("hormonal"); // male
-    expect(ids).not.toContain("menopause"); // female-only
-  });
-
-  it("includes female-only domains for sex=female, excludes male-only", () => {
-    const out = rollupCardsByDomain([], "female");
-    const ids = out.map((r) => r.domainId);
-    expect(ids).toContain("menopause"); // female
-    expect(ids).not.toContain("urinary"); // male-only
-    expect(ids).not.toContain("hormonal"); // male-only
-  });
-
-  it("includes only the unisex domains for sex=unknown", () => {
-    const out = rollupCardsByDomain([], "unknown");
-    const ids = out.map((r) => r.domainId);
-    expect(ids).toContain("mood");
-    expect(ids).toContain("anxiety");
-    expect(ids).toContain("alcohol");
-    expect(ids).toContain("sleep");
-    expect(ids).not.toContain("menopause");
-    expect(ids).not.toContain("urinary");
-    expect(ids).not.toContain("hormonal");
+  // Post-2026-07: instrument domains (mood/anxiety/alcohol) are universal;
+  // the former sex-gated instrument domains are now backed by the symptom
+  // tracker (sleep/urinary universal, menopause female, hormonal male).
+  it("surfaces instrument + symptom domains for every cohort (Step-4 symptom tracker)", () => {
+    for (const sex of ["male", "female", "unknown", "intersex", null] as const) {
+      const ids = rollupCardsByDomain([], sex).map((r) => r.domainId);
+      expect(ids).toContain("mood");
+      expect(ids).toContain("anxiety");
+      expect(ids).toContain("alcohol");
+      expect(ids).toContain("sleep");
+      expect(ids).toContain("urinary");
+    }
+    expect(
+      rollupCardsByDomain([], "female").map((r) => r.domainId),
+    ).toContain("menopause");
+    expect(rollupCardsByDomain([], "male").map((r) => r.domainId)).toContain(
+      "hormonal",
+    );
   });
 
   it("ALWAYS includes the universal domains regardless of sex", () => {
@@ -185,8 +177,32 @@ describe("rollupCardsByDomain — cohort gating", () => {
     const out = rollupCardsByDomain([], "female");
     const anxiety = out.find((r) => r.domainId === "anxiety");
     expect(anxiety?.kind).toBe("empty-domain");
+    // menopause is a FEMALE symptom domain → present, empty when no data.
     const menopause = out.find((r) => r.domainId === "menopause");
     expect(menopause?.kind).toBe("empty-domain");
+    // hormonal is MALE-only → absent entirely for a female cohort.
+    const hormonal = out.find((r) => r.domainId === "hormonal");
+    expect(hormonal).toBeUndefined();
+  });
+
+  it("routes a tracked symptom observation to its symptom domain (single-domain)", () => {
+    const hotFlash = row({
+      category: "symptom",
+      code: "denali.symptom.menopause.hot_flashes",
+      code_system: "internal",
+      source: "self_reported",
+    });
+    const out = rollupCardsByDomain(
+      groupByInstrumentSession([hotFlash]),
+      "female",
+    );
+    const menopause = out.find((r) => r.domainId === "menopause");
+    expect(menopause?.kind).toBe("single-domain");
+    if (menopause?.kind === "single-domain") {
+      expect(menopause.rows[0].code).toBe(
+        "denali.symptom.menopause.hot_flashes",
+      );
+    }
   });
 });
 

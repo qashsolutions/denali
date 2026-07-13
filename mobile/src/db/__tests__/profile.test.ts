@@ -75,6 +75,33 @@ describe("profile DAL", () => {
     expect(p!.is_on_medicare).toBe(true);
   });
 
+  it("marshals pcos_history correctly across null / true / false (migration 003)", async () => {
+    await dal.upsertProfile({ id: SUB, email: "x@y.com" });
+    let p = await dal.getProfile();
+    expect(p!.pcos_history).toBeNull();
+
+    await dal.upsertProfile({ id: SUB, email: "x@y.com", pcos_history: true });
+    p = await dal.getProfile();
+    expect(p!.pcos_history).toBe(true);
+
+    await dal.upsertProfile({ id: SUB, email: "x@y.com", pcos_history: false });
+    p = await dal.getProfile();
+    expect(p!.pcos_history).toBe(false);
+  });
+
+  it("pcos_history is additive — an upsert that omits it preserves the stored value", async () => {
+    await dal.upsertProfile({ id: SUB, email: "x@y.com", pcos_history: true });
+    // A later upsert that doesn't mention pcos_history must NOT clear it.
+    await dal.upsertProfile({
+      id: SUB,
+      email: "x@y.com",
+      sex_at_birth: "female",
+    });
+    const p = await dal.getProfile();
+    expect(p!.pcos_history).toBe(true);
+    expect(p!.sex_at_birth).toBe("female");
+  });
+
   it("plan CHECK rejects unknown plan", async () => {
     await expect(
       dal.upsertProfile({

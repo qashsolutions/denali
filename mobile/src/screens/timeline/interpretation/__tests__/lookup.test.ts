@@ -9,9 +9,12 @@
  *     female bands AND a fallbackNote.
  *   - Score interpolation: `{{score}}` is replaced in headline +
  *     explanation, never appears in user-facing text.
- *   - ADAM binary outcome: Morley 2000 rule cases.
  *   - Lookup returns null (not throw) for unknown instrument or
  *     out-of-range score.
+ *
+ * 2026-07 licensing removal: Epworth / IPSS / MRS / ADAM were removed
+ * (proprietary — audit/LICENSING_BRIEF.md), along with their table entries and
+ * the ADAM binary-outcome helper. Only the public-domain screeners remain.
  *   - Every shipped band carries `provisional: true` (sign-off gate).
  *
  * These tests pin the table V1 contract. When V2 ships (with reviewed
@@ -20,10 +23,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  computeAdamOutcome,
-  lookupInterpretation,
-} from "../lookup";
+import { lookupInterpretation } from "../lookup";
 import {
   flattenStrategyBands,
   INTERPRETATION_TABLE_V1,
@@ -101,26 +101,6 @@ describe("lookupInterpretation — GAD-7 (Spitzer 2006)", () => {
   });
 });
 
-describe("lookupInterpretation — Epworth (Johns official, delta 2)", () => {
-  // 0–5 lower normal / 6–10 higher normal / 11–12 mild / 13–15 moderate /
-  // 16–24 severe — per epworthsleepinessscale.com.
-  it.each([
-    [0, "lower-normal"],
-    [5, "lower-normal"],
-    [6, "higher-normal"],
-    [10, "higher-normal"],
-    [11, "mild"],
-    [12, "mild"],
-    [13, "moderate"],
-    [15, "moderate"],
-    [16, "severe"],
-    [24, "severe"],
-  ])("score %i → band %s", (score, bandId) => {
-    const r = lookupInterpretation("Epworth", score, "male");
-    expect(r?.band.bandId).toBe(bandId);
-  });
-});
-
 describe("lookupInterpretation — AUDIT-C (sex-dependent, Bush 1998 / Bradley 2007)", () => {
   describe("male bands", () => {
     it.each([
@@ -176,42 +156,6 @@ describe("lookupInterpretation — AUDIT-C (sex-dependent, Bush 1998 / Bradley 2
   });
 });
 
-describe("lookupInterpretation — IPSS (Barry 1992)", () => {
-  it.each([
-    [0, "mild"],
-    [7, "mild"],
-    [8, "moderate"],
-    [19, "moderate"],
-    [20, "severe"],
-    [35, "severe"],
-  ])("score %i → band %s", (score, bandId) => {
-    const r = lookupInterpretation("IPSS", score, "male");
-    expect(r?.band.bandId).toBe(bandId);
-  });
-});
-
-describe("lookupInterpretation — MRS (Heinemann, delta 2)", () => {
-  it.each([
-    [0, "minimal"],
-    [4, "minimal"],
-    [5, "mild"],
-    [8, "mild"],
-    [9, "moderate"],
-    [15, "moderate"],
-    [16, "severe"],
-    [30, "severe"],
-  ])("score %i → band %s", (score, bandId) => {
-    const r = lookupInterpretation("MRS", score, "female");
-    expect(r?.band.bandId).toBe(bandId);
-  });
-
-  it("the cutoffSource cites Heinemann and notes the alternate scheme", () => {
-    const mrs = INTERPRETATION_TABLE_V1.instruments["MRS"];
-    expect(mrs.cutoffSource).toMatch(/Heinemann/);
-    expect(mrs.cutoffSource).toMatch(/alternat/i);
-  });
-});
-
 describe("lookupInterpretation — score interpolation", () => {
   it("replaces {{score}} in headline and explanation, never appears in output", () => {
     const r = lookupInterpretation("GAD-7", 7, "male");
@@ -245,16 +189,6 @@ describe("provisional gate — every shipped band is provisional until clinical 
       // Silence unused-id by referencing it.
       expect(id).toBeTruthy();
     }
-  });
-
-  it("ADAM positive string does NOT mention 'testing' (operator delta 4)", () => {
-    const adam = INTERPRETATION_TABLE_V1.instruments["ADAM"];
-    const positiveBand = flattenStrategyBands(adam.strategy).find(
-      (b) => b.bandId === "positive",
-    );
-    expect(positiveBand).toBeDefined();
-    expect(positiveBand?.headline.toLowerCase()).not.toContain("testing");
-    expect(positiveBand?.explanation.toLowerCase()).not.toContain("testing");
   });
 });
 
@@ -500,52 +434,6 @@ describe("biomarkers map — WHO bands (provisional, sign-off pending)", () => {
       }
     }
     expect(INTERPRETATION_TABLE_V1.lastClinicallyReviewedBy).toBeNull();
-  });
-});
-
-describe("computeAdamOutcome — Morley 2000 binary rule", () => {
-  const Y = 1;
-  const N = 0;
-
-  function items(...vs: ReadonlyArray<0 | 1>): Array<number | null> {
-    return [...vs];
-  }
-
-  it("returns 1 when item 1 is yes (single rule)", () => {
-    expect(computeAdamOutcome(items(Y, N, N, N, N, N, N, N, N, N))).toBe(1);
-  });
-
-  it("returns 1 when item 7 is yes (single rule)", () => {
-    expect(computeAdamOutcome(items(N, N, N, N, N, N, Y, N, N, N))).toBe(1);
-  });
-
-  it("returns 1 when 3+ yes among items 2,3,4,5,6,8,9,10 (count rule)", () => {
-    expect(computeAdamOutcome(items(N, Y, Y, Y, N, N, N, N, N, N))).toBe(1);
-    expect(computeAdamOutcome(items(N, N, N, N, Y, Y, N, Y, N, N))).toBe(1);
-  });
-
-  it("returns 0 when only 2 yes among items 2..10 and neither item 1 nor 7", () => {
-    expect(computeAdamOutcome(items(N, Y, Y, N, N, N, N, N, N, N))).toBe(0);
-  });
-
-  it("returns 0 when all responses are 'no'", () => {
-    expect(computeAdamOutcome(items(N, N, N, N, N, N, N, N, N, N))).toBe(0);
-  });
-
-  it("returns null when length is wrong", () => {
-    expect(computeAdamOutcome([1, 0])).toBeNull();
-    expect(computeAdamOutcome([])).toBeNull();
-  });
-
-  it("returns null when any item is unanswered", () => {
-    expect(computeAdamOutcome([1, null, 0, 0, 0, 0, 0, 0, 0, 0])).toBeNull();
-  });
-
-  it("integrates with lookupInterpretation: outcome 1 → positive, outcome 0 → negative", () => {
-    const outcome = computeAdamOutcome(items(Y, N, N, N, N, N, N, N, N, N));
-    expect(outcome).toBe(1);
-    const r = lookupInterpretation("ADAM", outcome!, "male");
-    expect(r?.band.bandId).toBe("positive");
   });
 });
 

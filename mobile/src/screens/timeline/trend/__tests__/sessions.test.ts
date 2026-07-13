@@ -143,21 +143,20 @@ describe("computeScoredSessions", () => {
   });
 });
 
-describe("chartability — ADAM excluded", () => {
-  it.each([
-    ["PHQ-2"],
-    ["PHQ-9"],
-    ["GAD-7"],
-    ["Epworth"],
-    ["AUDIT-C"],
-    ["IPSS"],
-    ["MRS"],
-  ])("%s is chartable", (id) => {
-    expect(isChartableInstrument(id)).toBe(true);
-  });
+describe("chartability", () => {
+  it.each([["PHQ-2"], ["PHQ-9"], ["GAD-7"], ["AUDIT-C"]])(
+    "%s is chartable",
+    (id) => {
+      expect(isChartableInstrument(id)).toBe(true);
+    },
+  );
 
-  it("ADAM is NOT chartable (binary outcome)", () => {
-    expect(isChartableInstrument("ADAM")).toBe(false);
+  it("removed proprietary instruments are not chartable (no table entry)", () => {
+    // Epworth / IPSS / MRS / ADAM removed 2026-07 (audit/LICENSING_BRIEF.md) —
+    // no table entry ⇒ no scoreRange ⇒ not chartable.
+    for (const id of ["Epworth", "IPSS", "MRS", "ADAM"]) {
+      expect(isChartableInstrument(id)).toBe(false);
+    }
   });
 
   it("unknown instruments are not chartable", () => {

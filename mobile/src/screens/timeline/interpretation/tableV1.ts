@@ -449,58 +449,8 @@ const GAD7_BANDS: InterpretationBand[] = [
   },
 ];
 
-const EPWORTH_BANDS: InterpretationBand[] = [
-  {
-    minScore: 0,
-    maxScore: 5,
-    bandId: "lower-normal",
-    pill: "Lower normal",
-    headline: "Your score of {{score}} is in the lower-normal range.",
-    explanation:
-      "Your answers suggest you are getting enough restful sleep.",
-    provisional: true,
-  },
-  {
-    minScore: 6,
-    maxScore: 10,
-    bandId: "higher-normal",
-    pill: "Higher normal",
-    headline: "Your score of {{score}} is in the higher-normal range.",
-    explanation:
-      "Your answers suggest sleepiness within the normal range, but on the higher side.",
-    provisional: true,
-  },
-  {
-    minScore: 11,
-    maxScore: 12,
-    bandId: "mild",
-    pill: "Mild",
-    headline: "Your score of {{score}} is in the mild range.",
-    explanation:
-      "Your answers suggest mild excessive daytime sleepiness. Talking with your doctor could help.",
-    provisional: true,
-  },
-  {
-    minScore: 13,
-    maxScore: 15,
-    bandId: "moderate",
-    pill: "Moderate",
-    headline: "Your score of {{score}} is in the moderate range.",
-    explanation:
-      "Your answers suggest moderate excessive daytime sleepiness. Talking with your doctor could help.",
-    provisional: true,
-  },
-  {
-    minScore: 16,
-    maxScore: Number.POSITIVE_INFINITY,
-    bandId: "severe",
-    pill: "Severe",
-    headline: "Your score of {{score}} is in the severe range.",
-    explanation:
-      "Your answers suggest severe excessive daytime sleepiness. Talking with your doctor could help.",
-    provisional: true,
-  },
-];
+// Epworth / IPSS / MRS / ADAM band + source consts removed (2026-07 licensing
+// removal — audit/LICENSING_BRIEF.md). Only public-domain screeners remain.
 
 const AUDIT_C_MALE_BANDS: InterpretationBand[] = [
   {
@@ -568,114 +518,6 @@ const AUDIT_C_FEMALE_BANDS: InterpretationBand[] = [
   },
 ];
 
-const IPSS_BANDS: InterpretationBand[] = [
-  {
-    minScore: 0,
-    maxScore: 7,
-    bandId: "mild",
-    // v1.3 curated override: AUA's lowest band IS named "Mild"; default
-    // mild→watch (amber) styling misread as attention on a score of 0.
-    tint: "ok",
-    pill: "Mild",
-    headline: "Your score of {{score}} is in the mild range.",
-    explanation:
-      "Your answers suggest mild urinary symptoms.",
-    provisional: true,
-  },
-  {
-    minScore: 8,
-    maxScore: 19,
-    bandId: "moderate",
-    pill: "Moderate",
-    headline: "Your score of {{score}} is in the moderate range.",
-    explanation:
-      "Your answers suggest moderate urinary symptoms. Talking with your doctor could help.",
-    provisional: true,
-  },
-  {
-    minScore: 20,
-    maxScore: Number.POSITIVE_INFINITY,
-    bandId: "severe",
-    pill: "Severe",
-    headline: "Your score of {{score}} is in the severe range.",
-    explanation:
-      "Your answers suggest severe urinary symptoms. Talking with your doctor could help.",
-    provisional: true,
-  },
-];
-
-const MRS_BANDS: InterpretationBand[] = [
-  {
-    minScore: 0,
-    maxScore: 4,
-    bandId: "minimal",
-    pill: "Minimal",
-    headline: "Your score of {{score}} is in the minimal range.",
-    explanation:
-      "Your answers suggest little to no menopausal symptoms.",
-    provisional: true,
-  },
-  {
-    minScore: 5,
-    maxScore: 8,
-    bandId: "mild",
-    pill: "Mild",
-    headline: "Your score of {{score}} is in the mild range.",
-    explanation:
-      "Your answers suggest mild menopausal symptoms.",
-    provisional: true,
-  },
-  {
-    minScore: 9,
-    maxScore: 15,
-    bandId: "moderate",
-    pill: "Moderate",
-    headline: "Your score of {{score}} is in the moderate range.",
-    explanation:
-      "Your answers suggest moderate menopausal symptoms. Talking with your doctor could help.",
-    provisional: true,
-  },
-  {
-    minScore: 16,
-    maxScore: Number.POSITIVE_INFINITY,
-    bandId: "severe",
-    pill: "Severe",
-    headline: "Your score of {{score}} is in the severe range.",
-    explanation:
-      "Your answers suggest severe menopausal symptoms. Talking with your doctor could help.",
-    provisional: true,
-  },
-];
-
-// ADAM bands use 0 / 1 sentinels — the binary outcome IS the "score" for
-// lookup. The renderer computes the outcome via `computeAdamOutcome`
-// from per-item responses, then looks up with 0 or 1.
-const ADAM_BANDS: InterpretationBand[] = [
-  {
-    minScore: 0,
-    maxScore: 0,
-    bandId: "negative",
-    // v1.3 delta: was "Negative" (same screening-jargon class as the
-    // PHQ-2 fix). Headline/explanation replacements proposed in the
-    // step report — not changed unilaterally.
-    pill: "No signs",
-    headline: "Your answers are in the negative-screen range.",
-    explanation:
-      "Your answers did not match the pattern this screen looks for.",
-    provisional: true,
-  },
-  {
-    minScore: 1,
-    maxScore: 1,
-    bandId: "positive",
-    pill: "Positive screen",
-    headline: "Your answers are in the positive-screen range.",
-    explanation:
-      "Your answers match the pattern this screen looks for. Talking with your doctor could help.",
-    provisional: true,
-  },
-];
-
 // ─── Provenance (v1.2) ───────────────────────────────────────────────────
 
 /**
@@ -702,16 +544,8 @@ const PHQ9_SOURCE =
   "Kroenke K, Spitzer RL, Williams JBW. The PHQ-9: validity of a brief depression severity measure. J Gen Intern Med. 2001;16(9):606-13.";
 const GAD7_SOURCE =
   "Spitzer RL, Kroenke K, Williams JBW, Löwe B. A brief measure for assessing generalized anxiety disorder: the GAD-7. Arch Intern Med. 2006;166(10):1092-7.";
-const EPWORTH_SOURCE =
-  "Johns MW. A new method for measuring daytime sleepiness: the Epworth Sleepiness Scale. Sleep. 1991;14(6):540-5. Bands per the official scheme at epworthsleepinessscale.com (0-5 lower normal / 6-10 higher normal / 11-12 mild / 13-15 moderate / 16-24 severe).";
 const AUDIT_C_SOURCE =
   "Bush K, Kivlahan DR, McDonell MB, Fihn SD, Bradley KA. The AUDIT alcohol consumption questions (AUDIT-C): an effective brief screening test for problem drinking. Arch Intern Med. 1998;158(16):1789-95. Sex-specific cutoffs per Bradley KA et al. Alcohol Clin Exp Res. 2007;31(7):1208-17.";
-const IPSS_SOURCE =
-  "Barry MJ, Fowler FJ Jr, O'Leary MP, et al. The American Urological Association symptom index for benign prostatic hyperplasia. J Urol. 1992;148(5):1549-57.";
-const MRS_SOURCE =
-  "Heinemann LAJ, Potthoff P, Schneider HPG. International versions of the Menopause Rating Scale (MRS). Health Qual Life Outcomes. 2003;1:28. (See also Heinemann et al. validation studies, 2004.) An alternative scheme (9-16 moderate / 17+ severe) exists in some clinical references; the table uses the more-conservative Heinemann scheme.";
-const ADAM_SOURCE =
-  "Morley JE, Charlton E, Patrick P, et al. Validation of a screening questionnaire for androgen deficiency in aging males. Metabolism. 2000;49(9):1239-42.";
 
 // ─── Table V1 export ──────────────────────────────────────────────────────
 
@@ -840,16 +674,7 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
       scoreRange: { min: 0, max: 21 },
       strategy: { kind: "uniform", bands: GAD7_BANDS },
     },
-    Epworth: {
-      instrument: "Epworth",
-      // 85563-1 was fabricated (nonexistent on loinc.org); no verified Epworth
-      // LOINC, so mirror the instrument file's internal code.
-      loincPanel: "denali.EPWORTH.v1",
-      cutoffSource: EPWORTH_SOURCE,
-      provenance: pendingReview(EPWORTH_SOURCE),
-      scoreRange: { min: 0, max: 24 },
-      strategy: { kind: "uniform", bands: EPWORTH_BANDS },
-    },
+    // Epworth entry removed (2026-07 licensing removal).
     "AUDIT-C": {
       instrument: "AUDIT-C",
       // 75624-7 is "Total score [AUDIT]" (the full 10-item AUDIT), not AUDIT-C.
@@ -867,35 +692,8 @@ export const INTERPRETATION_TABLE_V1: InterpretationTableV1_1 = {
         },
       },
     },
-    IPSS: {
-      instrument: "IPSS",
-      // 75636-1 is "Emergency severity index [ESI]" — unrelated. IPSS has no
-      // verified LOINC; mirror the instrument file's internal code.
-      loincPanel: "denali.IPSS.v1",
-      cutoffSource: IPSS_SOURCE,
-      provenance: pendingReview(IPSS_SOURCE),
-      scoreRange: { min: 0, max: 35 },
-      strategy: { kind: "uniform", bands: IPSS_BANDS },
-    },
-    MRS: {
-      instrument: "MRS",
-      // 76494-4 is "Tacrolimus [Moles/volume] in Blood" — unrelated. MRS has no
-      // verified LOINC; mirror the instrument file's internal code.
-      loincPanel: "denali.MRS.v1",
-      cutoffSource: MRS_SOURCE,
-      provenance: pendingReview(MRS_SOURCE),
-      scoreRange: { min: 0, max: 44 },
-      strategy: { kind: "uniform", bands: MRS_BANDS },
-    },
-    ADAM: {
-      instrument: "ADAM",
-      // 77692-2 is "Swallowing scale [UPDRS]" — unrelated. ADAM has no verified
-      // LOINC; mirror the instrument file's internal code.
-      loincPanel: "denali.ADAM.v1",
-      cutoffSource: ADAM_SOURCE,
-      provenance: pendingReview(ADAM_SOURCE),
-      strategy: { kind: "uniform", bands: ADAM_BANDS },
-    },
+    // IPSS / MRS / ADAM entries removed (2026-07 licensing removal —
+    // audit/LICENSING_BRIEF.md). Only public-domain screeners remain.
   },
   /**
    * Increment 1: empty map. Schema is in place; the curated panel +

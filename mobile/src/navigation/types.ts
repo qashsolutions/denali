@@ -79,6 +79,14 @@ export type RootStackParamList = {
    */
   LogMarker: { markerKey?: string } | undefined;
   /**
+   * Symptom-severity logging ("Log a symptom") — the 2026-07 symptom tracker
+   * (unlicensed replacement for the removed scored instruments). `domainId`
+   * scopes the picker to one symptom domain (sleep / urinary / menopause /
+   * hormonal); `symptomKey` pre-selects a symptom. Reached from the "Log a
+   * symptom" CTA on a symptom DomainDetail.
+   */
+  SymptomLog: { domainId?: DomainId; symptomKey?: string } | undefined;
+  /**
    * Phase-3 — the ported chronological "All activity" view of every
    * observation. Gated behind `EXPO_PUBLIC_LEGACY_TIMELINE` during
    * the transition; surfaced as a de-emphasized footer entry on the

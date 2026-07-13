@@ -46,6 +46,7 @@ export type MarkerGroup =
   | "Blood sugar"
   | "Kidney & liver"
   | "Thyroid & nutrients"
+  | "Hormones"
   | "Body"
   | "Bone health"
   | "Men's health";
@@ -56,6 +57,7 @@ export const MARKER_GROUP_ORDER: ReadonlyArray<MarkerGroup> = [
   "Blood sugar",
   "Kidney & liver",
   "Thyroid & nutrients",
+  "Hormones",
   "Body",
   "Bone health",
   "Men's health",
@@ -405,6 +407,98 @@ export const MARKER_CATALOG: ReadonlyArray<MarkerDef> = [
     ],
   },
 
+  // ── Hormones ─────────────────────────────────────────────────────────
+  // FSH + estradiol are FEMALE-gated and framed "log if your clinician ordered
+  // it" — they sit in the manual picker (never a "due" prompt) because menopause
+  // is symptom-diagnosed and these are noisy in perimenopause. The androgen panel
+  // (free testosterone + SHBG + DHEA-S) is UNIVERSAL — it supports male androgen
+  // assessment AND the female PCOS androgen panel.
+  //
+  // NO interpretation bands ship for any of these: they render band-less (D28),
+  // so NO reference range is stored. Estradiol especially differs ~10× pre- vs
+  // post-menopause — any interpretation range must come from the user's own
+  // uploaded report (deterministic) or a reviewer-sourced, cited entry, never
+  // from recall. `plausible` below is a physical TYPO guard only, not a range.
+  {
+    key: "fsh",
+    display: "FSH (follicle-stimulating hormone)",
+    category: "biomarker",
+    group: "Hormones",
+    provisional: true,
+    cohort: { sex: ["female"] },
+    fields: [
+      {
+        // LOINC 15067-2 "Follitropin [Units/volume] in Serum or Plasma" — NLM-verified 2026-07-04.
+        loinc: "15067-2",
+        units: [{ unit: "mIU/mL", canonical: true, toCanonicalFactor: 1 }],
+        plausible: { min: 0, max: 250 }, // physical typo guard, NOT a clinical range
+      },
+    ],
+  },
+  {
+    key: "estradiol",
+    display: "Estradiol (E2)",
+    category: "biomarker",
+    group: "Hormones",
+    provisional: true,
+    cohort: { sex: ["female"] },
+    fields: [
+      {
+        // LOINC 2243-4 "Estradiol (E2) [Mass/volume] in Serum or Plasma" — NLM-verified 2026-07-04.
+        loinc: "2243-4",
+        units: [{ unit: "pg/mL", canonical: true, toCanonicalFactor: 1 }],
+        plausible: { min: 0, max: 20000 }, // physical typo guard (spans pregnancy highs), NOT a range
+      },
+    ],
+  },
+  {
+    key: "free_testosterone",
+    display: "Free testosterone",
+    category: "biomarker",
+    group: "Hormones",
+    provisional: true,
+    // Universal — the androgen panel serves both male assessment and the
+    // female PCOS panel. (Total testosterone stays male-gated below.)
+    fields: [
+      {
+        // LOINC 2991-8 "Testosterone Free [Mass/volume] in Serum or Plasma" — NLM-verified 2026-07-04.
+        loinc: "2991-8",
+        units: [{ unit: "pg/mL", canonical: true, toCanonicalFactor: 1 }],
+        plausible: { min: 0, max: 1000 }, // physical typo guard, NOT a clinical range
+      },
+    ],
+  },
+  {
+    key: "shbg",
+    display: "SHBG (sex hormone binding globulin)",
+    category: "biomarker",
+    group: "Hormones",
+    provisional: true,
+    fields: [
+      {
+        // LOINC 13967-5 "Sex hormone binding globulin [Moles/volume] in Serum or Plasma" — NLM-verified 2026-07-04.
+        loinc: "13967-5",
+        units: [{ unit: "nmol/L", canonical: true, toCanonicalFactor: 1 }],
+        plausible: { min: 0, max: 500 }, // physical typo guard, NOT a clinical range
+      },
+    ],
+  },
+  {
+    key: "dhea_s",
+    display: "DHEA-S (DHEA sulfate)",
+    category: "biomarker",
+    group: "Hormones",
+    provisional: true,
+    fields: [
+      {
+        // LOINC 2191-5 "Dehydroepiandrosterone sulfate (DHEA-S) [Mass/volume] in Serum or Plasma" — NLM-verified 2026-07-04.
+        loinc: "2191-5",
+        units: [{ unit: "µg/dL", canonical: true, toCanonicalFactor: 1 }],
+        plausible: { min: 0, max: 2000 }, // physical typo guard, NOT a clinical range
+      },
+    ],
+  },
+
   // ── Body ─────────────────────────────────────────────────────────────
   {
     key: "weight",
@@ -611,4 +705,80 @@ export function trackedMarkers(
   }
   out.sort((a, b) => (a.lastLoggedAt < b.lastLoggedAt ? 1 : -1));
   return out;
+}
+
+// ── PCOS-history surfacing (ORGANIZATIONAL ONLY) ─────────────────────────────
+//
+// A female user who self-reported a PCOS history (profile.pcos_history === true)
+// sees the androgen panel she can ALREADY log — free testosterone, SHBG, DHEA-S
+// — surfaced as "Related to your logged history" at the TOP of the marker
+// picker, ahead of the rest. This is purely ORGANIZATIONAL: it re-orders markers
+// the catalog already offers her, makes NO clinical claim / interpretation /
+// reference range, and never adds a marker the cohort couldn't otherwise log.
+// No / Prefer-not-to-say / non-female → default surfacing (nothing re-ordered).
+
+/** The androgen-panel marker keys (already UNIVERSAL in the catalog). */
+const ANDROGEN_PANEL_KEYS: ReadonlyArray<string> = [
+  "free_testosterone",
+  "shbg",
+  "dhea_s",
+];
+
+/**
+ * Markers surfaced as "related to your logged history" for a female user with a
+ * self-reported PCOS history. Empty unless `sexAtBirth === "female"` AND
+ * `pcosHistory === true`. Intersected with `markersFor` so it can NEVER widen
+ * access — it only re-orders markers the cohort can already log.
+ */
+export function pcosRelevantMarkers(
+  sexAtBirth: SexAtBirth | null | undefined,
+  pcosHistory: boolean | null | undefined,
+): ReadonlyArray<MarkerDef> {
+  if (sexAtBirth !== "female" || pcosHistory !== true) return [];
+  const visible = new Set(markersFor(sexAtBirth).map((m) => m.key));
+  return ANDROGEN_PANEL_KEYS.map((k) =>
+    MARKER_CATALOG.find((m) => m.key === k),
+  ).filter((m): m is MarkerDef => m != null && visible.has(m.key));
+}
+
+/** The three ordered sections of the manual-log marker picker. */
+export interface MarkerPickerSections {
+  /** Markers the user already has data for ("You're tracking"). */
+  tracked: TrackedMarker[];
+  /**
+   * PCOS-surfaced androgen panel ("Related to your logged history"), excluding
+   * any already in `tracked`. Empty for non-PCOS / non-female (default order).
+   */
+  related: MarkerDef[];
+  /** The rest of the cohort's markers grouped, excluding tracked + related. */
+  grouped: Array<{ group: MarkerGroup; markers: MarkerDef[] }>;
+}
+
+/**
+ * Partition the cohort's markers into the picker's three sections. Pure so the
+ * "PCOS Yes → panel surfaced + de-duped from its group; No → unchanged" behavior
+ * is unit-testable without rendering. Priority tracked > related > grouped —
+ * each marker appears in EXACTLY one section (surfaced, never hidden).
+ */
+export function buildMarkerPickerSections(args: {
+  observations: ReadonlyArray<{ code: string; effective_at: string }>;
+  sexAtBirth: SexAtBirth | null | undefined;
+  pcosHistory: boolean | null | undefined;
+}): MarkerPickerSections {
+  const tracked = trackedMarkers(args.observations, args.sexAtBirth);
+  const trackedKeys = new Set(tracked.map((t) => t.marker.key));
+  const related = pcosRelevantMarkers(args.sexAtBirth, args.pcosHistory).filter(
+    (m) => !trackedKeys.has(m.key),
+  );
+  const relatedKeys = new Set(related.map((m) => m.key));
+  const grouped = MARKER_GROUP_ORDER.map((group) => ({
+    group,
+    markers: markersFor(args.sexAtBirth).filter(
+      (m) =>
+        m.group === group &&
+        !trackedKeys.has(m.key) &&
+        !relatedKeys.has(m.key),
+    ),
+  })).filter((g) => g.markers.length > 0);
+  return { tracked, related, grouped };
 }

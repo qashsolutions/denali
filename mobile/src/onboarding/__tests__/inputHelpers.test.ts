@@ -24,13 +24,7 @@ import {
   valueAtStepIndex,
   type FamilyHistoryDraft,
 } from "@/onboarding/inputs/helpers";
-import {
-  AUDIT_C,
-  EPWORTH,
-  GAD7,
-  IPSS,
-  PHQ2,
-} from "@/onboarding/instruments";
+import { AUDIT_C, GAD7, PHQ2 } from "@/onboarding/instruments";
 import { CONDITIONS_45_PLUS, SYMPTOMS } from "@/onboarding/vocab";
 
 const PHQ2_POSITIVE_THRESHOLD = 3;
@@ -478,7 +472,7 @@ describe("assembleNextResponses (closure-safety: Instruments PHQ + menu)", () =>
     });
   });
 
-  describe("Menu instrument last-item present (GAD-7 / AUDIT-C / Epworth / IPSS)", () => {
+  describe("Menu instrument last-item present (GAD-7 / AUDIT-C)", () => {
     // The same closure-safety pattern applies to the menu instruments.
     // The bug would have dropped the last item's value when tapped via
     // auto-advance, so persistInstrument would write null for that
@@ -519,24 +513,6 @@ describe("assembleNextResponses (closure-safety: Instruments PHQ + menu)", () =>
       const result = simulateFullSequence(total, responses);
       expect(total).toBe(3);
       expect(result[total - 1]).toBe(2);
-      expect(result).toEqual(responses);
-    });
-
-    it("Epworth (8 items) — last item present", () => {
-      const total = EPWORTH.items.length;
-      const responses = [1, 1, 0, 2, 0, 1, 3, 2];
-      const result = simulateFullSequence(total, responses);
-      expect(total).toBe(8);
-      expect(result[total - 1]).toBe(2);
-      expect(result).toEqual(responses);
-    });
-
-    it("IPSS (7 items) — last item present", () => {
-      const total = IPSS.items.length;
-      const responses = [2, 3, 1, 0, 1, 4, 5];
-      const result = simulateFullSequence(total, responses);
-      expect(total).toBe(7);
-      expect(result[total - 1]).toBe(5);
       expect(result).toEqual(responses);
     });
   });

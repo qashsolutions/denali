@@ -13,10 +13,9 @@
  * truth; the rollup is a pure display transform.
  *
  * The latest-score for an instrument-session domain is recomputed
- * from the most recent session's items via the standard sum (or
- * `computeAdamOutcome` for ADAM). Domains without a recognized
- * instrument id (e.g. orphan questionnaire rows) downgrade to
- * `kind: "single-domain"` with the raw rows preserved.
+ * from the most recent session's items via the standard sum. Domains
+ * without a recognized instrument id (e.g. orphan questionnaire rows)
+ * downgrade to `kind: "single-domain"` with the raw rows preserved.
  */
 
 import type { ObservationRow, SexAtBirth } from "@/contracts";
@@ -27,7 +26,6 @@ import {
   domainsForCohort,
 } from "./domains/registry";
 import { parseObservationMetadata, type TimelineCard } from "./grouping";
-import { computeAdamOutcome } from "./interpretation/lookup";
 
 export type DomainRollup =
   | {
@@ -65,23 +63,18 @@ function effectiveAtOf(card: TimelineCard): string {
 }
 
 /**
- * Per-session score: sum of item values (ADAM: Morley binary outcome).
- * Exported for the trend layer (Step 3) so the chart scores sessions
- * identically to the dashboard rollup.
+ * Per-session score: sum of item values. Exported for the trend layer
+ * (Step 3) so the chart scores sessions identically to the dashboard rollup.
+ *
+ * All remaining instruments (PHQ-2/PHQ-9, GAD-7, AUDIT-C) score by summing
+ * item values. `instrumentId` is retained for signature stability + future
+ * per-instrument scoring; it no longer branches (the binary-outcome ADAM was
+ * removed 2026-07).
  */
 export function computeSessionScore(
-  instrumentId: string,
+  _instrumentId: string,
   items: ReadonlyArray<ObservationRow>,
 ): number | null {
-  // ADAM is binary — compute Morley-2000 outcome from per-item 0/1
-  // values. Other instruments sum item values.
-  if (instrumentId === "ADAM") {
-    if (items.length !== 10) return null;
-    const responses: Array<number | null> = items.map((r) =>
-      r.value_num == null ? null : r.value_num >= 1 ? 1 : 0,
-    );
-    return computeAdamOutcome(responses);
-  }
   let sum = 0;
   for (const r of items) {
     if (r.value_num == null) return null;
@@ -133,6 +126,7 @@ export function rollupCardsByDomain(
     const domain = domainForRow({
       category: card.row.category,
       metadataInstrument: meta.instrument ?? null,
+      code: card.row.code,
     });
     if (domain == null) continue; // unrecognizable; skip (defensive)
     const bucket = singleBuckets.get(domain) ?? [];

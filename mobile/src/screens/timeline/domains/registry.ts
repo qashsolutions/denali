@@ -24,16 +24,20 @@
 
 import type { ObservationCategory, SexAtBirth } from "@/contracts";
 import { instrumentsFor } from "@/onboarding/instruments";
+import {
+  SYMPTOM_CODE_TO_DOMAIN,
+  symptomDomainsFor,
+} from "@/screens/symptoms/symptomCatalog";
 
 /** Stable identifiers for the 9 user-facing domains. */
 export type DomainId =
   | "mood"           // PHQ-2 / PHQ-9
   | "anxiety"        // GAD-7
-  | "sleep"          // Epworth
+  | "sleep"          // symptom tracker (was Epworth — removed 2026-07)
   | "alcohol"        // AUDIT-C
-  | "urinary"        // IPSS
-  | "menopause"      // MRS
-  | "hormonal"       // ADAM
+  | "urinary"        // symptom tracker (was IPSS — removed 2026-07)
+  | "menopause"      // symptom tracker (was MRS — removed 2026-07)
+  | "hormonal"       // symptom tracker (was ADAM — removed 2026-07)
   | "health_markers" // biomarker + vital + anthropometric (+ future device data)
   | "health_history" // family_history + conditions + symptoms + lifestyle
   ;
@@ -49,11 +53,10 @@ export const INSTRUMENT_TO_DOMAIN: Readonly<Record<string, DomainId>> = {
   "PHQ-2": "mood",
   "PHQ-9": "mood",
   "GAD-7": "anxiety",
-  Epworth: "sleep",
   "AUDIT-C": "alcohol",
-  IPSS: "urinary",
-  MRS: "menopause",
-  ADAM: "hormonal",
+  // Epworth→sleep, IPSS→urinary, MRS→menopause, ADAM→hormonal removed 2026-07
+  // (licensing). Those domains are now backed by the symptom tracker — routed
+  // via SYMPTOM_CODE_TO_DOMAIN in `domainForRow`, surfaced via `symptomDomainsFor`.
 };
 
 /**
@@ -128,6 +131,10 @@ export function domainsForCohort(
     const dom = INSTRUMENT_TO_DOMAIN[inst.id];
     if (dom) relevant.add(dom);
   }
+  // Symptom-backed domains (sleep / urinary / menopause / hormonal) surface per
+  // the symptom tracker's own sex gating — the unlicensed replacement for the
+  // removed scored instruments.
+  for (const dom of symptomDomainsFor(sexAtBirth)) relevant.add(dom);
   return DOMAIN_ORDER.filter((d) => relevant.has(d));
 }
 
@@ -146,10 +153,20 @@ export function domainsForCohort(
 export function domainForRow(args: {
   category: ObservationCategory;
   metadataInstrument: string | null;
+  /** The row's observation code — used to route symptom-tracker rows. */
+  code?: string | null;
 }): DomainId | null {
   if (args.metadataInstrument != null) {
     const dom = INSTRUMENT_TO_DOMAIN[args.metadataInstrument];
     if (dom) return dom;
+  }
+  // Symptom-tracker rows route to their symptom domain BY CODE (menopause /
+  // urinary / hormonal / sleep). General intake symptoms (chief complaint,
+  // family-history symptoms — not in the map) fall through to the category map
+  // (health_history), so only deliberately-tracked symptoms split into a domain.
+  if (args.category === "symptom" && args.code != null) {
+    const symDom = SYMPTOM_CODE_TO_DOMAIN[args.code];
+    if (symDom) return symDom;
   }
   return CATEGORY_TO_DOMAIN[args.category] ?? null;
 }

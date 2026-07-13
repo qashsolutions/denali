@@ -50,28 +50,19 @@ import {
 } from "./displayMapping";
 import type { TimelineCard } from "./grouping";
 import { parseObservationMetadata } from "./grouping";
-import {
-  computeAdamOutcome,
-  lookupInterpretation,
-} from "./interpretation/lookup";
+import { lookupInterpretation } from "./interpretation/lookup";
 import type { InterpretationBand } from "./interpretation/tableV1";
 import { makePillStyles, pillTintForBand } from "./pill";
 
 // ─── score computation ───────────────────────────────────────────────────
 
 function computeInstrumentScore(
-  instrumentId: string,
+  _instrumentId: string,
   items: ReadonlyArray<ObservationRow>,
 ): number | null {
-  // ADAM is binary: convert items (sorted by itemNumber) into yes/no.
-  if (instrumentId === "ADAM") {
-    if (items.length !== 10) return null;
-    const responses: Array<number | null> = items.map((r) =>
-      r.value_num == null ? null : r.value_num >= 1 ? 1 : 0,
-    );
-    return computeAdamOutcome(responses);
-  }
-  // All other instruments: sum numeric values.
+  // All remaining instruments (PHQ-2/PHQ-9, GAD-7, AUDIT-C) sum numeric
+  // values. The binary-outcome ADAM was removed 2026-07; `instrumentId` is
+  // kept for signature stability + future per-instrument scoring.
   let total = 0;
   for (const r of items) {
     if (r.value_num == null) return null;

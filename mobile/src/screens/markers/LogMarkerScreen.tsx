@@ -47,10 +47,8 @@ import { useTheme } from "@/theme/useTheme";
 
 import { dateKeyOf, formatGroupHeader } from "../timeline/groupObservations";
 import {
+  buildMarkerPickerSections,
   findMarker,
-  MARKER_GROUP_ORDER,
-  markersFor,
-  trackedMarkers,
   type MarkerDef,
   type MarkerField,
 } from "./markerCatalog";
@@ -89,6 +87,10 @@ export function LogMarkerScreen(): React.ReactElement {
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [sexAtBirth, setSexAtBirth] = React.useState<SexAtBirth | null>(null);
+  // Self-reported PCOS history (female-only) — surfaces the androgen panel as
+  // "Related to your logged history" (organizational only; the clinical-content
+  // gate holds — no claim, no interpretation). See buildMarkerPickerSections.
+  const [pcosHistory, setPcosHistory] = React.useState<boolean | null>(null);
   // The user's logged/uploaded values (code + date) → drives "You're tracking".
   const [obs, setObs] = React.useState<
     ReadonlyArray<{ code: string; effective_at: string }>
@@ -115,7 +117,10 @@ export function LogMarkerScreen(): React.ReactElement {
     void (async () => {
       try {
         const profile = await dal.getProfile();
-        if (!cancelled) setSexAtBirth(profile?.sex_at_birth ?? null);
+        if (!cancelled) {
+          setSexAtBirth(profile?.sex_at_birth ?? null);
+          setPcosHistory(profile?.pcos_history ?? null);
+        }
         const user = api.getCurrentUser();
         const rows = await dal.listObservations({
           latest_only: true,
@@ -137,27 +142,18 @@ export function LogMarkerScreen(): React.ReactElement {
     };
   }, [dal, api]);
 
-  // "You're tracking" — markers the user already has data for (behavioral,
-  // most-recent first; NOT a clinical relevance claim).
-  const tracked = React.useMemo(
-    () => trackedMarkers(obs, sexAtBirth),
-    [obs, sexAtBirth],
-  );
-  const trackedKeys = React.useMemo(
-    () => new Set(tracked.map((t) => t.marker.key)),
-    [tracked],
-  );
-  // Remaining cohort-relevant markers, grouped (tracked ones surfaced above,
-  // so excluded here — surfaced, never hidden).
-  const groupedMarkers = React.useMemo(
+  // Picker sections: "You're tracking" (existing data) → "Related to your
+  // logged history" (PCOS androgen panel — organizational only) → the rest,
+  // grouped. Pure partition keeps the flag→surfacing logic testable; each
+  // marker appears in exactly one section (surfaced, never hidden).
+  const { tracked, related, grouped } = React.useMemo(
     () =>
-      MARKER_GROUP_ORDER.map((group) => ({
-        group,
-        markers: markersFor(sexAtBirth).filter(
-          (m) => m.group === group && !trackedKeys.has(m.key),
-        ),
-      })).filter((g) => g.markers.length > 0),
-    [sexAtBirth, trackedKeys],
+      buildMarkerPickerSections({
+        observations: obs,
+        sexAtBirth,
+        pcosHistory,
+      }),
+    [obs, sexAtBirth, pcosHistory],
   );
 
   // ── Live canSave derived from current inputs ────────────────────────────
@@ -288,7 +284,26 @@ export function LogMarkerScreen(): React.ReactElement {
                 ))}
               </View>
             ) : null}
-            {groupedMarkers.map(({ group, markers }) => (
+            {related.length > 0 ? (
+              <View testID="log_marker_related_section" style={styles.group}>
+                <Text style={styles.groupHeader}>
+                  Related to your logged history
+                </Text>
+                {related.map((m) => (
+                  <Pressable
+                    key={m.key}
+                    testID={`log_marker_pick_${m.key}`}
+                    style={styles.markerRow}
+                    onPress={() => selectMarker(m)}
+                    accessibilityRole="button"
+                    accessibilityLabel={m.display}
+                  >
+                    <Text style={styles.markerName}>{m.display}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+            {grouped.map(({ group, markers }) => (
               <View key={group} style={styles.group}>
                 <Text style={styles.groupHeader}>{group}</Text>
                 {markers.map((m) => (

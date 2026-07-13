@@ -22,8 +22,6 @@
  *     band + `gentleNudge` so the renderer can prompt for birth year.
  *     Otherwise the lookup returns null and the renderer shows raw
  *     value with no band — NEVER an age-specific claim without age.
- *   - ADAM is binary; renderer calls `computeAdamOutcome(items)` and
- *     passes 0/1 to lookupInterpretation.
  */
 
 import type { SexAtBirth } from "@/contracts";
@@ -204,33 +202,4 @@ export function lookupInterpretation(
     args.sexAtBirth,
     args.ageYears,
   );
-}
-
-/**
- * ADAM binary outcome from per-item responses (1 = yes, 0 = no).
- *
- * Morley 2000 positive-screen rule:
- *   positive iff item1 == yes OR item7 == yes OR
- *               (count of yes among items 2,3,4,5,6,8,9,10 >= 3).
- *
- * Returns 1 (positive) or 0 (negative). Returns null when the input
- * array is the wrong length OR any required item is null/undefined.
- *
- * Caller looks up the band via:
- *   lookupInterpretation("ADAM", outcome, sexAtBirth)
- */
-export function computeAdamOutcome(
-  responses: ReadonlyArray<number | null>,
-): 0 | 1 | null {
-  if (responses.length !== 10) return null;
-  for (const r of responses) {
-    if (r == null) return null;
-  }
-  const yes = (i: number): boolean => responses[i] === 1;
-  if (yes(0) || yes(6)) return 1;
-  let countYes = 0;
-  for (const i of [1, 2, 3, 4, 5, 7, 8, 9]) {
-    if (yes(i)) countYes += 1;
-  }
-  return countYes >= 3 ? 1 : 0;
 }

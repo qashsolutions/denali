@@ -24,8 +24,10 @@ import type {
 import type { SqliteAdapter, SqliteParam } from "../types";
 
 /** Row shape as it sits in SQLite (boolean → 0/1). */
-interface ProfileRowDb extends Omit<ProfileRow, "is_on_medicare"> {
+interface ProfileRowDb
+  extends Omit<ProfileRow, "is_on_medicare" | "pcos_history"> {
   is_on_medicare: number | null;
+  pcos_history: number | null;
 }
 
 function marshal(row: ProfileRowDb): ProfileRow {
@@ -33,6 +35,7 @@ function marshal(row: ProfileRowDb): ProfileRow {
     ...row,
     is_on_medicare:
       row.is_on_medicare === null ? null : row.is_on_medicare === 1,
+    pcos_history: row.pcos_history === null ? null : row.pcos_history === 1,
   };
 }
 
@@ -42,7 +45,7 @@ function boolToInt(b: boolean | null | undefined): number | null {
 }
 
 const COLUMNS =
-  "id, email, plan, birth_year, is_on_medicare, sex_at_birth, gender_identity, created_at, updated_at";
+  "id, email, plan, birth_year, is_on_medicare, sex_at_birth, gender_identity, pcos_history, created_at, updated_at";
 
 export async function getProfile(
   db: SqliteAdapter,
@@ -86,6 +89,10 @@ export async function upsertProfile(
       input.gender_identity !== undefined
         ? input.gender_identity
         : existing?.gender_identity ?? null,
+    pcos_history:
+      input.pcos_history !== undefined
+        ? boolToInt(input.pcos_history)
+        : existing?.pcos_history ?? null,
     created_at: existing?.created_at ?? now,
     updated_at: now,
   };
@@ -98,6 +105,7 @@ export async function upsertProfile(
     next.is_on_medicare,
     next.sex_at_birth,
     next.gender_identity,
+    next.pcos_history,
     next.created_at,
     next.updated_at,
   ];
@@ -106,7 +114,7 @@ export async function upsertProfile(
     await db.runAsync(
       `UPDATE profile SET
          email = ?, plan = ?, birth_year = ?, is_on_medicare = ?,
-         sex_at_birth = ?, gender_identity = ?, updated_at = ?
+         sex_at_birth = ?, gender_identity = ?, pcos_history = ?, updated_at = ?
        WHERE id = ?`,
       [
         next.email,
@@ -115,6 +123,7 @@ export async function upsertProfile(
         next.is_on_medicare,
         next.sex_at_birth,
         next.gender_identity,
+        next.pcos_history,
         next.updated_at,
         next.id,
       ],
@@ -122,7 +131,7 @@ export async function upsertProfile(
   } else {
     await db.runAsync(
       `INSERT INTO profile (${COLUMNS})
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params,
     );
   }
