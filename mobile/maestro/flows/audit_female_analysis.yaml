@@ -1,0 +1,70 @@
+# QA AUDIT — FEMALE session, part 2: dashboard scroll + trend graph + analysis
+# (no OTP; reuses the signed-in session from audit_female_populate.yaml).
+appId: health.denali.mobile
+---
+- assertVisible:
+    text: "Your health"
+
+# ── Scroll the dashboard: symptom domains + markers/history cards ───────
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_menopause"
+    direction: DOWN
+- takeScreenshot: /tmp/audit/female_02_dashboard_symptoms
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_health_history"
+    direction: DOWN
+- takeScreenshot: /tmp/audit/female_02b_dashboard_markers
+
+# ── 2nd PHQ-9 (via the mood card "New check-in") so the trend renders ───
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_log_mood"
+    direction: UP
+- tapOn:
+    id: "dashboard_card_log_mood"
+- assertVisible:
+    id: "instruments_mood_item1_option_2"
+- tapOn:
+    id: "instruments_mood_item1_option_2"
+- tapOn:
+    id: "instruments_mood_item2_option_2"
+- tapOn:
+    id: "instruments_mood_item3_option_1"
+- tapOn:
+    id: "instruments_mood_item4_option_1"
+- tapOn:
+    id: "instruments_mood_item5_option_1"
+- tapOn:
+    id: "instruments_mood_item6_option_1"
+- tapOn:
+    id: "instruments_mood_item7_option_1"
+- tapOn:
+    id: "instruments_mood_item8_option_1"
+- tapOn:
+    id: "instruments_phq9_item9_option_0"
+
+# ── Mood DETAIL — trend chart (2 PHQ-9 points) + latest analysis card ───
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_mood"
+    direction: UP
+- tapOn:
+    id: "dashboard_card_mood"
+- assertVisible:
+    id: "trend_chart_PHQ-9"
+- takeScreenshot: /tmp/audit/female_03_mood_trend_analysis
+- tapOn:
+    id: "domain_detail_back"
+
+# ── Alcohol DETAIL — the sex-specific (female) analysis, up close ───────
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_alcohol"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_alcohol"
+- takeScreenshot: /tmp/audit/female_04_alcohol_analysis
+- tapOn:
+    id: "domain_detail_back"

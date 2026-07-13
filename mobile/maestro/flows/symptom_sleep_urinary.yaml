@@ -1,0 +1,126 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Symptom tracker — SHARED Sleep + Urinary domains (universal cohort)
+#
+#   Sleep and Urinary are universal symptom domains (symptomsFor: no cohort
+#   gate), so ONE onboarding covers both. Full path per domain:
+#     domain card → DomainDetail (empty) → "Log a symptom" → pick → severity →
+#     back → persisted → second severity → tap card → MarkerDetail → BAND-LESS
+#     trend chart.
+#
+#   Reuses the default (male) onboarding — the cohort is irrelevant for
+#   universal domains. Model: instrument_checkin.yaml + trend_chart.yaml.
+#
+# GATE — needs an E2E test-OTP backend running NODE_ENV != production.
+# See signin_onboarding.yaml / ../README.md for setup. The bypass works ONLY
+# in a NODE_ENV != production backend (local `next dev` or CI), never the
+# deployed staging service. Point the mobile build's API_BASE_URL at it.
+#
+# Selectors are the testID / accessibilityLabel inventory in ../README.md.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+- runFlow: signin_onboarding.yaml
+
+# ═══ SLEEP (Daytime sleepiness) ═════════════════════════════════════════
+- assertVisible:
+    id: "dashboard_card_sleep"
+- tapOn:
+    id: "dashboard_card_sleep"
+- assertVisible:
+    id: "domain_detail_log_symptom_empty"
+- tapOn:
+    id: "domain_detail_log_symptom_empty"
+
+# LOG #1 — Daytime sleepiness, severity 2.
+- assertVisible:
+    id: "symptom_pick_daytime_sleepiness"
+- tapOn:
+    id: "symptom_pick_daytime_sleepiness"
+- assertVisible:
+    id: "symptom_severity_2"
+- tapOn:
+    id: "symptom_severity_2"
+
+# Persisted → "Latest symptoms" card.
+- assertVisible:
+    text: "Latest symptoms"
+- assertVisible:
+    text: "Daytime sleepiness"
+
+# LOG #2 — severity 1 (second point for the trend).
+- assertVisible:
+    id: "domain_detail_log_symptom"
+- tapOn:
+    id: "domain_detail_log_symptom"
+- assertVisible:
+    id: "symptom_pick_daytime_sleepiness"
+- tapOn:
+    id: "symptom_pick_daytime_sleepiness"
+- assertVisible:
+    id: "symptom_severity_1"
+- tapOn:
+    id: "symptom_severity_1"
+
+# Card → MarkerDetail → band-less trend chart.
+- assertVisible:
+    id: "timeline_card"
+- tapOn:
+    id: "timeline_card"
+- assertVisible:
+    id: "marker_trend_chart_denali.symptom.sleep.daytime_sleepiness"
+
+# Back to the dashboard: MarkerDetail → Sleep detail → dashboard.
+- tapOn:
+    id: "marker_detail_back"
+- assertVisible:
+    id: "domain_detail_back"
+- tapOn:
+    id: "domain_detail_back"
+
+# ═══ URINARY (Sudden urge to urinate) ═══════════════════════════════════
+- assertVisible:
+    id: "dashboard_card_urinary"
+- tapOn:
+    id: "dashboard_card_urinary"
+- assertVisible:
+    id: "domain_detail_log_symptom_empty"
+- tapOn:
+    id: "domain_detail_log_symptom_empty"
+
+# LOG #1 — Urgency, severity 3.
+- assertVisible:
+    id: "symptom_pick_urgency"
+- tapOn:
+    id: "symptom_pick_urgency"
+- assertVisible:
+    id: "symptom_severity_3"
+- tapOn:
+    id: "symptom_severity_3"
+
+# Persisted → "Latest symptoms" card.
+- assertVisible:
+    text: "Latest symptoms"
+- assertVisible:
+    text: "Sudden urge to urinate"
+
+# LOG #2 — severity 1 (second point for the trend).
+- assertVisible:
+    id: "domain_detail_log_symptom"
+- tapOn:
+    id: "domain_detail_log_symptom"
+- assertVisible:
+    id: "symptom_pick_urgency"
+- tapOn:
+    id: "symptom_pick_urgency"
+- assertVisible:
+    id: "symptom_severity_1"
+- tapOn:
+    id: "symptom_severity_1"
+
+# Card → MarkerDetail → band-less trend chart.
+- assertVisible:
+    id: "timeline_card"
+- tapOn:
+    id: "timeline_card"
+- assertVisible:
+    id: "marker_trend_chart_denali.symptom.urinary.urgency"

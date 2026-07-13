@@ -1,0 +1,8 @@
+# QA AUDIT — capture Settings at its NATURAL top (no force-scroll) to check
+# top safe-area inset / header. No OTP.
+appId: health.denali.mobile
+---
+- assertVisible:
+    text: "Your health"
+- tapOn: "Settings tab"
+- takeScreenshot: /tmp/audit/female_11_settings_top

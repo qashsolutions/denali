@@ -1,0 +1,97 @@
+# QA AUDIT — MALE resume: the app is ALREADY on the OTP screen (code emailed to
+# ramanac@gmail.com, local DB already cleared by the prior run). This flow does
+# NOT relaunch/clearState/re-send — it waits for the operator to type the OTP +
+# Verify, then continues male onboarding + populate. Mirrors the female populate.
+appId: health.denali.mobile
+---
+# ⏸  MANUAL: type the emailed 6-digit OTP + tap "Verify code". Waits up to 4 min.
+- extendedWaitUntil:
+    visible:
+      id: "privacy_acknowledge_button"
+    timeout: 240000
+- tapOn:
+    id: "privacy_acknowledge_button"
+
+# ── CohortOnboarding — MALE, age ~68 ───────────────────────────────────
+- tapOn:
+    id: "cohort_step1_birth_year_input"
+- inputText: "1958"
+- tapOn:
+    id: "oneitem_continue_button"
+- tapOn:
+    id: "cohort_step2_option_male"
+- tapOn:
+    id: "cohort_step3_option_yes"
+- tapOn:
+    id: "cohort_step4_option_male"
+- assertVisible:
+    id: "cohort_confirm_summary"
+- tapOn:
+    id: "oneitem_continue_button"
+- tapOn:
+    id: "intake_finish_button"
+
+# ── Mood — POSITIVE PHQ-2 → PHQ-9, item 9 = 0 (no 988). Total = 10 ──────
+- assertVisible:
+    id: "instruments_mood_item1_option_2"
+- tapOn:
+    id: "instruments_mood_item1_option_2"
+- tapOn:
+    id: "instruments_mood_item2_option_2"
+- tapOn:
+    id: "instruments_mood_item3_option_1"
+- tapOn:
+    id: "instruments_mood_item4_option_1"
+- tapOn:
+    id: "instruments_mood_item5_option_1"
+- tapOn:
+    id: "instruments_mood_item6_option_1"
+- tapOn:
+    id: "instruments_mood_item7_option_1"
+- tapOn:
+    id: "instruments_mood_item8_option_1"
+- tapOn:
+    id: "instruments_phq9_item9_option_0"
+
+# ── Menu → Anxiety (GAD-7, all 1s = 7 → mild) ──────────────────────────
+- assertVisible:
+    id: "instruments_menu_anxiety"
+- tapOn:
+    id: "instruments_menu_anxiety"
+- tapOn:
+    id: "instruments_anxiety_item1_option_1"
+- tapOn:
+    id: "instruments_anxiety_item2_option_1"
+- tapOn:
+    id: "instruments_anxiety_item3_option_1"
+- tapOn:
+    id: "instruments_anxiety_item4_option_1"
+- tapOn:
+    id: "instruments_anxiety_item5_option_1"
+- tapOn:
+    id: "instruments_anxiety_item6_option_1"
+- tapOn:
+    id: "instruments_anxiety_item7_option_1"
+
+# ── Menu → Alcohol (AUDIT-C, 1/1/1 = 3 → MALE lower-risk band) ──────────
+- assertVisible:
+    id: "instruments_menu_alcohol"
+- tapOn:
+    id: "instruments_menu_alcohol"
+- tapOn:
+    id: "instruments_alcohol_item1_option_1"
+- tapOn:
+    id: "instruments_alcohol_item2_option_1"
+- tapOn:
+    id: "instruments_alcohol_item3_option_1"
+
+# ── Finish → dashboard ─────────────────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "instruments_finish_button"
+    direction: DOWN
+- tapOn:
+    id: "instruments_finish_button"
+- assertVisible:
+    text: "Your health"
+- takeScreenshot: /tmp/audit/male_01_dashboard

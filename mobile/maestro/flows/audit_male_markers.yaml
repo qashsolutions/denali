@@ -1,0 +1,28 @@
+# QA AUDIT — MALE part 3: male-only markers (testosterone/PSA) present, and the
+# PCOS "Related to your logged history" section is ABSENT (negative test — that
+# surfacing is female+pcos_history only). No OTP.
+appId: health.denali.mobile
+---
+- assertVisible:
+    text: "Your health"
+- tapOn:
+    id: "dashboard_quick_add"
+- tapOn:
+    id: "quickadd_marker"
+
+# ── NEGATIVE TEST: at the picker top, NO PCOS surfacing for a male ────────
+# (the "Related to your logged history" section is the first group when it
+#  exists; for a male it must be absent entirely.)
+- assertNotVisible:
+    id: "log_marker_related_section"
+
+# ── Male-only "Men's health" markers present: testosterone + PSA ──────────
+- scrollUntilVisible:
+    element:
+      id: "log_marker_pick_testosterone"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "log_marker_pick_psa"
+    direction: DOWN
+- takeScreenshot: /tmp/audit/male_04_mens_health_markers

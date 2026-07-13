@@ -1,0 +1,39 @@
+# QA AUDIT — FEMALE: Settings demographics (locked/editable fields) + PCOS=Yes
+# → androgen panel surfacing in LogMarker ("Related to your logged history"). No OTP.
+appId: health.denali.mobile
+---
+- assertVisible:
+    text: "Your health"
+
+# ═══ Settings → Your details (locked year+sex, editable gender+Medicare+PCOS) ═══
+- tapOn: "Settings tab"
+- scrollUntilVisible:
+    element:
+      id: "settings_your_details"
+    direction: DOWN
+- takeScreenshot: /tmp/audit/female_08_settings_details
+
+# ═══ Set PCOS history = Yes ════════════════════════════════════════════
+- scrollUntilVisible:
+    element:
+      id: "settings_edit_pcos"
+    direction: DOWN
+- tapOn:
+    id: "settings_edit_pcos"
+- assertVisible:
+    id: "settings_pcos_option_yes"
+- tapOn:
+    id: "settings_pcos_option_yes"
+- takeScreenshot: /tmp/audit/female_09_pcos_yes
+
+# ═══ LogMarker → androgen panel surfaced under "Related to your logged history" ═══
+- tapOn: "Timeline tab"
+- assertVisible:
+    id: "dashboard_quick_add"
+- tapOn:
+    id: "dashboard_quick_add"
+- tapOn:
+    id: "quickadd_marker"
+- assertVisible:
+    id: "log_marker_related_section"
+- takeScreenshot: /tmp/audit/female_10_pcos_androgen_surfacing

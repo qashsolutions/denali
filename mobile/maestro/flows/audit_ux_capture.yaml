@@ -1,0 +1,24 @@
+# QA AUDIT — capture the SymptomLog picker + severity screens (UX review).
+# No OTP. Menopause already has 1 logged symptom → populated CTA.
+appId: health.denali.mobile
+---
+- assertVisible:
+    text: "Your health"
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_menopause"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_menopause"
+- assertVisible:
+    id: "domain_detail_log_symptom"
+- tapOn:
+    id: "domain_detail_log_symptom"
+- takeScreenshot: /tmp/audit/ux_01_symptom_picker
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_hot_flashes"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_hot_flashes"
+- takeScreenshot: /tmp/audit/ux_02_severity_picker

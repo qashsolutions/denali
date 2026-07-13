@@ -1,0 +1,56 @@
+# QA AUDIT — FEMALE: weight + height → BMI banded chart. No OTP.
+# Weight/height live in the "Body" group, below the picker fold → scroll to them.
+appId: health.denali.mobile
+---
+- assertVisible:
+    text: "Your health"
+
+# ═══ WEIGHT (Body group — scroll to it) ════════════════════════════════
+- tapOn:
+    id: "dashboard_quick_add"
+- tapOn:
+    id: "quickadd_marker"
+- scrollUntilVisible:
+    element:
+      id: "log_marker_pick_weight"
+    direction: DOWN
+- tapOn:
+    id: "log_marker_pick_weight"
+- assertVisible:
+    id: "log_marker_input_0"
+- tapOn:
+    id: "log_marker_input_0"
+- inputText: "70"
+- tapOn:
+    id: "log_marker_save"
+
+# ═══ HEIGHT (ft/in) so BMI derives ═════════════════════════════════════
+- tapOn:
+    id: "dashboard_quick_add"
+- tapOn:
+    id: "quickadd_marker"
+- scrollUntilVisible:
+    element:
+      id: "log_marker_pick_height"
+    direction: DOWN
+- tapOn:
+    id: "log_marker_pick_height"
+- assertVisible:
+    id: "log_marker_input_0_feet"
+- tapOn:
+    id: "log_marker_input_0_feet"
+- inputText: "5"
+- tapOn:
+    id: "log_marker_input_0_inches"
+- inputText: "5"
+- tapOn:
+    id: "log_marker_save"
+
+# ═══ HEALTH MARKERS detail → BMI banded chart (WHO bands) ═══════════════
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_health_markers"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_health_markers"
+- takeScreenshot: /tmp/audit/female_06_markers_bmi

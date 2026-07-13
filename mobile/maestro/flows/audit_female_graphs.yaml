@@ -1,0 +1,76 @@
+# QA AUDIT — FEMALE: menopause band-less trend + BMI banded chart. No OTP.
+appId: health.denali.mobile
+---
+- assertVisible:
+    text: "Your health"
+
+# ═══ Menopause: 2nd hot-flashes log → band-less trend graph ═════════════
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_menopause"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_menopause"
+- assertVisible:
+    id: "domain_detail_log_symptom"
+- tapOn:
+    id: "domain_detail_log_symptom"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_hot_flashes"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_hot_flashes"
+- tapOn:
+    id: "symptom_severity_1"
+- scrollUntilVisible:
+    element:
+      id: "timeline_card"
+    direction: DOWN
+- tapOn:
+    id: "timeline_card"
+- assertVisible:
+    id: "marker_trend_chart_denali.symptom.menopause.hot_flashes"
+- takeScreenshot: /tmp/audit/female_05_menopause_trend
+- tapOn:
+    id: "marker_detail_back"
+- tapOn:
+    id: "domain_detail_back"
+
+# ═══ Weight + Height → BMI banded chart ════════════════════════════════
+- tapOn:
+    id: "dashboard_quick_add"
+- tapOn:
+    id: "quickadd_marker"
+- tapOn:
+    id: "log_marker_pick_weight"
+- tapOn:
+    id: "log_marker_input_0"
+- inputText: "70"
+- tapOn:
+    id: "log_marker_save"
+- tapOn:
+    id: "dashboard_quick_add"
+- tapOn:
+    id: "quickadd_marker"
+- scrollUntilVisible:
+    element:
+      id: "log_marker_pick_height"
+    direction: DOWN
+- tapOn:
+    id: "log_marker_pick_height"
+- tapOn:
+    id: "log_marker_input_0_feet"
+- inputText: "5"
+- tapOn:
+    id: "log_marker_input_0_inches"
+- inputText: "5"
+- tapOn:
+    id: "log_marker_save"
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_health_markers"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_health_markers"
+- takeScreenshot: /tmp/audit/female_06_markers_bmi

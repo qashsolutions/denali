@@ -1,0 +1,108 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Sub-flow — Sign-in + onboarding happy path, FEMALE cohort.
+#
+#   Identical to signin_onboarding.yaml EXCEPT sex-at-birth = female and
+#   gender-identity = female, so the dashboard surfaces the female symptom
+#   domain (Menopause). Reused by symptom_menopause.yaml.
+#
+#   signin_onboarding.yaml is hardcoded MALE (cohort_step2_option_male); a
+#   female cohort needs its own onboarding, so this is an additive sibling —
+#   it does NOT modify the load-bearing male flow.
+#
+# GATE — needs an E2E test-OTP backend running NODE_ENV != production
+# (email e2e@denali.health, code 999999). See signin_onboarding.yaml /
+# ../README.md for setup. The bypass works ONLY in a NODE_ENV != production
+# backend (local `next dev` or CI), never the deployed staging service.
+# Point the mobile build's API_BASE_URL at it.
+#
+# Selectors are the testID / accessibilityLabel inventory in ../README.md.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+# Cold start — clear state so we always begin at the SignIn route.
+- launchApp:
+    clearState: true
+
+# ── SignIn — test-OTP bypass ────────────────────────────────────────────
+- assertVisible:
+    id: "signin_email_input"
+- tapOn:
+    id: "signin_email_input"
+- inputText: "e2e@denali.health"
+- tapOn:
+    id: "signin_send_code_button"
+- assertVisible:
+    id: "signin_otp_input"
+- tapOn:
+    id: "signin_otp_input"
+- inputText: "999999"
+- tapOn:
+    id: "signin_verify_button"
+
+# ── PrivacyNotice ───────────────────────────────────────────────────────
+- assertVisible:
+    id: "privacy_acknowledge_button"
+- tapOn:
+    id: "privacy_acknowledge_button"
+
+# ── CohortOnboarding ────────────────────────────────────────────────────
+# Step 1: birth year (explicit Continue).
+- assertVisible:
+    id: "cohort_step1_birth_year_input"
+- tapOn:
+    id: "cohort_step1_birth_year_input"
+- inputText: "1965"
+- tapOn:
+    id: "oneitem_continue_button"
+
+# Step 2: sex at birth = FEMALE — auto-advance (this is the divergence).
+- assertVisible:
+    id: "cohort_step2_option_female"
+- tapOn:
+    id: "cohort_step2_option_female"
+
+# Step 3: Medicare — auto-advance.
+- assertVisible:
+    id: "cohort_step3_option_no"
+- tapOn:
+    id: "cohort_step3_option_no"
+
+# Step 4: gender identity = female — auto-advance.
+- assertVisible:
+    id: "cohort_step4_option_female"
+- tapOn:
+    id: "cohort_step4_option_female"
+
+# Step 5: confirm (permanent fields) → writes profile → Intake.
+- assertVisible:
+    id: "cohort_confirm_summary"
+- tapOn:
+    id: "oneitem_continue_button"
+
+# ── Intake — finish straight through ────────────────────────────────────
+- assertVisible:
+    id: "intake_finish_button"
+- tapOn:
+    id: "intake_finish_button"
+
+# ── Instruments — mood path (PHQ-2) negative so no PHQ-9 / no 988 ────────
+- assertVisible:
+    id: "instruments_mood_item1_option_0"
+- tapOn:
+    id: "instruments_mood_item1_option_0"
+- assertVisible:
+    id: "instruments_mood_item2_option_0"
+- tapOn:
+    id: "instruments_mood_item2_option_0"
+
+# Skip the optional check-in menu → go to the app.
+- scrollUntilVisible:
+    element:
+      id: "instruments_finish_button"
+    direction: DOWN
+- tapOn:
+    id: "instruments_finish_button"
+
+# ── MainTabs — Timeline tab dashboard ───────────────────────────────────
+- assertVisible:
+    text: "Your health"

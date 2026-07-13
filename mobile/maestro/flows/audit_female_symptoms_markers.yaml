@@ -1,0 +1,105 @@
+# QA AUDIT — FEMALE part 3: menopause band-less trend + BMI banded chart.
+# No OTP (reuses the signed-in female session).
+appId: health.denali.mobile
+---
+- assertVisible:
+    text: "Your health"
+
+# ═══ MENOPAUSE symptom → band-less trend (the new feature's graph) ═══════
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_menopause"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_menopause"
+- assertVisible:
+    id: "domain_detail_log_symptom_empty"
+- tapOn:
+    id: "domain_detail_log_symptom_empty"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_hot_flashes"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_hot_flashes"
+- tapOn:
+    id: "symptom_severity_3"
+- assertVisible:
+    id: "domain_detail_log_symptom"
+- tapOn:
+    id: "domain_detail_log_symptom"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_hot_flashes"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_hot_flashes"
+- tapOn:
+    id: "symptom_severity_1"
+- scrollUntilVisible:
+    element:
+      id: "timeline_card"
+    direction: DOWN
+- tapOn:
+    id: "timeline_card"
+- assertVisible:
+    id: "marker_trend_chart_denali.symptom.menopause.hot_flashes"
+- takeScreenshot: /tmp/audit/female_05_menopause_trend
+- tapOn:
+    id: "marker_detail_back"
+- tapOn:
+    id: "domain_detail_back"
+
+# ═══ WEIGHT marker (via the "+" QuickAdd → A lab or vital value) ═════════
+- assertVisible:
+    id: "dashboard_quick_add"
+- tapOn:
+    id: "dashboard_quick_add"
+- assertVisible:
+    id: "quickadd_marker"
+- tapOn:
+    id: "quickadd_marker"
+- assertVisible:
+    id: "log_marker_pick_weight"
+- tapOn:
+    id: "log_marker_pick_weight"
+- assertVisible:
+    id: "log_marker_input_0"
+- tapOn:
+    id: "log_marker_input_0"
+- inputText: "70"
+- tapOn:
+    id: "log_marker_save"
+
+# ═══ HEIGHT marker (ft/in) so BMI can be derived ════════════════════════
+- assertVisible:
+    id: "dashboard_quick_add"
+- tapOn:
+    id: "dashboard_quick_add"
+- tapOn:
+    id: "quickadd_marker"
+- scrollUntilVisible:
+    element:
+      id: "log_marker_pick_height"
+    direction: DOWN
+- tapOn:
+    id: "log_marker_pick_height"
+- assertVisible:
+    id: "log_marker_input_0_feet"
+- tapOn:
+    id: "log_marker_input_0_feet"
+- inputText: "5"
+- tapOn:
+    id: "log_marker_input_0_inches"
+- inputText: "5"
+- tapOn:
+    id: "log_marker_save"
+
+# ═══ HEALTH MARKERS detail → BMI banded chart (WHO bands) ═══════════════
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_health_markers"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_health_markers"
+- takeScreenshot: /tmp/audit/female_06_markers_bmi

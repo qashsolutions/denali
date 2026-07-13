@@ -1,0 +1,95 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Symptom tracker — FEMALE menopause domain (Hot flashes)
+#
+#   Female onboarding → dashboard → Menopause domain card → DomainDetail
+#   (empty) → "Log a symptom" → pick Hot flashes → severity 2 → back →
+#   confirm the append-only observation persisted ("Latest symptoms" card) →
+#   log a SECOND severity (1) → tap the card → MarkerDetail → confirm the
+#   BAND-LESS trend chart renders (symptom code has no interpretation bands;
+#   two readings → the chart, not the n<2 quiet state).
+#
+#   Menopause symptoms are FEMALE-gated (symptomsFor), so this reuses the
+#   female onboarding sub-flow. Model: instrument_checkin.yaml (navigation) +
+#   trend_chart.yaml (two sessions → chart renders).
+#
+# GATE — needs an E2E test-OTP backend running NODE_ENV != production.
+# See signin_onboarding.yaml / ../README.md for setup. The bypass works ONLY
+# in a NODE_ENV != production backend (local `next dev` or CI), never the
+# deployed staging service. Point the mobile build's API_BASE_URL at it.
+#
+# Selectors are the testID / accessibilityLabel inventory in ../README.md.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+# Female sign-in + onboarding → dashboard ("Your health").
+- runFlow: signin_onboarding_female.yaml
+
+# ── Dashboard → Menopause domain card (female-only, empty state) ─────────
+# The dashboard is a scrolling list; menopause sits below mood/anxiety/
+# alcohol/sleep/urinary, so scroll it into view (assertVisible does NOT
+# auto-scroll — same pattern as instruments_finish_button in the onboarding).
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_menopause"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_menopause"
+
+# ── DomainDetail (Menopause, empty) → Log a symptom ─────────────────────
+- assertVisible:
+    id: "domain_detail_log_symptom_empty"
+- tapOn:
+    id: "domain_detail_log_symptom_empty"
+
+# ── SymptomLog — pick Hot flashes → severity 2 (Moderate) — LOG #1 ──────
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_hot_flashes"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_hot_flashes"
+- assertVisible:
+    id: "symptom_severity_2"
+- tapOn:
+    id: "symptom_severity_2"
+
+# ── Back on the Menopause detail — the observation PERSISTED ────────────
+# The append-only observation was written + read back: the consolidated
+# "Latest symptoms" section + the symptom's own card now render.
+- assertVisible:
+    text: "Latest symptoms"
+- assertVisible:
+    text: "Hot flashes"
+
+# ── LOG #2 — a second severity (1 = Mild) so the trend has 2 points ─────
+- assertVisible:
+    id: "domain_detail_log_symptom"
+- tapOn:
+    id: "domain_detail_log_symptom"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_hot_flashes"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_hot_flashes"
+- assertVisible:
+    id: "symptom_severity_1"
+- tapOn:
+    id: "symptom_severity_1"
+
+# ── Tap the symptom card → MarkerDetail (its history + trend) ───────────
+- scrollUntilVisible:
+    element:
+      id: "timeline_card"
+    direction: DOWN
+- tapOn:
+    id: "timeline_card"
+
+# ── MarkerDetail — the BAND-LESS trend chart renders ───────────────────
+# The symptom code (denali.symptom.menopause.hot_flashes) has NO entry in the
+# interpretation table, so the trend chart shades no bands (band-less), and
+# the ‡ legend confirms we are on the read-only detail surface.
+- assertVisible:
+    id: "marker_detail_provisional_footnote"
+- assertVisible:
+    id: "marker_trend_chart_denali.symptom.menopause.hot_flashes"

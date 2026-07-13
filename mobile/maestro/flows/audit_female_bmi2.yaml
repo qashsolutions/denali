@@ -1,0 +1,55 @@
+# QA AUDIT — FEMALE: 2 weights AFTER the existing height → 2-point banded BMI trend.
+# Height (165cm) already logged. deriveBmiTrend emits a point per weight seen
+# AFTER a height, so these two weights produce a 2-dot WHO-banded BMI line.
+#   63kg → BMI 23.1 (healthy)  ·  71kg → BMI 26.1 (overweight) — crosses the 25.0 band.
+appId: health.denali.mobile
+---
+- assertVisible:
+    text: "Your health"
+
+# ═══ WEIGHT #1 — 63 kg (BMI 23.1, healthy band) ════════════════════════
+- tapOn:
+    id: "dashboard_quick_add"
+- tapOn:
+    id: "quickadd_marker"
+- scrollUntilVisible:
+    element:
+      id: "log_marker_pick_weight"
+    direction: DOWN
+- tapOn:
+    id: "log_marker_pick_weight"
+- assertVisible:
+    id: "log_marker_input_0"
+- tapOn:
+    id: "log_marker_input_0"
+- inputText: "63"
+- tapOn:
+    id: "log_marker_save"
+
+# ═══ WEIGHT #2 — 71 kg (BMI 26.1, overweight band) ═════════════════════
+- tapOn:
+    id: "dashboard_quick_add"
+- tapOn:
+    id: "quickadd_marker"
+- scrollUntilVisible:
+    element:
+      id: "log_marker_pick_weight"
+    direction: DOWN
+- tapOn:
+    id: "log_marker_pick_weight"
+- assertVisible:
+    id: "log_marker_input_0"
+- tapOn:
+    id: "log_marker_input_0"
+- inputText: "71"
+- tapOn:
+    id: "log_marker_save"
+
+# ═══ HEALTH MARKERS detail → BMI banded chart (should pin at top) ══════
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_health_markers"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_health_markers"
+- takeScreenshot: /tmp/audit/female_07_bmi_banded

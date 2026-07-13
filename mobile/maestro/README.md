@@ -115,6 +115,31 @@ case, lowercase. Maestro flows reference these IDs verbatim.
 | `trend_empty_state` | n=1 quiet-state line |
 | `trend_delta` | Factual delta line under the chart |
 
+### Symptom tracker (2026-07)
+
+| testID | Element |
+|---|---|
+| `domain_detail_log_symptom` | DomainDetail "Log a symptom" CTA (populated symptom domain) |
+| `domain_detail_log_symptom_empty` | DomainDetail "Log a symptom" CTA (empty symptom domain) |
+| `symptom_log_back` | SymptomLog back chip |
+| `symptom_pick_${key}` | SymptomLog symptom-picker row (e.g. `symptom_pick_hot_flashes`, `_low_energy`, `_daytime_sleepiness`, `_urgency`) |
+| `symptom_severity_${0-3}` | SymptomLog severity option (0 None / 1 Mild / 2 Moderate / 3 Severe) |
+
+Symptom domains (sleep / urinary / menopause / hormonal) reuse the marker
+drill-down: the "Latest symptoms" `timeline_card` opens `MarkerDetail` (below),
+which charts the 0–3 severity BAND-LESS — the symptom code has no
+interpretation-table entry, so no bands are shaded.
+
+### Marker / symptom detail (MarkerDetail)
+
+| testID | Element |
+|---|---|
+| `marker_detail_back` | Back chip in the MarkerDetail header |
+| `marker_detail_provisional_footnote` | ‡ legend in the pinned disclaimer strip |
+| `marker_trend_chart_${code}` | Per-code trend chart container — renders at ≥2 in-range readings (e.g. `marker_trend_chart_denali.symptom.menopause.hot_flashes`) |
+| `marker_trend_delta_${code}` | Factual delta line under the chart |
+| `trend_empty_state` | n<2 quiet-state line (shown instead of the chart) |
+
 ### Crisis 988 modal
 
 | testID | Element |
@@ -162,6 +187,15 @@ the full gate.
 | `cross_user_isolation.yaml` ⚠️ | **NAV-2 + NAV-3A regression guard.** Account A (`e2e@denali.health`) onboards → sign out → account B (`e2e-b@denali.health`, different id) signs in → asserts B lands on **PrivacyNotice**, NOT A's MainTabs (NAV-2 SignIn gate). Then B **abandons** onboarding → **kill + cold-relaunch** → asserts the app lands on **SignIn**, NOT A's "Your health" (NAV-3A restore refuses a token whose owner ≠ the most-recent profile). Needs TWO seeded accounts; the kill+relaunch step is what exercises `restoreSession`, distinct from the SignIn gate. Uses `tapOn: text "Sign out"` — see missing-testID note below |
 | `account_delete.yaml` | Onboarding happy path → Settings → "Delete account" → confirm Alert ("Delete your account?" / Cancel / Delete) → local wipe → reset to SignIn. Needs a NON-ADMIN account (admin → 403, no wipe); DELETES the account so it is not idempotent without backend reseeding |
 | `signin_resend.yaml` | SignIn email → Send code → OTP step: assert "It expires in 10 minutes." + "Resend code" + the active `Resend code in Ns` cooldown countdown → "Use a different email" → email step with an empty field (placeholder "you@example.com" visible). Cooldown is time-sensitive (~30s window) |
+| `symptom_menopause.yaml` | **FEMALE** onboarding → dashboard → Menopause domain → log Hot flashes severity (×2) → confirm persistence ("Latest symptoms" card) → tap card → MarkerDetail **band-less** trend chart. Reuses `signin_onboarding_female.yaml` |
+| `symptom_hormonal.yaml` | **MALE** onboarding → Hormonal domain → log Low energy severity (×2) → persistence → MarkerDetail band-less trend |
+| `symptom_sleep_urinary.yaml` | Shared UNIVERSAL domains → Sleep (Daytime sleepiness) then Urinary (Sudden urge) → log severity (×2 each) → persistence → MarkerDetail band-less trend |
+| `signin_onboarding_female.yaml` | **Sub-flow** — sign-in + onboarding, FEMALE cohort (sex + gender female). Additive sibling of `signin_onboarding.yaml` (which is hardcoded male); reused by `symptom_menopause.yaml` |
+
+> The four symptom-tracker flows above are **authored + syntactically valid but
+> NOT yet executed end-to-end** — they share the same parked dependency as every
+> flow here (the E2E test-OTP backend is not stood up). Run command in the
+> "Running the symptom flows" note below.
 
 **Not yet automatable:** the upload keep/abandon journey (CU-3 'kept' / UPL-2
 removeReport) needs a deterministic test fixture for the native file picker +

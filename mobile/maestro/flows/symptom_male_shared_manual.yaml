@@ -1,0 +1,243 @@
+# ─────────────────────────────────────────────────────────────────────────
+# LOCAL / MANUAL — male Hormonal + shared Sleep + Urinary, real account + OTP.
+#
+# Covers the remaining three symptom domains in ONE run: onboard MALE (so the
+# Hormonal domain surfaces; Sleep + Urinary are universal). Real account
+# (ramanac@gmail.com); the operator types the emailed OTP at the pause.
+#
+# Full path per domain: dashboard card → DomainDetail (empty) → Log a symptom
+# → pick → severity → back → persisted → second severity → card → MarkerDetail
+# band-less trend → back to dashboard.
+#
+# NOT a CI flow (needs a human for the OTP). Automated CI versions:
+# symptom_hormonal.yaml + symptom_sleep_urinary.yaml (e2e bypass).
+#
+# SIDE EFFECT: clearState + onboards the account as MALE.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+- launchApp:
+    clearState: true
+
+# ── SignIn — real account; operator types the OTP ──────────────────────
+# Tolerate the cold-boot "deciding" splash (SQLCipher open + session gate)
+# before SignIn renders — a bare assertVisible can fire during the splash.
+- extendedWaitUntil:
+    visible:
+      id: "signin_email_input"
+    timeout: 40000
+- tapOn:
+    id: "signin_email_input"
+- inputText: "ramanac@gmail.com"
+- tapOn:
+    id: "signin_send_code_button"
+# ⏸  MANUAL: type the emailed OTP + tap Verify. Waits up to 4 minutes.
+- extendedWaitUntil:
+    visible:
+      id: "privacy_acknowledge_button"
+    timeout: 240000
+- tapOn:
+    id: "privacy_acknowledge_button"
+
+# ── CohortOnboarding — MALE ────────────────────────────────────────────
+- assertVisible:
+    id: "cohort_step1_birth_year_input"
+- tapOn:
+    id: "cohort_step1_birth_year_input"
+- inputText: "1965"
+- tapOn:
+    id: "oneitem_continue_button"
+- assertVisible:
+    id: "cohort_step2_option_male"
+- tapOn:
+    id: "cohort_step2_option_male"
+- assertVisible:
+    id: "cohort_step3_option_no"
+- tapOn:
+    id: "cohort_step3_option_no"
+- assertVisible:
+    id: "cohort_step4_option_male"
+- tapOn:
+    id: "cohort_step4_option_male"
+- assertVisible:
+    id: "cohort_confirm_summary"
+- tapOn:
+    id: "oneitem_continue_button"
+
+# ── Intake + negative PHQ-2 → dashboard ────────────────────────────────
+- assertVisible:
+    id: "intake_finish_button"
+- tapOn:
+    id: "intake_finish_button"
+- assertVisible:
+    id: "instruments_mood_item1_option_0"
+- tapOn:
+    id: "instruments_mood_item1_option_0"
+- assertVisible:
+    id: "instruments_mood_item2_option_0"
+- tapOn:
+    id: "instruments_mood_item2_option_0"
+- scrollUntilVisible:
+    element:
+      id: "instruments_finish_button"
+    direction: DOWN
+- tapOn:
+    id: "instruments_finish_button"
+- assertVisible:
+    text: "Your health"
+
+# ═══ HORMONAL (Low energy) — male-gated ═════════════════════════════════
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_hormonal"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_hormonal"
+- assertVisible:
+    id: "domain_detail_log_symptom_empty"
+- tapOn:
+    id: "domain_detail_log_symptom_empty"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_low_energy"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_low_energy"
+- assertVisible:
+    id: "symptom_severity_2"
+- tapOn:
+    id: "symptom_severity_2"
+- assertVisible:
+    text: "Latest symptoms"
+- assertVisible:
+    text: "Low energy"
+- assertVisible:
+    id: "domain_detail_log_symptom"
+- tapOn:
+    id: "domain_detail_log_symptom"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_low_energy"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_low_energy"
+- assertVisible:
+    id: "symptom_severity_1"
+- tapOn:
+    id: "symptom_severity_1"
+- scrollUntilVisible:
+    element:
+      id: "timeline_card"
+    direction: DOWN
+- tapOn:
+    id: "timeline_card"
+- assertVisible:
+    id: "marker_trend_chart_denali.symptom.hormonal.low_energy"
+- tapOn:
+    id: "marker_detail_back"
+- assertVisible:
+    id: "domain_detail_back"
+- tapOn:
+    id: "domain_detail_back"
+
+# ═══ SLEEP (Daytime sleepiness) — universal ═════════════════════════════
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_sleep"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_sleep"
+- assertVisible:
+    id: "domain_detail_log_symptom_empty"
+- tapOn:
+    id: "domain_detail_log_symptom_empty"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_daytime_sleepiness"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_daytime_sleepiness"
+- assertVisible:
+    id: "symptom_severity_2"
+- tapOn:
+    id: "symptom_severity_2"
+- assertVisible:
+    text: "Latest symptoms"
+- assertVisible:
+    text: "Daytime sleepiness"
+- assertVisible:
+    id: "domain_detail_log_symptom"
+- tapOn:
+    id: "domain_detail_log_symptom"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_daytime_sleepiness"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_daytime_sleepiness"
+- assertVisible:
+    id: "symptom_severity_1"
+- tapOn:
+    id: "symptom_severity_1"
+- scrollUntilVisible:
+    element:
+      id: "timeline_card"
+    direction: DOWN
+- tapOn:
+    id: "timeline_card"
+- assertVisible:
+    id: "marker_trend_chart_denali.symptom.sleep.daytime_sleepiness"
+- tapOn:
+    id: "marker_detail_back"
+- assertVisible:
+    id: "domain_detail_back"
+- tapOn:
+    id: "domain_detail_back"
+
+# ═══ URINARY (Sudden urge to urinate) — universal ═══════════════════════
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_urinary"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_urinary"
+- assertVisible:
+    id: "domain_detail_log_symptom_empty"
+- tapOn:
+    id: "domain_detail_log_symptom_empty"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_urgency"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_urgency"
+- assertVisible:
+    id: "symptom_severity_3"
+- tapOn:
+    id: "symptom_severity_3"
+- assertVisible:
+    text: "Latest symptoms"
+- assertVisible:
+    text: "Sudden urge to urinate"
+- assertVisible:
+    id: "domain_detail_log_symptom"
+- tapOn:
+    id: "domain_detail_log_symptom"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_urgency"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_urgency"
+- assertVisible:
+    id: "symptom_severity_1"
+- tapOn:
+    id: "symptom_severity_1"
+- scrollUntilVisible:
+    element:
+      id: "timeline_card"
+    direction: DOWN
+- tapOn:
+    id: "timeline_card"
+- assertVisible:
+    id: "marker_trend_chart_denali.symptom.urinary.urgency"

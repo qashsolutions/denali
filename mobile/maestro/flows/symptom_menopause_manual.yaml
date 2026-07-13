@@ -1,0 +1,134 @@
+# ─────────────────────────────────────────────────────────────────────────
+# LOCAL / MANUAL variant — symptom_menopause.yaml, real account + manual OTP.
+#
+# For interactive verification on a device where the E2E test-OTP bypass is
+# NOT used. Signs in with a REAL account (ceeveear@yahoo.com), then PAUSES at
+# the OTP step: the operator retrieves the emailed OTP and types it + taps
+# Verify on the device. The flow waits (extendedWaitUntil, 3 min) for the
+# post-verify screen, then drives the rest automatically.
+#
+# NOT a CI flow (it needs a human for the OTP) — the CI-appropriate,
+# fully-automated version is symptom_menopause.yaml (e2e bypass).
+#
+# SIDE EFFECT: clearState + onboards the account as FEMALE (writes
+# sex_at_birth=female to its profile) so the Menopause domain surfaces.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+- launchApp:
+    clearState: true
+
+# ── SignIn — real account; operator types the OTP ──────────────────────
+- assertVisible:
+    id: "signin_email_input"
+- tapOn:
+    id: "signin_email_input"
+- inputText: "ceeveear@yahoo.com"
+- tapOn:
+    id: "signin_send_code_button"
+
+# ⏸  MANUAL STEP: type the emailed OTP into the field + tap Verify on the
+#    device. The flow waits up to 3 minutes for the next screen to appear.
+- extendedWaitUntil:
+    visible:
+      id: "privacy_acknowledge_button"
+    timeout: 180000
+- tapOn:
+    id: "privacy_acknowledge_button"
+
+# ── CohortOnboarding — FEMALE ──────────────────────────────────────────
+- assertVisible:
+    id: "cohort_step1_birth_year_input"
+- tapOn:
+    id: "cohort_step1_birth_year_input"
+- inputText: "1965"
+- tapOn:
+    id: "oneitem_continue_button"
+- assertVisible:
+    id: "cohort_step2_option_female"
+- tapOn:
+    id: "cohort_step2_option_female"
+- assertVisible:
+    id: "cohort_step3_option_no"
+- tapOn:
+    id: "cohort_step3_option_no"
+- assertVisible:
+    id: "cohort_step4_option_female"
+- tapOn:
+    id: "cohort_step4_option_female"
+- assertVisible:
+    id: "cohort_confirm_summary"
+- tapOn:
+    id: "oneitem_continue_button"
+
+# ── Intake + negative PHQ-2 → dashboard ────────────────────────────────
+- assertVisible:
+    id: "intake_finish_button"
+- tapOn:
+    id: "intake_finish_button"
+- assertVisible:
+    id: "instruments_mood_item1_option_0"
+- tapOn:
+    id: "instruments_mood_item1_option_0"
+- assertVisible:
+    id: "instruments_mood_item2_option_0"
+- tapOn:
+    id: "instruments_mood_item2_option_0"
+- scrollUntilVisible:
+    element:
+      id: "instruments_finish_button"
+    direction: DOWN
+- tapOn:
+    id: "instruments_finish_button"
+- assertVisible:
+    text: "Your health"
+
+# ── Menopause symptom path (identical to symptom_menopause.yaml) ────────
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_menopause"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_menopause"
+- assertVisible:
+    id: "domain_detail_log_symptom_empty"
+- tapOn:
+    id: "domain_detail_log_symptom_empty"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_hot_flashes"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_hot_flashes"
+- assertVisible:
+    id: "symptom_severity_2"
+- tapOn:
+    id: "symptom_severity_2"
+- assertVisible:
+    text: "Latest symptoms"
+- assertVisible:
+    text: "Hot flashes"
+- assertVisible:
+    id: "domain_detail_log_symptom"
+- tapOn:
+    id: "domain_detail_log_symptom"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_hot_flashes"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_hot_flashes"
+- assertVisible:
+    id: "symptom_severity_1"
+- tapOn:
+    id: "symptom_severity_1"
+- scrollUntilVisible:
+    element:
+      id: "timeline_card"
+    direction: DOWN
+- tapOn:
+    id: "timeline_card"
+- assertVisible:
+    id: "marker_detail_provisional_footnote"
+- assertVisible:
+    id: "marker_trend_chart_denali.symptom.menopause.hot_flashes"

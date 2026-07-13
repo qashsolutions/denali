@@ -1,0 +1,73 @@
+# QA AUDIT — MALE part 2: the sex-specific analysis + band-less hormonal trend.
+# No OTP (reuses the male session). The alcohol card is THE cross-gender proof:
+# same AUDIT-C score 3 that read "Higher risk" for the female now reads
+# "Lower risk" for the male (Bradley 2007 sex-specific thresholds).
+appId: health.denali.mobile
+---
+- assertVisible:
+    text: "Your health"
+
+# ═══ ALCOHOL — MALE AUDIT-C "lower risk" at score 3 (the sex flip) ══════
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_alcohol"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_alcohol"
+- takeScreenshot: /tmp/audit/male_02_alcohol_lower_risk
+- tapOn:
+    id: "domain_detail_back"
+
+# ═══ MOOD — PHQ-9 = 10 "moderate" (uniform band, same as female) ════════
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_mood"
+    direction: UP
+- tapOn:
+    id: "dashboard_card_mood"
+- takeScreenshot: /tmp/audit/male_05_mood_analysis
+- tapOn:
+    id: "domain_detail_back"
+
+# ═══ HORMONAL — band-less symptom trend (low energy 3 → 1) ══════════════
+- scrollUntilVisible:
+    element:
+      id: "dashboard_card_hormonal"
+    direction: DOWN
+- tapOn:
+    id: "dashboard_card_hormonal"
+- tapOn:
+    id: "domain_detail_log_symptom_empty"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_low_energy"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_low_energy"
+- tapOn:
+    id: "symptom_severity_3"
+- assertVisible:
+    id: "domain_detail_log_symptom"
+- tapOn:
+    id: "domain_detail_log_symptom"
+- scrollUntilVisible:
+    element:
+      id: "symptom_pick_low_energy"
+    direction: DOWN
+- tapOn:
+    id: "symptom_pick_low_energy"
+- tapOn:
+    id: "symptom_severity_1"
+- scrollUntilVisible:
+    element:
+      id: "timeline_card"
+    direction: DOWN
+- tapOn:
+    id: "timeline_card"
+- assertVisible:
+    id: "marker_trend_chart_denali.symptom.hormonal.low_energy"
+- takeScreenshot: /tmp/audit/male_03_hormonal_trend
+- tapOn:
+    id: "marker_detail_back"
+- tapOn:
+    id: "domain_detail_back"

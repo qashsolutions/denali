@@ -1,0 +1,77 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Symptom tracker — MALE hormonal domain (Low energy)
+#
+#   Male onboarding → dashboard → Hormonal domain card → DomainDetail (empty)
+#   → "Log a symptom" → pick Low energy → severity 2 → back → confirm the
+#   append-only observation persisted → log a SECOND severity (1) → tap the
+#   card → MarkerDetail → confirm the BAND-LESS trend chart renders.
+#
+#   Hormonal symptoms are MALE-gated (symptomsFor), so this reuses the
+#   default (male) onboarding. Model: instrument_checkin.yaml +
+#   trend_chart.yaml.
+#
+# GATE — needs an E2E test-OTP backend running NODE_ENV != production.
+# See signin_onboarding.yaml / ../README.md for setup. The bypass works ONLY
+# in a NODE_ENV != production backend (local `next dev` or CI), never the
+# deployed staging service. Point the mobile build's API_BASE_URL at it.
+#
+# Selectors are the testID / accessibilityLabel inventory in ../README.md.
+# ─────────────────────────────────────────────────────────────────────────
+appId: health.denali.mobile
+---
+# Male sign-in + onboarding → dashboard ("Your health").
+- runFlow: signin_onboarding.yaml
+
+# ── Dashboard → Hormonal domain card (male-only, empty state) ───────────
+- assertVisible:
+    id: "dashboard_card_hormonal"
+- tapOn:
+    id: "dashboard_card_hormonal"
+
+# ── DomainDetail (Hormonal, empty) → Log a symptom ─────────────────────
+- assertVisible:
+    id: "domain_detail_log_symptom_empty"
+- tapOn:
+    id: "domain_detail_log_symptom_empty"
+
+# ── SymptomLog — pick Low energy → severity 2 (Moderate) — LOG #1 ──────
+- assertVisible:
+    id: "symptom_pick_low_energy"
+- tapOn:
+    id: "symptom_pick_low_energy"
+- assertVisible:
+    id: "symptom_severity_2"
+- tapOn:
+    id: "symptom_severity_2"
+
+# ── Back on the Hormonal detail — the observation PERSISTED ────────────
+- assertVisible:
+    text: "Latest symptoms"
+- assertVisible:
+    text: "Low energy"
+
+# ── LOG #2 — a second severity (1 = Mild) so the trend has 2 points ─────
+- assertVisible:
+    id: "domain_detail_log_symptom"
+- tapOn:
+    id: "domain_detail_log_symptom"
+- assertVisible:
+    id: "symptom_pick_low_energy"
+- tapOn:
+    id: "symptom_pick_low_energy"
+- assertVisible:
+    id: "symptom_severity_1"
+- tapOn:
+    id: "symptom_severity_1"
+
+# ── Tap the symptom card → MarkerDetail ────────────────────────────────
+- assertVisible:
+    id: "timeline_card"
+- tapOn:
+    id: "timeline_card"
+
+# ── MarkerDetail — the BAND-LESS trend chart renders ───────────────────
+- assertVisible:
+    id: "marker_detail_provisional_footnote"
+- assertVisible:
+    id: "marker_trend_chart_denali.symptom.hormonal.low_energy"
